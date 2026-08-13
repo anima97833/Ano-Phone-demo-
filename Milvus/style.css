@@ -5607,6 +5607,7 @@
       /* iOS 风格 Toggle 开关 */
       .toggle-switch {
         position: relative;
+        display: inline-block;
         width: 44px;
         height: 24px;
         flex-shrink: 0;
@@ -5644,11 +5645,11 @@
       }
 
       .toggle-input:checked + .toggle-slider {
-        background-color: #07c160; /* 微信绿 */
+        background-color: #07c160 !important; /* 微信绿 */
       }
 
       .toggle-input:checked + .toggle-slider:before {
-        transform: translateX(20px);
+        transform: translateX(20px) !important;
       }
 
       /* 编辑模态框样式 */
