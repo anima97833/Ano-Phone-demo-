@@ -69018,6 +69018,15 @@ const BackpackPage = ({ onClose }) => {
 
 // ==================== [新增] 隐私与安全二级页面组件 ====================
 const PrivacySecurityPage = ({ onOpenMinimax }) => {
+  const [activeSubPage, setActiveSubPage] = React.useState(null);
+
+  if (activeSubPage === 'wallet') {
+    return <WalletPage onClose={() => setActiveSubPage(null)} />;
+  }
+  if (activeSubPage === 'backpack') {
+    return <BackpackPage onClose={() => setActiveSubPage(null)} />;
+  }
+
   return (
     <div
       className="no-scrollbar"
@@ -69030,16 +69039,6 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
     >
       <div
         style={{
-          fontSize: "14px",
-          fontWeight: "bold",
-          color: "#5A5F4D",
-          margin: "12px 0 8px",
-        }}
-      >
-        大模型服务配置
-      </div>
-      <div
-        style={{
           background: "#FFFFFF",
           borderRadius: "16px",
           padding: "16px",
@@ -69047,8 +69046,55 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
           marginBottom: "16px",
         }}
       >
+        {/* 数据接口 */}
         <div
           onClick={() => onOpenMinimax && onOpenMinimax()}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 0",
+            borderBottom: "1px solid #f5f5f5",
+            cursor: "pointer",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: "500", color: "#333" }}>
+              数据接口
+            </div>
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
+              配置 API 与相关服务
+            </div>
+          </div>
+          <i data-lucide="chevron-right" style={{ color: "#aaa" }}></i>
+        </div>
+
+        {/* 我的钱包 */}
+        <div
+          onClick={() => setActiveSubPage('wallet')}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 0",
+            borderBottom: "1px solid #f5f5f5",
+            cursor: "pointer",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: "500", color: "#333" }}>
+              我的钱包
+            </div>
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
+              查看余额与交易记录
+            </div>
+          </div>
+          <i data-lucide="chevron-right" style={{ color: "#aaa" }}></i>
+        </div>
+
+        {/* 我的背包 */}
+        <div
+          onClick={() => setActiveSubPage('backpack')}
           style={{
             display: "flex",
             alignItems: "center",
@@ -69059,10 +69105,10 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
         >
           <div>
             <div style={{ fontSize: "14px", fontWeight: "500", color: "#333" }}>
-              Minimax 接入设置
+              我的背包
             </div>
             <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
-              配置 Minimax API Key 与语音合成服务
+              管理已获得的物品
             </div>
           </div>
           <i data-lucide="chevron-right" style={{ color: "#aaa" }}></i>
@@ -69089,22 +69135,8 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
         }}
       >
         <div
-          style={{
-            padding: "12px 0",
-            borderBottom: "1px solid #f5f5f5",
-          }}
-        >
-          <div style={{ fontSize: "14px", fontWeight: "500", color: "#333" }}>
-            本地数据存储说明
-          </div>
-          <div style={{ fontSize: "12px", color: "#888", marginTop: "4px", lineHeight: "1.5" }}>
-            您的所有聊天记录、锁屏图片、背景设置及书架数据均安全保存在浏览器本地 IndexedDB 中，不会被上传到任何未经授权的第三方服务器。
-          </div>
-        </div>
-
-        <div
           onClick={() => {
-            if (confirm("确定要清理临时图像与网页缓存吗？这不会影响您的核心聊天记录和身份设定。")) {
+            if (confirm("确定要清理临时图像与网页缓存吗？")) {
               alert("缓存清理完成");
             }
           }}
