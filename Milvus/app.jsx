@@ -71149,6 +71149,16 @@ ${worldContext}
         const [pageIndex, setPageIndex] = useState(0);
         const [time, setTime] = useState(new Date());
         const [images, setImages] = useState([]);
+        useEffect(() => {
+          if (window.lockScreenStore) {
+            window.lockScreenStore.getAll().then(storedImages => {
+              if (storedImages && storedImages.length > 0) {
+                setImages(storedImages);
+                setCurrentImgIndex(storedImages.length - 1);
+              }
+            }).catch(e => console.error("读取锁屏图片失败", e));
+          }
+        }, []);
         const [currentImgIndex, setCurrentImgIndex] = useState(-1);
         const [expanded, setExpanded] = useState(false);
         const [battery, setBattery] = useState(85);
@@ -72670,15 +72680,30 @@ ${worldContext}
           input.onchange = (event) => {
             const file = event.target.files[0];
             if (!file) return;
-            const url = URL.createObjectURL(file);
-            setImages((prev) => {
-              const newList = [
-                ...prev,
-                { url, name: file.name, id: Date.now() },
-              ];
-              setCurrentImgIndex(newList.length - 1);
-              return newList;
-            });
+            const reader = new FileReader();
+            reader.onload = async (evt) => {
+              const url = evt.target.result;
+              const newImage = { url, name: file.name, id: Date.now() };
+              
+              setImages((prev) => {
+                const newList = [
+                  ...prev,
+                  newImage,
+                ];
+                setCurrentImgIndex(newList.length - 1);
+                return newList;
+              });
+
+              if (window.lockScreenStore) {
+                try {
+                  await window.lockScreenStore.save(newImage);
+                  console.log("锁屏图片保存到IndexedDB成功");
+                } catch(error) {
+                  console.error("锁屏图片保存失败:", error);
+                }
+              }
+            };
+            reader.readAsDataURL(file);
             input.value = "";
           };
           input.click();
@@ -72700,9 +72725,14 @@ ${worldContext}
                 <header
                   className="e6-header"
                   onClick={() => {
-                    images.forEach((i) => URL.revokeObjectURL(i.url));
+                    images.forEach((i) => {
+                      if (i.url && i.url.startsWith("blob:")) URL.revokeObjectURL(i.url);
+                    });
                     setImages([]);
                     setCurrentImgIndex(-1);
+                    if (window.lockScreenStore) {
+                       window.lockScreenStore.clearAll().catch(e => console.error(e));
+                    }
                   }}
                 >
                   ···

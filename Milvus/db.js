@@ -1,7 +1,7 @@
 
       // IndexedDB 数据库配置
       const DB_NAME = "t8_chat_db";
-      const DB_VERSION = 14; // 修改为14
+      const DB_VERSION = 15; // 修改为15
       const STORES = {
         AVATARS: "avatars",
         USER_SETTINGS: "user_settings", // 存储用户设置，包括头像和背景
@@ -17,6 +17,7 @@
         MUSIC_PLAYLIST: "music_playlist", // 存储音乐列表
         EMOJIS: "emojis", // [新增] 存储用户自定义表情包
         BACKPACK: "backpack", // ✅ 新增：背包存储
+        LOCKSCREEN: "lockscreen", // ✅ 新增：锁屏图片存储
       };
 
       // 打开数据库连接
@@ -102,6 +103,11 @@
             // ✅ 新增：创建背包存储
             if (!db.objectStoreNames.contains(STORES.BACKPACK)) {
               db.createObjectStore(STORES.BACKPACK, { keyPath: "id" });
+            }
+
+            // ✅ 新增：创建锁屏图片存储
+            if (!db.objectStoreNames.contains(STORES.LOCKSCREEN)) {
+              db.createObjectStore(STORES.LOCKSCREEN, { keyPath: "id" });
             }
           };
 
@@ -209,6 +215,44 @@
         },
       };
       window.backpackStore = backpackStore;
+
+      // ✅ 新增：锁屏图片存储操作对象
+      const lockScreenStore = {
+        getAll: async () => {
+          const db = await openDB();
+          return new Promise((resolve) => {
+            const tx = db.transaction(STORES.LOCKSCREEN, "readonly");
+            const request = tx.objectStore(STORES.LOCKSCREEN).getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => resolve([]);
+          });
+        },
+        save: async (image) => {
+          const db = await openDB();
+          return new Promise((resolve) => {
+            const tx = db.transaction(STORES.LOCKSCREEN, "readwrite");
+            const request = tx.objectStore(STORES.LOCKSCREEN).put(image);
+            request.onsuccess = () => resolve(true);
+          });
+        },
+        delete: async (id) => {
+          const db = await openDB();
+          return new Promise((resolve) => {
+            const tx = db.transaction(STORES.LOCKSCREEN, "readwrite");
+            const request = tx.objectStore(STORES.LOCKSCREEN).delete(id);
+            request.onsuccess = () => resolve(true);
+          });
+        },
+        clearAll: async () => {
+          const db = await openDB();
+          return new Promise((resolve) => {
+            const tx = db.transaction(STORES.LOCKSCREEN, "readwrite");
+            const request = tx.objectStore(STORES.LOCKSCREEN).clear();
+            request.onsuccess = () => resolve(true);
+          });
+        }
+      };
+      window.lockScreenStore = lockScreenStore;
 
       // 检查并创建必要的存储（兼容旧版本）
       async function ensureStoresExist() {
