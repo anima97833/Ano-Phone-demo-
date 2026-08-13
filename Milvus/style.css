@@ -10500,3 +10500,10 @@
   pointer-events: none !important;
   visibility: hidden !important;
 }
+
+/* Global overlay protection */
+[class*="-overlay"]:not(.open) {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
