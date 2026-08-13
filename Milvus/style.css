@@ -5644,7 +5644,7 @@
       }
 
       .toggle-input:checked + .toggle-slider {
-        background-color: #4a90e2; /* 激活色 */
+        background-color: #07c160; /* 微信绿 */
       }
 
       .toggle-input:checked + .toggle-slider:before {
