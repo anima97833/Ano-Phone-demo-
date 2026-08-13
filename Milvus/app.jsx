@@ -61679,7 +61679,7 @@ const APISettingsOverlay = ({ isOpen, onClose }) => {
     >
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <i data-lucide="chevron-left"></i>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </div>
         <div className="title">API 设置</div>
       </div>
@@ -62095,7 +62095,7 @@ const WorldBookOverlay = ({ isOpen, onClose }) => {
     >
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <i data-lucide="chevron-left"></i>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </div>
         <div className="title">世界书 (World Book)</div>
       </div>
@@ -62569,7 +62569,7 @@ const UserProfileOverlay = ({ isOpen, onClose, onUpdateActiveUser }) => {
     >
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <i data-lucide="chevron-left"></i>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </div>
         <div className="title">身份配置库</div>
       </div>
@@ -62997,7 +62997,7 @@ const ReaderDetailPage = ({
             cursor: "pointer",
           }}
         >
-          <i data-lucide="chevron-left"></i>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           <span style={{ fontSize: "14px" }}>书架</span>
         </div>
 
@@ -64115,7 +64115,7 @@ const LongTermMemoryOverlay = ({ isOpen, onClose }) => {
     >
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <i data-lucide="chevron-left"></i>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </div>
         <div className="title">长期记忆设置</div>
       </div>
@@ -64273,7 +64273,7 @@ const FontSettingsPage = ({ onClose }) => {
     <div className={`settings-overlay open`} style={styles.container}>
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <i data-lucide="chevron-left"></i>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </div>
         <div className="title">字体设置</div>
       </div>
@@ -64539,7 +64539,7 @@ const ThemeSettingsPage = ({
     <div className={`settings-overlay open`} style={styles.container}>
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <i data-lucide="chevron-left"></i>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </div>
         <div className="title">主题设置</div>
       </div>
@@ -65425,7 +65425,7 @@ const MinimaxSettingsOverlay = ({ isOpen, onClose }) => {
     >
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <i data-lucide="chevron-left"></i>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </div>
 
         <div className="title">Minimax 接入</div>
@@ -69172,7 +69172,7 @@ const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
     >
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <i data-lucide="chevron-left"></i>
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
         </div>
         <div className="title">隐私与安全</div>
       </div>
@@ -73096,7 +73096,7 @@ const MasterApp = () => {
             className="back-btn"
             onClick={() => setIsSettingsOpen(false)}
           >
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
           <div className="title">设置</div>
         </div>
@@ -73211,7 +73211,7 @@ const MasterApp = () => {
             className="back-btn"
             onClick={() => setIsWeatherOpen(false)}
           >
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
           <div className="title">天气</div>
         </div>
@@ -73225,7 +73225,7 @@ const MasterApp = () => {
             className="back-btn"
             onClick={() => setIsCalendarOpen(false)}
           >
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
           <div className="title">日历</div>
         </div>
@@ -74215,7 +74215,7 @@ const MasterApp = () => {
             className="back-btn"
             onClick={() => setIsReaderOpen(false)}
           >
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
           {/* 下拉按钮：今日阅读 / 天下书城 */}
           <div className="relative">
@@ -74810,7 +74810,7 @@ const MasterApp = () => {
       <div className={`forum-overlay ${isForumOpen ? "open" : ""}`}>
         <div className="forum-nav">
           <div className="back-btn" onClick={() => setIsForumOpen(false)}>
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
         </div>
         <ForumPage />
@@ -74820,7 +74820,7 @@ const MasterApp = () => {
       <div className={`msg-overlay ${isMsgOpen ? "open" : ""}`}>
         <div className="msg-nav">
           <div className="back-btn" onClick={() => setIsMsgOpen(false)}>
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
           <div className="title">传讯</div>
         </div>
@@ -74831,7 +74831,7 @@ const MasterApp = () => {
       <div className={`t9-overlay ${isT9Open ? "open" : ""}`}>
         <div className="t9-nav">
           <div className="back-btn" onClick={() => setIsT9Open(false)}>
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
           <div className="title">我们的空间</div>
         </div>
@@ -74842,7 +74842,7 @@ const MasterApp = () => {
       <div className={`t10-overlay ${isT10Open ? "open" : ""}`}>
         <div className="t10-nav">
           <div className="back-btn" onClick={() => setIsT10Open(false)}>
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
           <div className="title">诊疗咨询</div>
         </div>
@@ -74858,7 +74858,7 @@ const MasterApp = () => {
             className="back-btn"
             onClick={() => setIsDecoctionOpen(false)}
           >
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
           <div className="title">煎药台</div>
         </div>
@@ -74875,7 +74875,7 @@ const MasterApp = () => {
       <div className={`t12-overlay ${isT12Open ? "open" : ""}`}>
         <div className="t12-nav">
           <div className="back-btn" onClick={() => setIsT12Open(false)}>
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
           <div className="title">太疾驰 - 温暖版</div>
         </div>
@@ -74886,7 +74886,7 @@ const MasterApp = () => {
       <div className={`t13-overlay ${isT13Open ? "open" : ""}`}>
         <div className="t13-nav">
           <div className="back-btn" onClick={() => setIsT13Open(false)}>
-            <i data-lucide="chevron-left"></i>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
           </div>
           <div className="title">休闲一刻</div>
         </div>
