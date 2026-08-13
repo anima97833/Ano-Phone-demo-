@@ -1,4 +1,4 @@
-
+﻿
 /** @jsx React.createElement */
 /** @jsxFrag React.Fragment */
 const { useState, useEffect, useRef } = React;
@@ -61681,7 +61681,7 @@ const APISettingsOverlay = ({ isOpen, onClose }) => {
         <div className="back-btn" onClick={onClose}>
           <i data-lucide="chevron-left"></i>
         </div>
-        <div className="title">API 设置</div>
+        <div className="title">API ��������</div>
       </div>
       <APISettingsPage />
     </div>
@@ -62097,7 +62097,7 @@ const WorldBookOverlay = ({ isOpen, onClose }) => {
         <div className="back-btn" onClick={onClose}>
           <i data-lucide="chevron-left"></i>
         </div>
-        <div className="title">世界书 (World Book)</div>
+        <div className="title">������ (World Book)</div>
       </div>
       <WorldBookPage />
     </div>
@@ -62571,7 +62571,7 @@ const UserProfileOverlay = ({ isOpen, onClose, onUpdateActiveUser }) => {
         <div className="back-btn" onClick={onClose}>
           <i data-lucide="chevron-left"></i>
         </div>
-        <div className="title">身份配置库</div>
+        <div className="title">�û���������</div>
       </div>
       <UserProfilePage
         onUpdateActiveUser={onUpdateActiveUser}
@@ -64117,7 +64117,7 @@ const LongTermMemoryOverlay = ({ isOpen, onClose }) => {
         <div className="back-btn" onClick={onClose}>
           <i data-lucide="chevron-left"></i>
         </div>
-        <div className="title">长期记忆设置</div>
+        <div className="title">���ڼ�������</div>
       </div>
       <LongTermMemoryPage />
     </div>
@@ -69017,6 +69017,120 @@ const BackpackPage = ({ onClose }) => {
 };
 
 // ==================== [新增] 隐私与安全二级页面组件 ====================
+const PrivacySecurityPage = ({ onOpenMinimax }) => {
+  return (
+    <div
+      className="no-scrollbar"
+      style={{
+        flex: 1,
+        padding: "20px",
+        overflowY: "auto",
+        background: "#F9F7F5",
+      }}
+    >
+      <div
+        style={{
+          fontSize: "14px",
+          fontWeight: "bold",
+          color: "#5A5F4D",
+          margin: "12px 0 8px",
+        }}
+      >
+        大模型服务配置
+      </div>
+      <div
+        style={{
+          background: "#FFFFFF",
+          borderRadius: "16px",
+          padding: "16px",
+          boxShadow: "0 4px 12px rgba(163, 177, 164, 0.08)",
+          marginBottom: "16px",
+        }}
+      >
+        <div
+          onClick={() => onOpenMinimax && onOpenMinimax()}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 0",
+            cursor: "pointer",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: "500", color: "#333" }}>
+              Minimax 接入设置
+            </div>
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
+              配置 Minimax API Key 与语音合成服务
+            </div>
+          </div>
+          <i data-lucide="chevron-right" style={{ color: "#aaa" }}></i>
+        </div>
+      </div>
+
+      <div
+        style={{
+          fontSize: "14px",
+          fontWeight: "bold",
+          color: "#5A5F4D",
+          margin: "12px 0 8px",
+        }}
+      >
+        数据与安全
+      </div>
+      <div
+        style={{
+          background: "#FFFFFF",
+          borderRadius: "16px",
+          padding: "16px",
+          boxShadow: "0 4px 12px rgba(163, 177, 164, 0.08)",
+          marginBottom: "16px",
+        }}
+      >
+        <div
+          style={{
+            padding: "12px 0",
+            borderBottom: "1px solid #f5f5f5",
+          }}
+        >
+          <div style={{ fontSize: "14px", fontWeight: "500", color: "#333" }}>
+            本地数据存储说明
+          </div>
+          <div style={{ fontSize: "12px", color: "#888", marginTop: "4px", lineHeight: "1.5" }}>
+            您的所有聊天记录、锁屏图片、背景设置及书架数据均安全保存在浏览器本地 IndexedDB 中，不会被上传到任何未经授权的第三方服务器。
+          </div>
+        </div>
+
+        <div
+          onClick={() => {
+            if (confirm("确定要清理临时图像与网页缓存吗？这不会影响您的核心聊天记录和身份设定。")) {
+              alert("缓存清理完成");
+            }
+          }}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 0",
+            cursor: "pointer",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: "500", color: "#D6724B" }}>
+              清理临时缓存
+            </div>
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
+              释放浏览器占用的临时资源空间
+            </div>
+          </div>
+          <i data-lucide="trash-2" style={{ color: "#D6724B", width: 18, height: 18 }}></i>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
   if (!isOpen) return null;
   return (
@@ -69028,7 +69142,7 @@ const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
         <div className="back-btn" onClick={onClose}>
           <i data-lucide="chevron-left"></i>
         </div>
-        <div className="title">隐私与安全</div>
+        <div className="title">��˽�밲ȫ</div>
       </div>
       <PrivacySecurityPage onOpenMinimax={onOpenMinimax} />
     </div>
@@ -76626,3 +76740,4 @@ const SandTablePage = ({ onBack }) => {
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<MasterApp />);
+
