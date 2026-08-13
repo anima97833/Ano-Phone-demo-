@@ -12726,8 +12726,8 @@ const JoinUsPage = ({ onBack }) => {
               height: orb.size,
               background: orb.color,
               // 绝对定位 + 偏移
-              left: `calc(50% + ${orb.x}px - ${orb.size / 2}px)`,
-              top: `calc(45% + ${orb.y}px - ${orb.size / 2}px)`, // 整体稍微上移一点视觉中心
+              left: `calc(50% + ${orb.x - orb.size / 2}px)`,
+              top: `calc(45% + ${orb.y - orb.size / 2}px)`,
               "--mx": orb.mx,
               "--my": orb.my,
               animationDelay: `${orb.id * 0.2}s`,
@@ -76709,6 +76709,37 @@ const SandTablePage = ({ onBack }) => {
 
 // T9 情侣空间页面组件
 
+
+class ErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    this.setState({ errorInfo });
+    console.error('ErrorBoundary caught an error', error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div style={{ padding: '20px', background: '#fff', color: 'red', zIndex: 99999, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'auto' }}>
+          <h2>渲染出现错误</h2>
+          <details style={{ whiteSpace: 'pre-wrap' }}>
+            {this.state.error && this.state.error.toString()}
+            <br />
+            {this.state.errorInfo && this.state.errorInfo.componentStack}
+          </details>
+          <button onClick={() => window.location.reload()}>刷新页面</button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<MasterApp />);
+root.render(<ErrorBoundary><MasterApp /></ErrorBoundary>);
 
