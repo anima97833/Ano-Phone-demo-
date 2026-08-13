@@ -10493,3 +10493,10 @@
         cursor: pointer;
       }
     
+
+/* Fix overlay clickthrough */
+.settings-overlay:not(.open) {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}

@@ -61690,16 +61690,17 @@
       };
       // API 配置页面覆盖层
       const APISettingsOverlay = ({ isOpen, onClose }) => {
+        if (!isOpen) return null;
         return (
           <div
-            className={`settings-overlay ${isOpen ? "open" : ""}`}
-            style={{ zIndex: 1000 }} // 比悬浮球更高的层级
+            className="settings-overlay open"
+            style={{ zIndex: 1000 }}
           >
             <div className="settings-nav">
               <div className="back-btn" onClick={onClose}>
                 <i data-lucide="chevron-left"></i>
               </div>
-              <div className="title">API 配置中心</div>
+              <div className="title">API ��������</div>
             </div>
             <APISettingsPage />
           </div>
@@ -62105,16 +62106,17 @@
       };
 
       const WorldBookOverlay = ({ isOpen, onClose }) => {
+        if (!isOpen) return null;
         return (
           <div
-            className={`settings-overlay ${isOpen ? "open" : ""}`}
-            style={{ zIndex: 202 }} // 比 API 设置更高的层级
+            className="settings-overlay open"
+            style={{ zIndex: 202 }}
           >
             <div className="settings-nav">
               <div className="back-btn" onClick={onClose}>
                 <i data-lucide="chevron-left"></i>
               </div>
-              <div className="title">世界书 (World Book)</div>
+              <div className="title">������ (World Book)</div>
             </div>
             <WorldBookPage />
           </div>
@@ -62579,18 +62581,22 @@
 
       // 身份管理 Overlay 容器
       const UserProfileOverlay = ({ isOpen, onClose, onUpdateActiveUser }) => {
+        if (!isOpen) return null;
         return (
           <div
-            className={`settings-overlay ${isOpen ? "open" : ""}`}
-            style={{ zIndex: 202 }}
+            className="settings-overlay open"
+            style={{ zIndex: 1001 }}
           >
             <div className="settings-nav">
               <div className="back-btn" onClick={onClose}>
                 <i data-lucide="chevron-left"></i>
               </div>
-              <div className="title">个人信息与面具</div>
+              <div className="title">�û���������</div>
             </div>
-            <UserProfilePage onUpdateActiveUser={onUpdateActiveUser} />
+            <UserProfilePage
+              onUpdateActiveUser={onUpdateActiveUser}
+              onClose={onClose}
+            />
           </div>
         );
       };
@@ -64125,16 +64131,17 @@
 
       // 长期记忆 Overlay 容器
       const LongTermMemoryOverlay = ({ isOpen, onClose }) => {
+        if (!isOpen) return null;
         return (
           <div
-            className={`settings-overlay ${isOpen ? "open" : ""}`}
-            style={{ zIndex: 202 }}
+            className="settings-overlay open"
+            style={{ zIndex: 203 }}
           >
             <div className="settings-nav">
               <div className="back-btn" onClick={onClose}>
                 <i data-lucide="chevron-left"></i>
               </div>
-              <div className="title">长期记忆管理</div>
+              <div className="title">���ڼ�������</div>
             </div>
             <LongTermMemoryPage />
           </div>
@@ -69035,49 +69042,19 @@ ${worldContext}
 
       // ==================== [新增] 隐私与安全二级页面组件 ====================
       const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
-        const [showWallet, setShowWallet] = React.useState(false);
-        const [showBackpack, setShowBackpack] = React.useState(false); // ✅ 新增：控制背包显示状态
-
+        if (!isOpen) return null;
         return (
           <div
-            className={`settings-overlay ${isOpen ? "open" : ""}`}
-            style={{ zIndex: 204 }}
+            className="settings-overlay open"
+            style={{ zIndex: 1005 }}
           >
-            {showWallet && <WalletPage onClose={() => setShowWallet(false)} />}
-            {showBackpack && (
-              <BackpackPage onClose={() => setShowBackpack(false)} />
-            )}{" "}
-            {/* ✅ 新增：渲染背包组件 */}
             <div className="settings-nav">
               <div className="back-btn" onClick={onClose}>
                 <i data-lucide="chevron-left"></i>
               </div>
-              <div className="title">隐私与安全</div>
+              <div className="title">��˽�밲ȫ</div>
             </div>
-            <div className="settings-content">
-              <div className="setting-list" style={{ marginTop: "16px" }}>
-                <SettingRow
-                  icon="backpack"
-                  text="我的背包"
-                  color="#F5A623"
-                  onClick={() =>
-                    setShowBackpack(true)
-                  } /* ✅ 修改：点击打开背包 */
-                />
-                <SettingRow
-                  icon="database"
-                  text="数据接口"
-                  color="#4A90E2"
-                  onClick={onOpenMinimax}
-                />
-                <SettingRow
-                  icon="wallet"
-                  text="我的钱包"
-                  color="#7ED321"
-                  onClick={() => setShowWallet(true)}
-                />
-              </div>
-            </div>
+            <PrivacySecurityPage onOpenMinimax={onOpenMinimax} />
           </div>
         );
       };
