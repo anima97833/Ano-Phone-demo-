@@ -59345,16 +59345,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                   title="点赞"
                   onClick={() => handleButtonClick(item.id, "like")}
                 >
-                  <iconify-icon
-                    icon="line-md:emoji-smile"
-                    style={{
-                      width: "20px",
-                      height: "20px",
-                      color: buttonStates[item.id]?.like
-                        ? "#FF6B6B"
-                        : "#666",
-                    }}
-                  ></iconify-icon>
+                  <i className="ph ph-smiley" style={{ fontSize: "20px", color: buttonStates[item.id]?.like ? "#FF6B6B" : "#666" }}></i>
                 </button>
                 {/* 屏蔽按钮 */}
                 <button
@@ -59367,16 +59358,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                   title="屏蔽"
                   onClick={() => handleButtonClick(item.id, "block")}
                 >
-                  <iconify-icon
-                    icon="line-md:emoji-frown-filled"
-                    style={{
-                      width: "20px",
-                      height: "20px",
-                      color: buttonStates[item.id]?.block
-                        ? "#4ECDC4"
-                        : "#666",
-                    }}
-                  ></iconify-icon>
+                  <i className="ph-fill ph-smiley-sad" style={{ fontSize: "20px", color: buttonStates[item.id]?.block ? "#4ECDC4" : "#666" }}></i>
                 </button>
                 {/* 无语按钮 */}
                 <button
@@ -59389,16 +59371,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                   title="无语"
                   onClick={() => handleButtonClick(item.id, "speechless")}
                 >
-                  <iconify-icon
-                    icon="line-md:question"
-                    style={{
-                      width: "20px",
-                      height: "20px",
-                      color: buttonStates[item.id]?.speechless
-                        ? "#45B7D1"
-                        : "#666",
-                    }}
-                  ></iconify-icon>
+                  <i className="ph ph-question" style={{ fontSize: "20px", color: buttonStates[item.id]?.speechless ? "#45B7D1" : "#666" }}></i>
                 </button>
               </div>
             </div>
@@ -59453,14 +59426,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                 }}
                 title="删除动态"
               >
-                <iconify-icon
-                  icon="line-md:close-circle"
-                  style={{
-                    width: "20px",
-                    height: "20px",
-                    color: "#666",
-                  }}
-                ></iconify-icon>
+                <i className="ph ph-x-circle" style={{ fontSize: "20px", color: "#666" }}></i>
               </button>
               {/* 评论按钮 */}
               <button
@@ -59473,18 +59439,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                 }}
                 title="评论"
               >
-                <iconify-icon
-                  icon="line-md:cloud-alt-print-twotone-loop"
-                  style={{
-                    width: "20px",
-                    height: "20px",
-                    color: "#666",
-                    transition: "transform 0.3s ease",
-                    transform: expandedComments[item.id]
-                      ? "rotate(180deg)"
-                      : "rotate(0deg)",
-                  }}
-                ></iconify-icon>
+                <i className="ph ph-chat-circle-dots" style={{ fontSize: "20px", color: "#666", transition: "transform 0.3s ease", transform: expandedComments[item.id] ? "rotate(180deg)" : "rotate(0deg)" }}></i>
               </button>
               {/* 生成按钮 */}
               <button
@@ -59499,17 +59454,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                 }}
                 title="生成评论"
               >
-                <iconify-icon
-                  icon="line-md:loading-twotone-loop"
-                  style={{
-                    width: "20px",
-                    height: "20px",
-                    color: "#666",
-                    animation: isGeneratingComment
-                      ? "spin 1s linear infinite"
-                      : "none",
-                  }}
-                ></iconify-icon>
+                <i className="ph ph-spinner" style={{ fontSize: "20px", color: "#666", animation: isGeneratingComment ? "spin 1s linear infinite" : "none" }}></i>
               </button>
             </div>
 
