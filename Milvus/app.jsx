@@ -61681,7 +61681,7 @@ const APISettingsOverlay = ({ isOpen, onClose }) => {
         <div className="back-btn" onClick={onClose}>
           <i data-lucide="chevron-left"></i>
         </div>
-        <div className="title">API ��������</div>
+        <div className="title">API 设置</div>
       </div>
       <APISettingsPage />
     </div>
@@ -62097,7 +62097,7 @@ const WorldBookOverlay = ({ isOpen, onClose }) => {
         <div className="back-btn" onClick={onClose}>
           <i data-lucide="chevron-left"></i>
         </div>
-        <div className="title">������ (World Book)</div>
+        <div className="title">世界书 (World Book)</div>
       </div>
       <WorldBookPage />
     </div>
@@ -62571,7 +62571,7 @@ const UserProfileOverlay = ({ isOpen, onClose, onUpdateActiveUser }) => {
         <div className="back-btn" onClick={onClose}>
           <i data-lucide="chevron-left"></i>
         </div>
-        <div className="title">�û���������</div>
+        <div className="title">身份配置库</div>
       </div>
       <UserProfilePage
         onUpdateActiveUser={onUpdateActiveUser}
@@ -64117,7 +64117,7 @@ const LongTermMemoryOverlay = ({ isOpen, onClose }) => {
         <div className="back-btn" onClick={onClose}>
           <i data-lucide="chevron-left"></i>
         </div>
-        <div className="title">���ڼ�������</div>
+        <div className="title">长期记忆设置</div>
       </div>
       <LongTermMemoryPage />
     </div>
@@ -69174,7 +69174,7 @@ const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
         <div className="back-btn" onClick={onClose}>
           <i data-lucide="chevron-left"></i>
         </div>
-        <div className="title">��˽�밲ȫ</div>
+        <div className="title">隐私与安全</div>
       </div>
       <PrivacySecurityPage onOpenMinimax={onOpenMinimax} />
     </div>
