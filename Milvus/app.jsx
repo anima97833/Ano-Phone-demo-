@@ -34588,273 +34588,449 @@ const T13StatisticsPage = ({ onBack }) => {
 };
 
 // ==================== [新增] 郡县市井地图详情页组件 ====================
+// ==================== [重构升级] 游戏级沙盘古风郡县舆图组件 ====================
 const CountyMapViewer = ({ regionName, countyName, mapData, onBack }) => {
   const svgRef = React.useRef(null);
+  const containerRef = React.useRef(null);
+  const zoomBehaviorRef = React.useRef(null);
   const [selectedLandmark, setSelectedLandmark] = React.useState(null);
+  const [activeTypeFilter, setActiveTypeFilter] = React.useState("all");
+
+  // 地图虚拟世界尺寸
+  const WORLD_WIDTH = 1100;
+  const WORLD_HEIGHT = 1500;
+
+  // 节点分类配色体系 (汉代古风色盘)
+  const getNodeTheme = (type = "", isSeat = false) => {
+    if (isSeat || type.includes("治所") || type.includes("官署") || type.includes("县衙")) {
+      return { fill: "#4A6B82", stroke: "#E2C37A", text: "#FFFFFF", icon: "官", bg: "rgba(74, 107, 130, 0.12)" };
+    }
+    if (type.includes("坞堡") || type.includes("关隘") || type.includes("军营") || type.includes("营寨")) {
+      return { fill: "#B84A39", stroke: "#F7D6B5", text: "#FFFFFF", icon: "坞", bg: "rgba(184, 74, 57, 0.12)" };
+    }
+    if (type.includes("庄园") || type.includes("义庄") || type.includes("别院") || type.includes("世家")) {
+      return { fill: "#BA6838", stroke: "#F2DEC4", text: "#FFFFFF", icon: "庄", bg: "rgba(186, 104, 56, 0.12)" };
+    }
+    if (type.includes("市") || type.includes("商") || type.includes("盐号") || type.includes("铺") || type.includes("坊")) {
+      return { fill: "#C99632", stroke: "#FFF2C2", text: "#FFFFFF", icon: "市", bg: "rgba(201, 150, 50, 0.12)" };
+    }
+    if (type.includes("渡") || type.includes("码头") || type.includes("水驿") || type.includes("渔")) {
+      return { fill: "#3E837E", stroke: "#C1E8E4", text: "#FFFFFF", icon: "津", bg: "rgba(62, 131, 126, 0.12)" };
+    }
+    if (type.includes("客栈") || type.includes("酒") || type.includes("茶") || type.includes("楼")) {
+      return { fill: "#8A6856", stroke: "#EADAD1", text: "#FFFFFF", icon: "客", bg: "rgba(138, 104, 86, 0.12)" };
+    }
+    if (type.includes("驿") || type.includes("站")) {
+      return { fill: "#5A8568", stroke: "#D0EAD6", text: "#FFFFFF", icon: "驿", bg: "rgba(90, 133, 104, 0.12)" };
+    }
+    return { fill: "#6E7E71", stroke: "#E0EAE2", text: "#FFFFFF", icon: "地", bg: "rgba(110, 126, 113, 0.12)" };
+  };
 
   React.useEffect(() => {
-    if (!mapData || !svgRef.current) return;
-    const width = window.innerWidth || 400;
-    const height = window.innerHeight || 800;
+    if (!mapData || !svgRef.current || !containerRef.current) return;
+    const container = containerRef.current;
+    const viewWidth = container.clientWidth || window.innerWidth || 400;
+    const viewHeight = container.clientHeight || (window.innerHeight - 56) || 700;
 
     d3.select(svgRef.current).selectAll("*").remove();
+
     const svg = d3
       .select(svgRef.current)
       .attr("width", "100%")
       .attr("height", "100%")
-      .style("background", "transparent"); // 底色交由父容器控制
+      .style("background", "#F5F2E9");
 
-    // 绘制一些纸张纹理线条(辅助线)
-    svg
-      .append("g")
-      .selectAll("line.h")
-      .data(d3.range(0, height, 40))
-      .enter()
-      .append("line")
-      .attr("x1", 0)
-      .attr("x2", width)
-      .attr("y1", (d) => d)
-      .attr("y2", (d) => d)
-      .attr("stroke", "rgba(0,0,0,0.03)")
-      .attr("stroke-width", 1);
-    svg
-      .append("g")
-      .selectAll("line.v")
-      .data(d3.range(0, width, 40))
-      .enter()
-      .append("line")
-      .attr("x1", (d) => d)
-      .attr("x2", (d) => d)
-      .attr("y1", 0)
-      .attr("y2", height)
-      .attr("stroke", "rgba(0,0,0,0.03)")
-      .attr("stroke-width", 1);
+    // 1. 定义滤镜与渐变
+    const defs = svg.append("defs");
 
-    const g = svg.append("g");
-    let currentScale = 1;
+    // 宣纸底纹微噪点/阴影滤镜
+    const shadowFilter = defs.append("filter")
+      .attr("id", "map-node-shadow")
+      .attr("x", "-20%")
+      .attr("y", "-20%")
+      .attr("width", "150%")
+      .attr("height", "150%");
+    shadowFilter.append("feDropShadow")
+      .attr("dx", "0")
+      .attr("dy", "4")
+      .attr("stdDeviation", "4")
+      .attr("flood-color", "rgba(74, 65, 53, 0.2)");
 
-    const zoom = d3
-      .zoom()
-      .scaleExtent([0.5, 5])
-      .on("zoom", (event) => {
-        g.attr("transform", event.transform);
-        currentScale = event.transform.k;
-        updateDetailLevel(currentScale);
-      });
-    svg.call(zoom);
+    // 水系河流渐变
+    const riverGradient = defs.append("linearGradient")
+      .attr("id", "river-grad")
+      .attr("x1", "0%").attr("y1", "0%")
+      .attr("x2", "100%").attr("y2", "100%");
+    riverGradient.append("stop").attr("offset", "0%").attr("stop-color", "#A1C4D4").attr("stop-opacity", "0.75");
+    riverGradient.append("stop").attr("offset", "50%").attr("stop-color", "#8CB2C4").attr("stop-opacity", "0.85");
+    riverGradient.append("stop").attr("offset", "100%").attr("stop-color", "#96BACB").attr("stop-opacity", "0.75");
 
-    // 将坐标映射到合理的屏幕区间
-    const xScale = d3
-      .scaleLinear()
-      .domain([0, 100])
-      .range([60, width - 60]);
-    const yScale = d3
-      .scaleLinear()
-      .domain([0, 100])
-      .range([120, height - 120]);
+    // 2. 主地图平移缩放层
+    const mapWorld = svg.append("g").attr("class", "map-world");
 
-    // 生成随机河流路径
-    const generateRiverPath = () => {
-      const points = [];
-      const startX = Math.random() * 20 + 10;
-      const startY = Math.random() * 30 + 20;
-      points.push([startX, startY]);
+    // 3. 绘制古风水墨经纬方格 (井田棋盘网格)
+    const gridGroup = mapWorld.append("g").attr("class", "ancient-grid").style("opacity", "0.4");
+    for (let x = 0; x <= WORLD_WIDTH; x += 50) {
+      gridGroup.append("line")
+        .attr("x1", x).attr("y1", 0)
+        .attr("x2", x).attr("y2", WORLD_HEIGHT)
+        .attr("stroke", x % 200 === 0 ? "rgba(163, 150, 133, 0.25)" : "rgba(163, 150, 133, 0.1)")
+        .attr("stroke-width", x % 200 === 0 ? 1.5 : 0.8)
+        .attr("stroke-dasharray", x % 200 === 0 ? "none" : "2,4");
+    }
+    for (let y = 0; y <= WORLD_HEIGHT; y += 50) {
+      gridGroup.append("line")
+        .attr("x1", 0).attr("y1", y)
+        .attr("x2", WORLD_WIDTH).attr("y2", y)
+        .attr("stroke", y % 200 === 0 ? "rgba(163, 150, 133, 0.25)" : "rgba(163, 150, 133, 0.1)")
+        .attr("stroke-width", y % 200 === 0 ? 1.5 : 0.8)
+        .attr("stroke-dasharray", y % 200 === 0 ? "none" : "2,4");
+    }
 
-      for (let i = 0; i < 5; i++) {
-        const x = Math.random() * 60 + 20;
-        const y = Math.random() * 40 + 30;
-        points.push([x, y]);
-      }
+    // 4. 自然水系蜿蜒流向
+    const riverPoints = [
+      [60, 200],
+      [220, 360],
+      [380, 480],
+      [560, 720],
+      [720, 980],
+      [880, 1200],
+      [1040, 1380]
+    ];
+    const riverGenerator = d3.line().curve(d3.curveBasis);
+    const riverPathData = riverGenerator(riverPoints);
 
-      const endX = Math.random() * 20 + 70;
-      const endY = Math.random() * 30 + 50;
-      points.push([endX, endY]);
-
-      return d3
-        .line()
-        .curve(d3.curveBasis)
-        .x((d) => xScale(d[0]))
-        .y((d) => yScale(d[1]))(points);
-    };
-
-    // 生成随机草木位置
-    const generateVegetation = (count) => {
-      const vegetation = [];
-      for (let i = 0; i < count; i++) {
-        vegetation.push({
-          x: Math.random() * 80 + 10,
-          y: Math.random() * 80 + 10,
-          type: Math.random() > 0.5 ? "tree" : "bush",
-        });
-      }
-      return vegetation;
-    };
-
-    // 绘制河流
-    const riverPath = generateRiverPath();
-    const river = g
-      .append("path")
-      .attr("d", riverPath)
-      .attr("stroke", "#8AA6C1")
-      .attr("stroke-width", 6)
+    // 河流外晕与主水系
+    mapWorld.append("path")
+      .attr("d", riverPathData)
       .attr("fill", "none")
-      .style("opacity", 0);
+      .attr("stroke", "rgba(161, 196, 212, 0.25)")
+      .attr("stroke-width", 42)
+      .attr("stroke-linecap", "round");
+    mapWorld.append("path")
+      .attr("d", riverPathData)
+      .attr("fill", "none")
+      .attr("stroke", "url(#river-grad)")
+      .attr("stroke-width", 22)
+      .attr("stroke-linecap", "round");
+    mapWorld.append("path")
+      .attr("d", riverPathData)
+      .attr("fill", "none")
+      .attr("stroke", "rgba(255, 255, 255, 0.45)")
+      .attr("stroke-width", 3)
+      .attr("stroke-dasharray", "8,16")
+      .attr("stroke-linecap", "round");
 
-    // 绘制草木
-    const vegetation = generateVegetation(20);
-    const vegetationGroup = g.append("g").style("opacity", 0);
-
-    vegetation.forEach((veg, index) => {
-      const vegGroup = vegetationGroup
-        .append("g")
-        .attr("transform", `translate(${xScale(veg.x)}, ${yScale(veg.y)})`);
-
-      if (veg.type === "tree") {
-        // 绘制树
-        vegGroup
-          .append("rect")
-          .attr("x", -3)
-          .attr("y", -15)
-          .attr("width", 6)
-          .attr("height", 15)
-          .attr("fill", "#8B4513");
-        vegGroup.append("circle").attr("r", 10).attr("fill", "#A1CDA8");
-      } else {
-        // 绘制灌木
-        vegGroup.append("circle").attr("r", 6).attr("fill", "#A1CDA8");
-      }
+    // 5. 远山微景观装饰
+    const mountainPoints = [
+      { x: 160, y: 150, s: 0.9 },
+      { x: 880, y: 220, s: 1.1 },
+      { x: 120, y: 880, s: 0.85 },
+      { x: 920, y: 920, s: 1.0 },
+      { x: 220, y: 1350, s: 0.95 }
+    ];
+    const mountainGroup = mapWorld.append("g").attr("class", "mountains").style("opacity", "0.22");
+    mountainPoints.forEach(m => {
+      mountainGroup.append("path")
+        .attr("d", `M ${m.x - 45 * m.s} ${m.y} Q ${m.x - 20 * m.s} ${m.y - 40 * m.s} ${m.x} ${m.y - 65 * m.s} Q ${m.x + 20 * m.s} ${m.y - 40 * m.s} ${m.x + 45 * m.s} ${m.y} Z`)
+        .attr("fill", "#6A7B6E");
+      mountainGroup.append("path")
+        .attr("d", `M ${m.x + 20 * m.s} ${m.y} Q ${m.x + 45 * m.s} ${m.y - 30 * m.s} ${m.x + 65 * m.s} ${m.y - 50 * m.s} Q ${m.x + 85 * m.s} ${m.y - 25 * m.s} ${m.x + 105 * m.s} ${m.y} Z`)
+        .attr("fill", "#5C6C60");
     });
 
-    // 根据缩放级别更新细节显示
-    const updateDetailLevel = (scale) => {
-      if (scale > 1.5) {
-        river.style("opacity", 0.7);
-        vegetationGroup.style("opacity", 0.8);
-      } else {
-        river.style("opacity", 0);
-        vegetationGroup.style("opacity", 0);
+    // 6. 核心数据准备与力导向防碰撞布局计算
+    // 深拷贝数据以避免修改 props
+    const nodes = mapData.map((d, index) => {
+      // 初始分散坐标映射到 1100x1500 空间
+      const initX = d.x !== undefined ? (d.x / 100) * (WORLD_WIDTH - 240) + 120 : (Math.random() * (WORLD_WIDTH - 260) + 130);
+      const initY = d.y !== undefined ? (d.y / 100) * (WORLD_HEIGHT - 260) + 130 : (Math.random() * (WORLD_HEIGHT - 280) + 140);
+      const isSeat = index === 0 || (d.type && d.type.includes("治所")) || (d.type && d.type.includes("官署"));
+      return {
+        ...d,
+        index,
+        isSeat,
+        x: initX,
+        y: initY,
+        theme: getNodeTheme(d.type, isSeat)
+      };
+    });
+
+    // 运行 D3 力导向仿真，确保节点间距 >= 120px，文字与图标完全无碰撞
+    const simulation = d3.forceSimulation(nodes)
+      .force("charge", d3.forceManyBody().strength(-400))
+      .force("collide", d3.forceCollide().radius(d => d.owner ? 85 : 72).iterations(4))
+      .force("center", d3.forceCenter(WORLD_WIDTH / 2, WORLD_HEIGHT / 2).strength(0.05))
+      .force("x", d3.forceX(d => d.x).strength(0.2))
+      .force("y", d3.forceY(d => d.y).strength(0.2))
+      .stop();
+
+    // 迭代计算 120 次获得稳定收敛坐标
+    for (let i = 0; i < 120; ++i) simulation.tick();
+
+    // 限制在边界内
+    nodes.forEach(d => {
+      d.x = Math.max(90, Math.min(WORLD_WIDTH - 90, d.x));
+      d.y = Math.max(100, Math.min(WORLD_HEIGHT - 100, d.y));
+    });
+
+    // 7. 构建科学且不交叉的古道驿路网 (基于最小生成树 MST + 近邻扩展)
+    const roadNetwork = [];
+    const n = nodes.length;
+    if (n > 1) {
+      // 计算全图所有边与欧几里得距离
+      const edges = [];
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const dist = Math.hypot(nodes[i].x - nodes[j].x, nodes[i].y - nodes[j].y);
+          edges.push({ u: i, v: j, dist });
+        }
       }
-    };
+      edges.sort((a, b) => a.dist - b.dist);
 
-    // 添加连线，模拟街道 (使用更随机的连接方式)
-    const connected = new Set();
-    mapData.forEach((d, i) => {
-      // 为每个点随机连接2-3个其他点
-      const connections = Math.floor(Math.random() * 2) + 2;
-      const possibleTargets = mapData.filter(
-        (_, j) => j !== i && !connected.has(`${j}-${i}`),
-      );
+      // Kruskal 算法求最小生成树 (保证全图连通且无交叉混乱)
+      const parent = Array.from({ length: n }, (_, i) => i);
+      const find = (i) => (parent[i] === i ? i : (parent[i] = find(parent[i])));
+      const union = (i, j) => {
+        const rootI = find(i);
+        const rootJ = find(j);
+        if (rootI !== rootJ) {
+          parent[rootI] = rootJ;
+          return true;
+        }
+        return false;
+      };
 
-      possibleTargets.slice(0, connections).forEach((target) => {
-        g.append("line")
-          .attr("x1", xScale(d.x))
-          .attr("y1", yScale(d.y))
-          .attr("x2", xScale(target.x))
-          .attr("y2", yScale(target.y))
-          .attr("stroke", "#C9C5B5")
-          .attr("stroke-width", 4)
-          .attr("stroke-dasharray", "4,4");
-        connected.add(`${i}-${target.id}`);
+      const mstEdges = [];
+      const nodeDegree = Array(n).fill(0);
+
+      edges.forEach(e => {
+        if (union(e.u, e.v)) {
+          mstEdges.push(e);
+          nodeDegree[e.u]++;
+          nodeDegree[e.v]++;
+        }
       });
+
+      // 为叶子节点或距离较近的次级节点补充少量不重叠环路
+      edges.forEach(e => {
+        if (e.dist < 260 && (nodeDegree[e.u] <= 2 || nodeDegree[e.v] <= 2) && !mstEdges.includes(e)) {
+          if (Math.random() > 0.4) {
+            mstEdges.push(e);
+            nodeDegree[e.u]++;
+            nodeDegree[e.v]++;
+          }
+        }
+      });
+
+      mstEdges.forEach(e => {
+        roadNetwork.push({
+          source: nodes[e.u],
+          target: nodes[e.v],
+          dist: e.dist,
+          isMain: nodes[e.u].isSeat || nodes[e.v].isSeat || Boolean(nodes[e.u].owner && nodes[e.v].owner)
+        });
+      });
+    }
+
+    // 8. 绘制官道与驿道路网 (带边缘裁剪，不穿透节点)
+    const roadsGroup = mapWorld.append("g").attr("class", "roads");
+    roadNetwork.forEach(road => {
+      const dx = road.target.x - road.source.x;
+      const dy = road.target.y - road.source.y;
+      const angle = Math.atan2(dy, dx);
+
+      // 偏移使端点停靠在节点外圈
+      const offsetSrc = road.source.owner ? 32 : 24;
+      const offsetTgt = road.target.owner ? 32 : 24;
+      const sx = road.source.x + Math.cos(angle) * offsetSrc;
+      const sy = road.source.y + Math.sin(angle) * offsetSrc;
+      const tx = road.target.x - Math.cos(angle) * offsetTgt;
+      const ty = road.target.y - Math.sin(angle) * offsetTgt;
+
+      if (road.isMain) {
+        // 官道主干路 (加宽实底 + 古朴双轨)
+        roadsGroup.append("line")
+          .attr("x1", sx).attr("y1", sy)
+          .attr("x2", tx).attr("y2", ty)
+          .attr("stroke", "rgba(186, 172, 153, 0.4)")
+          .attr("stroke-width", 6)
+          .attr("stroke-linecap", "round");
+        roadsGroup.append("line")
+          .attr("x1", sx).attr("y1", sy)
+          .attr("x2", tx).attr("y2", ty)
+          .attr("stroke", "#8F7D6B")
+          .attr("stroke-width", 2.2)
+          .attr("stroke-dasharray", "6,4")
+          .attr("stroke-linecap", "round");
+      } else {
+        // 乡野驿道 (细虚线)
+        roadsGroup.append("line")
+          .attr("x1", sx).attr("y1", sy)
+          .attr("x2", tx).attr("y2", ty)
+          .attr("stroke", "rgba(168, 155, 138, 0.65)")
+          .attr("stroke-width", 1.8)
+          .attr("stroke-dasharray", "4,4")
+          .attr("stroke-linecap", "round");
+      }
     });
 
-    const nodes = g
-      .selectAll(".node")
-      .data(mapData)
+    // 9. 绘制据点节点群 (Nodes)
+    const nodesGroup = mapWorld.append("g").attr("class", "landmarks");
+
+    const nodeG = nodesGroup
+      .selectAll(".landmark-node")
+      .data(nodes)
       .enter()
       .append("g")
-      .attr("class", "node")
-      .attr("transform", (d) => `translate(${xScale(d.x)}, ${yScale(d.y)})`)
+      .attr("class", "landmark-node")
+      .attr("transform", d => `translate(${d.x}, ${d.y})`)
       .style("cursor", "pointer")
       .on("click", function (event, d) {
         event.stopPropagation();
         setSelectedLandmark(d);
       });
 
-    // 专属家族的高亮动画脉冲
-    nodes
-      .filter((d) => d.owner && d.owner.trim() !== "")
+    // 9.1 专属世家/势力的外层光晕呼吸环
+    nodeG
+      .filter(d => d.owner && d.owner.trim() !== "")
+      .append("circle")
+      .attr("r", 30)
+      .attr("fill", "none")
+      .attr("stroke", "rgba(214, 114, 75, 0.35)")
+      .attr("stroke-width", 5)
+      .style("animation", "pulse 2.2s infinite ease-in-out");
+
+    // 治所金环外框
+    nodeG
+      .filter(d => d.isSeat)
       .append("circle")
       .attr("r", 28)
       .attr("fill", "none")
-      .attr("stroke", "rgba(214, 114, 75, 0.4)")
-      .attr("stroke-width", 6)
-      .style("animation", "pulse 2s infinite");
+      .attr("stroke", "rgba(226, 195, 122, 0.8)")
+      .attr("stroke-width", 3.5);
 
-    // 建筑底座
-    nodes
+    // 9.2 建筑主体圆形徽章
+    nodeG
       .append("circle")
-      .attr("r", (d) => (d.owner && d.owner.trim() !== "" ? 22 : 16))
-      .attr("fill", (d) => {
-        const type = d.type || "";
-        if (
-          type.includes("坞堡") ||
-          type.includes("庄园") ||
-          type.includes("世家")
-        )
-          return "#D6724B";
-        if (
-          type.includes("官署") ||
-          type.includes("衙") ||
-          type.includes("军营")
-        )
-          return "#8AA6C1";
-        if (type.includes("酒") || type.includes("客栈") || type.includes("坊"))
-          return "#E8C3A8";
-        return "#A8C8BA"; // 默认如布庄、药铺、寺庙
-      })
-      .attr("stroke", (d) =>
-        d.owner && d.owner.trim() !== "" ? "#FFD93D" : "#fff",
-      )
-      .attr("stroke-width", (d) => (d.owner && d.owner.trim() !== "" ? 3 : 2))
-      .style("filter", "drop-shadow(0 4px 6px rgba(0,0,0,0.15))");
+      .attr("r", d => (d.isSeat ? 22 : d.owner ? 20 : 17))
+      .attr("fill", d => d.theme.fill)
+      .attr("stroke", d => d.theme.stroke)
+      .attr("stroke-width", d => (d.isSeat ? 3 : d.owner ? 2.5 : 2))
+      .style("filter", "url(#map-node-shadow)");
 
-    // 中心类型字
-    nodes
+    // 9.3 核心标志汉字 (如：官、坞、庄、市、津、客、驿)
+    nodeG
       .append("text")
-      .attr("y", 4)
+      .attr("y", 5)
       .attr("text-anchor", "middle")
-      .text((d) => (d.type ? d.type[0] : "市"))
-      .style("font-size", (d) =>
-        d.owner && d.owner.trim() !== "" ? "14px" : "12px",
-      )
+      .text(d => (d.type ? d.type[0] : d.theme.icon))
+      .style("font-size", d => (d.isSeat ? "15px" : d.owner ? "14px" : "12px"))
       .style("font-weight", "bold")
-      .style("fill", "#FFF");
+      .style("fill", "#FFFFFF")
+      .style("font-family", "serif, KaiTi, STKaiti, sans-serif")
+      .style("pointer-events", "none");
 
-    // 标签背景
-    nodes
-      .append("rect")
-      .attr("x", -45)
-      .attr("y", (d) => (d.owner && d.owner.trim() !== "" ? 26 : 20))
-      .attr("width", 90)
-      .attr("height", 20)
-      .attr("rx", 10)
-      .attr("fill", "rgba(253, 252, 248, 0.85)")
-      .attr("stroke", "#EAE6D6")
-      .attr("stroke-width", 1);
+    // 9.4 势力印章式小标 (紧凑徽章，置于顶部)
+    const ownerGroup = nodeG
+      .filter(d => d.owner && d.owner.trim() !== "")
+      .append("g")
+      .attr("transform", "translate(0, -28)");
 
-    // 建筑名称
-    nodes
-      .append("text")
-      .attr("y", (d) => (d.owner && d.owner.trim() !== "" ? 40 : 34))
+    ownerGroup.append("rect")
+      .attr("x", d => -((d.owner.length * 11 + 14) / 2))
+      .attr("y", -9)
+      .attr("width", d => d.owner.length * 11 + 14)
+      .attr("height", 17)
+      .attr("rx", 4)
+      .attr("fill", "#B84A39")
+      .attr("stroke", "#FAD8C8")
+      .attr("stroke-width", 1)
+      .style("filter", "drop-shadow(0 2px 4px rgba(184, 74, 57, 0.3))");
+
+    ownerGroup.append("text")
+      .attr("y", 3)
       .attr("text-anchor", "middle")
-      .text((d) => d.name)
+      .text(d => d.owner)
+      .style("font-size", "10px")
+      .style("font-weight", "bold")
+      .style("fill", "#FFFFFF")
+      .style("font-family", "serif, KaiTi, STKaiti, sans-serif")
+      .style("pointer-events", "none");
+
+    // 9.5 优雅宣纸地名标牌 (自适应字长，位于下方)
+    const labelGroup = nodeG
+      .append("g")
+      .attr("transform", d => `translate(0, ${d.owner ? 28 : 24})`);
+
+    labelGroup.append("rect")
+      .attr("x", d => -((d.name.length * 12 + 18) / 2))
+      .attr("y", 0)
+      .attr("width", d => d.name.length * 12 + 18)
+      .attr("height", 21)
+      .attr("rx", 10.5)
+      .attr("fill", "rgba(255, 253, 248, 0.94)")
+      .attr("stroke", "#D8D0C0")
+      .attr("stroke-width", 1)
+      .style("filter", "drop-shadow(0 2px 6px rgba(0, 0, 0, 0.08))");
+
+    labelGroup.append("text")
+      .attr("y", 14)
+      .attr("text-anchor", "middle")
+      .text(d => d.name)
       .style("font-size", "11px")
       .style("font-weight", "bold")
-      .style("fill", "#5A5F4D");
+      .style("fill", "#4A453D")
+      .style("font-family", "serif, KaiTi, STKaiti, sans-serif")
+      .style("pointer-events", "none");
 
-    // 势力名称
-    nodes
-      .filter((d) => d.owner && d.owner.trim() !== "")
-      .append("text")
-      .attr("y", -30)
-      .attr("text-anchor", "middle")
-      .text((d) => `【${d.owner}】`)
-      .style("font-size", "12px")
-      .style("font-weight", "bold")
-      .style("fill", "#D6724B")
-      .style("text-shadow", "0 1px 2px rgba(255,255,255,0.9)");
+    // 10. 配置平滑阻尼缩放与初始视野聚焦
+    const zoom = d3
+      .zoom()
+      .scaleExtent([0.45, 2.8])
+      .on("zoom", (event) => {
+        mapWorld.attr("transform", event.transform);
+      });
+
+    zoomBehaviorRef.current = zoom;
+    svg.call(zoom);
+
+    // 找到核心治所或中心点，平滑居中
+    const focusNode = nodes.find(d => d.isSeat) || nodes[0] || { x: WORLD_WIDTH / 2, y: WORLD_HEIGHT / 2 };
+    const initScale = Math.min(viewWidth / 520, viewHeight / 720, 1.0);
+    const initialTransform = d3.zoomIdentity
+      .translate(viewWidth / 2 - focusNode.x * initScale, viewHeight / 2 - focusNode.y * initScale)
+      .scale(initScale);
+
+    svg.call(zoom.transform, initialTransform);
   }, [mapData]);
+
+  // 控制面板：居中复位
+  const handleResetView = () => {
+    if (!svgRef.current || !zoomBehaviorRef.current || !containerRef.current) return;
+    const container = containerRef.current;
+    const viewWidth = container.clientWidth || 400;
+    const viewHeight = container.clientHeight || 700;
+    const initScale = Math.min(viewWidth / 520, viewHeight / 720, 1.0);
+    const centerTransform = d3.zoomIdentity
+      .translate(viewWidth / 2 - (WORLD_WIDTH / 2) * initScale, viewHeight / 2 - (WORLD_HEIGHT / 2) * initScale)
+      .scale(initScale);
+
+    d3.select(svgRef.current)
+      .transition()
+      .duration(600)
+      .ease(d3.easeCubicOut)
+      .call(zoomBehaviorRef.current.transform, centerTransform);
+  };
+
+  // 控制面板：缩放
+  const handleZoom = (delta) => {
+    if (!svgRef.current || !zoomBehaviorRef.current) return;
+    d3.select(svgRef.current)
+      .transition()
+      .duration(300)
+      .call(zoomBehaviorRef.current.scaleBy, delta);
+  };
 
   return (
     <div
@@ -34862,32 +35038,33 @@ const CountyMapViewer = ({ regionName, countyName, mapData, onBack }) => {
         position: "absolute",
         inset: 0,
         zIndex: 1000,
-        background: "#F4F1E8",
+        background: "#F5F2E9",
         overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
       }}
       onClick={() => setSelectedLandmark(null)}
     >
+      {/* 顶部导航 */}
       <div
         className="t13-nav"
         style={{
-          background: "rgba(244, 241, 232, 0.95)",
-          backdropFilter: "blur(10px)",
-          position: "absolute",
-          top: 0,
-          width: "100%",
-          zIndex: 10,
+          background: "rgba(245, 242, 233, 0.92)",
+          backdropFilter: "blur(12px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           padding: "0 16px",
           height: "56px",
-          paddingTop: "max(0px, env(safe-area-inset-top))",
+          borderBottom: "1px solid rgba(197, 184, 165, 0.35)",
+          flexShrink: 0,
+          zIndex: 10,
         }}
       >
         <div
           className="back-btn"
           onClick={onBack}
-          style={{ cursor: "pointer", zIndex: 11 }}
+          style={{ cursor: "pointer", display: "flex", alignItems: "center", zIndex: 11 }}
         >
           <i
             className="ph ph-caret-left"
@@ -34900,42 +35077,136 @@ const CountyMapViewer = ({ regionName, countyName, mapData, onBack }) => {
             color: "#4A453D",
             fontWeight: "bold",
             fontSize: "18px",
-            letterSpacing: "1px",
+            letterSpacing: "2px",
             textAlign: "center",
-            width: "100%",
-            position: "absolute",
-            left: 0,
+            flex: 1,
+            fontFamily: "serif, KaiTi, STKaiti, sans-serif",
           }}
         >
           {regionName} · {countyName}
         </div>
+        <div style={{ width: 24 }}></div>
       </div>
-      <div style={{ width: "100%", height: "100%", paddingTop: "56px" }}>
+
+      {/* SVG 舆图主渲染区 */}
+      <div
+        ref={containerRef}
+        style={{
+          flex: 1,
+          width: "100%",
+          position: "relative",
+          touchAction: "none",
+          overflow: "hidden",
+        }}
+      >
         <svg
           ref={svgRef}
           style={{ width: "100%", height: "100%", display: "block" }}
         ></svg>
-      </div>
-      <div
-        style={{
-          position: "absolute",
-          bottom: "30px",
-          left: "50%",
-          transform: "translateX(-50%)",
-          background: "rgba(255,255,255,0.7)",
-          padding: "6px 16px",
-          borderRadius: "20px",
-          fontSize: "12px",
-          color: "#5A5F4D",
-          pointerEvents: "none",
-          backdropFilter: "blur(4px)",
-          boxShadow: "0 2px 10px rgba(0,0,0,0.05)",
-        }}
-      >
-        双指缩放 · 单指拖动 · 点击查看详情
+
+        {/* 右侧悬浮快捷操作罗盘 */}
+        <div
+          style={{
+            position: "absolute",
+            right: "14px",
+            top: "16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px",
+            zIndex: 15,
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            onClick={() => handleZoom(1.3)}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              background: "rgba(255, 253, 248, 0.92)",
+              border: "1px solid #D8D0C0",
+              color: "#5A544B",
+              fontSize: "18px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            title="放大"
+          >
+            +
+          </button>
+          <button
+            onClick={() => handleZoom(0.75)}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              background: "rgba(255, 253, 248, 0.92)",
+              border: "1px solid #D8D0C0",
+              color: "#5A544B",
+              fontSize: "18px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            title="缩小"
+          >
+            -
+          </button>
+          <button
+            onClick={handleResetView}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              background: "rgba(255, 253, 248, 0.92)",
+              border: "1px solid #D8D0C0",
+              color: "#5A544B",
+              fontSize: "13px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.1)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+            title="复位"
+          >
+            <i className="ph ph-compass" style={{ fontSize: "18px" }}></i>
+          </button>
+        </div>
+
+        {/* 底部探索手势提示 */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: "16px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(255, 253, 248, 0.88)",
+            padding: "5px 16px",
+            borderRadius: "20px",
+            fontSize: "11px",
+            color: "#6B6457",
+            pointerEvents: "none",
+            backdropFilter: "blur(6px)",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+            border: "1px solid rgba(216, 208, 192, 0.6)",
+            whiteSpace: "nowrap",
+            zIndex: 5,
+          }}
+        >
+          双指缩放 · 自由拖动沙盘 · 点击据点探查
+        </div>
       </div>
 
-      {/* 地点详情卡片 */}
+      {/* 地点详情弹出抽屉 */}
       {selectedLandmark && (
         <div
           style={{
@@ -34943,15 +35214,16 @@ const CountyMapViewer = ({ regionName, countyName, mapData, onBack }) => {
             bottom: 0,
             left: 0,
             right: 0,
-            background: "#fff",
-            borderTopLeftRadius: "20px",
-            borderTopRightRadius: "20px",
-            padding: "24px",
-            boxShadow: "0 -8px 24px rgba(0,0,0,0.1)",
-            zIndex: 20,
-            maxHeight: "40vh",
+            background: "#FAF7EE",
+            borderTopLeftRadius: "22px",
+            borderTopRightRadius: "22px",
+            padding: "20px 22px 28px",
+            boxShadow: "0 -8px 30px rgba(74, 65, 53, 0.18)",
+            zIndex: 30,
+            maxHeight: "45vh",
             overflowY: "auto",
-            animation: "slideUp 0.3s ease-out",
+            animation: "slideUp 0.28s ease-out",
+            borderTop: "2px solid #D6C7B2",
           }}
           onClick={(e) => e.stopPropagation()}
         >
@@ -34960,40 +35232,46 @@ const CountyMapViewer = ({ regionName, countyName, mapData, onBack }) => {
               display: "flex",
               justifyContent: "space-between",
               alignItems: "flex-start",
-              marginBottom: "16px",
+              marginBottom: "12px",
             }}
           >
             <div>
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: "20px",
-                  fontWeight: "bold",
-                  color: "#5A5F4D",
-                }}
-              >
-                {selectedLandmark.name}
-              </h3>
-              <p
-                style={{
-                  margin: "8px 0",
-                  fontSize: "14px",
-                  color: "#8C917B",
-                }}
-              >
-                {selectedLandmark.type}
-              </p>
-              {selectedLandmark.owner && (
-                <p
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <h3
                   style={{
                     margin: 0,
-                    fontSize: "14px",
-                    color: "#D6724B",
+                    fontSize: "20px",
+                    fontWeight: "bold",
+                    color: "#4A453D",
+                    fontFamily: "serif, KaiTi, STKaiti, sans-serif",
+                  }}
+                >
+                  {selectedLandmark.name}
+                </h3>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    padding: "2px 8px",
+                    borderRadius: "8px",
+                    background: selectedLandmark.theme?.bg || "rgba(0,0,0,0.05)",
+                    color: selectedLandmark.theme?.fill || "#4A453D",
                     fontWeight: "bold",
                   }}
                 >
-                  【{selectedLandmark.owner}】
-                </p>
+                  {selectedLandmark.type || "据点"}
+                </span>
+              </div>
+              {selectedLandmark.owner && (
+                <div
+                  style={{
+                    marginTop: "6px",
+                    fontSize: "13px",
+                    color: "#B84A39",
+                    fontWeight: "bold",
+                  }}
+                >
+                  所属势力：【{selectedLandmark.owner}】
+                </div>
               )}
             </div>
             <button
@@ -35001,37 +35279,78 @@ const CountyMapViewer = ({ regionName, countyName, mapData, onBack }) => {
               style={{
                 background: "none",
                 border: "none",
-                fontSize: "24px",
-                color: "#8C917B",
+                fontSize: "22px",
+                color: "#8C8375",
                 cursor: "pointer",
-                padding: 0,
+                padding: "2px",
               }}
             >
               ×
             </button>
           </div>
+
           {selectedLandmark.brief && (
             <div
               style={{
-                background: "#FDF9F4",
-                padding: "16px",
-                borderRadius: "12px",
-                fontSize: "14px",
-                lineHeight: "1.6",
-                color: "#5A5F4D",
-                borderLeft: "4px solid #A8C8BA",
+                background: "#FFFFFF",
+                padding: "14px 16px",
+                borderRadius: "14px",
+                fontSize: "13px",
+                lineHeight: "1.65",
+                color: "#5A544B",
+                border: "1px solid #EAE3D5",
+                borderLeft: "4px solid #B84A39",
+                marginBottom: "14px",
               }}
             >
               {selectedLandmark.brief}
             </div>
           )}
+
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button
+              onClick={() => {
+                alert(`已标记【${selectedLandmark.name}】为驿路探查重点。`);
+                setSelectedLandmark(null);
+              }}
+              style={{
+                flex: 1,
+                padding: "11px",
+                borderRadius: "12px",
+                border: "1px solid #D8D0C0",
+                background: "#FFFFFF",
+                color: "#5A544B",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              标记据点
+            </button>
+            <button
+              onClick={() => setSelectedLandmark(null)}
+              style={{
+                flex: 1,
+                padding: "11px",
+                borderRadius: "12px",
+                border: "none",
+                background: "linear-gradient(135deg, #B84A39 0%, #9C392B 100%)",
+                color: "#FFFFFF",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                boxShadow: "0 4px 12px rgba(184, 74, 57, 0.25)",
+              }}
+            >
+              关闭
+            </button>
+          </div>
         </div>
       )}
     </div>
   );
 };
 
-// ==================== T13 东汉驿路通地图组件 ====================
 const T13MapPage = ({ onBack }) => {
   const { useState } = React;
   const [activeRegion, setActiveRegion] = useState(null);
@@ -68625,6 +68944,7 @@ const BackupRestorePage = ({ onClose }) => {
 
 
 // ==================== [新增] 隐私与安全二级页面组件 ====================
+// ==================== [新增] 隐私与安全二级页面组件 ====================
 const PrivacySecurityPage = ({ onOpenMinimax }) => {
   const [activeSubPage, setActiveSubPage] = React.useState(null);
 
@@ -68680,7 +69000,7 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
           <i data-lucide="chevron-right" style={{ color: "#aaa" }}></i>
         </div>
 
-        {/* 我的钱包 */}
+        {/* 我的金库 */}
         <div
           onClick={() => setActiveSubPage("wallet")}
           style={{
@@ -68694,7 +69014,7 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
         >
           <div>
             <div style={{ fontSize: "14px", fontWeight: "500", color: "#333" }}>
-              我的钱包
+              我的金库
             </div>
             <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
               查看余额与交易记录
