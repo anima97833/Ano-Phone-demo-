@@ -64898,15 +64898,13 @@ ${worldContext}
     setRecommends(updatedRecs);
     await dbManager.set("charity_projects", JSON.stringify(updatedRecs));
 
-    const today = new Date();
-    const nextMonth = new Date(today);
+    const nextMonth = new Date();
     nextMonth.setMonth(nextMonth.getMonth() + 1);
 
     const newSub = {
       id: Date.now(),
       projectName: monthlyProject,
       amount: amount,
-      startDate: today.toISOString().split("T")[0],
       nextDeductDate: nextMonth.toISOString().split("T")[0],
     };
 
@@ -64914,14 +64912,15 @@ ${worldContext}
     setMonthlySubscriptions(newSubs);
     localStorage.setItem("charity_monthly_subs", JSON.stringify(newSubs));
 
-    setMonthlyAmount("");
     setMonthlyProject("");
+    setMonthlyAmount("");
+    setShowMonthlyDonateModal(false);
+    alert("恭喜您成功开启公益月捐！天下苍生感激您的涓涓善流。");
     setDonateCount((prev) => prev + 1);
-    alert("月捐计划开启成功！善举已登册。");
   };
 
   const handleCancelSubscription = (subId) => {
-    if (confirm("确定要终止这项月捐计划吗？终止后下月将不再自动扣款。")) {
+    if (confirm("确定要终止这项月捐计划吗？")) {
       const newSubs = monthlySubscriptions.filter((s) => s.id !== subId);
       setMonthlySubscriptions(newSubs);
       localStorage.setItem("charity_monthly_subs", JSON.stringify(newSubs));
@@ -64929,156 +64928,50 @@ ${worldContext}
   };
   // ==================== 新增：月捐相关状态与逻辑 END ====================
 
-  // 检查今日是否已打卡捐赠
-  useEffect(() => {
-    const lastPunchDate = localStorage.getItem("charity_walk_punch_date");
-    const today = new Date().toLocaleDateString();
-    if (lastPunchDate === today) {
-      setHasPunchedToday(true);
-    }
-  }, []);
-
-  // 调用陀螺仪/加速度传感器进行晃动计步
-  useEffect(() => {
-    const handleMotion = (e) => {
-      if (!isCounting) return;
-      const acc = e.accelerationIncludingGravity;
-      if (!acc) return;
-
-      const currTime = Date.now();
-      // 限制更新频率，防止数值飙升过快（150ms判定一次）
-      if (currTime - lastUpdate.current > 150) {
-        const deltaX = Math.abs(lastAccel.current.x - acc.x);
-        const deltaY = Math.abs(lastAccel.current.y - acc.y);
-        const deltaZ = Math.abs(lastAccel.current.z - acc.z);
-
-        // 判定晃动阈值（大于15视为走了一步/晃动了一下）
-        if (deltaX + deltaY + deltaZ > 15) {
-          setSteps((prev) => prev + 1);
-        }
-
-        lastAccel.current = { x: acc.x, y: acc.y, z: acc.z };
-        lastUpdate.current = currTime;
-      }
-    };
-
-    if (isCounting) {
-      // iOS 13+ 需要主动请求权限
-      if (
-        typeof DeviceMotionEvent !== "undefined" &&
-        typeof DeviceMotionEvent.requestPermission === "function"
-      ) {
-        DeviceMotionEvent.requestPermission()
-          .then((permissionState) => {
-            if (permissionState === "granted") {
-              window.addEventListener("devicemotion", handleMotion);
-            } else {
-              alert("需要设备传感器权限才能进行计步！");
-              setIsCounting(false);
-            }
-          })
-          .catch(console.error);
-      } else {
-        // 安卓及老设备直接监听
-        window.addEventListener("devicemotion", handleMotion);
-      }
-    }
-
-    return () => {
-      window.removeEventListener("devicemotion", handleMotion);
-    };
-  }, [isCounting]);
-
-  const handleDonateWalk = () => {
-    if (steps === 0) return alert("您还没有走动任何步数哦~");
-    if (!selectedProject) return alert("请在上方选择要捐助的公益项目！");
-
-    const today = new Date().toLocaleDateString();
-    localStorage.setItem("charity_walk_punch_date", today);
-    setHasPunchedToday(true);
-    setDonateCount((prev) => prev + 1);
-    setSteps(0);
-    alert(`打卡成功！感谢您为【${selectedProject}】项目捐赠了 ${steps} 步！`);
-    setShowWalkModal(false);
-  };
-
-  // --- 核心逻辑：加载与生成公益项目 ---
+  // 初始化加载公益项目
   useEffect(() => {
     const loadProjects = async () => {
-      try {
-        const saved = await dbManager.get("charity_projects");
-        if (saved) {
+      const saved = await dbManager.get("charity_projects");
+      if (saved) {
+        try {
           setRecommends(JSON.parse(saved));
-        } else {
-          const defaultProjects = [
-            {
-              id: 1,
-              title: "流民妥善安置",
-              sub: "为战乱失去家园者提供庇护",
-              intro:
-                "连年征战，中原大地流民四起。本项目旨在洛阳城外建立棚户区，为无家可归者提供每日两餐热粥及御寒衣物，并组织轻壮劳力开垦荒地。",
-              history: [
-                { date: "初平元年三月", event: "项目发起，募集粮草。" },
-                {
-                  date: "初平元年四月",
-                  event: "首批灾棚搭建完毕，安置流民五百余人。",
-                },
-              ],
-              org: "颍川赈灾互助会",
-              raised: 25000,
-              donors: 312,
-            },
-            {
-              id: 2,
-              title: "伤兵义诊施药",
-              sub: "悬壶济世，救死扶伤",
-              intro:
-                "兵燹过后，伤兵与无辜百姓多受病痛折磨。我们将邀请民间医工，筹集常见金创药与风寒草药，无偿为贫苦者诊治。",
-              history: [{ date: "初平二年十月", event: "药局筹设完成。" }],
-              org: "谯县杏林馆",
-              raised: 12000,
-              donors: 105,
-            },
-          ];
-          setRecommends(defaultProjects);
-          await dbManager.set(
-            "charity_projects",
-            JSON.stringify(defaultProjects),
-          );
+        } catch (e) {
+          console.error(e);
         }
-      } catch (e) {
-        console.error(e);
+      } else {
+        handleGenerateProjects();
       }
     };
     loadProjects();
   }, []);
 
+  // AI 动态生成公益项目
   const handleGenerateProjects = async () => {
-    if (isGeneratingRecs) return;
     setIsGeneratingRecs(true);
     try {
       const worldContext = window.getWorldBookContext
         ? await window.getWorldBookContext()
-        : "无背景";
-      const sysPrompt = "你是一个深谙东汉末年历史背景的公益救援项目策划专家。";
+        : "无特定背景设定";
+      const sysPrompt = "你是一个东汉末年三国时期的民间救济与世家慈幼署记室。";
       const userPrompt = `
-              【世界设定】
-              ${worldContext}
-              
-              【任务】
-              请根据上面的世界背景，结合东汉末年的社会状态（如战乱、瘟疫、流民、农业荒废等），生成7到8个急需援助的公益项目。
-              
-              【要求】
-              1. 严格返回纯 JSON 数组格式，不要包裹在 \`\`\`json 标记中。
-              2. 每个对象包含以下字段：
-                 - id: 数字格式的随机唯一ID
-                 - title: 项目名称正标题，如"赈济洛阳流民"
-                 - sub: 副标题，如"给无家可归者一碗热粥"
-                 - intro: 详细的项目介绍（100字左右），说明为何需要资助及具体执行方案
-                 - history: 数组，包含2-4条历史进展，每条有 "date" (如"建安二年三月") 和 "event" (进展描述)
-                 - org: 收款和执行机构（如"某某宗族"、"某刺史部"、"太守府"）
-                 - raised: 已筹集到的资金，为数字（代表五铢钱，初始500-10000的随机数字）
-                 - donors: 捐赠人数，为数字（初始10-500的随机数字）
+【世界设定】
+${worldContext}
+
+【任务要求】
+请根据上述世界设定，结合汉末乱世的社会背景（如战乱、流民、瘟疫、饥荒、寒冬、孤儿抚恤、义诊施药等），生成 4 到 6 个极具古风沉浸感且切合时政民生的“民间慈善救济项目”。
+每个项目需要包含：
+- id: 数字编号
+- title: 项目名称（如：流民安居庐舍、伤兵义诊施药等，4-8字）
+- sub: 一句话口号或简短诉求（如：为战乱失居者提供一隅庇护，6-14字）
+- org: 发起机构或世家（如：广陵陈氏慈幼堂、太平道安济局、汉中义舍等）
+- intro: 详细的项目背景与救济实施方案介绍（50-100字，体现汉末乱世风貌）
+- target: 目标善款（5000-50000五铢钱）
+- raised: 已筹集善款（0-目标值之间随机数）
+- donors: 捐款义士人数（5-100之间随机数）
+- history: 进展动态数组，每项包含 { date: "如：建安三年秋", event: "具体动态记录" }
+
+【输出格式】
+必须严格返回纯 JSON 数组，不要包含任何 Markdown 标记或代码块，直接返回 [ 开头。
             `;
 
       if (window.sendToLLM) {
@@ -65095,31 +64988,184 @@ ${worldContext}
               if (Array.isArray(data) && data.length > 0) {
                 setRecommends(data);
                 await dbManager.set("charity_projects", JSON.stringify(data));
-                alert("已寻访各地，为您整理出最新急需援助的项目。");
+              } else {
+                throw new Error("格式错误");
               }
             } catch (e) {
-              console.error("文书解析失败", e, reply);
-              alert("文书解析失败，请重试。");
+              console.error("解析公益项目失败:", e);
+              loadDefaultProjects();
             } finally {
               setIsGeneratingRecs(false);
             }
           },
           (err) => {
             console.error(err);
+            loadDefaultProjects();
             setIsGeneratingRecs(false);
-            alert("请求飞鹰信使失败");
           },
         );
       } else {
-        alert("未配置API，请先在设置中完成API配置。");
+        loadDefaultProjects();
         setIsGeneratingRecs(false);
       }
-    } catch (e) {
-      console.error(e);
+    } catch (error) {
+      console.error(error);
+      loadDefaultProjects();
       setIsGeneratingRecs(false);
     }
   };
 
+  const loadDefaultProjects = async () => {
+    const defaultData = [
+      {
+        id: 1,
+        title: "流民妥善安置",
+        sub: "为战乱失去家园者提供庇护",
+        org: "广陵陈氏慈幼堂",
+        intro:
+          "淮泗一带战乱频仍，百姓流离失所。设立义舍草庐，提供避风之所，并发放过冬棉麻衣物与粗粮，护佑流民度过难关。",
+        target: 20000,
+        raised: 12500,
+        donors: 48,
+        history: [
+          { date: "三日前", event: "收容来自下邳的流民共三十户。" },
+          { date: "昨日", event: "发放粗麻衣衫五十件，熬煮热粥三鼎。" },
+        ],
+      },
+      {
+        id: 2,
+        title: "伤兵义诊施药",
+        sub: "悬壶济世，救死扶伤",
+        org: "太医署民间安济所",
+        intro:
+          "延请民间良医，于城郊设立药棚，采购金创药、麻沸散及清热解毒药材，为伤残退伍之军卒及贫困病患施针发药。",
+        target: 30000,
+        raised: 18900,
+        donors: 86,
+        history: [
+          { date: "五日前", event: "采购防风、柴胡、三七等药材十余石。" },
+          { date: "今日", event: "接诊伤卒与病民百余人次。" },
+        ],
+      },
+      {
+        id: 3,
+        title: "义庄孤幼蒙学",
+        sub: "开蒙启智，续绝存孤",
+        org: "颍川荀氏蒙学堂",
+        intro:
+          "乱世之中多遗孤。设立义学，招揽战乱孤儿入学，教授千字文、礼乐及农桑之术，并管一日两餐，使幼有所长。",
+        target: 15000,
+        raised: 6800,
+        donors: 32,
+        history: [
+          { date: "十日前", event: "修缮东厢房蒙馆三间，购置竹简笔墨。" },
+          { date: "昨日", event: "新接引流浪幼童八名入塾启蒙。" },
+        ],
+      },
+    ];
+    setRecommends(defaultData);
+    await dbManager.set("charity_projects", JSON.stringify(defaultData));
+  };
+
+  // 检查今日是否已打卡
+  useEffect(() => {
+    const today = new Date().toDateString();
+    const lastPunch = localStorage.getItem("charity_walk_punch_date");
+    if (lastPunch === today) {
+      setHasPunchedToday(true);
+    }
+  }, []);
+
+  // 重力感应计步算法
+  useEffect(() => {
+    let handleMotion;
+    if (isCounting) {
+      handleMotion = (event) => {
+        const current = event.accelerationIncludingGravity;
+        if (!current) return;
+
+        const currentTime = new Date().getTime();
+        if (currentTime - lastUpdate.current > 100) {
+          const diffTime = currentTime - lastUpdate.current;
+          lastUpdate.current = currentTime;
+
+          const speed =
+            Math.abs(
+              current.x +
+                current.y +
+                current.z -
+                lastAccel.current.x -
+                lastAccel.current.y -
+                lastAccel.current.z,
+            ) /
+            diffTime *
+            10000;
+
+          if (speed > 800) {
+            setSteps((prev) => prev + 1);
+          }
+
+          lastAccel.current = {
+            x: current.x,
+            y: current.y,
+            z: current.z,
+          };
+        }
+      };
+
+      if (window.DeviceMotionEvent) {
+        window.addEventListener("devicemotion", handleMotion, false);
+      }
+    }
+
+    return () => {
+      if (window.DeviceMotionEvent && handleMotion) {
+        window.removeEventListener("devicemotion", handleMotion, false);
+      }
+    };
+  }, [isCounting]);
+
+  // 确认捐赠步数逻辑
+  const handleDonateWalk = () => {
+    if (steps < 10) {
+      return alert("步数不足，多走走再来兑换吧！（至少需 10 步）");
+    }
+    if (!selectedProject) {
+      return alert("请先选择您想要捐赠的公益项目！");
+    }
+
+    const today = new Date().toDateString();
+    localStorage.setItem("charity_walk_punch_date", today);
+    setHasPunchedToday(true);
+
+    const coinsEarned = Math.floor(steps / 10);
+    const currentBalance = parseInt(
+      localStorage.getItem("farm_coins") || "500",
+    );
+    localStorage.setItem(
+      "farm_coins",
+      (currentBalance + coinsEarned).toString(),
+    );
+
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord(
+        "income",
+        coinsEarned,
+        `行走捐步数兑换善款：${selectedProject}`,
+      );
+    }
+
+    setDonateCount((prev) => prev + 1);
+    alert(
+      `打卡成功！您今日行走的 ${steps} 步已成功兑换为 ${coinsEarned} 铢善款，捐入【${selectedProject}】。感谢您的仁心善举！`,
+    );
+
+    setIsCounting(false);
+    setShowWalkModal(false);
+    setSteps(0);
+  };
+
+  // 确认直接捐款
   const handleConfirmDonate = async () => {
     const amount = parseInt(donateAmount);
     if (isNaN(amount) || amount <= 0) return alert("请输入正确的善款金额！");
@@ -65135,7 +65181,7 @@ ${worldContext}
       window.addTransactionRecord(
         "expense",
         amount,
-        `公益捐助：${selectedProjectDetail.title}`,
+        `公益善款：${selectedProjectDetail.title}`,
       );
     }
 
@@ -65172,27 +65218,31 @@ ${worldContext}
     {
       title: "女性专题",
       sub: "助力乡村女性",
-      icon: "ph:gender-female-bold",
+      icon: "ph-bold ph-gender-female",
       color: "#D6724B",
+      bgGrad: "linear-gradient(135deg, #FFECE6 0%, #FBD5C8 100%)",
+      illuIcon: "ph-fill ph-hand-heart",
     },
     {
       title: "备灾专题",
       sub: "守护美好家园",
-      icon: "ph:first-aid-kit-bold",
+      icon: "ph-bold ph-first-aid-kit",
       color: "#E3C862",
+      bgGrad: "linear-gradient(135deg, #FEF9E7 0%, #F9E79F 100%)",
+      illuIcon: "ph-fill ph-shield-plus",
     },
   ];
 
   const menuIcons = [
     {
       name: "行走捐",
-      icon: "ph:person-simple-walk-bold",
+      icon: "ph-bold ph-person-simple-walk",
       color: "#D6724B",
     },
-    { name: "月捐", icon: "ph:calendar-heart-bold", color: "#E3C862" },
-    { name: "一帮一", icon: "ph:users-three-bold", color: "#D6724B" },
-    { name: "收益捐", icon: "ph:money-bold", color: "#D6724B" },
-    { name: "真心查", icon: "ph:heart-bold", color: "#E3C862" },
+    { name: "月捐", icon: "ph-bold ph-calendar-heart", color: "#E3C862" },
+    { name: "一帮一", icon: "ph-bold ph-users-three", color: "#D6724B" },
+    { name: "收益捐", icon: "ph-bold ph-coins", color: "#D6724B" },
+    { name: "真心查", icon: "ph-bold ph-heart", color: "#E3C862" },
   ];
 
   return (
@@ -65221,8 +65271,8 @@ ${worldContext}
         }}
       >
         {/* 背景装饰爱心 */}
-        <iconify-icon
-          icon="ph:heart-fill"
+        <i
+          className="ph-fill ph-heart"
           style={{
             position: "absolute",
             right: "20%",
@@ -65231,7 +65281,7 @@ ${worldContext}
             color: "rgba(255,255,255,0.3)",
             zIndex: 0,
           }}
-        ></iconify-icon>
+        ></i>
 
         {/* 导航栏 */}
         <div
@@ -65256,20 +65306,17 @@ ${worldContext}
               fontSize: "18px",
             }}
           >
-            <iconify-icon
-              icon="ph:caret-left-bold"
-              style={{ fontSize: "20px" }}
-            ></iconify-icon>
+            <i className="ph-bold ph-caret-left" style={{ fontSize: "20px" }}></i>
             绣衣公益
           </div>
-          <iconify-icon
-            icon="ph:magnifying-glass-bold"
+          <i
+            className="ph-bold ph-magnifying-glass"
             style={{
               fontSize: "24px",
               color: "#5A5F4D",
               cursor: "pointer",
             }}
-          ></iconify-icon>
+          ></i>
         </div>
 
         {/* 捐赠数字 */}
@@ -65361,10 +65408,10 @@ ${worldContext}
                   marginBottom: "8px",
                 }}
               >
-                <iconify-icon
-                  icon={topic.icon}
+                <i
+                  className={topic.icon}
                   style={{ color: topic.color, fontSize: "16px" }}
-                ></iconify-icon>
+                ></i>
                 <span
                   style={{
                     fontSize: "13px",
@@ -65384,16 +65431,36 @@ ${worldContext}
                   {topic.sub}
                 </span>
               </div>
-              {/* 灰色占位图 */}
+              {/* 美化插画占位图 */}
               <div
                 style={{
                   width: "100%",
                   aspectRatio: "4/3",
-                  background: "#EAE6D6",
+                  background: topic.bgGrad || "#FCEEE9",
                   borderRadius: "12px",
                   marginBottom: "12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
                 }}
-              ></div>
+              >
+                <i
+                  className={topic.illuIcon || "ph-fill ph-heart"}
+                  style={{ fontSize: "36px", color: topic.color }}
+                ></i>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: topic.color,
+                    fontWeight: "bold",
+                    opacity: 0.85,
+                  }}
+                >
+                  {topic.title}
+                </span>
+              </div>
               <button
                 className="active-press"
                 style={{
@@ -65453,10 +65520,10 @@ ${worldContext}
                 }
               }}
             >
-              <iconify-icon
-                icon={menu.icon}
+              <i
+                className={menu.icon}
                 style={{ fontSize: "28px", color: menu.color }}
-              ></iconify-icon>
+              ></i>
               <span
                 style={{
                   fontSize: "11px",
@@ -65512,21 +65579,20 @@ ${worldContext}
               为你精选
             </h3>
             {isGeneratingRecs ? (
-              <iconify-icon
-                icon="line-md:loading-twotone-loop"
+              <i
+                className="ph-bold ph-spinner animate-spin"
                 style={{ fontSize: "20px", color: "#D6724B" }}
-              ></iconify-icon>
+              ></i>
             ) : (
-              <iconify-icon
-                className="active-press"
-                icon="ph:arrows-clockwise-bold"
+              <i
+                className="ph-bold ph-arrows-clockwise active-press"
                 style={{
                   fontSize: "18px",
                   color: "#D6724B",
                   cursor: "pointer",
                 }}
                 onClick={handleGenerateProjects}
-              ></iconify-icon>
+              ></i>
             )}
           </div>
 
@@ -65566,14 +65632,14 @@ ${worldContext}
                     justifyContent: "center",
                   }}
                 >
-                  <iconify-icon
-                    icon="ph:plant-fill"
+                  <i
+                    className="ph-fill ph-plant"
                     style={{
                       fontSize: "40px",
                       color: "#FFF",
-                      opacity: 0.8,
+                      opacity: 0.85,
                     }}
-                  ></iconify-icon>
+                  ></i>
                 </div>
                 <div style={{ padding: "12px" }}>
                   <div
@@ -65655,22 +65721,22 @@ ${worldContext}
                   gap: "6px",
                 }}
               >
-                <iconify-icon
-                  icon="ph:person-simple-walk-bold"
+                <i
+                  className="ph-bold ph-person-simple-walk"
                   style={{ color: "#D6724B" }}
-                ></iconify-icon>
+                ></i>
                 行走捐
               </h3>
               {!isCounting && (
-                <iconify-icon
-                  icon="ph:x-bold"
+                <i
+                  className="ph-bold ph-x"
                   style={{
                     fontSize: "20px",
                     color: "#999",
                     cursor: "pointer",
                   }}
                   onClick={() => setShowWalkModal(false)}
-                ></iconify-icon>
+                ></i>
               )}
             </div>
 
@@ -65732,11 +65798,11 @@ ${worldContext}
                       : "none",
                   }}
                 >
-                  <iconify-icon
-                    icon={
-                      hasPunchedToday ? "ph:check-bold" : "ph:footprints-fill"
+                  <i
+                    className={
+                      hasPunchedToday ? "ph-bold ph-check" : "ph-fill ph-footprints"
                     }
-                  ></iconify-icon>
+                  ></i>
                 </div>
                 <span
                   style={{
@@ -65911,15 +65977,15 @@ ${worldContext}
               >
                 {selectedProjectDetail.title}
               </h3>
-              <iconify-icon
-                icon="ph:x-bold"
+              <i
+                className="ph-bold ph-x"
                 style={{
                   fontSize: "20px",
                   color: "#999",
                   cursor: "pointer",
                 }}
                 onClick={() => setSelectedProjectDetail(null)}
-              ></iconify-icon>
+              ></i>
             </div>
 
             <div
@@ -66025,11 +66091,11 @@ ${worldContext}
                 >
                   机构信息
                 </div>
-                <div style={{ fontSize: "13px", color: "#8C917B" }}>
-                  <iconify-icon
-                    icon="ph:bank-fill"
+                <div style={{ fontSize: "13px", color: "#8C917B", display: "flex", alignItems: "center" }}>
+                  <i
+                    className="ph-fill ph-bank"
                     style={{ marginRight: "6px" }}
-                  ></iconify-icon>
+                  ></i>
                   {selectedProjectDetail.org}
                 </div>
               </div>
@@ -66259,21 +66325,21 @@ ${worldContext}
                   gap: "6px",
                 }}
               >
-                <iconify-icon
-                  icon="ph:calendar-heart-bold"
+                <i
+                  className="ph-bold ph-calendar-heart"
                   style={{ color: "#E3C862" }}
-                ></iconify-icon>
+                ></i>
                 设立月捐计划
               </h3>
-              <iconify-icon
-                icon="ph:x-bold"
+              <i
+                className="ph-bold ph-x"
                 style={{
                   fontSize: "20px",
                   color: "#999",
                   cursor: "pointer",
                 }}
                 onClick={() => setShowMonthlyDonateModal(false)}
-              ></iconify-icon>
+              ></i>
             </div>
 
             <div
@@ -66546,21 +66612,21 @@ ${worldContext}
                   gap: "6px",
                 }}
               >
-                <iconify-icon
-                  icon="ph:money-bold"
+                <i
+                  className="ph-bold ph-coins"
                   style={{ color: "#D6724B" }}
-                ></iconify-icon>
+                ></i>
                 设立收益捐计划
               </h3>
-              <iconify-icon
-                icon="ph:x-bold"
+              <i
+                className="ph-bold ph-x"
                 style={{
                   fontSize: "20px",
                   color: "#999",
                   cursor: "pointer",
                 }}
                 onClick={() => setShowIncomeDonateModal(false)}
-              ></iconify-icon>
+              ></i>
             </div>
 
             <div
@@ -66878,22 +66944,22 @@ ${worldContext}
                   gap: "6px",
                 }}
               >
-                <iconify-icon
-                  icon="ph:heart-bold"
+                <i
+                  className="ph-bold ph-heart"
                   style={{ color: "#E3C862" }}
-                ></iconify-icon>
+                ></i>
                 真心查 - 账目溯源
               </h3>
               {!isVerifying && (
-                <iconify-icon
-                  icon="ph:x-bold"
+                <i
+                  className="ph-bold ph-x"
                   style={{
                     fontSize: "20px",
                     color: "#999",
                     cursor: "pointer",
                   }}
                   onClick={() => setShowVerifyModal(false)}
-                ></iconify-icon>
+                ></i>
               )}
             </div>
 
@@ -66983,7 +67049,7 @@ ${worldContext}
                 >
                   {isVerifying ? (
                     <>
-                      <iconify-icon icon="line-md:loading-twotone-loop"></iconify-icon>{" "}
+                      <i className="ph-bold ph-spinner animate-spin" style={{ fontSize: "16px" }}></i>{" "}
                       廷尉核查账目中...
                     </>
                   ) : (
@@ -67019,13 +67085,13 @@ ${worldContext}
                         gap: "6px",
                       }}
                     >
-                      <iconify-icon
-                        icon={
+                      <i
+                        className={
                           verifyResult.isCorrupt
-                            ? "ph:warning-octagon-fill"
-                            : "ph:check-circle-fill"
+                            ? "ph-fill ph-warning-octagon"
+                            : "ph-fill ph-check-circle"
                         }
-                      ></iconify-icon>
+                      ></i>
                       {verifyResult.isCorrupt
                         ? "警报：发现贪腐猫腻！"
                         : "良心机构：款项落到实处！"}
@@ -67075,13 +67141,13 @@ ${worldContext}
                         cursor: "pointer",
                       }}
                     >
-                      <iconify-icon
-                        icon="ph:siren-fill"
+                      <i
+                        className="ph-fill ph-siren"
                         style={{
                           verticalAlign: "middle",
                           marginRight: "4px",
                         }}
-                      ></iconify-icon>
+                      ></i>
                       举报
                     </button>
                     <button
@@ -67100,17 +67166,16 @@ ${worldContext}
                         fontWeight: "bold",
                         fontSize: "14px",
                         cursor: "pointer",
-                        boxShadow: "0 4px 10px rgba(168,200,186,0.3)",
                       }}
                     >
-                      <iconify-icon
-                        icon="ph:flower-lotus-fill"
+                      <i
+                        className="ph-fill ph-flower-lotus"
                         style={{
                           verticalAlign: "middle",
                           marginRight: "4px",
                         }}
-                      ></iconify-icon>
-                      送花
+                      ></i>
+                      表彰
                     </button>
                   </div>
                 </div>
@@ -67120,13 +67185,10 @@ ${worldContext}
         </div>
       )}
       {/* ================= 真心查底部弹窗 END ================= */}
-
-      {/* ======================================================== */}
     </div>
   );
 };
 
-// ==================== [新增] 我的钱包页面组件 ====================
 const WalletPage = ({ onClose }) => {
   const { useState, useEffect } = React;
   const [balance, setBalance] = useState(0);
