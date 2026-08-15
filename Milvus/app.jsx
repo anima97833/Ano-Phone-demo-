@@ -1,4 +1,3 @@
-﻿
 /** @jsx React.createElement */
 /** @jsxFrag React.Fragment */
 const { useState, useEffect, useRef } = React;
@@ -67,20 +66,23 @@ window.buildSystemPrompt = (charProfile) => {
                                                                                                                      姓名：${charProfile.name}
                                                                                                                      性别：${charProfile.gender || "未知"}
                                                                                                                      年龄：${charProfile.age || "未知"}
-                                                                                                                     ${charProfile.mbtiEnabled
-      ? `MBTI：${charProfile.mbti || "未知"}
-                                                                                                                     ${charProfile.enneagram
-        ? `九型人格：${charProfile.enneagram || "未知"}
+                                                                                                                     ${
+                                                                                                                       charProfile.mbtiEnabled
+                                                                                                                         ? `MBTI：${charProfile.mbti || "未知"}
+                                                                                                                     ${
+                                                                                                                       charProfile.enneagram
+                                                                                                                         ? `九型人格：${charProfile.enneagram || "未知"}
                                                                                                                      `
-        : ``
-      }`
-      : ``
-    }
-                                                                                                                     ${charProfile.constellationEnabled
-      ? `星座：${charProfile.constellation || "未知"}
+                                                                                                                         : ``
+                                                                                                                     }`
+                                                                                                                         : ``
+                                                                                                                     }
+                                                                                                                     ${
+                                                                                                                       charProfile.constellationEnabled
+                                                                                                                         ? `星座：${charProfile.constellation || "未知"}
                                                                                                                      `
-      : ``
-    }
+                                                                                                                         : ``
+                                                                                                                     }
                                                                                                                      性格：${charProfile.personality || "未知"}
                                                                                                                      背景：${charProfile.background || "未知"}
                                                                                                                      语言风格：${charProfile.style || "未知"}
@@ -156,9 +158,7 @@ window.sendToLLM = async (messages, onChunk, onFinish, onError) => {
       if (!response.ok) {
         const errText = await response.text();
         console.error("MiniMax API 错误:", errText);
-        throw new Error(
-          `MiniMax API Error: ${response.status} - ${errText}`,
-        );
+        throw new Error(`MiniMax API Error: ${response.status} - ${errText}`);
       }
 
       const data = await response.json();
@@ -173,9 +173,7 @@ window.sendToLLM = async (messages, onChunk, onFinish, onError) => {
   } else {
     console.log("使用通用 API 配置");
     // 获取通用 API 配置
-    const configs = JSON.parse(
-      localStorage.getItem("api_configs") || "[]",
-    );
+    const configs = JSON.parse(localStorage.getItem("api_configs") || "[]");
     console.log("API配置:", configs);
     if (configs.length === 0) {
       console.error("没有API配置");
@@ -186,9 +184,7 @@ window.sendToLLM = async (messages, onChunk, onFinish, onError) => {
     const savedSelectedIndex = localStorage.getItem(
       "selected_api_config_index",
     );
-    const selectedIndex = savedSelectedIndex
-      ? parseInt(savedSelectedIndex)
-      : 0;
+    const selectedIndex = savedSelectedIndex ? parseInt(savedSelectedIndex) : 0;
     const config = configs[selectedIndex] || configs[0]; // 如果选中的配置不存在，使用第一个作为 fallback
     console.log("选中的API配置:", config);
 
@@ -614,7 +610,7 @@ const WeatherPage = () => {
         const parsed = JSON.parse(savedWeather);
         setMyLoc((prev) => ({ ...prev, ...parsed.myLoc }));
         setTheirLoc((prev) => ({ ...prev, ...parsed.theirLoc }));
-      } catch (e) { }
+      } catch (e) {}
     }
 
     // 尝试从IndexedDB加载聊天角色
@@ -642,13 +638,10 @@ const WeatherPage = () => {
             setChatCharacters(filterValidChars(characters));
             console.log("从IndexedDB加载独立聊天角色成功");
           } else if (migrateChatData) {
-            console.log(
-              "IndexedDB中无聊天角色数据，尝试从localStorage迁移...",
-            );
+            console.log("IndexedDB中无聊天角色数据，尝试从localStorage迁移...");
             const migrated = await migrateChatData();
             if (migrated) {
-              const migratedCharacters =
-                await chatCharacterStore.getAll();
+              const migratedCharacters = await chatCharacterStore.getAll();
               if (migratedCharacters && migratedCharacters.length > 0) {
                 setChatCharacters(filterValidChars(migratedCharacters));
               }
@@ -824,10 +817,7 @@ const WeatherPage = () => {
               }}
             ></div>
           </div>
-          <span
-            className="loc-text"
-            onClick={() => setShowLocModal("them")}
-          >
+          <span className="loc-text" onClick={() => setShowLocModal("them")}>
             {theirLoc.characterName} · {theirLoc.name}
           </span>
         </div>
@@ -1016,7 +1006,7 @@ const WeatherPage = () => {
       {/* 建议弹窗 */}
       {/* 加载动画 */}
       {isLoadingSuggestions && (
-        <div className="weather-modal-mask" onClick={() => { }}>
+        <div className="weather-modal-mask" onClick={() => {}}>
           <div
             className="weather-modal-box"
             onClick={(e) => e.stopPropagation()}
@@ -1042,19 +1032,14 @@ const WeatherPage = () => {
             <div className="wm-title" style={{ marginBottom: "10px" }}>
               对方正在思考建议
             </div>
-            <div style={{ color: "#999", fontSize: "14px" }}>
-              请稍候...
-            </div>
+            <div style={{ color: "#999", fontSize: "14px" }}>请稍候...</div>
           </div>
         </div>
       )}
 
       {/* 建议弹窗 */}
       {showSuggestionModal && (
-        <div
-          className="weather-modal-mask"
-          onClick={closeSuggestionModal}
-        >
+        <div className="weather-modal-mask" onClick={closeSuggestionModal}>
           <div
             className="weather-modal-box"
             onClick={(e) => e.stopPropagation()}
@@ -1124,9 +1109,7 @@ const WeatherPage = () => {
             onClick={(e) => e.stopPropagation()}
             style={{ maxWidth: "320px" }}
           >
-            <div className="wm-title">
-              发送消息给{theirLoc.characterName}
-            </div>
+            <div className="wm-title">发送消息给{theirLoc.characterName}</div>
             <div style={{ margin: "15px 0" }}>
               <textarea
                 value={editMessage}
@@ -1400,8 +1383,7 @@ const CalendarPage = () => {
         const dayPattern = `\\b${day}\\b`;
         const dayRegex = new RegExp(dayPattern, "g");
         // 如果日期块有对应的角色ID，只匹配该角色的任务
-        const characterMatch =
-          !characterId || task.characterId === characterId;
+        const characterMatch = !characterId || task.characterId === characterId;
         // 优先匹配时间字段中的日期，确保一一对应
         return characterMatch && dayRegex.test(task.time);
       });
@@ -1438,9 +1420,7 @@ const CalendarPage = () => {
       }, 100);
 
       // 显示提示信息
-      alert(
-        `已跳转到${taskInfo.category}类别，任务：${taskInfo.task.title}`,
-      );
+      alert(`已跳转到${taskInfo.category}类别，任务：${taskInfo.task.title}`);
     } else {
       // 如果没有任务，显示颜色选择器
       setSelectedDay(day);
@@ -1459,13 +1439,8 @@ const CalendarPage = () => {
     }));
     setShowColorPicker(false);
 
-    // 弹出确认创建日程的提示
-    const confirmCreate = confirm("是否创建日程？");
-    if (confirmCreate) {
-      // 存储当前选中的日期，以便在创建任务时使用
-      setSelectedDayForTask(selectedDay);
-      setShowCategorySelect(true);
-    }
+    // 弹出确认创建日程的自定义弹窗（兼容嵌入式 WebView，原生 confirm 可能被拦截）
+    setShowCreateScheduleConfirm(true);
   };
 
   // 触摸事件处理 - 开始
@@ -1484,8 +1459,7 @@ const CalendarPage = () => {
     const startX = swipeOffset[taskId]?.startX;
     if (startX) {
       const currentX = e.touches[0].clientX;
-      const offset =
-        currentX - startX + (swipeOffset[taskId]?.offset || 0);
+      const offset = currentX - startX + (swipeOffset[taskId]?.offset || 0);
       // 只允许向左滑动（负值）
       const clampedOffset = Math.min(0, offset);
       setSwipeOffset((prev) => ({
@@ -1539,9 +1513,7 @@ const CalendarPage = () => {
     const { category, ...taskData } = updatedTask;
     setTasks((prev) => {
       // 检查任务是否已存在
-      const taskExists = prev[category].some(
-        (task) => task.id === taskData.id,
-      );
+      const taskExists = prev[category].some((task) => task.id === taskData.id);
 
       if (taskExists) {
         // 更新现有任务
@@ -1585,9 +1557,7 @@ const CalendarPage = () => {
     // 根据类别设置默认值
     let defaultTask;
     // 生成包含选中日期的时间字符串
-    const timeWithDay = selectedDayForTask
-      ? `${selectedDayForTask}日 `
-      : "";
+    const timeWithDay = selectedDayForTask ? `${selectedDayForTask}日 ` : "";
 
     switch (category) {
       case "已毕之事":
@@ -1707,10 +1677,7 @@ const CalendarPage = () => {
                 const migrated = await migrateLargeData();
                 if (migrated) {
                   const migratedTasks = await calendarStore.getTasks();
-                  if (
-                    migratedTasks &&
-                    Object.keys(migratedTasks).length > 0
-                  ) {
+                  if (migratedTasks && Object.keys(migratedTasks).length > 0) {
                     setTasks(migratedTasks);
                     console.log("迁移后从IndexedDB加载日历任务成功");
                   }
@@ -1735,17 +1702,14 @@ const CalendarPage = () => {
   // 创建日程相关状态
   const [showCreateScheduleConfirm, setShowCreateScheduleConfirm] =
     React.useState(false);
-  const [showCategorySelect, setShowCategorySelect] =
-    React.useState(false);
+  const [showCategorySelect, setShowCategorySelect] = React.useState(false);
   const [selectedCategory, setSelectedCategory] = React.useState(null);
 
   // 日期选择相关状态
   const [currentYear, setCurrentYear] = React.useState(
     new Date().getFullYear(),
   );
-  const [currentMonth, setCurrentMonth] = React.useState(
-    new Date().getMonth(),
-  );
+  const [currentMonth, setCurrentMonth] = React.useState(new Date().getMonth());
   const [showYearSelector, setShowYearSelector] = React.useState(false);
   const [showMonthSelector, setShowMonthSelector] = React.useState(false);
   const [selectedYear, setSelectedYear] = React.useState(
@@ -1754,8 +1718,7 @@ const CalendarPage = () => {
   const [selectedMonth, setSelectedMonth] = React.useState(
     new Date().getMonth(),
   );
-  const [selectedDayForTask, setSelectedDayForTask] =
-    React.useState(null);
+  const [selectedDayForTask, setSelectedDayForTask] = React.useState(null);
 
   // 角色选择相关状态
   const [showCharacterSelector, setShowCharacterSelector] =
@@ -1848,8 +1811,7 @@ const CalendarPage = () => {
     const daysInMonth = lastDay.getDate();
     const today = new Date();
     const isToday =
-      today.getFullYear() === currentYear &&
-      today.getMonth() === currentMonth;
+      today.getFullYear() === currentYear && today.getMonth() === currentMonth;
 
     const grid = [];
 
@@ -1866,9 +1828,7 @@ const CalendarPage = () => {
         !selectedCharacter ||
         dayColorData?.characterId === selectedCharacter.id;
       const backgroundColor =
-        shouldShowColor && dayColorData
-          ? dayColorData.color
-          : "transparent";
+        shouldShowColor && dayColorData ? dayColorData.color : "transparent";
       grid.push(
         <div
           key={`day-${day}`}
@@ -1939,9 +1899,7 @@ const CalendarPage = () => {
         <div className="calendar-color-picker">
           <div className="calendar-color-picker-header">
             <h3>选择年份</h3>
-            <button onClick={() => setShowYearSelector(false)}>
-              关闭
-            </button>
+            <button onClick={() => setShowYearSelector(false)}>关闭</button>
           </div>
           <div
             className="calendar-color-options"
@@ -1956,8 +1914,7 @@ const CalendarPage = () => {
                   backgroundColor:
                     year === currentYear ? "#b4c7e7" : "transparent",
                   color: year === currentYear ? "white" : "#333",
-                  border:
-                    year === currentYear ? "none" : "2px solid #ccc",
+                  border: year === currentYear ? "none" : "2px solid #ccc",
                 }}
               >
                 <span>{year}</span>
@@ -1972,9 +1929,7 @@ const CalendarPage = () => {
         <div className="calendar-color-picker">
           <div className="calendar-color-picker-header">
             <h3>选择月份</h3>
-            <button onClick={() => setShowMonthSelector(false)}>
-              关闭
-            </button>
+            <button onClick={() => setShowMonthSelector(false)}>关闭</button>
           </div>
           <div
             className="calendar-color-options"
@@ -1989,8 +1944,7 @@ const CalendarPage = () => {
                   backgroundColor:
                     month === currentMonth ? "#e8c3a2" : "transparent",
                   color: month === currentMonth ? "white" : "#333",
-                  border:
-                    month === currentMonth ? "none" : "2px solid #ccc",
+                  border: month === currentMonth ? "none" : "2px solid #ccc",
                 }}
               >
                 <span>{getMonthName(month)}</span>
@@ -2020,9 +1974,7 @@ const CalendarPage = () => {
         <div className="calendar-color-picker">
           <div className="calendar-color-picker-header">
             <h3>选择颜色</h3>
-            <button onClick={() => setShowColorPicker(false)}>
-              关闭
-            </button>
+            <button onClick={() => setShowColorPicker(false)}>关闭</button>
           </div>
           <div className="calendar-color-options">
             {colorOptions.map((color) => (
@@ -2071,8 +2023,7 @@ const CalendarPage = () => {
           tasks["已毕之事"]
             .filter(
               (task) =>
-                !selectedCharacter ||
-                task.characterId === selectedCharacter.id,
+                !selectedCharacter || task.characterId === selectedCharacter.id,
             )
             .map((task) => (
               <div
@@ -2109,10 +2060,7 @@ const CalendarPage = () => {
                 >
                   <div className="calendar-task-icon-box">
                     {/* 手绘花朵图标 */}
-                    <svg
-                      className="calendar-flower-icon"
-                      viewBox="0 0 100 100"
-                    >
+                    <svg className="calendar-flower-icon" viewBox="0 0 100 100">
                       <circle cx="50" cy="50" r="12" fill="#FFD93D" />
                       <ellipse
                         cx="50"
@@ -2150,12 +2098,8 @@ const CalendarPage = () => {
                   </div>
                   <div className="calendar-task-content">
                     <div className="calendar-task-header">
-                      <span className="calendar-task-title">
-                        {task.title}
-                      </span>
-                      <span className="calendar-time-tag">
-                        {task.time}
-                      </span>
+                      <span className="calendar-task-title">{task.title}</span>
+                      <span className="calendar-time-tag">{task.time}</span>
                     </div>
                     <div className="calendar-task-subtitle">
                       {task.subtitle}
@@ -2189,8 +2133,7 @@ const CalendarPage = () => {
           tasks["进行之事"]
             .filter(
               (task) =>
-                !selectedCharacter ||
-                task.characterId === selectedCharacter.id,
+                !selectedCharacter || task.characterId === selectedCharacter.id,
             )
             .map((task) => (
               <div
@@ -2227,9 +2170,7 @@ const CalendarPage = () => {
                 >
                   <div className="calendar-task-content">
                     <div className="calendar-task-header">
-                      <span className="calendar-task-title">
-                        {task.title}
-                      </span>
+                      <span className="calendar-task-title">{task.title}</span>
                     </div>
                     <div className="calendar-task-subtitle">
                       {task.subtitle}
@@ -2246,8 +2187,7 @@ const CalendarPage = () => {
                           key={index}
                           className="calendar-time-tag"
                           style={{
-                            background:
-                              index === 1 ? "#e8c3a2" : "#f0f0f0",
+                            background: index === 1 ? "#e8c3a2" : "#f0f0f0",
                             color: index === 1 ? "#fff" : "#aaa",
                           }}
                         >
@@ -2281,8 +2221,7 @@ const CalendarPage = () => {
           tasks["未竟之事"]
             .filter(
               (task) =>
-                !selectedCharacter ||
-                task.characterId === selectedCharacter.id,
+                !selectedCharacter || task.characterId === selectedCharacter.id,
             )
             .map((task) => (
               <div
@@ -2319,9 +2258,7 @@ const CalendarPage = () => {
                 >
                   <div className="calendar-task-content">
                     <div className="calendar-task-header">
-                      <span className="calendar-task-title">
-                        {task.title}
-                      </span>
+                      <span className="calendar-task-title">{task.title}</span>
                     </div>
                     <div className="calendar-task-subtitle">
                       {task.subtitle}
@@ -2332,15 +2269,10 @@ const CalendarPage = () => {
                     >
                       {task.time}
                     </span>
-                    <div className="calendar-task-desc">
-                      {task.description}
-                    </div>
+                    <div className="calendar-task-desc">{task.description}</div>
                     <div className="calendar-cat-footer">
                       {/* 手绘小猫图标 */}
-                      <svg
-                        className="calendar-cat-head"
-                        viewBox="0 0 40 40"
-                      >
+                      <svg className="calendar-cat-head" viewBox="0 0 40 40">
                         <circle
                           cx="20"
                           cy="22"
@@ -2354,10 +2286,7 @@ const CalendarPage = () => {
                         <circle cx="15" cy="20" r="1.5" fill="#333" />
                         <circle cx="25" cy="20" r="1.5" fill="#333" />
                       </svg>
-                      <svg
-                        className="calendar-cat-head"
-                        viewBox="0 0 40 40"
-                      >
+                      <svg className="calendar-cat-head" viewBox="0 0 40 40">
                         <circle
                           cx="20"
                           cy="22"
@@ -2572,6 +2501,43 @@ const CalendarPage = () => {
         </div>
       )}
 
+      {/* 创建日程确认弹窗 */}
+      {showCreateScheduleConfirm && (
+        <div className="calendar-modal-overlay">
+          <div className="calendar-modal-content">
+            <div className="calendar-modal-header">
+              <h3>创建日程</h3>
+              <button
+                className="calendar-modal-close"
+                onClick={() => setShowCreateScheduleConfirm(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="calendar-modal-body">
+              <p>是否创建日程？</p>
+              <div className="calendar-modal-footer">
+                <button
+                  className="calendar-btn cancel-btn"
+                  onClick={() => setShowCreateScheduleConfirm(false)}
+                >
+                  取消
+                </button>
+                <button
+                  className="calendar-btn save-btn"
+                  onClick={() => {
+                    setShowCreateScheduleConfirm(false);
+                    setSelectedDayForTask(selectedDay);
+                    setShowCategorySelect(true);
+                  }}
+                >
+                  创建
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {/* 类别选择弹窗 */}
       {showCategorySelect && (
         <div className="calendar-modal-overlay">
@@ -2700,12 +2666,11 @@ const CalendarPage = () => {
                         setShowCharacterSelector(false);
 
                         // 1. 定义检查任务是否存在的逻辑
-                        const hasCharacterTasks = Object.values(
-                          tasks,
-                        ).some((categoryTasks) =>
-                          categoryTasks.some(
-                            (task) => task.characterId === character.id,
-                          ),
+                        const hasCharacterTasks = Object.values(tasks).some(
+                          (categoryTasks) =>
+                            categoryTasks.some(
+                              (task) => task.characterId === character.id,
+                            ),
                         );
 
                         // 2. 如果没有任务，调用 AI 生成
@@ -2748,10 +2713,7 @@ const CalendarPage = () => {
                           } catch (e) {
                             console.log("读取聊天记录失败");
                           }
-                          console.log(
-                            "聊天记录获取完成:",
-                            chatContext || "无",
-                          );
+                          console.log("聊天记录获取完成:", chatContext || "无");
 
                           // B. 构建提示词 (Prompt)
                           const systemPrompt = `你是一个基于剧情的角色日程生成器。请根据给定的【世界观】、【角色设定】和【最近聊天】，为角色生成的今日日程。
@@ -2809,25 +2771,23 @@ const CalendarPage = () => {
 
                                   // 辅助函数：转换 AI 数据为组件任务格式
                                   const mapTasks = (aiList, category) => {
-                                    return (aiList || []).map(
-                                      (t, idx) => ({
-                                        id:
-                                          timestamp +
-                                          idx +
-                                          (category === "已毕之事"
-                                            ? 0
-                                            : category === "进行之事"
-                                              ? 100
-                                              : 200),
-                                        title: t.title,
-                                        subtitle: t.subtitle,
-                                        time: t.time,
-                                        description: t.description,
-                                        progress: t.progress,
-                                        category: category,
-                                        characterId: character.id,
-                                      }),
-                                    );
+                                    return (aiList || []).map((t, idx) => ({
+                                      id:
+                                        timestamp +
+                                        idx +
+                                        (category === "已毕之事"
+                                          ? 0
+                                          : category === "进行之事"
+                                            ? 100
+                                            : 200),
+                                      title: t.title,
+                                      subtitle: t.subtitle,
+                                      time: t.time,
+                                      description: t.description,
+                                      progress: t.progress,
+                                      category: category,
+                                      characterId: character.id,
+                                    }));
                                   };
 
                                   const newCompleted = mapTasks(
@@ -2853,10 +2813,7 @@ const CalendarPage = () => {
                                       ...prev["进行之事"],
                                       ...newOngoing,
                                     ],
-                                    未竟之事: [
-                                      ...prev["未竟之事"],
-                                      ...newTodo,
-                                    ],
+                                    未竟之事: [...prev["未竟之事"], ...newTodo],
                                   }));
 
                                   // 生成日历颜色块
@@ -2867,18 +2824,14 @@ const CalendarPage = () => {
                                     console.log("正在生成日历颜色块...");
                                     const newDayColors = { ...dayColors };
 
-                                    data.calendarColors.forEach(
-                                      (item) => {
-                                        if (item.day && item.color) {
-                                          newDayColors[
-                                            item.day.toString()
-                                          ] = {
-                                            color: item.color,
-                                            characterId: character.id,
-                                          };
-                                        }
-                                      },
-                                    );
+                                    data.calendarColors.forEach((item) => {
+                                      if (item.day && item.color) {
+                                        newDayColors[item.day.toString()] = {
+                                          color: item.color,
+                                          characterId: character.id,
+                                        };
+                                      }
+                                    });
 
                                     setDayColors(newDayColors);
                                     console.log("日历颜色块生成完成");
@@ -2888,11 +2841,7 @@ const CalendarPage = () => {
                                     `${character.name} 的日程和日历颜色已生成！`,
                                   );
                                 } catch (e) {
-                                  console.error(
-                                    "生成日程解析失败:",
-                                    e,
-                                    reply,
-                                  );
+                                  console.error("生成日程解析失败:", e, reply);
                                   alert("AI 生成格式有误，请重试");
                                 } finally {
                                   // 清除加载状态
@@ -2936,9 +2885,7 @@ const CalendarPage = () => {
                         {(character.name || "?").charAt(0)}
                       </div>
                       <div>
-                        <div
-                          style={{ fontWeight: "bold", fontSize: "14px" }}
-                        >
+                        <div style={{ fontWeight: "bold", fontSize: "14px" }}>
                           {character.name || "未知角色"}
                         </div>
                         <div style={{ fontSize: "12px", color: "#999" }}>
@@ -3003,9 +2950,7 @@ const CalendarPage = () => {
               >
                 {loadingCharacter.name}
               </div>
-              <div style={{ fontSize: "14px", color: "#666" }}>
-                正在思考...
-              </div>
+              <div style={{ fontSize: "14px", color: "#666" }}>正在思考...</div>
             </div>
             <div
               style={{
@@ -3060,8 +3005,7 @@ const T10Page = ({ onPrescribe }) => {
   const [tongueSegments, setTongueSegments] = useState([33, 66]); // 轨道分段位置
   const [ballPosition, setBallPosition] = useState(0); // 小球位置
   const [ballSpeed, setBallSpeed] = useState(6); // 小球下落速度
-  const [memoryTestModalVisible, setMemoryTestModalVisible] =
-    useState(false); // 记忆力测试弹窗是否可见
+  const [memoryTestModalVisible, setMemoryTestModalVisible] = useState(false); // 记忆力测试弹窗是否可见
   const [memoryTestHearts, setMemoryTestHearts] = useState(2); // 记忆力测试爱心数量
   const [memoryTestLevel, setMemoryTestLevel] = useState(0); // 记忆力测试等级（对应诊断准确率的10%增量）
   const [memoryTestBlocks, setMemoryTestBlocks] = useState(4); // 积木数量
@@ -3077,8 +3021,7 @@ const T10Page = ({ onPrescribe }) => {
   const [currentQuestion, setCurrentQuestion] = useState(null);
   const [questionsAsked, setQuestionsAsked] = useState([]);
   const [showOptions, setShowOptions] = useState(false);
-  const [showConclusionButtons, setShowConclusionButtons] =
-    useState(false);
+  const [showConclusionButtons, setShowConclusionButtons] = useState(false);
 
   // 问题库
   const questions = [
@@ -3144,14 +3087,7 @@ const T10Page = ({ onPrescribe }) => {
       ],
       characterPool1: ["袁基", "傅融", "刘辩", "孙策"],
       characterPool2: ["袁基", "傅融", "刘辩", "孙策"],
-      characterPool3: [
-        "水镜先生",
-        "左慈",
-        "张仲景",
-        "董奉",
-        "华佗",
-        "史子眇",
-      ],
+      characterPool3: ["水镜先生", "左慈", "张仲景", "董奉", "华佗", "史子眇"],
     },
     {
       id: 6,
@@ -3455,9 +3391,7 @@ const T10Page = ({ onPrescribe }) => {
     if (availableQuestions.length === 0) return;
 
     const randomQuestion =
-      availableQuestions[
-      Math.floor(Math.random() * availableQuestions.length)
-      ];
+      availableQuestions[Math.floor(Math.random() * availableQuestions.length)];
     setCurrentQuestion(randomQuestion);
     setQuestionsAsked((prev) => [...prev, randomQuestion.id]);
 
@@ -3479,43 +3413,35 @@ const T10Page = ({ onPrescribe }) => {
     // 处理不同类型的占位符
     if (optionText.includes("{name}")) {
       // 检查是否有特定的角色池
-      const characterPool =
-        currentQuestion.characterPool || characterNames;
+      const characterPool = currentQuestion.characterPool || characterNames;
       const randomName =
         characterPool[Math.floor(Math.random() * characterPool.length)];
       optionText = optionText.replace("{name}", randomName);
     }
 
     if (optionText.includes("{name1}")) {
-      const characterPool1 =
-        currentQuestion.characterPool1 || characterNames;
+      const characterPool1 = currentQuestion.characterPool1 || characterNames;
       const randomName1 =
         characterPool1[Math.floor(Math.random() * characterPool1.length)];
       optionText = optionText.replace("{name1}", randomName1);
     }
 
     if (optionText.includes("{name2}")) {
-      const characterPool2 =
-        currentQuestion.characterPool2 || characterNames;
+      const characterPool2 = currentQuestion.characterPool2 || characterNames;
       const randomName2 =
         characterPool2[Math.floor(Math.random() * characterPool2.length)];
       optionText = optionText.replace("{name2}", randomName2);
     }
 
     if (optionText.includes("{name3}")) {
-      const characterPool3 =
-        currentQuestion.characterPool3 || characterNames;
+      const characterPool3 = currentQuestion.characterPool3 || characterNames;
       const randomName3 =
         characterPool3[Math.floor(Math.random() * characterPool3.length)];
       optionText = optionText.replace("{name3}", randomName3);
     }
 
     if (optionText.includes("{place}")) {
-      const placePool = currentQuestion.placePool || [
-        "荆北",
-        "雪山",
-        "幽州",
-      ];
+      const placePool = currentQuestion.placePool || ["荆北", "雪山", "幽州"];
       const randomPlace =
         placePool[Math.floor(Math.random() * placePool.length)];
       optionText = optionText.replace("{place}", randomPlace);
@@ -3537,38 +3463,28 @@ const T10Page = ({ onPrescribe }) => {
       let hintText = option.hint;
 
       if (hintText.includes("{name1}")) {
-        const characterPool1 =
-          currentQuestion.characterPool1 || characterNames;
+        const characterPool1 = currentQuestion.characterPool1 || characterNames;
         const randomName1 =
-          characterPool1[
-          Math.floor(Math.random() * characterPool1.length)
-          ];
+          characterPool1[Math.floor(Math.random() * characterPool1.length)];
         hintText = hintText.replace("{name1}", randomName1);
       }
 
       if (hintText.includes("{name2}")) {
-        const characterPool2 =
-          currentQuestion.characterPool2 || characterNames;
+        const characterPool2 = currentQuestion.characterPool2 || characterNames;
         const randomName2 =
-          characterPool2[
-          Math.floor(Math.random() * characterPool2.length)
-          ];
+          characterPool2[Math.floor(Math.random() * characterPool2.length)];
         hintText = hintText.replace("{name2}", randomName2);
       }
 
       if (hintText.includes("{name3}")) {
-        const characterPool3 =
-          currentQuestion.characterPool3 || characterNames;
+        const characterPool3 = currentQuestion.characterPool3 || characterNames;
         const randomName3 =
-          characterPool3[
-          Math.floor(Math.random() * characterPool3.length)
-          ];
+          characterPool3[Math.floor(Math.random() * characterPool3.length)];
         hintText = hintText.replace("{name3}", randomName3);
       }
 
       if (hintText.includes("{name}")) {
-        const characterPool =
-          currentQuestion.characterPool || characterNames;
+        const characterPool = currentQuestion.characterPool || characterNames;
         const randomName =
           characterPool[Math.floor(Math.random() * characterPool.length)];
         hintText = hintText.replace("{name}", randomName);
@@ -3659,13 +3575,13 @@ const T10Page = ({ onPrescribe }) => {
       prev.map((block) =>
         block.id === blockId
           ? {
-            ...block,
-            isDragging: true,
-            dragStartX: x,
-            dragStartY: y,
-            initialX: block.x,
-            initialY: block.y,
-          }
+              ...block,
+              isDragging: true,
+              dragStartX: x,
+              dragStartY: y,
+              initialX: block.x,
+              initialY: block.y,
+            }
           : block,
       ),
     );
@@ -3695,9 +3611,7 @@ const T10Page = ({ onPrescribe }) => {
       const newY = clientY - rect.top - block.dragStartY;
 
       setMemoryTestRightShapes((prev) =>
-        prev.map((b) =>
-          b.id === blockId ? { ...b, x: newX, y: newY } : b,
-        ),
+        prev.map((b) => (b.id === blockId ? { ...b, x: newX, y: newY } : b)),
       );
     }
   };
@@ -3708,11 +3622,11 @@ const T10Page = ({ onPrescribe }) => {
       prev.map((block) =>
         block.id === blockId
           ? {
-            ...block,
-            isDragging: false,
-            dragStartX: undefined,
-            dragStartY: undefined,
-          }
+              ...block,
+              isDragging: false,
+              dragStartX: undefined,
+              dragStartY: undefined,
+            }
           : block,
       ),
     );
@@ -3724,14 +3638,12 @@ const T10Page = ({ onPrescribe }) => {
 
     // 1. 初始生成逻辑
     const myNumber = Math.floor(Math.random() * 50) + 10;
-    const assignedDoctor =
-      doctors[Math.floor(Math.random() * doctors.length)];
+    const assignedDoctor = doctors[Math.floor(Math.random() * doctors.length)];
     const patientCount = Math.floor(Math.random() * 8) + 3;
     let waitList = Array.from({ length: patientCount }).map((_, i) => ({
       no: myNumber - (patientCount - i),
       name: names[Math.floor(Math.random() * names.length)],
-      symptom:
-        symptomsList[Math.floor(Math.random() * symptomsList.length)],
+      symptom: symptomsList[Math.floor(Math.random() * symptomsList.length)],
     }));
 
     // 2. 静态冲突检测 (不涉及UI交互的)
@@ -3767,9 +3679,7 @@ const T10Page = ({ onPrescribe }) => {
     if (doctor === "华佗" && list.some((p) => p.name === "张飞")) {
       return (
         setViewState("select"),
-        alert(
-          "因华佗医师与张飞将军发生冲突，华佗医师无法出诊。请重选医师。",
-        )
+        alert("因华佗医师与张飞将军发生冲突，华佗医师无法出诊。请重选医师。")
       );
     }
     // 规则 3: 甘宁
@@ -3813,9 +3723,7 @@ const T10Page = ({ onPrescribe }) => {
     ) {
       return (
         setViewState("select"),
-        alert(
-          "左慈阁主似乎嗅到了安期的气息…妖祥启动。此诊室暂废，请重选医师。",
-        )
+        alert("左慈阁主似乎嗅到了安期的气息…妖祥启动。此诊室暂废，请重选医师。")
       );
     }
     // 规则 8: 董奉 + 士燮
@@ -3970,9 +3878,7 @@ const T10Page = ({ onPrescribe }) => {
 
     if (type === "ganning") {
       if (choice === "yes") setViewState("queue");
-      else
-        (setViewState("select"),
-          alert("人群骚乱，无法出诊。请重选医师。"));
+      else (setViewState("select"), alert("人群骚乱，无法出诊。请重选医师。"));
     } else if (type === "guojia") {
       if (choice === "yes") setViewState("queue");
       else if (choice === "timeout") {
@@ -4095,8 +4001,7 @@ const T10Page = ({ onPrescribe }) => {
   React.useEffect(() => {
     if (
       activeConflict &&
-      (activeConflict.type === "guojia" ||
-        activeConflict.type === "zhangmiao")
+      (activeConflict.type === "guojia" || activeConflict.type === "zhangmiao")
     ) {
       const timer = setTimeout(() => {
         handleConflictResolve("timeout");
@@ -4170,10 +4075,7 @@ const T10Page = ({ onPrescribe }) => {
           // 检查是否在正确区域
           let isCorrect = false;
 
-          if (
-            tongueTarget === "舌根" &&
-            tonguePosition <= tongueSegments[0]
-          ) {
+          if (tongueTarget === "舌根" && tonguePosition <= tongueSegments[0]) {
             isCorrect = true;
           } else if (
             tongueTarget === "舌中" &&
@@ -4237,9 +4139,7 @@ const T10Page = ({ onPrescribe }) => {
       {activeConflict && (
         <div className="t10-conflict-overlay">
           <div className="t10-conflict-modal">
-            <div className="t10-conflict-text">
-              {activeConflict.title}
-            </div>
+            <div className="t10-conflict-text">{activeConflict.title}</div>
             <div className="t10-conflict-btns">
               <button
                 className="t10-cbtn t10-cbtn-primary"
@@ -4280,11 +4180,11 @@ const T10Page = ({ onPrescribe }) => {
             </div>
             {(activeConflict.type === "guojia" ||
               activeConflict.type === "zhangmiao") && (
-                <div
-                  className="t10-timer-bar"
-                  style={{ animation: "timerShrink 3s linear forwards" }}
-                ></div>
-              )}
+              <div
+                className="t10-timer-bar"
+                style={{ animation: "timerShrink 3s linear forwards" }}
+              ></div>
+            )}
           </div>
         </div>
       )}
@@ -4331,10 +4231,7 @@ const T10Page = ({ onPrescribe }) => {
                 />
               </g>
               <g transform="translate(0, 10)">
-                <path
-                  d="M75 180 Q60 140 70 100 Q80 80 90 180"
-                  fill="#B3CCC0"
-                />
+                <path d="M75 180 Q60 140 70 100 Q80 80 90 180" fill="#B3CCC0" />
                 <path
                   d="M125 180 Q140 140 130 100 Q120 80 110 180"
                   fill="#B3CCC0"
@@ -4355,10 +4252,7 @@ const T10Page = ({ onPrescribe }) => {
                   d="M100 185 C90 120 85 40 100 20 C115 40 110 120 100 185"
                   fill="#88AD96"
                 />
-                <path
-                  d="M65 180 L135 180 L130 188 L70 188 Z"
-                  fill="#D3C598"
-                />
+                <path d="M65 180 L135 180 L130 188 L70 188 Z" fill="#D3C598" />
                 <rect
                   x="65"
                   y="165"
@@ -4420,9 +4314,7 @@ const T10Page = ({ onPrescribe }) => {
       {viewState === "queue" && (
         <div className="t10-queue-container">
           <div className="t10-info-card">
-            <div style={{ fontSize: "14px", color: "#8c8c8c" }}>
-              挂号成功
-            </div>
+            <div style={{ fontSize: "14px", color: "#8c8c8c" }}>挂号成功</div>
             <div className="t10-number-big">{queueData.myNumber}</div>
             <div className="t10-doctor-tag">
               当前坐诊医师：{queueData.assignedDoctor}
@@ -4687,9 +4579,7 @@ const T10Page = ({ onPrescribe }) => {
             </div>
 
             {/* 输入区域 */}
-            <div
-              style={{ marginTop: "10px", display: "flex", gap: "10px" }}
-            >
+            <div style={{ marginTop: "10px", display: "flex", gap: "10px" }}>
               <input
                 style={{
                   flex: 1,
@@ -4833,8 +4723,7 @@ const T10Page = ({ onPrescribe }) => {
 
                 // 随机生成轨道分段
                 const segment1 = Math.floor(Math.random() * 30) + 20; // 20-50%
-                const segment2 =
-                  Math.floor(Math.random() * 20) + segment1 + 10; // segment1+10 到 segment1+30%
+                const segment2 = Math.floor(Math.random() * 20) + segment1 + 10; // segment1+10 到 segment1+30%
                 setTongueSegments([segment1, segment2]);
 
                 // 随机生成目标区域
@@ -4932,15 +4821,9 @@ const T10Page = ({ onPrescribe }) => {
                     // 检查是否在金色区间内
                     const goldenMin = 40;
                     const goldenMax = 60;
-                    if (
-                      newQiLevel >= goldenMin &&
-                      newQiLevel <= goldenMax
-                    ) {
+                    if (newQiLevel >= goldenMin && newQiLevel <= goldenMax) {
                       // 增加诊断准确率
-                      const newAccuracy = Math.min(
-                        100,
-                        diagnosisAccuracy + 5,
-                      );
+                      const newAccuracy = Math.min(100, diagnosisAccuracy + 5);
                       setDiagnosisAccuracy(newAccuracy);
                     }
                   }}
@@ -5460,12 +5343,8 @@ const T10Page = ({ onPrescribe }) => {
                       cursor: "move",
                       zIndex: block.isDragging ? 10 : 1,
                     }}
-                    onMouseDown={(e) =>
-                      startDrag(block.id, e, e.currentTarget)
-                    }
-                    onMouseMove={(e) =>
-                      drag(block.id, e, e.currentTarget)
-                    }
+                    onMouseDown={(e) => startDrag(block.id, e, e.currentTarget)}
+                    onMouseMove={(e) => drag(block.id, e, e.currentTarget)}
                     onMouseUp={() => endDrag(block.id)}
                     onMouseLeave={() => endDrag(block.id)}
                     onTouchStart={(e) => {
@@ -5500,8 +5379,7 @@ const T10Page = ({ onPrescribe }) => {
                       width: "20px",
                       height: "20px",
                       borderRadius: "50%",
-                      background:
-                        i < memoryTestHearts ? "#e8afaf" : "#f2efde",
+                      background: i < memoryTestHearts ? "#e8afaf" : "#f2efde",
                       border: "1px solid #e8afaf",
                     }}
                   ></div>
@@ -5735,16 +5613,13 @@ const DecoctionPage = ({ isActive }) => {
   const replaceCharacters = (template) => {
     return template.replace(
       /{角色}/g,
-      () =>
-        characterNames[Math.floor(Math.random() * characterNames.length)],
+      () => characterNames[Math.floor(Math.random() * characterNames.length)],
     );
   };
 
   const showNextMessage = React.useCallback(() => {
     if (gameStatus !== "playing") return;
-    const randomIndex = Math.floor(
-      Math.random() * messageTemplates.length,
-    );
+    const randomIndex = Math.floor(Math.random() * messageTemplates.length);
     setCurrentMessageIndex(randomIndex);
     const nextMessage = replaceCharacters(messageTemplates[randomIndex]);
     setCurrentMessage(nextMessage);
@@ -5818,8 +5693,7 @@ const DecoctionPage = ({ isActive }) => {
     const fireHintInterval = setInterval(
       () => {
         const hints = ["加大火候", "减弱火候"];
-        const randomHint =
-          hints[Math.floor(Math.random() * hints.length)];
+        const randomHint = hints[Math.floor(Math.random() * hints.length)];
         setFireHint(randomHint);
         setShowFireHint(true);
         timeoutRefs.current.hint = setTimeout(
@@ -5871,9 +5745,7 @@ const DecoctionPage = ({ isActive }) => {
     <div className="decoction-container">
       {/* 弹幕条 */}
       <div className="decoction-danmaku">
-        {messageVisible && (
-          <div className="danmaku-item">{currentMessage}</div>
-        )}
+        {messageVisible && <div className="danmaku-item">{currentMessage}</div>}
       </div>
 
       {/* 煎药时长 */}
@@ -6245,11 +6117,7 @@ const CharacterHomePage = ({ character, onBack }) => {
 
               // 确保返回的数据格式正确
               if (Array.isArray(result) && result.length > 0) {
-                console.log(
-                  "生成新闻成功，共生成",
-                  result.length,
-                  "条新闻",
-                );
+                console.log("生成新闻成功，共生成", result.length, "条新闻");
                 setNews(result);
                 // 缓存新生成的新闻
                 const cacheKey = `character_news_${character?.name || "default"}`;
@@ -6285,10 +6153,7 @@ const CharacterHomePage = ({ character, onBack }) => {
                 setNews(fallbackNews);
                 // 缓存默认新闻
                 const cacheKey = `character_news_${character?.name || "default"}`;
-                localStorage.setItem(
-                  cacheKey,
-                  JSON.stringify(fallbackNews),
-                );
+                localStorage.setItem(cacheKey, JSON.stringify(fallbackNews));
               }
             } catch (parseError) {
               console.error("解析API响应失败:", parseError);
@@ -6318,10 +6183,7 @@ const CharacterHomePage = ({ character, onBack }) => {
               setNews(fallbackNews);
               // 缓存默认新闻
               const cacheKey = `character_news_${character?.name || "default"}`;
-              localStorage.setItem(
-                cacheKey,
-                JSON.stringify(fallbackNews),
-              );
+              localStorage.setItem(cacheKey, JSON.stringify(fallbackNews));
             } finally {
               setLoading(false);
             }
@@ -6559,10 +6421,7 @@ const CharacterHomePage = ({ character, onBack }) => {
 
                 // 更新缓存
                 const cacheKey = `character_news_${character?.name || "default"}`;
-                localStorage.setItem(
-                  cacheKey,
-                  JSON.stringify(updatedNews),
-                );
+                localStorage.setItem(cacheKey, JSON.stringify(updatedNews));
               } else {
                 console.error(
                   "API返回的数据格式不正确，期望是数组但得到:",
@@ -6675,10 +6534,7 @@ const CharacterHomePage = ({ character, onBack }) => {
               }
             `}</style>
       {/* 顶部返回 */}
-      <div
-        style={{ marginBottom: "10px", height: "24px" }}
-        onClick={onBack}
-      >
+      <div style={{ marginBottom: "10px", height: "24px" }} onClick={onBack}>
         {/* 使用简单的字符箭头代替图标，或者如果上下文有 lucide 可以用 */}
         <span
           style={{
@@ -6700,9 +6556,7 @@ const CharacterHomePage = ({ character, onBack }) => {
           marginBottom: "15px",
         }}
       >
-        <div
-          style={{ display: "flex", alignItems: "center", gap: "10px" }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div
             style={{
               fontSize: "48px",
@@ -6874,8 +6728,7 @@ const CharacterHomePage = ({ character, onBack }) => {
                 onDragOver={handleDragOver}
                 onDrop={(e) => {
                   e.preventDefault();
-                  const droppedText =
-                    e.dataTransfer.getData("text/plain");
+                  const droppedText = e.dataTransfer.getData("text/plain");
 
                   // 获取鼠标在元素内的位置
                   const rect = e.currentTarget.getBoundingClientRect();
@@ -6929,9 +6782,7 @@ const CharacterHomePage = ({ character, onBack }) => {
                         position: "absolute",
                         // 修改：如果是NPC弹幕，初始在右侧，靠动画向左移动
                         left: sticker.isNpc ? "100%" : `${sticker.x}px`,
-                        top: sticker.isNpc
-                          ? `${sticker.y}%`
-                          : `${sticker.y}px`,
+                        top: sticker.isNpc ? `${sticker.y}%` : `${sticker.y}px`,
                         transform: sticker.isNpc
                           ? "translateY(-50%)"
                           : "translate(-50%, -50%)",
@@ -6976,9 +6827,7 @@ const CharacterHomePage = ({ character, onBack }) => {
             fontFamily: "SimHei",
           }}
         >
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "6px" }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <div
               style={{
                 width: "6px",
@@ -6990,9 +6839,7 @@ const CharacterHomePage = ({ character, onBack }) => {
             ></div>
             粘点什么
           </div>
-          <div
-            style={{ display: "flex", gap: "8px", alignItems: "center" }}
-          >
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
             <div
               className="active-press"
               style={{
@@ -7153,9 +7000,7 @@ const CharacterHomePage = ({ character, onBack }) => {
                 type="text"
                 value={textInputValue}
                 onChange={(e) => setTextInputValue(e.target.value)}
-                onKeyPress={(e) =>
-                  e.key === "Enter" && handleTextSubmit()
-                }
+                onKeyPress={(e) => e.key === "Enter" && handleTextSubmit()}
                 placeholder="输入文字..."
                 style={{
                   flex: 1,
@@ -7428,19 +7273,11 @@ const VerticalCarousel = ({ onCharacterClick }) => {
             try {
               const parsedContent = JSON.parse(cachedContent);
               console.log("解析区域内容:", parsedContent);
-              if (
-                parsedContent.items &&
-                Array.isArray(parsedContent.items)
-              ) {
-                console.log(
-                  "区域包含",
-                  parsedContent.items.length,
-                  "个项目",
-                );
+              if (parsedContent.items && Array.isArray(parsedContent.items)) {
+                console.log("区域包含", parsedContent.items.length, "个项目");
                 parsedContent.items.forEach((item) => {
                   if (item.title && (item.likes || item.comments)) {
-                    const hotScore =
-                      (item.likes || 0) + (item.comments || 0);
+                    const hotScore = (item.likes || 0) + (item.comments || 0);
                     hotPosts.push({
                       id: item.id,
                       title: item.title,
@@ -7452,12 +7289,7 @@ const VerticalCarousel = ({ onCharacterClick }) => {
                       color: item.color || "",
                       areaContent: parsedContent,
                     });
-                    console.log(
-                      "添加热点帖子:",
-                      item.title,
-                      "热度:",
-                      hotScore,
-                    );
+                    console.log("添加热点帖子:", item.title, "热度:", hotScore);
                   }
                 });
               } else {
@@ -7474,11 +7306,7 @@ const VerticalCarousel = ({ onCharacterClick }) => {
 
       // 按热度排序
       hotPosts.sort((a, b) => b.hotScore - a.hotScore);
-      console.log(
-        "热点追踪信息读取完成，共找到",
-        hotPosts.length,
-        "个热点",
-      );
+      console.log("热点追踪信息读取完成，共找到", hotPosts.length, "个热点");
 
       // 只取前5个热点
       return hotPosts.slice(0, 5);
@@ -7522,10 +7350,7 @@ const VerticalCarousel = ({ onCharacterClick }) => {
   };
 
   // 调用LLM API生成名人卡片
-  const generateCelebritiesWithLLM = async (
-    hotTrackingInfo,
-    worldBookInfo,
-  ) => {
+  const generateCelebritiesWithLLM = async (hotTrackingInfo, worldBookInfo) => {
     return new Promise((resolve, reject) => {
       try {
         console.log("开始调用LLM API生成名人卡片...");
@@ -7573,9 +7398,7 @@ const VerticalCarousel = ({ onCharacterClick }) => {
                 console.log("API响应结果:", reply);
 
                 // 清理可能的markdown标记
-                const cleanJson = reply
-                  .replace(/```json|```/g, "")
-                  .trim();
+                const cleanJson = reply.replace(/```json|```/g, "").trim();
 
                 // 解析JSON响应
                 const result = JSON.parse(cleanJson);
@@ -7691,8 +7514,7 @@ const VerticalCarousel = ({ onCharacterClick }) => {
       } else {
         // 向下滑 (上一个)
         setActiveIndex(
-          (prev) =>
-            (prev - 1 + carouselData.length) % carouselData.length,
+          (prev) => (prev - 1 + carouselData.length) % carouselData.length,
         );
       }
     }
@@ -7765,21 +7587,15 @@ const VerticalCarousel = ({ onCharacterClick }) => {
               className="carousel-card"
               style={{
                 background: item.themeColor,
-                transform: `translateY(${index === activeIndex
-                    ? 0
-                    : index > activeIndex
-                      ? 160
-                      : -160
-                  }px)`,
+                transform: `translateY(${
+                  index === activeIndex ? 0 : index > activeIndex ? 160 : -160
+                }px)`,
                 opacity: index === activeIndex ? 1 : 0,
                 zIndex: index === activeIndex ? 10 : 1,
                 pointerEvents: index === activeIndex ? "auto" : "none", // 防止点击看不见的卡片
               }}
             >
-              <div
-                className="avatar"
-                style={{ background: item.avatarBg }}
-              >
+              <div className="avatar" style={{ background: item.avatarBg }}>
                 <span
                   style={{
                     color: item.iconColor,
@@ -7807,9 +7623,7 @@ const VerticalCarousel = ({ onCharacterClick }) => {
                 <div className="subtag">{item.subTag}</div>
               </div>
               <div className="carousel-controls">
-                <div
-                  style={{ transform: "rotate(-90deg)", opacity: 0.3 }}
-                >
+                <div style={{ transform: "rotate(-90deg)", opacity: 0.3 }}>
                   <T7Icons.ChevronDown />
                 </div>
                 <div style={{ display: "flex", gap: "8px" }}>
@@ -7867,10 +7681,7 @@ const HotTrackingList = ({ onPostClick }) => {
             try {
               const parsedContent = JSON.parse(cachedContent);
               // 提取帖子数据
-              if (
-                parsedContent.items &&
-                Array.isArray(parsedContent.items)
-              ) {
+              if (parsedContent.items && Array.isArray(parsedContent.items)) {
                 parsedContent.items.forEach((item) => {
                   if (item.title && (item.likes || item.comments)) {
                     // 计算帖子的缓存键，与 PostDetailPage 中的逻辑一致
@@ -7883,8 +7694,7 @@ const HotTrackingList = ({ onPostClick }) => {
                     const postCache = localStorage.getItem(postCacheKey);
                     if (postCache) {
                       // 计算热度分数（点赞数 + 评论数）
-                      const hotScore =
-                        (item.likes || 0) + (item.comments || 0);
+                      const hotScore = (item.likes || 0) + (item.comments || 0);
                       hotPosts.push({
                         id: item.id,
                         title: item.title,
@@ -7924,20 +7734,19 @@ const HotTrackingList = ({ onPostClick }) => {
   const listData =
     hotPosts.length > 0
       ? hotPosts.slice(0, 8).map((post, i) => ({
-        ...post, // 保存完整的帖子数据
-        views: post.hotScore.toLocaleString(),
-        iconBg: i % 2 === 0 ? "#D8E6D8" : "#F0F0F0",
-      }))
+          ...post, // 保存完整的帖子数据
+          views: post.hotScore.toLocaleString(),
+          iconBg: i % 2 === 0 ? "#D8E6D8" : "#F0F0F0",
+        }))
       : Array.from({ length: 8 }).map((_, i) => ({
-        id: i,
-        title:
-          i === 0 ? "五年绣衣 三年特训" : `热门话题追踪 No.${i + 1}`,
-        views: (28312.22 - i * 1000).toLocaleString("en-US", {
-          minimumFractionDigits: 2,
-          maximumFractionDigits: 2,
-        }),
-        iconBg: i % 2 === 0 ? "#D8E6D8" : "#F0F0F0",
-      }));
+          id: i,
+          title: i === 0 ? "五年绣衣 三年特训" : `热门话题追踪 No.${i + 1}`,
+          views: (28312.22 - i * 1000).toLocaleString("en-US", {
+            minimumFractionDigits: 2,
+            maximumFractionDigits: 2,
+          }),
+          iconBg: i % 2 === 0 ? "#D8E6D8" : "#F0F0F0",
+        }));
 
   return (
     <div className="hotlist-container">
@@ -8096,8 +7905,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
   const [showPostDetail, setShowPostDetail] = React.useState(false);
   const [showPostPage, setShowPostPage] = React.useState(false);
   // 发布帖子状态
-  const [showCreatePostModal, setShowCreatePostModal] =
-    React.useState(false);
+  const [showCreatePostModal, setShowCreatePostModal] = React.useState(false);
   const [postTitle, setPostTitle] = React.useState("");
   const [postContent, setPostContent] = React.useState("");
 
@@ -8134,8 +7942,8 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
         const worldBookContext =
           targetWorldBooks.length > 0
             ? targetWorldBooks
-              .map((book) => `- ${book.title}: ${book.content}`)
-              .join("\n")
+                .map((book) => `- ${book.title}: ${book.content}`)
+                .join("\n")
             : "无特定世界书，请根据区域名称自由发挥";
 
         // 3. 构建提示词
@@ -8190,7 +7998,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
         await new Promise((resolve, reject) => {
           window.sendToLLM(
             [{ role: "user", content: prompt }],
-            (chunk) => { },
+            (chunk) => {},
             (response) => {
               console.log("AI响应:", response);
 
@@ -8204,8 +8012,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
               // 方法1: 尝试按严格格式解析
               let descMatch = response.match(/描述：\[(.*?)\]/s);
               let secMatch = response.match(/板块：\[(.*?)\]/);
-              let listMatch =
-                response.match(/列表：[\s\S]*?(?=内容：|$)/);
+              let listMatch = response.match(/列表：[\s\S]*?(?=内容：|$)/);
               let contentMatch = response.match(/内容：[\s\S]*/);
 
               // 方法2: 如果方法1失败，尝试按宽松格式解析
@@ -8231,12 +8038,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
               }
 
               // 方法3: 如果方法2失败，尝试按行解析
-              if (
-                !descMatch ||
-                !secMatch ||
-                !listMatch ||
-                !contentMatch
-              ) {
+              if (!descMatch || !secMatch || !listMatch || !contentMatch) {
                 const lines = response.split("\n");
                 let currentSection = "";
                 let descLines = [];
@@ -8351,9 +8153,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
 
                 // 提取列表
                 if (listMatch) {
-                  const listStr = listMatch[0]
-                    .replace("列表：", "")
-                    .trim();
+                  const listStr = listMatch[0].replace("列表：", "").trim();
                   // 修复：不使用逗号分割标题，而是按行或段落分割，确保标题完整
                   let titles = [];
                   if (listStr.includes("\n")) {
@@ -8426,108 +8226,43 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
                     sections = ["文学", "戏剧", "绘画", "艺术活动"];
                     break;
                   case "美食区":
-                    sections = [
-                      "菜谱分享",
-                      "美食测评",
-                      "烹饪技巧",
-                      "食材知识",
-                    ];
+                    sections = ["菜谱分享", "美食测评", "烹饪技巧", "食材知识"];
                     break;
                   case "手工区":
-                    sections = [
-                      "DIY教程",
-                      "手工作品",
-                      "材料分享",
-                      "创意灵感",
-                    ];
+                    sections = ["DIY教程", "手工作品", "材料分享", "创意灵感"];
                     break;
                   case "宠物区":
-                    sections = [
-                      "宠物饲养",
-                      "宠物健康",
-                      "宠物训练",
-                      "宠物趣事",
-                    ];
+                    sections = ["宠物饲养", "宠物健康", "宠物训练", "宠物趣事"];
                     break;
                   case "体育区":
-                    sections = [
-                      "赛事资讯",
-                      "运动技巧",
-                      "健身计划",
-                      "装备推荐",
-                    ];
+                    sections = ["赛事资讯", "运动技巧", "健身计划", "装备推荐"];
                     break;
                   case "理财区":
-                    sections = [
-                      "投资技巧",
-                      "理财知识",
-                      "市场分析",
-                      "保险规划",
-                    ];
+                    sections = ["投资技巧", "理财知识", "市场分析", "保险规划"];
                     break;
                   case "音乐区":
-                    sections = [
-                      "音乐分享",
-                      "乐器学习",
-                      "乐理知识",
-                      "演出资讯",
-                    ];
+                    sections = ["音乐分享", "乐器学习", "乐理知识", "演出资讯"];
                     break;
                   case "医疗区":
-                    sections = [
-                      "健康知识",
-                      "疾病预防",
-                      "医疗资讯",
-                      "养生保健",
-                    ];
+                    sections = ["健康知识", "疾病预防", "医疗资讯", "养生保健"];
                     break;
                   case "教育区":
-                    sections = [
-                      "学习方法",
-                      "考试资讯",
-                      "教育理念",
-                      "课程推荐",
-                    ];
+                    sections = ["学习方法", "考试资讯", "教育理念", "课程推荐"];
                     break;
                   case "美妆区":
-                    sections = [
-                      "护肤技巧",
-                      "彩妆教程",
-                      "产品测评",
-                      "时尚搭配",
-                    ];
+                    sections = ["护肤技巧", "彩妆教程", "产品测评", "时尚搭配"];
                     break;
                   case "职场区":
-                    sections = [
-                      "求职技巧",
-                      "职业发展",
-                      "职场人际",
-                      "行业资讯",
-                    ];
+                    sections = ["求职技巧", "职业发展", "职场人际", "行业资讯"];
                     break;
                   case "民生区":
-                    sections = [
-                      "社会热点",
-                      "政策解读",
-                      "生活资讯",
-                      "社区活动",
-                    ];
+                    sections = ["社会热点", "政策解读", "生活资讯", "社区活动"];
                     break;
                   case "搞笑区":
-                    sections = [
-                      "搞笑段子",
-                      "幽默图片",
-                      "搞笑视频",
-                      "趣味测试",
-                    ];
+                    sections = ["搞笑段子", "幽默图片", "搞笑视频", "趣味测试"];
                     break;
                   case "情感区":
-                    sections = [
-                      "情感故事",
-                      "恋爱技巧",
-                      "婚姻家庭",
-                      "心理健康",
-                    ];
+                    sections = ["情感故事", "恋爱技巧", "婚姻家庭", "心理健康"];
                     break;
                   case "二刺螈区":
                     sections = [
@@ -8571,10 +8306,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
 
               // 缓存内容
               const cacheKey = getCacheKey();
-              localStorage.setItem(
-                cacheKey,
-                JSON.stringify(newAreaContent),
-              );
+              localStorage.setItem(cacheKey, JSON.stringify(newAreaContent));
 
               setLoading(false);
               resolve();
@@ -8769,8 +8501,8 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
       const worldBookContext =
         targetWorldBooks.length > 0
           ? targetWorldBooks
-            .map((book) => `- ${book.title}: ${book.content}`)
-            .join("\n")
+              .map((book) => `- ${book.title}: ${book.content}`)
+              .join("\n")
           : "无特定世界书，请根据区域名称自由发挥";
 
       // 构建提示词，要求生成更多列表项
@@ -8817,7 +8549,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
       await new Promise((resolve) => {
         window.sendToLLM(
           [{ role: "user", content: prompt }],
-          (chunk) => { },
+          (chunk) => {},
           (response) => {
             console.log("加载更多响应:", response);
 
@@ -8830,9 +8562,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
 
             if (listMatch && contentMatch) {
               const listStr = listMatch[0].replace("列表：", "").trim();
-              const contentStr = contentMatch[0]
-                .replace("内容：", "")
-                .trim();
+              const contentStr = contentMatch[0].replace("内容：", "").trim();
 
               // 解析标题
               let titles = [];
@@ -8869,8 +8599,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
               newItems = titles.map((title, index) => ({
                 id: generatePostId(Date.now() + index),
                 color:
-                  areaContent.items[index % areaContent.items.length]
-                    .color,
+                  areaContent.items[index % areaContent.items.length].color,
                 date: `${Math.floor(Math.random() * 6) + 1}个月前`,
                 title: title,
                 content: contentLines[index] || "",
@@ -8893,10 +8622,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
 
               // 更新缓存，确保新加载的内容在二次进入页面时仍然存在
               const cacheKey = getCacheKey();
-              localStorage.setItem(
-                cacheKey,
-                JSON.stringify(updatedContent),
-              );
+              localStorage.setItem(cacheKey, JSON.stringify(updatedContent));
               console.log("缓存已更新，新加载的内容已保存");
             } else {
               console.error("没有生成新条目");
@@ -8995,8 +8721,8 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
         const worldBookContext =
           targetWorldBooks.length > 0
             ? targetWorldBooks
-              .map((book) => `- ${book.title}: ${book.content}`)
-              .join("\n")
+                .map((book) => `- ${book.title}: ${book.content}`)
+                .join("\n")
             : "无特定世界书，请根据区域名称自由发挥";
 
         // 3. 构建提示词
@@ -9051,7 +8777,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
         await new Promise((resolve, reject) => {
           window.sendToLLM(
             [{ role: "user", content: prompt }],
-            (chunk) => { },
+            (chunk) => {},
             (response) => {
               console.log("AI响应:", response);
 
@@ -9092,12 +8818,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
               }
 
               // 方法3: 如果方法2失败，尝试按行解析
-              if (
-                !descMatch ||
-                !secMatch ||
-                !listMatch ||
-                !contentMatch
-              ) {
+              if (!descMatch || !secMatch || !listMatch || !contentMatch) {
                 const lines = response.split("\n");
                 let currentSection = "";
                 let descLines = [];
@@ -9281,108 +9002,43 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
                     sections = ["文学", "戏剧", "绘画", "艺术活动"];
                     break;
                   case "美食区":
-                    sections = [
-                      "菜谱分享",
-                      "美食测评",
-                      "烹饪技巧",
-                      "食材知识",
-                    ];
+                    sections = ["菜谱分享", "美食测评", "烹饪技巧", "食材知识"];
                     break;
                   case "手工区":
-                    sections = [
-                      "DIY教程",
-                      "手工作品",
-                      "材料分享",
-                      "创意灵感",
-                    ];
+                    sections = ["DIY教程", "手工作品", "材料分享", "创意灵感"];
                     break;
                   case "宠物区":
-                    sections = [
-                      "宠物饲养",
-                      "宠物健康",
-                      "宠物训练",
-                      "宠物趣事",
-                    ];
+                    sections = ["宠物饲养", "宠物健康", "宠物训练", "宠物趣事"];
                     break;
                   case "体育区":
-                    sections = [
-                      "赛事资讯",
-                      "运动技巧",
-                      "健身计划",
-                      "装备推荐",
-                    ];
+                    sections = ["赛事资讯", "运动技巧", "健身计划", "装备推荐"];
                     break;
                   case "理财区":
-                    sections = [
-                      "投资技巧",
-                      "理财知识",
-                      "市场分析",
-                      "保险规划",
-                    ];
+                    sections = ["投资技巧", "理财知识", "市场分析", "保险规划"];
                     break;
                   case "音乐区":
-                    sections = [
-                      "音乐分享",
-                      "乐器学习",
-                      "乐理知识",
-                      "演出资讯",
-                    ];
+                    sections = ["音乐分享", "乐器学习", "乐理知识", "演出资讯"];
                     break;
                   case "医疗区":
-                    sections = [
-                      "健康知识",
-                      "疾病预防",
-                      "医疗资讯",
-                      "养生保健",
-                    ];
+                    sections = ["健康知识", "疾病预防", "医疗资讯", "养生保健"];
                     break;
                   case "教育区":
-                    sections = [
-                      "学习方法",
-                      "考试资讯",
-                      "教育理念",
-                      "课程推荐",
-                    ];
+                    sections = ["学习方法", "考试资讯", "教育理念", "课程推荐"];
                     break;
                   case "美妆区":
-                    sections = [
-                      "护肤技巧",
-                      "彩妆教程",
-                      "产品测评",
-                      "时尚搭配",
-                    ];
+                    sections = ["护肤技巧", "彩妆教程", "产品测评", "时尚搭配"];
                     break;
                   case "职场区":
-                    sections = [
-                      "求职技巧",
-                      "职业发展",
-                      "职场人际",
-                      "行业资讯",
-                    ];
+                    sections = ["求职技巧", "职业发展", "职场人际", "行业资讯"];
                     break;
                   case "民生区":
-                    sections = [
-                      "社会热点",
-                      "政策解读",
-                      "生活资讯",
-                      "社区活动",
-                    ];
+                    sections = ["社会热点", "政策解读", "生活资讯", "社区活动"];
                     break;
                   case "搞笑区":
-                    sections = [
-                      "搞笑段子",
-                      "幽默图片",
-                      "搞笑视频",
-                      "趣味测试",
-                    ];
+                    sections = ["搞笑段子", "幽默图片", "搞笑视频", "趣味测试"];
                     break;
                   case "情感区":
-                    sections = [
-                      "情感故事",
-                      "恋爱技巧",
-                      "婚姻家庭",
-                      "心理健康",
-                    ];
+                    sections = ["情感故事", "恋爱技巧", "婚姻家庭", "心理健康"];
                     break;
                   case "二刺螈区":
                     sections = [
@@ -9426,10 +9082,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
 
               // 缓存内容
               const cacheKey = getCacheKey();
-              localStorage.setItem(
-                cacheKey,
-                JSON.stringify(newAreaContent),
-              );
+              localStorage.setItem(cacheKey, JSON.stringify(newAreaContent));
 
               setLoading(false);
               resolve();
@@ -9469,10 +9122,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
       >
         {/* 顶部导航 */}
         <div className="ad-nav">
-          <div
-            onClick={onBack}
-            style={{ cursor: "pointer", padding: "10px" }}
-          >
+          <div onClick={onBack} style={{ cursor: "pointer", padding: "10px" }}>
             <svg
               width="24"
               height="24"
@@ -9542,10 +9192,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
       >
         {/* 顶部导航 */}
         <div className="ad-nav">
-          <div
-            onClick={onBack}
-            style={{ cursor: "pointer", padding: "10px" }}
-          >
+          <div onClick={onBack} style={{ cursor: "pointer", padding: "10px" }}>
             <svg
               width="24"
               height="24"
@@ -9587,9 +9234,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
           }}
         >
           <div style={{ textAlign: "center", color: "#ff4d4f" }}>
-            <div style={{ fontSize: "20px", marginBottom: "16px" }}>
-              错误
-            </div>
+            <div style={{ fontSize: "20px", marginBottom: "16px" }}>错误</div>
             <div style={{ marginBottom: "16px" }}>{error}</div>
             <button
               onClick={() => window.location.reload()}
@@ -9623,16 +9268,10 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
   }
 
   return (
-    <div
-      className="ad-container"
-      style={{ animation: "fadeIn 0.4s ease-out" }}
-    >
+    <div className="ad-container" style={{ animation: "fadeIn 0.4s ease-out" }}>
       {/* 顶部导航 */}
       <div className="ad-nav">
-        <div
-          onClick={onBack}
-          style={{ cursor: "pointer", padding: "10px" }}
-        >
+        <div onClick={onBack} style={{ cursor: "pointer", padding: "10px" }}>
           <svg
             width="24"
             height="24"
@@ -9883,17 +9522,14 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
                 transform: "scale(1)",
               }}
             >
-              <div
-                style={{ flex: 1 }}
-                onClick={() => handlePostClick(item)}
-              >
+              <div style={{ flex: 1 }} onClick={() => handlePostClick(item)}>
                 <div className="ad-item-left">
                   <div className="ad-item-header">
                     <span className="ad-item-tag">
                       #
                       {
                         areaContent.sections[
-                        index % areaContent.sections.length
+                          index % areaContent.sections.length
                         ]
                       }
                     </span>
@@ -9934,7 +9570,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
                         date: item.date,
                         section:
                           areaContent.sections[
-                          (item.id || 0) % areaContent.sections.length
+                            (item.id || 0) % areaContent.sections.length
                           ],
                         likes: item.likes || 0,
                         comments: item.comments || 0,
@@ -9975,7 +9611,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
                     padding: "5px",
                     color:
                       localStorage.getItem(`post_favorite_${item.id}`) ===
-                        "true"
+                      "true"
                         ? "#ff4d4f"
                         : "#999",
                   }}
@@ -9986,7 +9622,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
                     viewBox="0 0 24 24"
                     fill={
                       localStorage.getItem(`post_favorite_${item.id}`) ===
-                        "true"
+                      "true"
                         ? "currentColor"
                         : "none"
                     }
@@ -10050,8 +9686,8 @@ const PostDetailPage = ({
   // 确保areaContent存在且结构正确
   const areaContent = propAreaContent ||
     post.areaContent || {
-    sections: ["板块1", "板块2", "板块3", "板块4"],
-  };
+      sections: ["板块1", "板块2", "板块3", "板块4"],
+    };
   // 状态管理
   const [loading, setLoading] = React.useState(true);
   const [npcReplies, setNpcReplies] = React.useState([]);
@@ -10061,9 +9697,7 @@ const PostDetailPage = ({
   // 帖子状态
   const [postLiked, setPostLiked] = React.useState(false);
   const [postLikes, setPostLikes] = React.useState(post.likes || 0);
-  const [postComments, setPostComments] = React.useState(
-    post.comments || 0,
-  );
+  const [postComments, setPostComments] = React.useState(post.comments || 0);
   // 用户回复状态
   const [userReplies, setUserReplies] = React.useState([]);
   const [replyingTo, setReplyingTo] = React.useState(null);
@@ -10447,9 +10081,7 @@ const PostDetailPage = ({
                     // 解析回复
                     const lines = response.split("\n");
                     lines.forEach((line) => {
-                      const match = line.match(
-                        /^\[?(.*?)\]?[:：]\s*(.*)$/,
-                      );
+                      const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
                       if (match && match[1] && match[2]) {
                         generatedRoleReplies.push({
                           id: Date.now() + generatedRoleReplies.length,
@@ -10502,14 +10134,7 @@ const PostDetailPage = ({
     };
 
     generateReplies();
-  }, [
-    post,
-    areaContent,
-    selectedArea,
-    userRoles,
-    savedAreas,
-    activePersona,
-  ]);
+  }, [post, areaContent, selectedArea, userRoles, savedAreas, activePersona]);
 
   // 处理帖子点赞
   const handlePostLike = () => {
@@ -10621,7 +10246,8 @@ const PostDetailPage = ({
       【被回复的对象】：${targetName}
       【用户回复】：${newUserReply.content}
 
-      ${role
+      ${
+        role
           ? `【角色设定】：
       角色名称：${role.name}
       角色背景：${roleProfile.background || role.background || "无"}
@@ -10629,7 +10255,7 @@ const PostDetailPage = ({
       角色身份：${roleProfile.identity || role.identity || "无"}
       其他设定：${roleProfile.additionalSettings || role.additionalSettings || JSON.stringify(roleProfile) || "无"}`
           : ""
-        }
+      }
 
       要求：
       1. 回复内容必须符合角色的设定，包括背景、性格、身份等
@@ -10655,7 +10281,7 @@ const PostDetailPage = ({
 
         window.sendToLLM(
           messages,
-          (chunk) => { },
+          (chunk) => {},
           (response) => {
             console.log("互动回应:", response);
             const lines = response.split("\n");
@@ -10899,9 +10525,7 @@ const PostDetailPage = ({
                     // 解析回复
                     const lines = response.split("\n");
                     lines.forEach((line) => {
-                      const match = line.match(
-                        /^\[?(.*?)\]?[:：]\s*(.*)$/,
-                      );
+                      const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
                       if (match && match[1] && match[2]) {
                         roleReplies.push({
                           id: Date.now() + roleReplies.length,
@@ -11000,7 +10624,7 @@ const PostDetailPage = ({
 
         window.sendToLLM(
           messages,
-          (chunk) => { },
+          (chunk) => {},
           (response) => {
             console.log("加载更多NPC回复:", response);
 
@@ -11169,10 +10793,7 @@ const PostDetailPage = ({
 
         const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
         // 当滚动到底部150px时加载更多，增加阈值减少触发频率
-        if (
-          scrollHeight - scrollTop - clientHeight < 150 &&
-          !loadingMore
-        ) {
+        if (scrollHeight - scrollTop - clientHeight < 150 && !loadingMore) {
           loadMoreReplies();
         }
       }, 300); // 300ms的防抖延迟
@@ -11201,10 +10822,7 @@ const PostDetailPage = ({
       >
         {/* 顶部导航 */}
         <div className="ad-nav">
-          <div
-            onClick={onBack}
-            style={{ cursor: "pointer", padding: "10px" }}
-          >
+          <div onClick={onBack} style={{ cursor: "pointer", padding: "10px" }}>
             <svg
               width="24"
               height="24"
@@ -11269,10 +10887,7 @@ const PostDetailPage = ({
     >
       {/* 顶部导航 */}
       <div className="ad-nav">
-        <div
-          onClick={onBack}
-          style={{ cursor: "pointer", padding: "10px" }}
-        >
+        <div onClick={onBack} style={{ cursor: "pointer", padding: "10px" }}>
           <svg
             width="24"
             height="24"
@@ -11331,7 +10946,7 @@ const PostDetailPage = ({
               #
               {
                 areaContent.sections[
-                (post.id || 0) % areaContent.sections.length
+                  (post.id || 0) % areaContent.sections.length
                 ]
               }
             </span>
@@ -11584,8 +11199,7 @@ const PostDetailPage = ({
                   >
                     {userReplies
                       .filter(
-                        (userReply) =>
-                          userReply.repliedTo === roleReply.id,
+                        (userReply) => userReply.repliedTo === roleReply.id,
                       )
                       .map((userReply, userIndex, filteredArr) => (
                         <div
@@ -11597,9 +11211,7 @@ const PostDetailPage = ({
                                 ? "1px solid #EAEAEA"
                                 : "none",
                             paddingBottom:
-                              userIndex < filteredArr.length - 1
-                                ? "8px"
-                                : "0",
+                              userIndex < filteredArr.length - 1 ? "8px" : "0",
                           }}
                         >
                           <div
@@ -11648,11 +11260,7 @@ const PostDetailPage = ({
                                 width="14"
                                 height="14"
                                 viewBox="0 0 24 24"
-                                fill={
-                                  userReply.liked
-                                    ? "currentColor"
-                                    : "none"
-                                }
+                                fill={userReply.liked ? "currentColor" : "none"}
                                 stroke="currentColor"
                                 strokeWidth="2"
                                 strokeLinecap="round"
@@ -11661,9 +11269,7 @@ const PostDetailPage = ({
                                   cursor: "pointer",
                                   color: "#6a9c95",
                                 }}
-                                onClick={() =>
-                                  handleReplyLike(userReply.id)
-                                }
+                                onClick={() => handleReplyLike(userReply.id)}
                               >
                                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                               </svg>
@@ -11687,9 +11293,7 @@ const PostDetailPage = ({
                           autoFocus
                           type="text"
                           value={replyContent}
-                          onChange={(e) =>
-                            setReplyContent(e.target.value)
-                          }
+                          onChange={(e) => setReplyContent(e.target.value)}
                           placeholder={`回复 ${roleReply.role}...`}
                           style={{
                             flex: 1,
@@ -11861,8 +11465,7 @@ const PostDetailPage = ({
                   >
                     {userReplies
                       .filter(
-                        (userReply) =>
-                          userReply.repliedTo === npcReply.id,
+                        (userReply) => userReply.repliedTo === npcReply.id,
                       )
                       .map((userReply, userIndex, filteredArr) => (
                         <div
@@ -11874,9 +11477,7 @@ const PostDetailPage = ({
                                 ? "1px solid #EAEAEA"
                                 : "none",
                             paddingBottom:
-                              userIndex < filteredArr.length - 1
-                                ? "8px"
-                                : "0",
+                              userIndex < filteredArr.length - 1 ? "8px" : "0",
                           }}
                         >
                           <div
@@ -11925,11 +11526,7 @@ const PostDetailPage = ({
                                 width="14"
                                 height="14"
                                 viewBox="0 0 24 24"
-                                fill={
-                                  userReply.liked
-                                    ? "currentColor"
-                                    : "none"
-                                }
+                                fill={userReply.liked ? "currentColor" : "none"}
                                 stroke="currentColor"
                                 strokeWidth="2"
                                 strokeLinecap="round"
@@ -11938,9 +11535,7 @@ const PostDetailPage = ({
                                   cursor: "pointer",
                                   color: "#8c917b",
                                 }}
-                                onClick={() =>
-                                  handleReplyLike(userReply.id)
-                                }
+                                onClick={() => handleReplyLike(userReply.id)}
                               >
                                 <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
                               </svg>
@@ -11964,9 +11559,7 @@ const PostDetailPage = ({
                           autoFocus
                           type="text"
                           value={replyContent}
-                          onChange={(e) =>
-                            setReplyContent(e.target.value)
-                          }
+                          onChange={(e) => setReplyContent(e.target.value)}
                           placeholder={`回复 ${npcReply.npc}...`}
                           style={{
                             flex: 1,
@@ -12067,6 +11660,73 @@ const PostDetailPage = ({
     </div>
   );
 };
+
+// ErrorBoundary for JoinUsPage
+class JoinUsErrorBoundary extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false, error: null, errorInfo: null };
+  }
+  static getDerivedStateFromError(error) {
+    return { hasError: true, error };
+  }
+  componentDidCatch(error, errorInfo) {
+    console.error("JoinUsPage Error:", error, errorInfo);
+    this.setState({ errorInfo });
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "#1a0000",
+            color: "#ff6b6b",
+            zIndex: 99999,
+            padding: "20px",
+            overflow: "auto",
+          }}
+        >
+          <h2>加入我们页面渲染出错</h2>
+          <p>
+            <strong>错误:</strong>{" "}
+            {this.state.error && this.state.error.toString()}
+          </p>
+          <pre
+            style={{
+              background: "#2a0000",
+              padding: "10px",
+              borderRadius: "5px",
+              fontSize: "12px",
+              whiteSpace: "pre-wrap",
+            }}
+          >
+            {this.state.errorInfo && this.state.errorInfo.componentStack}
+          </pre>
+          <button
+            onClick={() => this.props.onBack && this.props.onBack()}
+            style={{
+              marginTop: "20px",
+              padding: "10px 20px",
+              background: "#ff6b6b",
+              color: "#fff",
+              border: "none",
+              borderRadius: "5px",
+              cursor: "pointer",
+            }}
+          >
+            返回论坛
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
 
 // ==================== T7 加入我们页面组件 (1:1 复刻版) ====================
 const JoinUsPage = ({ onBack }) => {
@@ -12275,8 +11935,7 @@ const JoinUsPage = ({ onBack }) => {
   // 显示保存的区域详情
   const [showSavedAreas, setShowSavedAreas] = React.useState(false);
   // 当前选中的区域
-  const [currentSelectedArea, setCurrentSelectedArea] =
-    React.useState(null);
+  const [currentSelectedArea, setCurrentSelectedArea] = React.useState(null);
 
   // 表单输入处理函数
   const handleInputChange = (e) => {
@@ -12409,9 +12068,7 @@ const JoinUsPage = ({ onBack }) => {
   // 删除区域
   const handleDelete = () => {
     // 删除保存的区域数据
-    setSavedAreas((prev) =>
-      prev.filter((area) => area.id !== selectedOrb.id),
-    );
+    setSavedAreas((prev) => prev.filter((area) => area.id !== selectedOrb.id));
     // 从 IndexedDB 中删除
     const deleteAreaData = async () => {
       try {
@@ -12497,10 +12154,7 @@ const JoinUsPage = ({ onBack }) => {
               const updatedAreas = savedAreas.filter(
                 (area) => area.id !== areaId,
               );
-              localStorage.setItem(
-                "saved_areas",
-                JSON.stringify(updatedAreas),
-              );
+              localStorage.setItem("saved_areas", JSON.stringify(updatedAreas));
               console.log("从localStorage删除区域数据");
             } catch (e) {
               console.error("删除区域数据失败:", e);
@@ -12573,15 +12227,11 @@ const JoinUsPage = ({ onBack }) => {
               // 如果IndexedDB中没有数据，尝试从localStorage迁移
               const migrateChatData = window.migrateChatData;
               if (migrateChatData) {
-                console.log(
-                  "IndexedDB中无角色数据，尝试从localStorage迁移...",
-                );
+                console.log("IndexedDB中无角色数据，尝试从localStorage迁移...");
                 const migrated = await migrateChatData();
                 if (migrated) {
                   const migratedRoles = await chatCharacterStore.getAll();
-                  const validMigrated = filterValidRoles(
-                    migratedRoles || [],
-                  );
+                  const validMigrated = filterValidRoles(migratedRoles || []);
                   if (validMigrated.length > 0) {
                     setUserRoles(validMigrated);
                     console.log(
@@ -12697,10 +12347,47 @@ const JoinUsPage = ({ onBack }) => {
   }
 
   return (
-    <div className="join-us-overlay">
+    <div
+      className="join-us-overlay open"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        background: "#0f1015",
+        zIndex: 99999,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
       {/* 返回按钮 */}
-      <div className="join-us-header">
-        <button className="back-btn" onClick={onBack}>
+      <div
+        className="join-us-header"
+        style={{
+          position: "absolute",
+          top: "16px",
+          left: "16px",
+          zIndex: 100000,
+        }}
+      >
+        <button
+          className="back-btn"
+          onClick={onBack}
+          style={{
+            background: "rgba(255, 255, 255, 0.2)",
+            color: "#ffffff",
+            border: "1px solid rgba(255, 255, 255, 0.3)",
+            borderRadius: "20px",
+            padding: "8px 16px",
+            cursor: "pointer",
+            fontSize: "14px",
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "4px",
+          }}
+        >
           ← 返回论坛
         </button>
       </div>
@@ -12726,8 +12413,8 @@ const JoinUsPage = ({ onBack }) => {
               height: orb.size,
               background: orb.color,
               // 绝对定位 + 偏移
-              left: `calc(50% + ${orb.x - orb.size / 2}px)`,
-              top: `calc(45% + ${orb.y - orb.size / 2}px)`,
+              left: `calc(50% + (${orb.x - orb.size / 2}px))`,
+              top: `calc(45% + (${orb.y - orb.size / 2}px))`,
               "--mx": orb.mx,
               "--my": orb.my,
               animationDelay: `${orb.id * 0.2}s`,
@@ -12760,7 +12447,7 @@ const JoinUsPage = ({ onBack }) => {
 
       {/* 保存的区域详情 */}
       {showSavedAreas && savedAreas.length > 0 && (
-        <div className="saved-areas-overlay">
+        <div className="saved-areas-overlay open">
           <div className="saved-areas-container">
             <div className="saved-areas-header">
               <h3>保存的区域</h3>
@@ -12789,8 +12476,7 @@ const JoinUsPage = ({ onBack }) => {
                       <span>
                         {userPersonas.find(
                           (p) =>
-                            String(p.id) ===
-                            String(area.formData.identity),
+                            String(p.id) === String(area.formData.identity),
                         )?.name || "未选择"}
                       </span>
                     </div>
@@ -12808,16 +12494,11 @@ const JoinUsPage = ({ onBack }) => {
                       </div>
                     </div>
                     <div className="saved-area-detail">
-                      <span className="saved-area-label">
-                        挂载世界书:
-                      </span>
+                      <span className="saved-area-label">挂载世界书:</span>
                       <div className="saved-area-tags">
                         {area.formData.worldBooks.map((bookId) => (
                           <span key={bookId} className="saved-area-tag">
-                            {
-                              worldBooks.find((b) => b.id === bookId)
-                                ?.title
-                            }
+                            {worldBooks.find((b) => b.id === bookId)?.title}
                           </span>
                         ))}
                         {area.formData.worldBooks.length === 0 && (
@@ -12863,14 +12544,11 @@ const JoinUsPage = ({ onBack }) => {
 
       {/* 区域详情弹窗 */}
       {showModal && selectedOrb && (
-        <div className="area-modal-overlay">
+        <div className="area-modal-overlay open">
           <div className="area-modal">
             <div className="area-modal-header">
               <h3 className="area-modal-title">{selectedOrb.name}</h3>
-              <button
-                className="area-modal-close"
-                onClick={handleCloseModal}
-              >
+              <button className="area-modal-close" onClick={handleCloseModal}>
                 ×
               </button>
             </div>
@@ -12882,9 +12560,7 @@ const JoinUsPage = ({ onBack }) => {
               ) : (
                 <>
                   <div className="area-modal-section">
-                    <label className="area-modal-label">
-                      1. 选择身份
-                    </label>
+                    <label className="area-modal-label">1. 选择身份</label>
                     <select
                       className="area-modal-select"
                       name="identity"
@@ -12910,10 +12586,7 @@ const JoinUsPage = ({ onBack }) => {
                     <div className="area-modal-multiselect">
                       {userRoles.length > 0 ? (
                         userRoles.map((role) => (
-                          <div
-                            key={role.id}
-                            className="area-modal-checkbox"
-                          >
+                          <div key={role.id} className="area-modal-checkbox">
                             <input
                               type="checkbox"
                               id={`role-${role.id}`}
@@ -12937,19 +12610,12 @@ const JoinUsPage = ({ onBack }) => {
                     <div className="area-modal-multiselect">
                       {worldBooks.length > 0 ? (
                         worldBooks.map((book) => (
-                          <div
-                            key={book.id}
-                            className="area-modal-checkbox"
-                          >
+                          <div key={book.id} className="area-modal-checkbox">
                             <input
                               type="checkbox"
                               id={`book-${book.id}`}
-                              checked={formData.worldBooks.includes(
-                                book.id,
-                              )}
-                              onChange={() =>
-                                handleWorldBookChange(book.id)
-                              }
+                              checked={formData.worldBooks.includes(book.id)}
+                              onChange={() => handleWorldBookChange(book.id)}
                             />
                             <label htmlFor={`book-${book.id}`}>
                               {book.title}
@@ -12962,9 +12628,7 @@ const JoinUsPage = ({ onBack }) => {
                     </div>
                   </div>
                   <div className="area-modal-section">
-                    <label className="area-modal-label">
-                      4. 补充说明
-                    </label>
+                    <label className="area-modal-label">4. 补充说明</label>
                     <textarea
                       className="area-modal-textarea"
                       placeholder="请输入补充说明"
@@ -13031,19 +12695,11 @@ const TopicCelebrityPage = ({ onBack }) => {
             try {
               const parsedContent = JSON.parse(cachedContent);
               console.log("解析区域内容:", parsedContent);
-              if (
-                parsedContent.items &&
-                Array.isArray(parsedContent.items)
-              ) {
-                console.log(
-                  "区域包含",
-                  parsedContent.items.length,
-                  "个项目",
-                );
+              if (parsedContent.items && Array.isArray(parsedContent.items)) {
+                console.log("区域包含", parsedContent.items.length, "个项目");
                 parsedContent.items.forEach((item) => {
                   if (item.title && (item.likes || item.comments)) {
-                    const hotScore =
-                      (item.likes || 0) + (item.comments || 0);
+                    const hotScore = (item.likes || 0) + (item.comments || 0);
                     hotPosts.push({
                       id: item.id,
                       title: item.title,
@@ -13055,12 +12711,7 @@ const TopicCelebrityPage = ({ onBack }) => {
                       color: item.color || "",
                       areaContent: parsedContent,
                     });
-                    console.log(
-                      "添加热点帖子:",
-                      item.title,
-                      "热度:",
-                      hotScore,
-                    );
+                    console.log("添加热点帖子:", item.title, "热度:", hotScore);
                   }
                 });
               } else {
@@ -13077,11 +12728,7 @@ const TopicCelebrityPage = ({ onBack }) => {
 
       // 按热度排序
       hotPosts.sort((a, b) => b.hotScore - a.hotScore);
-      console.log(
-        "热点追踪信息读取完成，共找到",
-        hotPosts.length,
-        "个热点",
-      );
+      console.log("热点追踪信息读取完成，共找到", hotPosts.length, "个热点");
 
       // 只取前5个热点
       return hotPosts.slice(0, 5);
@@ -13296,10 +12943,7 @@ const TopicCelebrityPage = ({ onBack }) => {
                 { rank: 8, name: "名人8", tags: ["#标签1", "#标签2"] },
               ];
               setCelebrities(mockData);
-              console.log(
-                "data.celebrities 不是数组，使用模拟数据:",
-                mockData,
-              );
+              console.log("data.celebrities 不是数组，使用模拟数据:", mockData);
               // 保存模拟数据到localStorage缓存
               localStorage.setItem(
                 "cached_celebrities",
@@ -13379,10 +13023,7 @@ const TopicCelebrityPage = ({ onBack }) => {
       ];
       setCelebrities(fallbackData);
       // 保存默认数据到localStorage缓存
-      localStorage.setItem(
-        "cached_celebrities",
-        JSON.stringify(fallbackData),
-      );
+      localStorage.setItem("cached_celebrities", JSON.stringify(fallbackData));
       console.log("缓存生成失败时的默认数据到localStorage");
     } finally {
       setLoading(false);
@@ -13418,9 +13059,7 @@ const TopicCelebrityPage = ({ onBack }) => {
           const newCelebrities = [...prevCelebrities];
 
           // 随机选择两个不同的索引
-          const index1 = Math.floor(
-            Math.random() * newCelebrities.length,
-          );
+          const index1 = Math.floor(Math.random() * newCelebrities.length);
           let index2 = Math.floor(Math.random() * newCelebrities.length);
           while (index2 === index1) {
             index2 = Math.floor(Math.random() * newCelebrities.length);
@@ -13718,8 +13357,7 @@ const UserProfileDetailPage = ({ onBack }) => {
           if (migrated) {
             console.log("迁移成功，重新从IndexedDB加载数据...");
             const migratedAvatar = await settingsStore.getUserAvatar();
-            const migratedBackground =
-              await settingsStore.getPageBackground();
+            const migratedBackground = await settingsStore.getPageBackground();
 
             if (migratedAvatar) {
               setUserAvatar(migratedAvatar);
@@ -13773,8 +13411,7 @@ const UserProfileDetailPage = ({ onBack }) => {
         name: "陈登",
         role: "盟友",
         group: "ally",
-        mobileAvatar:
-          "https://api.dicebear.com/7.x/micah/svg?seed=Teacher",
+        mobileAvatar: "https://api.dicebear.com/7.x/micah/svg?seed=Teacher",
         bio: "智慧的指引者，帮助主角看清局势。",
       },
       {
@@ -13782,8 +13419,7 @@ const UserProfileDetailPage = ({ onBack }) => {
         name: "曹操",
         role: "敌对",
         group: "enemy",
-        mobileAvatar:
-          "https://api.dicebear.com/7.x/micah/svg?seed=Villain",
+        mobileAvatar: "https://api.dicebear.com/7.x/micah/svg?seed=Villain",
         bio: "宿命的敌人，与主角在理念上存在根本冲突。",
       },
       {
@@ -13791,8 +13427,7 @@ const UserProfileDetailPage = ({ onBack }) => {
         name: "徐庶",
         role: "亲属",
         group: "family",
-        mobileAvatar:
-          "https://api.dicebear.com/7.x/micah/svg?seed=Friend",
+        mobileAvatar: "https://api.dicebear.com/7.x/micah/svg?seed=Friend",
         bio: "从小一起长大的伙伴，对主角极其信任。",
       },
       {
@@ -13800,8 +13435,7 @@ const UserProfileDetailPage = ({ onBack }) => {
         name: "安期",
         role: "中立",
         group: "neutral",
-        mobileAvatar:
-          "https://api.dicebear.com/7.x/micah/svg?seed=Mystery",
+        mobileAvatar: "https://api.dicebear.com/7.x/micah/svg?seed=Mystery",
         bio: "游离于体系之外，动机不明。",
       },
     ],
@@ -13829,9 +13463,7 @@ const UserProfileDetailPage = ({ onBack }) => {
               // 如果IndexedDB中没有数据，尝试从localStorage迁移
               const migrateLargeData = window.migrateLargeData;
               if (migrateLargeData) {
-                console.log(
-                  "IndexedDB中无关系数据，尝试从localStorage迁移...",
-                );
+                console.log("IndexedDB中无关系数据，尝试从localStorage迁移...");
                 const migrated = await migrateLargeData();
                 if (migrated) {
                   const migratedData = await relationshipStore.getData();
@@ -13928,22 +13560,14 @@ const UserProfileDetailPage = ({ onBack }) => {
       const reader = new FileReader();
       reader.onload = (event) => {
         const backgroundUrl = event.target.result;
-        console.log(
-          "背景图片加载完成，大小:",
-          backgroundUrl.length,
-          "字符",
-        );
+        console.log("背景图片加载完成，大小:", backgroundUrl.length, "字符");
         // 调用裁剪功能
         cropImage(
           backgroundUrl,
           window.innerWidth,
           window.innerHeight,
           async (croppedImage) => {
-            console.log(
-              "背景图片裁剪完成，大小:",
-              croppedImage.length,
-              "字符",
-            );
+            console.log("背景图片裁剪完成，大小:", croppedImage.length, "字符");
             setPageBackground(croppedImage);
             try {
               // 检查localStorage容量
@@ -13961,8 +13585,7 @@ const UserProfileDetailPage = ({ onBack }) => {
                   console.error("保存背景图片到IndexedDB失败:", error);
                 }
                 // 验证保存是否成功
-                const savedBackground =
-                  await settingsStore.getPageBackground();
+                const savedBackground = await settingsStore.getPageBackground();
                 if (savedBackground) {
                   console.log(
                     "背景图片验证成功，保存大小:",
@@ -13980,9 +13603,7 @@ const UserProfileDetailPage = ({ onBack }) => {
                     );
                     setPageBackground(compressedImage);
                     try {
-                      await settingsStore.setPageBackground(
-                        compressedImage,
-                      );
+                      await settingsStore.setPageBackground(compressedImage);
                       console.log("压缩后背景图片保存到IndexedDB成功");
                       const savedCompressed =
                         await settingsStore.getPageBackground();
@@ -14018,9 +13639,7 @@ const UserProfileDetailPage = ({ onBack }) => {
                 const settingsStore = window.settingsStore;
                 if (settingsStore) {
                   try {
-                    await settingsStore.setPageBackground(
-                      compressedImage,
-                    );
+                    await settingsStore.setPageBackground(compressedImage);
                     console.log("压缩后背景图片保存到IndexedDB成功");
                     const savedCompressed =
                       await settingsStore.getPageBackground();
@@ -14031,10 +13650,7 @@ const UserProfileDetailPage = ({ onBack }) => {
                       alert("背景图片保存失败，请尝试使用更小的图片");
                     }
                   } catch (error) {
-                    console.error(
-                      "压缩后背景图片保存到IndexedDB失败:",
-                      error,
-                    );
+                    console.error("压缩后背景图片保存到IndexedDB失败:", error);
                     alert("背景图片保存失败，请尝试使用更小的图片");
                   }
                 } else {
@@ -14313,9 +13929,7 @@ const UserProfileDetailPage = ({ onBack }) => {
               : "#718096",
         )
         .attr("stroke-width", (d) => (d.type === "pos" ? 1.5 : 1))
-        .attr("stroke-dasharray", (d) =>
-          d.type === "neu" ? "4,2" : "none",
-        )
+        .attr("stroke-dasharray", (d) => (d.type === "neu" ? "4,2" : "none"))
         .attr("marker-end", (d) => `url(#arrow-${d.type})`);
 
       // 创建关系文字（添加到g元素中，参与缩放）
@@ -14860,9 +14474,7 @@ const UserProfileDetailPage = ({ onBack }) => {
         </label>
         {/* 姓名文字 */}
         {editingName ? (
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "8px" }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <input
               type="text"
               value={userName}
@@ -15246,9 +14858,7 @@ const UserProfileDetailPage = ({ onBack }) => {
                             "relationship_data",
                             JSON.stringify(initialData),
                           );
-                          console.log(
-                            "保存关系数据到localStorage作为后备",
-                          );
+                          console.log("保存关系数据到localStorage作为后备");
                         } catch (e) {
                           console.error("保存关系数据失败:", e);
                         }
@@ -15791,14 +15401,12 @@ const UserProfileDetailPage = ({ onBack }) => {
                 <button
                   onClick={() => {
                     // 更新角色信息
-                    const updatedNodes = relationshipData.nodes.map(
-                      (node) => {
-                        if (node.id === editCharacter.id) {
-                          return editCharacter;
-                        }
-                        return node;
-                      },
-                    );
+                    const updatedNodes = relationshipData.nodes.map((node) => {
+                      if (node.id === editCharacter.id) {
+                        return editCharacter;
+                      }
+                      return node;
+                    });
                     const updatedData = {
                       ...relationshipData,
                       nodes: updatedNodes,
@@ -15807,8 +15415,7 @@ const UserProfileDetailPage = ({ onBack }) => {
                     // 保存到IndexedDB
                     const saveRelationshipData = async () => {
                       try {
-                        const relationshipStore =
-                          window.relationshipStore;
+                        const relationshipStore = window.relationshipStore;
                         if (relationshipStore) {
                           try {
                             await relationshipStore.saveData(updatedData);
@@ -15816,19 +15423,14 @@ const UserProfileDetailPage = ({ onBack }) => {
                             // 清除localStorage中的旧数据
                             localStorage.removeItem("relationship_data");
                           } catch (e) {
-                            console.error(
-                              "保存关系数据到IndexedDB失败:",
-                              e,
-                            );
+                            console.error("保存关系数据到IndexedDB失败:", e);
                             // 失败时尝试保存到localStorage作为后备
                             try {
                               localStorage.setItem(
                                 "relationship_data",
                                 JSON.stringify(updatedData),
                               );
-                              console.log(
-                                "保存关系数据到localStorage作为后备",
-                              );
+                              console.log("保存关系数据到localStorage作为后备");
                             } catch (e) {
                               console.error("保存关系数据失败:", e);
                             }
@@ -15986,6 +15588,7 @@ const UserProfileDetailPage = ({ onBack }) => {
   );
 };
 
+// ==================== JoinUs 错误边界组件 ====================
 // T7 论坛页面主组件 (修改版)
 const ForumPage = () => {
   const [showJoinPage, setShowJoinPage] = React.useState(false);
@@ -15995,8 +15598,7 @@ const ForumPage = () => {
   // 新增：控制角色主页显示
   const [selectedHomeChar, setSelectedHomeChar] = React.useState(null);
   // [新增]：控制话题名人榜页面显示
-  const [showTopicCelebrity, setShowTopicCelebrity] =
-    React.useState(false);
+  const [showTopicCelebrity, setShowTopicCelebrity] = React.useState(false);
   // [新增]：控制用户详情页显示
   const [showUserProfile, setShowUserProfile] = React.useState(false);
   // [新增]：控制标签页切换
@@ -16037,10 +15639,15 @@ const ForumPage = () => {
     }
   };
 
-  // 如果显示加入我们页面
-  if (showJoinPage) {
-    return <JoinUsPage onBack={() => setShowJoinPage(false)} />;
-  }
+  // 如果显示加入我们页面，用 Portal 渲染到 body，绕过 forum-overlay 的 transform 约束
+  const joinUsPortal = showJoinPage
+    ? ReactDOM.createPortal(
+        <JoinUsErrorBoundary onBack={() => setShowJoinPage(false)}>
+          <JoinUsPage onBack={() => setShowJoinPage(false)} />
+        </JoinUsErrorBoundary>,
+        document.body,
+      )
+    : null;
 
   // 如果显示帖子详情页面
   if (showPostDetail && selectedPost) {
@@ -16064,33 +15671,41 @@ const ForumPage = () => {
   }
 
   return (
-    <div className="forum-container h-full flex flex-col">
-      {/* 内容区域 */}
-      <div className="flex-1 overflow-y-auto no-scrollbar">
-        {activeTab === "home" ? (
-          <div className="pb-[80px]">
-            <div className="forum-header">
-              <h1 className="forum-title">主页一览</h1>
-              <div className="forum-title-line"></div>
+    <React.Fragment>
+      {joinUsPortal}
+      <div className="forum-container h-full flex flex-col">
+        {/* 内容区域 */}
+        <div className="flex-1 overflow-y-auto no-scrollbar">
+          {activeTab === "home" ? (
+            <div className="pb-[80px]">
+              <div className="forum-header">
+                <h1 className="forum-title">主页一览</h1>
+                <div className="forum-title-line"></div>
+              </div>
+              {/* 传递 onJoin 回调 */}
+              <ForumBanner
+                onJoin={() => {
+                  console.log("JOIN BUTTON CLICKED IN REACT");
+                  setShowJoinPage(true);
+                }}
+              />
+              <VerticalCarousel onCharacterClick={handleCharacterClick} />
+              <HotTrackingList onPostClick={handlePostClick} />
             </div>
-            {/* 传递 onJoin 回调 */}
-            <ForumBanner onJoin={() => setShowJoinPage(true)} />
-            <VerticalCarousel onCharacterClick={handleCharacterClick} />
-            <HotTrackingList onPostClick={handlePostClick} />
-          </div>
-        ) : activeTab === "topics" ? (
-          <div className="pb-[80px]">
-            <TopicCelebrityPage onBack={() => { }} />
-          </div>
-        ) : activeTab === "profile" ? (
-          <div className="pb-[80px]">
-            <UserProfileDetailPage onBack={() => { }} />
-          </div>
-        ) : null}
+          ) : activeTab === "topics" ? (
+            <div className="pb-[80px]">
+              <TopicCelebrityPage onBack={() => {}} />
+            </div>
+          ) : activeTab === "profile" ? (
+            <div className="pb-[80px]">
+              <UserProfileDetailPage onBack={() => {}} />
+            </div>
+          ) : null}
+        </div>
+        {/* [修改] 传递 onTabClick 回调 */}
+        <ForumNavBar onTabClick={handleNavClick} />
       </div>
-      {/* [修改] 传递 onTabClick 回调 */}
-      <ForumNavBar onTabClick={handleNavClick} />
-    </div>
+    </React.Fragment>
   );
 };
 
@@ -16182,9 +15797,7 @@ const T12SettlementList = ({ items }) => {
   return (
     <div className="mb-8">
       <div className="px-5 mb-3 flex justify-between items-end">
-        <h2 className="text-lg font-bold text-[var(--text-main)]">
-          结算单
-        </h2>
+        <h2 className="text-lg font-bold text-[var(--text-main)]">结算单</h2>
         <span className="text-xs text-[var(--text-sub)] flex items-center gap-1 active-press">
           查看全部 <i className="ph-bold ph-caret-right"></i>
         </span>
@@ -16257,9 +15870,7 @@ const T12Categories = ({ activeCategory, onCategoryChange }) => {
               style={{
                 backgroundColor: isActive ? "var(--primary)" : "white",
                 color: isActive ? "white" : "var(--text-sub)",
-                boxShadow: isActive
-                  ? "0 4px 12px rgba(0,0,0,0.1)"
-                  : "none",
+                boxShadow: isActive ? "0 4px 12px rgba(0,0,0,0.1)" : "none",
                 transform: isActive ? "scale(1.05)" : "scale(1)",
                 border: "1px solid transparent",
               }}
@@ -16871,9 +16482,7 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       const validChars = allChars.filter(
         (c) => !String(c.id).startsWith("group") && c.type !== "decor",
@@ -17150,67 +16759,67 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
           <div className="flex gap-5 overflow-x-auto no-scrollbar py-2">
             {hotSellers.length > 0
               ? hotSellers.map((seller, i) => (
-                <div
-                  key={i}
-                  className="flex flex-col items-center"
-                  style={{ flexShrink: 0 }}
-                >
                   <div
+                    key={i}
+                    className="flex flex-col items-center"
+                    style={{ flexShrink: 0 }}
+                  >
+                    <div
+                      style={{
+                        width: "52px",
+                        height: "52px",
+                        borderRadius: "50%",
+                        background: seller.isNpc ? "#DBC2B1" : "#F2E6D8",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow: "inset 0 0 10px rgba(0,0,0,0.05)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          color: "white",
+                          fontSize: "14px",
+                          fontWeight: "bold",
+                        }}
+                      >
+                        {seller.name.charAt(0)}
+                      </span>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "10px",
+                        color: "#8C8279",
+                        marginTop: "4px",
+                        textAlign: "center",
+                      }}
+                    >
+                      {seller.name}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "8px",
+                        color: "#B0A69D",
+                        marginTop: "2px",
+                      }}
+                    >
+                      {seller.wantCount}人想要
+                    </span>
+                  </div>
+                ))
+              : [1, 2, 3, 4, 5].map((i) => (
+                  <div
+                    key={i}
                     style={{
                       width: "52px",
                       height: "52px",
                       borderRadius: "50%",
-                      background: seller.isNpc ? "#DBC2B1" : "#F2E6D8",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
+                      background: "#F2E6D8",
+                      flexShrink: 0,
                       boxShadow: "inset 0 0 10px rgba(0,0,0,0.05)",
                     }}
-                  >
-                    <span
-                      style={{
-                        color: "white",
-                        fontSize: "14px",
-                        fontWeight: "bold",
-                      }}
-                    >
-                      {seller.name.charAt(0)}
-                    </span>
-                  </div>
-                  <span
-                    style={{
-                      fontSize: "10px",
-                      color: "#8C8279",
-                      marginTop: "4px",
-                      textAlign: "center",
-                    }}
-                  >
-                    {seller.name}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: "8px",
-                      color: "#B0A69D",
-                      marginTop: "2px",
-                    }}
-                  >
-                    {seller.wantCount}人想要
-                  </span>
-                </div>
-              ))
-              : [1, 2, 3, 4, 5].map((i) => (
-                <div
-                  key={i}
-                  style={{
-                    width: "52px",
-                    height: "52px",
-                    borderRadius: "50%",
-                    background: "#F2E6D8",
-                    flexShrink: 0,
-                    boxShadow: "inset 0 0 10px rgba(0,0,0,0.05)",
-                  }}
-                ></div>
-              ))}
+                  ></div>
+                ))}
           </div>
         </div>
 
@@ -17428,9 +17037,7 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
               {/* 卖家信息 */}
               <div className="flex items-center gap-2 p-3 bg-[#FDFCF8] rounded-xl">
                 <div className="w-10 h-10 rounded-full bg-[#DBC2B1] flex items-center justify-center text-white text-sm font-bold">
-                  {selectedTrade.seller
-                    ? selectedTrade.seller.charAt(0)
-                    : "?"}
+                  {selectedTrade.seller ? selectedTrade.seller.charAt(0) : "?"}
                 </div>
                 <div>
                   <div className="text-sm font-bold text-[#6D735B]">
@@ -17612,8 +17219,7 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
                 const styledData = data.map((item, idx) => ({
                   ...item,
                   id: "rec_search_" + Date.now() + idx,
-                  bgColor:
-                    item.bgColor || bgColors[idx % bgColors.length],
+                  bgColor: item.bgColor || bgColors[idx % bgColors.length],
                   iconColor:
                     item.iconColor || iconColors[idx % iconColors.length],
                 }));
@@ -17659,10 +17265,7 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
     } else if (products.length > 0) {
       contextData = `用户正在浏览商品列表：\n`;
       contextData += products
-        .map(
-          (p) =>
-            `店名:${p.shopName},商品:${p.productName},价格:${p.price}`,
-        )
+        .map((p) => `店名:${p.shopName},商品:${p.productName},价格:${p.price}`)
         .join("； ");
     } else {
       contextData = "用户正在闲逛太疾驰外卖商城...";
@@ -17767,9 +17370,7 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       const validChars = allChars.filter(
         (c) => !String(c.id).startsWith("group") && c.type !== "decor",
@@ -18156,7 +17757,7 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
               </h5>
               <div className="flex flex-col gap-2.5">
                 {selectedProduct.variants &&
-                  selectedProduct.variants.length > 0 ? (
+                selectedProduct.variants.length > 0 ? (
                   selectedProduct.variants.map((variant, vIdx) => (
                     <div
                       key={vIdx}
@@ -18190,12 +17791,8 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
               <button
                 className="flex-[2] py-4 bg-black text-white rounded-2xl font-bold shadow-lg active:scale-95 transition-transform flex justify-center items-center gap-2 text-lg tracking-wide"
                 onClick={() => {
-                  if (
-                    selectedVariant !== null &&
-                    selectedProduct.variants
-                  ) {
-                    const variant =
-                      selectedProduct.variants[selectedVariant];
+                  if (selectedVariant !== null && selectedProduct.variants) {
+                    const variant = selectedProduct.variants[selectedVariant];
                     const shoppingItem = {
                       id: Date.now(),
                       name: selectedProduct.productName,
@@ -18280,13 +17877,10 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
                         <div
                           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[15px] font-bold shadow-inner"
                           style={{
-                            backgroundColor:
-                              review.avatarColor || "#B4C7E7",
+                            backgroundColor: review.avatarColor || "#B4C7E7",
                           }}
                         >
-                          {review.reviewer
-                            ? review.reviewer.charAt(0)
-                            : "?"}
+                          {review.reviewer ? review.reviewer.charAt(0) : "?"}
                         </div>
                         <span className="font-bold text-[15px] text-[var(--text-main)]">
                           {review.reviewer}
@@ -18393,8 +17987,9 @@ const T12BottomBar = ({ activeTab, onTabChange, onSettlementClick }) => {
             className="flex flex-col items-center gap-1 w-14 active-press"
           >
             <i
-              className={`ph ${isActive ? tab.icon + "-fill" : tab.icon
-                } text-2xl transition-colors duration-300`}
+              className={`ph ${
+                isActive ? tab.icon + "-fill" : tab.icon
+              } text-2xl transition-colors duration-300`}
               style={{
                 color: isActive
                   ? "var(--text-main)"
@@ -18467,9 +18062,7 @@ const T12Page = () => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       // 过滤掉群聊和装饰类型，仅保留有效的对话角色
       const validChars = allChars.filter(
@@ -18690,9 +18283,7 @@ const T12Page = () => {
 
       // 触发传讯红点和预览更新
       window.dispatchEvent(new CustomEvent("reloadChats"));
-      alert(
-        `代付请求已发送给 ${role.name || "未知角色"}！飞鹰正在等待回信...`,
-      );
+      alert(`代付请求已发送给 ${role.name || "未知角色"}！飞鹰正在等待回信...`);
 
       // 4. 后台调用 AI 获取该角色的即时回复
       const worldContext = window.getWorldBookContext
@@ -18769,9 +18360,7 @@ const T12Page = () => {
               }),
             };
             if (window.chatHistoryStore) {
-              const res2 = await window.chatHistoryStore.getMessages(
-                role.id,
-              );
+              const res2 = await window.chatHistoryStore.getMessages(role.id);
               let latestHistory =
                 res2 && res2.messages
                   ? res2.messages
@@ -18888,8 +18477,7 @@ const T12Page = () => {
     };
 
     const extractPrice = (priceStr) => {
-      if (typeof priceStr === "number")
-        return { price: priceStr, unit: "钱" };
+      if (typeof priceStr === "number") return { price: priceStr, unit: "钱" };
       const str = priceStr.toString().replace(/起|左右/g, ""); // 过滤无关字眼
       const arabicMatch = str.match(/(\d+)([^\d]+)?/);
       if (arabicMatch)
@@ -19129,9 +18717,7 @@ const T12Page = () => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       const validChars = allChars.filter(
         (c) => !String(c.id).startsWith("group") && c.type !== "decor",
@@ -19334,9 +18920,7 @@ const T12Page = () => {
         <div className="fixed inset-x-0 bottom-0 bg-white rounded-t-2xl shadow-xl z-50 animate-slide-up max-h-[80vh]">
           <div className="p-5 h-full overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold">
-                {selectedMerchant.shopName}
-              </h3>
+              <h3 className="text-xl font-bold">{selectedMerchant.shopName}</h3>
               <button
                 onClick={closeMerchantDetail}
                 className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center"
@@ -19359,9 +18943,7 @@ const T12Page = () => {
               </div>
               <div className="flex items-center gap-2">
                 <i className="ph ph-chart-bar text-[var(--primary)]"></i>
-                <span>
-                  月售：{selectedMerchant.monthlySales || "未知"}
-                </span>
+                <span>月售：{selectedMerchant.monthlySales || "未知"}</span>
               </div>
               <div className="flex items-start gap-2">
                 <i className="ph ph-info text-[var(--primary)] mt-1"></i>
@@ -19427,13 +19009,10 @@ const T12Page = () => {
                         <div
                           className="w-10 h-10 rounded-full flex items-center justify-center text-white text-[15px] font-bold shadow-inner"
                           style={{
-                            backgroundColor:
-                              review.avatarColor || "#B4C7E7",
+                            backgroundColor: review.avatarColor || "#B4C7E7",
                           }}
                         >
-                          {review.reviewer
-                            ? review.reviewer.charAt(0)
-                            : "?"}
+                          {review.reviewer ? review.reviewer.charAt(0) : "?"}
                         </div>
                         <span className="font-bold text-[15px] text-[var(--text-main)]">
                           {review.reviewer}
@@ -19506,25 +19085,20 @@ const T12Page = () => {
                       <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
-                          checked={selectedItems.settlement.includes(
-                            item.id,
-                          )}
+                          checked={selectedItems.settlement.includes(item.id)}
                           onChange={(e) =>
                             setSelectedItems((prev) =>
                               e.target.checked
                                 ? {
-                                  ...prev,
-                                  settlement: [
-                                    ...prev.settlement,
-                                    item.id,
-                                  ],
-                                }
+                                    ...prev,
+                                    settlement: [...prev.settlement, item.id],
+                                  }
                                 : {
-                                  ...prev,
-                                  settlement: prev.settlement.filter(
-                                    (id) => id !== item.id,
-                                  ),
-                                },
+                                    ...prev,
+                                    settlement: prev.settlement.filter(
+                                      (id) => id !== item.id,
+                                    ),
+                                  },
                             )
                           }
                           className="w-5 h-5 accent-[var(--primary)]"
@@ -19548,8 +19122,7 @@ const T12Page = () => {
             {/* 购物结算 */}
             <div className="mb-6">
               <h4 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <i className="ph ph-storefront text-[var(--primary)]"></i>{" "}
-                购物
+                <i className="ph ph-storefront text-[var(--primary)]"></i> 购物
               </h4>
               {shoppingItems.length > 0 ? (
                 <div className="bg-gray-50 rounded-xl p-3 space-y-2">
@@ -19561,22 +19134,20 @@ const T12Page = () => {
                       <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
-                          checked={selectedItems.shopping.includes(
-                            item.id,
-                          )}
+                          checked={selectedItems.shopping.includes(item.id)}
                           onChange={(e) =>
                             setSelectedItems((prev) =>
                               e.target.checked
                                 ? {
-                                  ...prev,
-                                  shopping: [...prev.shopping, item.id],
-                                }
+                                    ...prev,
+                                    shopping: [...prev.shopping, item.id],
+                                  }
                                 : {
-                                  ...prev,
-                                  shopping: prev.shopping.filter(
-                                    (id) => id !== item.id,
-                                  ),
-                                },
+                                    ...prev,
+                                    shopping: prev.shopping.filter(
+                                      (id) => id !== item.id,
+                                    ),
+                                  },
                             )
                           }
                           className="w-5 h-5 accent-[var(--primary)]"
@@ -19613,25 +19184,20 @@ const T12Page = () => {
                       <div className="flex items-center gap-3">
                         <input
                           type="checkbox"
-                          checked={selectedItems.secondHand.includes(
-                            item.id,
-                          )}
+                          checked={selectedItems.secondHand.includes(item.id)}
                           onChange={(e) =>
                             setSelectedItems((prev) =>
                               e.target.checked
                                 ? {
-                                  ...prev,
-                                  secondHand: [
-                                    ...prev.secondHand,
-                                    item.id,
-                                  ],
-                                }
+                                    ...prev,
+                                    secondHand: [...prev.secondHand, item.id],
+                                  }
                                 : {
-                                  ...prev,
-                                  secondHand: prev.secondHand.filter(
-                                    (id) => id !== item.id,
-                                  ),
-                                },
+                                    ...prev,
+                                    secondHand: prev.secondHand.filter(
+                                      (id) => id !== item.id,
+                                    ),
+                                  },
                             )
                           }
                           className="w-5 h-5 accent-[var(--primary)]"
@@ -19655,8 +19221,7 @@ const T12Page = () => {
             {/* 抢票结算 */}
             <div className="mb-6">
               <h4 className="text-lg font-semibold mb-3 flex items-center gap-2">
-                <i className="ph ph-ticket text-[var(--primary)]"></i>{" "}
-                抢票
+                <i className="ph ph-ticket text-[var(--primary)]"></i> 抢票
               </h4>
               {ticketItems.length > 0 ? (
                 <div className="bg-gray-50 rounded-xl p-3 space-y-2">
@@ -19673,15 +19238,15 @@ const T12Page = () => {
                             setSelectedItems((prev) =>
                               e.target.checked
                                 ? {
-                                  ...prev,
-                                  ticket: [...prev.ticket, item.id],
-                                }
+                                    ...prev,
+                                    ticket: [...prev.ticket, item.id],
+                                  }
                                 : {
-                                  ...prev,
-                                  ticket: prev.ticket.filter(
-                                    (id) => id !== item.id,
-                                  ),
-                                },
+                                    ...prev,
+                                    ticket: prev.ticket.filter(
+                                      (id) => id !== item.id,
+                                    ),
+                                  },
                             )
                           }
                           className="w-5 h-5 accent-[var(--primary)]"
@@ -19855,9 +19420,7 @@ const T12Page = () => {
       {showPayRoleModal && (
         <div className="fixed inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.15)] z-[80] animate-slide-up h-[65vh] flex flex-col">
           <div className="p-5 flex justify-between items-center bg-[#FDFCF8] rounded-t-3xl border-b border-[#F2EFDE] z-10 sticky top-0">
-            <h3 className="text-xl font-bold text-[#5A5F4D]">
-              选择代付人
-            </h3>
+            <h3 className="text-xl font-bold text-[#5A5F4D]">选择代付人</h3>
             <button
               onClick={() => setShowPayRoleModal(false)}
               className="w-8 h-8 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#8C8C8C] active:scale-90 transition-transform"
@@ -19959,8 +19522,7 @@ const T12Page = () => {
                   折合五铢钱
                 </span>
                 <span className="text-3xl font-black text-[#D6724B] font-mono">
-                  {paymentInfo.totalBase}{" "}
-                  <span className="text-sm">铢</span>
+                  {paymentInfo.totalBase} <span className="text-sm">铢</span>
                 </span>
               </div>
             </div>
@@ -20107,8 +19669,7 @@ const T11Header = ({ onBack }) => {
 
     updateInfo();
     window.addEventListener("t11_user_updated", updateInfo);
-    return () =>
-      window.removeEventListener("t11_user_updated", updateInfo);
+    return () => window.removeEventListener("t11_user_updated", updateInfo);
   }, []);
 
   return (
@@ -20184,8 +19745,7 @@ const T11ProfilePage = ({ onBack }) => {
   const [showPersonaModal, setShowPersonaModal] = React.useState(false);
   const [showAboutModal, setShowAboutModal] = React.useState(false);
 
-  const [showWalletPwdModal, setShowWalletPwdModal] =
-    React.useState(false);
+  const [showWalletPwdModal, setShowWalletPwdModal] = React.useState(false);
   const [walletPwd, setWalletPwd] = React.useState("");
   const [showWalletBalance, setShowWalletBalance] = React.useState(false);
   const [coins, setCoins] = React.useState(0);
@@ -20243,8 +19803,7 @@ const T11ProfilePage = ({ onBack }) => {
         zIndex: 20,
         display: "flex",
         flexDirection: "column",
-        animation:
-          "slideInRight 0.4s cubic-bezier(0.23, 1, 0.32, 1) forwards",
+        animation: "slideInRight 0.4s cubic-bezier(0.23, 1, 0.32, 1) forwards",
       }}
     >
       <style>{`
@@ -20266,10 +19825,7 @@ const T11ProfilePage = ({ onBack }) => {
 
       <div className="t11-nav">
         <div className="back-btn" onClick={onBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">我的主页</div>
       </div>
@@ -20370,8 +19926,7 @@ const T11ProfilePage = ({ onBack }) => {
               style={{
                 padding: "12px 18px",
                 borderRadius: "12px",
-                background:
-                  "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
                 color: "white",
                 border: "none",
                 fontWeight: "bold",
@@ -20414,10 +19969,7 @@ const T11ProfilePage = ({ onBack }) => {
               className="profile-icon"
               style={{ background: "#FCEFE3", color: "#D6724B" }}
             >
-              <i
-                className="ph-fill ph-wallet"
-                style={{ fontSize: "20px" }}
-              ></i>
+              <i className="ph-fill ph-wallet" style={{ fontSize: "20px" }}></i>
             </div>
             <span
               style={{
@@ -20432,10 +19984,7 @@ const T11ProfilePage = ({ onBack }) => {
           <i className="ph ph-caret-right" style={{ color: "#ccc" }}></i>
         </div>
 
-        <div
-          className="profile-btn"
-          onClick={() => setShowAboutModal(true)}
-        >
+        <div className="profile-btn" onClick={() => setShowAboutModal(true)}>
           <div style={{ display: "flex", alignItems: "center" }}>
             <div
               className="profile-icon"
@@ -20525,9 +20074,7 @@ const T11ProfilePage = ({ onBack }) => {
                     borderBottom: "1px solid #f0f0f0",
                     cursor: "pointer",
                     background:
-                      activePersona?.id === p.id
-                        ? "#F2F7F4"
-                        : "transparent",
+                      activePersona?.id === p.id ? "#F2F7F4" : "transparent",
                     borderRadius: "12px",
                     transition: "background 0.2s",
                   }}
@@ -20620,8 +20167,7 @@ const T11ProfilePage = ({ onBack }) => {
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              animation:
-                "slideUp 0.3s cubic-bezier(0.23, 1, 0.32, 1) forwards",
+              animation: "slideUp 0.3s cubic-bezier(0.23, 1, 0.32, 1) forwards",
             }}
           >
             <div
@@ -20679,45 +20225,41 @@ const T11ProfilePage = ({ onBack }) => {
                 maxWidth: "320px",
               }}
             >
-              {[1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "del"].map(
-                (digit, index) => (
-                  <button
-                    key={index}
-                    disabled={digit === ""}
-                    onClick={() => {
-                      if (digit === "del")
-                        setWalletPwd((prev) => prev.slice(0, -1));
-                      else if (digit !== "") handleWalletPwdClick(digit);
-                    }}
-                    className="active-press"
-                    style={{
-                      padding: "16px 0",
-                      borderRadius: "16px",
-                      border: "none",
-                      background: digit === "" ? "transparent" : "#FFF",
-                      color: "#5a5f4d",
-                      fontSize: "22px",
-                      fontWeight: "bold",
-                      boxShadow:
-                        digit !== ""
-                          ? "0 4px 12px rgba(0,0,0,0.04)"
-                          : "none",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                    }}
-                  >
-                    {digit === "del" ? (
-                      <i
-                        className="ph-bold ph-backspace"
-                        style={{ fontSize: "24px" }}
-                      ></i>
-                    ) : (
-                      digit
-                    )}
-                  </button>
-                ),
-              )}
+              {[1, 2, 3, 4, 5, 6, 7, 8, 9, "", 0, "del"].map((digit, index) => (
+                <button
+                  key={index}
+                  disabled={digit === ""}
+                  onClick={() => {
+                    if (digit === "del")
+                      setWalletPwd((prev) => prev.slice(0, -1));
+                    else if (digit !== "") handleWalletPwdClick(digit);
+                  }}
+                  className="active-press"
+                  style={{
+                    padding: "16px 0",
+                    borderRadius: "16px",
+                    border: "none",
+                    background: digit === "" ? "transparent" : "#FFF",
+                    color: "#5a5f4d",
+                    fontSize: "22px",
+                    fontWeight: "bold",
+                    boxShadow:
+                      digit !== "" ? "0 4px 12px rgba(0,0,0,0.04)" : "none",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  {digit === "del" ? (
+                    <i
+                      className="ph-bold ph-backspace"
+                      style={{ fontSize: "24px" }}
+                    ></i>
+                  ) : (
+                    digit
+                  )}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -20750,8 +20292,7 @@ const T11ProfilePage = ({ onBack }) => {
               borderRadius: "30px",
               padding: "40px 24px",
               textAlign: "center",
-              animation:
-                "popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+              animation: "popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
             }}
           >
             <div
@@ -20800,8 +20341,7 @@ const T11ProfilePage = ({ onBack }) => {
                 width: "100%",
                 padding: "14px",
                 borderRadius: "16px",
-                background:
-                  "linear-gradient(135deg, #E8C3A8 0%, #D4AB90 100%)",
+                background: "linear-gradient(135deg, #E8C3A8 0%, #D4AB90 100%)",
                 color: "white",
                 border: "none",
                 fontWeight: "bold",
@@ -20900,8 +20440,7 @@ const T11ProfilePage = ({ onBack }) => {
                 marginTop: "24px",
                 width: "100%",
                 padding: "14px",
-                background:
-                  "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
                 color: "#fff",
                 border: "none",
                 borderRadius: "16px",
@@ -20998,89 +20537,89 @@ const T11FooterList = ({ notices }) => {
       </div>
       {randomNotices.length > 0
         ? randomNotices.map((notice, index) => (
-          <div
-            key={notice.id || index}
-            className="t11-simple-list-item click-effect"
-          >
             <div
-              style={{
-                width: "36px",
-                height: "36px",
-                background: "#F2F4F7",
-                borderRadius: "10px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: "12px",
-                flexShrink: 0,
-              }}
+              key={notice.id || index}
+              className="t11-simple-list-item click-effect"
             >
-              <i
-                className="ph ph-file-text"
-                style={{ color: "#8FA4B5", fontSize: "18px" }}
-              ></i>
-            </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
               <div
                 style={{
-                  fontSize: "14px",
-                  color: "#4A4F55",
-                  fontWeight: "500",
-                  marginBottom: "4px",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  width: "36px",
+                  height: "36px",
+                  background: "#F2F4F7",
+                  borderRadius: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: "12px",
+                  flexShrink: 0,
                 }}
               >
-                {notice.title}
+                <i
+                  className="ph ph-file-text"
+                  style={{ color: "#8FA4B5", fontSize: "18px" }}
+                ></i>
               </div>
-              <div style={{ fontSize: "12px", color: "#9DA3AE" }}>
-                更新于 {notice.time}
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <div
+                  style={{
+                    fontSize: "14px",
+                    color: "#4A4F55",
+                    fontWeight: "500",
+                    marginBottom: "4px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {notice.title}
+                </div>
+                <div style={{ fontSize: "12px", color: "#9DA3AE" }}>
+                  更新于 {notice.time}
+                </div>
               </div>
             </div>
-          </div>
-        ))
+          ))
         : // 当没有公告数据时显示默认内容
-        [1, 2, 3].map((i) => (
-          <div key={i} className="t11-simple-list-item click-effect">
-            <div
-              style={{
-                width: "36px",
-                height: "36px",
-                background: "#F2F4F7",
-                borderRadius: "10px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginRight: "12px",
-                flexShrink: 0,
-              }}
-            >
-              <i
-                className="ph ph-file-text"
-                style={{ color: "#8FA4B5", fontSize: "18px" }}
-              ></i>
-            </div>
-            <div style={{ flex: 1, overflow: "hidden" }}>
+          [1, 2, 3].map((i) => (
+            <div key={i} className="t11-simple-list-item click-effect">
               <div
                 style={{
-                  fontSize: "14px",
-                  color: "#4A4F55",
-                  fontWeight: "500",
-                  marginBottom: "4px",
-                  whiteSpace: "nowrap",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
+                  width: "36px",
+                  height: "36px",
+                  background: "#F2F4F7",
+                  borderRadius: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginRight: "12px",
+                  flexShrink: 0,
                 }}
               >
-                关于各部考勤和请假的暂行规定 {i}
+                <i
+                  className="ph ph-file-text"
+                  style={{ color: "#8FA4B5", fontSize: "18px" }}
+                ></i>
               </div>
-              <div style={{ fontSize: "12px", color: "#9DA3AE" }}>
-                更新于 10:00 AM
+              <div style={{ flex: 1, overflow: "hidden" }}>
+                <div
+                  style={{
+                    fontSize: "14px",
+                    color: "#4A4F55",
+                    fontWeight: "500",
+                    marginBottom: "4px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  关于各部考勤和请假的暂行规定 {i}
+                </div>
+                <div style={{ fontSize: "12px", color: "#9DA3AE" }}>
+                  更新于 10:00 AM
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          ))}
     </div>
   );
 };
@@ -21103,10 +20642,11 @@ const T11TabBar = ({ activeTab, setActiveTab }) => {
           onClick={() => setActiveTab(tab.value)}
         >
           <i
-            className={`ph ${activeTab === tab.value
+            className={`ph ${
+              activeTab === tab.value
                 ? "ph-" + tab.icon + "-fill"
                 : "ph-" + tab.icon
-              }`}
+            }`}
           ></i>
           <span>{tab.name}</span>
         </div>
@@ -21251,9 +20791,7 @@ const TeamBuildingVotePage = ({ onBack }) => {
           >
             感谢填写
           </h3>
-          <p
-            style={{ fontSize: "14px", color: "#999", lineHeight: "1.6" }}
-          >
+          <p style={{ fontSize: "14px", color: "#999", lineHeight: "1.6" }}>
             您的意见对绣衣楼团建非常重要！
             <br />
             期待与大家共度美好时光。
@@ -21290,9 +20828,7 @@ const TeamBuildingVotePage = ({ onBack }) => {
               style={{ fontSize: "24px", color: "#728DA8" }}
             ></i>
           </div>
-          <span style={{ fontSize: "12px", color: "#728DA8" }}>
-            重新填写
-          </span>
+          <span style={{ fontSize: "12px", color: "#728DA8" }}>重新填写</span>
         </div>
 
         <button
@@ -21330,10 +20866,7 @@ const TeamBuildingVotePage = ({ onBack }) => {
       {/* 顶部导航 */}
       <div className="t11-nav">
         <div className="back-btn" onClick={onBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">团建地点投票</div>
       </div>
@@ -21367,17 +20900,15 @@ const TeamBuildingVotePage = ({ onBack }) => {
               gap: "10px",
             }}
           >
-            {["蛾部", "雀部", "蜂部", "鸢部", "蝶部", "闲人"].map(
-              (dept) => (
-                <div
-                  key={dept}
-                  onClick={() => setFormData({ ...formData, dept })}
-                  style={optionBtnStyle(formData.dept === dept)}
-                >
-                  {dept}
-                </div>
-              ),
-            )}
+            {["蛾部", "雀部", "蜂部", "鸢部", "蝶部", "闲人"].map((dept) => (
+              <div
+                key={dept}
+                onClick={() => setFormData({ ...formData, dept })}
+                style={optionBtnStyle(formData.dept === dept)}
+              >
+                {dept}
+              </div>
+            ))}
           </div>
         </div>
 
@@ -21572,8 +21103,7 @@ const TeamBuildingVotePage = ({ onBack }) => {
             padding: "16px",
             borderRadius: "24px",
             border: "none",
-            background:
-              "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+            background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
             color: "white",
             fontSize: "16px",
             fontWeight: "bold",
@@ -21640,10 +21170,7 @@ const T11QuestionnaireSubPage = ({ onBack }) => {
         {/* 子页面导航栏 */}
         <div className="t11-nav">
           <div className="back-btn" onClick={onBack}>
-            <i
-              className="ph ph-caret-left"
-              style={{ fontSize: "24px" }}
-            ></i>
+            <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
           </div>
           <div className="title">绣衣问卷</div>
         </div>
@@ -21685,10 +21212,7 @@ const T11QuestionnaireSubPage = ({ onBack }) => {
                 </div>
                 <span>{item.title}</span>
               </div>
-              <i
-                className="ph ph-caret-right"
-                style={{ opacity: 0.4 }}
-              ></i>
+              <i className="ph ph-caret-right" style={{ opacity: 0.4 }}></i>
             </div>
           ))}
         </div>
@@ -21818,11 +21342,7 @@ const T11AppointmentSubPage = ({ onBack }) => {
     const initialData = [];
     for (let dayIndex = 0; dayIndex < WEEKDAYS.length; dayIndex++) {
       const daySchedule = [];
-      for (
-        let slotIndex = 0;
-        slotIndex < TIME_SLOTS.length;
-        slotIndex++
-      ) {
+      for (let slotIndex = 0; slotIndex < TIME_SLOTS.length; slotIndex++) {
         daySchedule.push({
           id: `${dayIndex}-${slotIndex}`,
           day: WEEKDAYS[dayIndex],
@@ -21859,11 +21379,7 @@ const T11AppointmentSubPage = ({ onBack }) => {
       }
 
       // 随机选择并设置预约
-      for (
-        let i = 0;
-        i < appointmentCount && emptyCells.length > 0;
-        i++
-      ) {
+      for (let i = 0; i < appointmentCount && emptyCells.length > 0; i++) {
         const randomIndex = Math.floor(Math.random() * emptyCells.length);
         const { dayIndex, slotIndex } = emptyCells[randomIndex];
         emptyCells.splice(randomIndex, 1);
@@ -21894,9 +21410,7 @@ const T11AppointmentSubPage = ({ onBack }) => {
     if (selectedCell) {
       setScheduleData((prevData) => {
         const newData = JSON.parse(JSON.stringify(prevData));
-        const [dayIndex, slotIndex] = selectedCell.id
-          .split("-")
-          .map(Number);
+        const [dayIndex, slotIndex] = selectedCell.id.split("-").map(Number);
         newData[dayIndex][slotIndex].status = "accepted";
         return newData;
       });
@@ -21910,9 +21424,7 @@ const T11AppointmentSubPage = ({ onBack }) => {
     if (selectedCell) {
       setScheduleData((prevData) => {
         const newData = JSON.parse(JSON.stringify(prevData));
-        const [dayIndex, slotIndex] = selectedCell.id
-          .split("-")
-          .map(Number);
+        const [dayIndex, slotIndex] = selectedCell.id.split("-").map(Number);
         newData[dayIndex][slotIndex].status = "empty";
         newData[dayIndex][slotIndex].character = null;
         return newData;
@@ -21962,10 +21474,7 @@ const T11AppointmentSubPage = ({ onBack }) => {
       {/* 子页面导航栏 */}
       <div className="t11-nav">
         <div className="back-btn" onClick={onBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">楼主预约</div>
       </div>
@@ -22348,8 +21857,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
 
   // 生成出勤记录
   const generateAttendanceRecord = () => {
-    const char =
-      CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+    const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
     const time = generateRandomTime();
     const hour = parseInt(time.split(":")[0]);
     const result = hour >= 6 && hour < 8 ? "成功" : "失败";
@@ -22364,8 +21872,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
 
   // 生成请假记录
   const generateLeaveRecord = () => {
-    const char =
-      CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+    const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
     const result = Math.random() > 0.5 ? "成功" : "失败";
 
     return {
@@ -22432,10 +21939,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
       {/* 子页面导航栏 */}
       <div className="t11-nav">
         <div className="back-btn" onClick={onBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">假勤</div>
       </div>
@@ -22443,9 +21947,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
       {/* 主要内容区域 */}
       <div className="t11-subpage-container" style={{ padding: "20px" }}>
         {/* 左右两栏布局 */}
-        <div
-          style={{ display: "flex", gap: "15px", marginBottom: "20px" }}
-        >
+        <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
           {/* 左侧：出勤 */}
           <div style={{ flex: 1 }}>
             <div
@@ -22830,14 +22332,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
   ];
 
   // 敌人列表
-  const ENEMIES = [
-    "黄巾军",
-    "董卓军",
-    "袁绍军",
-    "曹操军",
-    "孙权军",
-    "刘备军",
-  ];
+  const ENEMIES = ["黄巾军", "董卓军", "袁绍军", "曹操军", "孙权军", "刘备军"];
 
   // 事件模板
   const EVENT_TEMPLATES = {
@@ -22944,11 +22439,9 @@ const T11TaskManagementSubPage = ({ onBack }) => {
   // 生成随机事件
   const generateRandomEvent = () => {
     const eventTypes = Object.keys(EVENT_TEMPLATES);
-    const eventType =
-      eventTypes[Math.floor(Math.random() * eventTypes.length)];
+    const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
     const templates = EVENT_TEMPLATES[eventType];
-    const template =
-      templates[Math.floor(Math.random() * templates.length)];
+    const template = templates[Math.floor(Math.random() * templates.length)];
 
     let eventText = template;
 
@@ -22961,10 +22454,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
         let role;
         do {
           role = generateRandomCharacter();
-        } while (
-          usedRoles.has(role) &&
-          usedRoles.size < CHARACTERS.length
-        );
+        } while (usedRoles.has(role) && usedRoles.size < CHARACTERS.length);
         usedRoles.add(role);
         return role;
       });
@@ -23032,8 +22522,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
   // 生成随机小球（备用）
   const generateRandomBall = () => {
     const eventTypes = Object.keys(MORANDI_COLORS);
-    const eventType =
-      eventTypes[Math.floor(Math.random() * eventTypes.length)];
+    const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
     return generateBallFromEvent(eventType);
   };
 
@@ -23383,10 +22872,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
       {/* 子页面导航栏 */}
       <div className="t11-nav">
         <div className="back-btn" onClick={handleBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">任务管理</div>
       </div>
@@ -23536,9 +23022,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
               const trackPerimeter =
                 Math.PI *
                 (3 * (radiusX + radiusY) -
-                  Math.sqrt(
-                    (3 * radiusX + radiusY) * (radiusX + 3 * radiusY),
-                  ));
+                  Math.sqrt((3 * radiusX + radiusY) * (radiusX + 3 * radiusY)));
               // 每两个小球之间的角度间距
               const anglePerBall =
                 (ballDiameter / trackPerimeter) * Math.PI * 2;
@@ -23585,8 +23069,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
               width: "120px",
               height: "120px",
               borderRadius: "50%",
-              background:
-                "radial-gradient(circle, #f2f0e4 0%, #d4c2b0 100%)",
+              background: "radial-gradient(circle, #f2f0e4 0%, #d4c2b0 100%)",
               boxShadow:
                 "0 0 20px rgba(0,0,0,0.1), inset 0 0 10px rgba(255,255,255,0.5)",
               border: "4px solid #fff",
@@ -23696,8 +23179,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
               padding: "10px 30px",
               borderRadius: "20px",
               border: "none",
-              background:
-                "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+              background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
               color: "#fff",
               fontWeight: "bold",
               boxShadow: "0 4px 12px rgba(168, 200, 186, 0.4)",
@@ -23831,8 +23313,7 @@ const T11TeamworkSubPage = ({ onBack }) => {
   const timerRef = React.useRef(null);
 
   // 收获评价相关状态
-  const [currentEvaluationIndex, setCurrentEvaluationIndex] =
-    React.useState(0);
+  const [currentEvaluationIndex, setCurrentEvaluationIndex] = React.useState(0);
   const [evaluationCards, setEvaluationCards] = React.useState([]);
   const [showEvaluations, setShowEvaluations] = React.useState(false);
   const [showStars, setShowStars] = React.useState(false);
@@ -23982,8 +23463,7 @@ const T11TeamworkSubPage = ({ onBack }) => {
 
   // 生成随机团队协作记录
   const generateTeamworkRecord = () => {
-    const char1 =
-      CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+    const char1 = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
     let char2 = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
     while (char2 === char1) {
       char2 = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
@@ -24107,12 +23587,10 @@ const T11TeamworkSubPage = ({ onBack }) => {
 
   // 生成评价卡片
   const generateEvaluationCard = () => {
-    const name =
-      CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+    const name = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
     const date = WEEKDAYS[Math.floor(Math.random() * WEEKDAYS.length)];
     const task = TASKS[Math.floor(Math.random() * TASKS.length)];
-    let partner =
-      CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+    let partner = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
     while (partner === name) {
       partner = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
     }
@@ -24308,10 +23786,7 @@ const T11TeamworkSubPage = ({ onBack }) => {
       {/* 子页面导航栏 */}
       <div className="t11-nav">
         <div className="back-btn" onClick={onBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">团体协作</div>
       </div>
@@ -24453,8 +23928,7 @@ const T11TeamworkSubPage = ({ onBack }) => {
                             style={{
                               cursor: "pointer",
                               fontSize: "20px",
-                              color:
-                                star <= rating ? "#F7D794" : "#e8e5d9",
+                              color: star <= rating ? "#F7D794" : "#e8e5d9",
                             }}
                             onClick={() => handleRating(star)}
                           >
@@ -24494,30 +23968,28 @@ const T11TeamworkSubPage = ({ onBack }) => {
                   {/* 评价列表 */}
                   {showEvaluations && (
                     <div style={{ marginBottom: "30px" }}>
-                      {evaluationCards[
-                        currentEvaluationIndex
-                      ].evaluations.map((item, index) => (
-                        <div
-                          key={index}
-                          style={{
-                            background: "rgba(255,255,255,0.7)",
-                            borderRadius: "12px",
-                            padding: "12px",
-                            marginBottom: "8px",
-                            boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
-                            animation: `fadeIn 0.5s ease ${index * 0.1}s both`,
-                          }}
-                        >
+                      {evaluationCards[currentEvaluationIndex].evaluations.map(
+                        (item, index) => (
                           <div
-                            style={{ fontSize: "13px", color: "#5a5f4d" }}
+                            key={index}
+                            style={{
+                              background: "rgba(255,255,255,0.7)",
+                              borderRadius: "12px",
+                              padding: "12px",
+                              marginBottom: "8px",
+                              boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+                              animation: `fadeIn 0.5s ease ${index * 0.1}s both`,
+                            }}
                           >
-                            <span style={{ fontWeight: "bold" }}>
-                              {item.evaluator}：
-                            </span>
-                            {item.evaluation}
+                            <div style={{ fontSize: "13px", color: "#5a5f4d" }}>
+                              <span style={{ fontWeight: "bold" }}>
+                                {item.evaluator}：
+                              </span>
+                              {item.evaluation}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        ),
+                      )}
                     </div>
                   )}
 
@@ -24980,33 +24452,27 @@ const T11ApprovalSubPage = ({ onBack }) => {
 
   // 弹窗相关状态
   const [showLeaveModal, setShowLeaveModal] = React.useState(false);
-  const [currentLeaveRequests, setCurrentLeaveRequests] = React.useState(
-    [],
-  );
+  const [currentLeaveRequests, setCurrentLeaveRequests] = React.useState([]);
   const [showFundModal, setShowFundModal] = React.useState(false);
-  const [currentFundRequests, setCurrentFundRequests] = React.useState(
-    [],
-  );
+  const [currentFundRequests, setCurrentFundRequests] = React.useState([]);
   const [showOutingModal, setShowOutingModal] = React.useState(false);
-  const [currentOutingRequests, setCurrentOutingRequests] =
-    React.useState([]);
+  const [currentOutingRequests, setCurrentOutingRequests] = React.useState([]);
   const [showExpenseModal, setShowExpenseModal] = React.useState(false);
-  const [currentExpenseRequests, setCurrentExpenseRequests] =
-    React.useState([]);
+  const [currentExpenseRequests, setCurrentExpenseRequests] = React.useState(
+    [],
+  );
   const [showPurchaseModal, setShowPurchaseModal] = React.useState(false);
-  const [currentPurchaseRequests, setCurrentPurchaseRequests] =
-    React.useState([]);
+  const [currentPurchaseRequests, setCurrentPurchaseRequests] = React.useState(
+    [],
+  );
   const [showHireModal, setShowHireModal] = React.useState(false);
-  const [currentHireRequests, setCurrentHireRequests] = React.useState(
-    [],
-  );
+  const [currentHireRequests, setCurrentHireRequests] = React.useState([]);
   const [showItemModal, setShowItemModal] = React.useState(false);
-  const [currentItemRequests, setCurrentItemRequests] = React.useState(
+  const [currentItemRequests, setCurrentItemRequests] = React.useState([]);
+  const [showTrainingModal, setShowTrainingModal] = React.useState(false);
+  const [currentTrainingRequests, setCurrentTrainingRequests] = React.useState(
     [],
   );
-  const [showTrainingModal, setShowTrainingModal] = React.useState(false);
-  const [currentTrainingRequests, setCurrentTrainingRequests] =
-    React.useState([]);
   const [feedback, setFeedback] = React.useState(null); // { text, id }
 
   // 数据常量
@@ -25287,8 +24753,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
     for (let i = 0; i < count; i++) {
-      const char =
-        CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+      const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
       const evt = EVENTS[Math.floor(Math.random() * EVENTS.length)];
       const days = Math.floor(Math.random() * 5) + 1; // 1-5 days
       requests.push({
@@ -25307,18 +24772,15 @@ const T11ApprovalSubPage = ({ onBack }) => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
     for (let i = 0; i < count; i++) {
-      const char =
-        CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
-      const location =
-        LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+      const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+      const location = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
       // 随机选择活动，可能是角色生日会
       let activity;
       if (Math.random() > 0.7) {
         // 30% 概率是角色生日会
         activity = `${char}生日会`;
       } else {
-        activity =
-          ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)];
+        activity = ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)];
       }
       const amount = Math.floor(Math.random() * 10000) + 500; // >=500
       requests.push({
@@ -25338,12 +24800,10 @@ const T11ApprovalSubPage = ({ onBack }) => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
     for (let i = 0; i < count; i++) {
-      const char =
-        CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+      const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
       const reason =
         OUTING_REASONS[Math.floor(Math.random() * OUTING_REASONS.length)];
-      const location =
-        LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+      const location = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
       const days = Math.floor(Math.random() * 5) + 3; // 3-7 days
       requests.push({
         id: Date.now() + i,
@@ -25362,8 +24822,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
     for (let i = 0; i < count; i++) {
-      const char =
-        CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+      const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
       const reason =
         OUTING_REASONS[Math.floor(Math.random() * OUTING_REASONS.length)];
       // 随机生成 2-3 个具体费用
@@ -25374,9 +24833,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
         // 确保不重复
         do {
           item =
-            EXPENSE_ITEMS[
-            Math.floor(Math.random() * EXPENSE_ITEMS.length)
-            ];
+            EXPENSE_ITEMS[Math.floor(Math.random() * EXPENSE_ITEMS.length)];
         } while (items.includes(item));
         items.push(item);
       }
@@ -25398,12 +24855,10 @@ const T11ApprovalSubPage = ({ onBack }) => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
     for (let i = 0; i < count; i++) {
-      const char =
-        CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+      const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
       const activity =
         ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)];
-      const location =
-        LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
+      const location = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
       // 随机生成 2-3 个采购材料
       const itemCount = Math.floor(Math.random() * 2) + 2; // 2-3 items
       const items = [];
@@ -25412,9 +24867,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
         // 确保不重复
         do {
           item =
-            PURCHASE_ITEMS[
-            Math.floor(Math.random() * PURCHASE_ITEMS.length)
-            ];
+            PURCHASE_ITEMS[Math.floor(Math.random() * PURCHASE_ITEMS.length)];
         } while (items.includes(item));
         // 可能是角色布偶
         if (item === "角色布偶") {
@@ -25439,8 +24892,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
     for (let i = 0; i < count; i++) {
-      const char =
-        CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+      const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
       const department =
         DEPARTMENTS[Math.floor(Math.random() * DEPARTMENTS.length)];
       requests.push({
@@ -25458,8 +24910,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
     for (let i = 0; i < count; i++) {
-      const char =
-        CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+      const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
       const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];
       const item =
         PURCHASE_ITEMS[Math.floor(Math.random() * PURCHASE_ITEMS.length)];
@@ -25479,14 +24930,11 @@ const T11ApprovalSubPage = ({ onBack }) => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
     for (let i = 0; i < count; i++) {
-      const char =
-        CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
+      const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
       const item =
         PURCHASE_ITEMS[Math.floor(Math.random() * PURCHASE_ITEMS.length)];
       const effect =
-        TRAINING_EFFECTS[
-        Math.floor(Math.random() * TRAINING_EFFECTS.length)
-        ];
+        TRAINING_EFFECTS[Math.floor(Math.random() * TRAINING_EFFECTS.length)];
       requests.push({
         id: Date.now() + i,
         char,
@@ -25633,9 +25081,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setTimeout(() => setFeedback(null), 2000);
 
     // 移除该条申请
-    const remaining = currentExpenseRequests.filter(
-      (r) => r.id !== reqId,
-    );
+    const remaining = currentExpenseRequests.filter((r) => r.id !== reqId);
     setCurrentExpenseRequests(remaining);
 
     // 如果全部处理完，关闭弹窗，并将主列表的“费用报销”移动到已审批
@@ -25643,9 +25089,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
       setTimeout(() => {
         setShowExpenseModal(false);
         // 找到列表里的第一个费用报销并移动（简单处理）
-        const expenseItem = pendingList.find(
-          (i) => i.type === "费用报销",
-        );
+        const expenseItem = pendingList.find((i) => i.type === "费用报销");
         if (expenseItem) {
           moveItemToApproved(expenseItem);
         }
@@ -25665,9 +25109,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setTimeout(() => setFeedback(null), 2000);
 
     // 移除该条申请
-    const remaining = currentPurchaseRequests.filter(
-      (r) => r.id !== reqId,
-    );
+    const remaining = currentPurchaseRequests.filter((r) => r.id !== reqId);
     setCurrentPurchaseRequests(remaining);
 
     // 如果全部处理完，关闭弹窗，并将主列表的“采购申请”移动到已审批
@@ -25675,9 +25117,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
       setTimeout(() => {
         setShowPurchaseModal(false);
         // 找到列表里的第一个采购申请并移动（简单处理）
-        const purchaseItem = pendingList.find(
-          (i) => i.type === "采购申请",
-        );
+        const purchaseItem = pendingList.find((i) => i.type === "采购申请");
         if (purchaseItem) {
           moveItemToApproved(purchaseItem);
         }
@@ -25753,9 +25193,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setTimeout(() => setFeedback(null), 2000);
 
     // 移除该条申请
-    const remaining = currentTrainingRequests.filter(
-      (r) => r.id !== reqId,
-    );
+    const remaining = currentTrainingRequests.filter((r) => r.id !== reqId);
     setCurrentTrainingRequests(remaining);
 
     // 如果全部处理完，关闭弹窗，并将主列表的“培训申请”移动到已审批
@@ -25763,9 +25201,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
       setTimeout(() => {
         setShowTrainingModal(false);
         // 找到列表里的第一个培训申请并移动（简单处理）
-        const trainingItem = pendingList.find(
-          (i) => i.type === "培训申请",
-        );
+        const trainingItem = pendingList.find((i) => i.type === "培训申请");
         if (trainingItem) {
           moveItemToApproved(trainingItem);
         }
@@ -25776,8 +25212,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
   // 获取卡片边框颜色类
   const getCardClass = (type) => {
     if (type.includes("请假")) return "card-type-leave";
-    if (type.includes("费") || type.includes("购"))
-      return "card-type-money";
+    if (type.includes("费") || type.includes("购")) return "card-type-money";
     return "card-type-normal";
   };
 
@@ -25798,10 +25233,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
       {/* 顶部导航 */}
       <div className="t11-nav">
         <div className="back-btn" onClick={onBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">审批中心</div>
       </div>
@@ -26302,9 +25734,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
                   </div>
                   <div
                     className="btn-approve"
-                    onClick={() =>
-                      handlePurchaseAction(req.id, "approve")
-                    }
+                    onClick={() => handlePurchaseAction(req.id, "approve")}
                   >
                     通过
                   </div>
@@ -26533,9 +25963,7 @@ const T11ApprovalSubPage = ({ onBack }) => {
                   </div>
                   <div
                     className="btn-approve"
-                    onClick={() =>
-                      handleTrainingAction(req.id, "approve")
-                    }
+                    onClick={() => handleTrainingAction(req.id, "approve")}
                   >
                     通过
                   </div>
@@ -26821,10 +26249,7 @@ const T11Page = ({ onBack }) => {
   };
 
   return (
-    <div
-      id="t11-root"
-      style={{ position: "relative", overflow: "hidden" }}
-    >
+    <div id="t11-root" style={{ position: "relative", overflow: "hidden" }}>
       {/* 1. 主页面内容 */}
       <div
         style={{
@@ -27223,8 +26648,7 @@ const FancyHammer = ({ x, y, state }) => {
         zIndex: 50,
         transform: `translate(-30%, -60%) rotate(${rotation}deg)`, // 调整中心点以便锤头对准鼠标
         transformOrigin: "bottom right",
-        transition:
-          "transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+        transition: "transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
       }}
     >
       <svg
@@ -27238,23 +26662,11 @@ const FancyHammer = ({ x, y, state }) => {
       >
         {/* 锤头主体 (圆柱形) */}
         <defs>
-          <linearGradient
-            id="headGrad"
-            x1="0%"
-            y1="0%"
-            x2="100%"
-            y2="100%"
-          >
+          <linearGradient id="headGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" stopColor="#FFD93D" />
             <stop offset="100%" stopColor="#F4C724" />
           </linearGradient>
-          <linearGradient
-            id="handleGrad"
-            x1="0%"
-            y1="0%"
-            x2="100%"
-            y2="0%"
-          >
+          <linearGradient id="handleGrad" x1="0%" y1="0%" x2="100%" y2="0%">
             <stop offset="0%" stopColor="#EEE" />
             <stop offset="100%" stopColor="#CCC" />
           </linearGradient>
@@ -27357,8 +26769,7 @@ const T11PersonnelSubPage = ({ onBack }) => {
       id: Date.now() + Math.random(),
       text: `${randomChar}前来围观`,
       y: Math.random() * 80 + 10, // 10-90% 的垂直位置
-      color:
-        MOLE_THEMES[Math.floor(Math.random() * MOLE_THEMES.length)].body,
+      color: MOLE_THEMES[Math.floor(Math.random() * MOLE_THEMES.length)].body,
     };
 
     setDanmakus((prev) => [...prev, newDanmaku]);
@@ -27431,10 +26842,7 @@ const T11PersonnelSubPage = ({ onBack }) => {
             currentMoleDuration > MIN_MOLE_DURATION
           ) {
             setCurrentMoleDuration((prevDuration) =>
-              Math.max(
-                prevDuration - DURATION_DECREASE,
-                MIN_MOLE_DURATION,
-              ),
+              Math.max(prevDuration - DURATION_DECREASE, MIN_MOLE_DURATION),
             );
           }
 
@@ -27453,17 +26861,13 @@ const T11PersonnelSubPage = ({ onBack }) => {
         }
 
         // 根据当前地鼠时长调整生成间隔
-        const nextPopTime =
-          Math.random() * 300 + currentMoleDuration * 0.6;
+        const nextPopTime = Math.random() * 300 + currentMoleDuration * 0.6;
         moleTimerRef.current = setTimeout(loop, nextPopTime);
       };
       loop();
 
       // 3. 启动弹幕生成
-      danmakuTimerRef.current = setInterval(
-        generateDanmaku,
-        DANMAKU_INTERVAL,
-      );
+      danmakuTimerRef.current = setInterval(generateDanmaku, DANMAKU_INTERVAL);
 
       // 4. 如果任务模式开启，启动任务生成
       if (missionEnabled) {
@@ -27656,10 +27060,7 @@ const T11PersonnelSubPage = ({ onBack }) => {
       {/* 导航栏 */}
       <div className="t11-nav">
         <div className="back-btn" onClick={onBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">部门人事考核</div>
       </div>
@@ -27807,9 +27208,7 @@ const T11PersonnelSubPage = ({ onBack }) => {
 
             {/* 右边时间 */}
             <div style={{ flex: 1, textAlign: "right" }}>
-              <div style={{ fontSize: "12px", color: "#999" }}>
-                剩余时间
-              </div>
+              <div style={{ fontSize: "12px", color: "#999" }}>剩余时间</div>
               <div
                 style={{
                   fontSize: "24px",
@@ -27889,8 +27288,7 @@ const T11PersonnelSubPage = ({ onBack }) => {
                     bottom: "0",
                     width: "90%",
                     height: "60%",
-                    background:
-                      "linear-gradient(to top, #5D534A, #8B7E70)",
+                    background: "linear-gradient(to top, #5D534A, #8B7E70)",
                     borderRadius: "50% 50% 50% 50% / 30% 30% 70% 70%",
                     zIndex: 1,
                   }}
@@ -27912,10 +27310,7 @@ const T11PersonnelSubPage = ({ onBack }) => {
                   }}
                 >
                   {moleData && (
-                    <CuteMole
-                      themeIdx={moleData.themeIdx}
-                      hit={moleData.hit}
-                    />
+                    <CuteMole themeIdx={moleData.themeIdx} hit={moleData.hit} />
                   )}
                 </div>
 
@@ -27969,8 +27364,7 @@ const T11PersonnelSubPage = ({ onBack }) => {
               className="active-press"
               style={{
                 padding: "16px 48px",
-                background:
-                  "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
                 border: "none",
                 borderRadius: "30px",
                 color: "white",
@@ -28068,9 +27462,7 @@ const NoticeEditPage = ({
 }) => {
   // 在组件内部使用useState管理输入状态
   const [title, setTitle] = React.useState(initialData?.title || "");
-  const [content, setContent] = React.useState(
-    initialData?.content || "",
-  );
+  const [content, setContent] = React.useState(initialData?.content || "");
   const [selectedTab, setSelectedTab] = React.useState(
     initialData?.selectedTab || 0,
   );
@@ -28113,10 +27505,7 @@ const NoticeEditPage = ({
       {/* 导航栏 */}
       <div className="t11-nav">
         <div className="back-btn" onClick={onCancel}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">
           {originalTabIndex >= 0 ? "编辑公告" : "发布公告"}
@@ -28213,9 +27602,7 @@ const NoticeEditPage = ({
                   borderRadius: "16px",
                   border: "none",
                   background:
-                    selectedTab === index
-                      ? MORANDI_COLORS.primary
-                      : "#f0f0f0",
+                    selectedTab === index ? MORANDI_COLORS.primary : "#f0f0f0",
                   color: selectedTab === index ? "#fff" : "#999",
                   fontSize: "12px",
                   cursor: "pointer",
@@ -28425,10 +27812,7 @@ const T11InsideContactsPage = ({ onBack }) => {
       {/* 导航栏 */}
       <div className="t11-nav">
         <div className="back-btn" onClick={onBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">楼内联系人</div>
       </div>
@@ -28477,8 +27861,7 @@ const T11InsideContactsPage = ({ onBack }) => {
                   const input = document.createElement("input");
                   input.type = "file";
                   input.accept = "image/*";
-                  input.onchange = (e) =>
-                    handleAvatarUpload(character, e);
+                  input.onchange = (e) => handleAvatarUpload(character, e);
                   input.click();
                 }}
               >
@@ -28609,10 +27992,7 @@ const T11ContactsPage = ({ onBack }) => {
       {/* 导航栏 */}
       <div className="t11-nav">
         <div className="back-btn" onClick={onBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">通讯录</div>
       </div>
@@ -28966,8 +28346,7 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
         originalTabIndex >= 0
           ? notices[originalTabIndex][originalNoticeIndex].time
           : generateRandomTime(),
-      character:
-        selectedTab === 0 || selectedTab === 1 ? "傅融" : "绣衣楼",
+      character: selectedTab === 0 || selectedTab === 1 ? "傅融" : "绣衣楼",
     };
 
     // 更新公告列表
@@ -28977,8 +28356,7 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
       if (originalTabIndex >= 0 && originalNoticeIndex >= 0) {
         // 编辑现有公告
         newNotices[originalTabIndex] = newNotices[originalTabIndex].map(
-          (item, index) =>
-            index === originalNoticeIndex ? notice : item,
+          (item, index) => (index === originalNoticeIndex ? notice : item),
         );
       } else {
         // 创建新公告
@@ -29356,10 +28734,7 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
           {/* 导航栏 */}
           <div className="t11-nav">
             <div className="back-btn" onClick={onBack}>
-              <i
-                className="ph ph-caret-left"
-                style={{ fontSize: "24px" }}
-              ></i>
+              <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
             </div>
             <div className="title">公告</div>
           </div>
@@ -29889,8 +29264,7 @@ const T11SalarySubPage = ({ onBack }) => {
               color: "#5a5f4d",
               fontSize: "24px",
               fontWeight: "bold",
-              boxShadow:
-                digit !== "" ? "0 4px 10px rgba(0,0,0,0.05)" : "none",
+              boxShadow: digit !== "" ? "0 4px 10px rgba(0,0,0,0.05)" : "none",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -30074,8 +29448,7 @@ const T11SalarySubPage = ({ onBack }) => {
               fontWeight: "bold",
               fontSize: "14px",
               textShadow: "0 1px 2px rgba(0,0,0,0.1)",
-              animation:
-                "popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+              animation: "popIn 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
             }}
           >
             🔥 完美连击 x{combo}
@@ -30199,9 +29572,7 @@ const T11SalarySubPage = ({ onBack }) => {
                 zIndex: 2,
                 // 仅在非跳跃状态下平滑移动，跳跃时瞬间锁定
                 transition:
-                  gameState === "jumping"
-                    ? "none"
-                    : "transform 0.05s linear",
+                  gameState === "jumping" ? "none" : "transform 0.05s linear",
               }}
             >
               <div
@@ -30388,10 +29759,7 @@ const T11SalarySubPage = ({ onBack }) => {
             else onBack();
           }}
         >
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">工资分配</div>
       </div>
@@ -30506,7 +29874,7 @@ const T9Icons = {
 };
 
 // T9 顶部头像区
-const T9Header = () => {
+const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaCharacter } = {}) => {
   const { useState, useEffect } = React;
   const [days, setDays] = useState(99);
   const [status, setStatus] = useState("异地中");
@@ -30514,8 +29882,13 @@ const T9Header = () => {
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [inputValue, setInputValue] = useState("");
 
-  // --- 新增：TA 和 我的选择状态 ---
-  const [taCharacter, setTaCharacter] = useState(null);
+  // --- 伴侣 TA 和 我的 设定选择状态 ---
+  const [internalTaCharacter, setInternalTaCharacter] = useState(null);
+  const taCharacter = propTaCharacter !== undefined ? propTaCharacter : internalTaCharacter;
+  const setTaCharacter = (val) => {
+    setInternalTaCharacter(val);
+    if (propSetTaCharacter) propSetTaCharacter(val);
+  };
   const [mePersona, setMePersona] = useState(null);
   const [showTaSelect, setShowTaSelect] = useState(false);
   const [availableChars, setAvailableChars] = useState([]);
@@ -30601,9 +29974,7 @@ const T9Header = () => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       const validChars = allChars.filter(
         (c) => !String(c.id).startsWith("group") && c.type !== "decor",
@@ -30614,6 +29985,13 @@ const T9Header = () => {
       if (savedTaId) {
         const ta = validChars.find((c) => String(c.id) === savedTaId);
         if (ta) setTaCharacter(ta);
+        else if (validChars.length > 0) {
+          setTaCharacter(validChars[0]);
+          localStorage.setItem("t9_ta_character_id", validChars[0].id);
+        }
+      } else if (validChars.length > 0) {
+        setTaCharacter(validChars[0]);
+        localStorage.setItem("t9_ta_character_id", validChars[0].id);
       }
     };
     loadRoles();
@@ -30669,14 +30047,13 @@ const T9Header = () => {
             overflow: "hidden",
             cursor: "pointer",
             border: "2px solid rgba(255,255,255,0.6)",
-            background:
-              taCharacter?.avatarColor || "rgba(255,255,255,0.4)",
+            background: taCharacter?.avatarColor || "rgba(255,255,255,0.4)",
           }}
         >
           {taCharacter ? (
             taCharacter.avatar ? (
               typeof taCharacter.avatar === "string" &&
-                taCharacter.avatar.startsWith("data:image") ? (
+              taCharacter.avatar.startsWith("data:image") ? (
                 <img
                   src={taCharacter.avatar}
                   style={{
@@ -30940,9 +30317,7 @@ const T9Header = () => {
                           ? "1px solid var(--accent-primary)"
                           : "1px solid #ddd",
                       background:
-                        option === status
-                          ? "rgba(0,0,0,0.05)"
-                          : "#f5f5f5",
+                        option === status ? "rgba(0,0,0,0.05)" : "#f5f5f5",
                       cursor: "pointer",
                       textAlign: "center",
                     }}
@@ -31001,9 +30376,7 @@ const T9Header = () => {
                 marginBottom: "16px",
               }}
             >
-              <h3
-                style={{ margin: 0, color: "#5a5f4d", fontSize: "16px" }}
-              >
+              <h3 style={{ margin: 0, color: "#5a5f4d", fontSize: "16px" }}>
                 选择伴侣角色
               </h3>
               <span
@@ -31064,7 +30437,7 @@ const T9Header = () => {
                     >
                       {char.avatar ? (
                         typeof char.avatar === "string" &&
-                          char.avatar.startsWith("data:image") ? (
+                        char.avatar.startsWith("data:image") ? (
                           <img
                             src={char.avatar}
                             style={{
@@ -31169,9 +30542,7 @@ const T9Page = () => {
   // 持久化读取我问你猜数据
   useEffect(() => {
     if (taCharacter) {
-      const savedGame = localStorage.getItem(
-        `t9_guess_game_${taCharacter.id}`,
-      );
+      const savedGame = localStorage.getItem(`t9_guess_game_${taCharacter.id}`);
       if (savedGame) {
         setGuessState(JSON.parse(savedGame));
       } else {
@@ -31298,9 +30669,7 @@ const T9Page = () => {
           null,
           (reply) => {
             try {
-              const data = JSON.parse(
-                reply.replace(/```json|```/g, "").trim(),
-              );
+              const data = JSON.parse(reply.replace(/```json|```/g, "").trim());
               setGuessState((prev) => ({
                 ...prev,
                 userScore: prev.userScore + (data.isCorrect ? 10 : -10),
@@ -31409,9 +30778,7 @@ const T9Page = () => {
   // 加载账单数据
   useEffect(() => {
     if (taCharacter) {
-      const savedBills = localStorage.getItem(
-        `t9_bills_${taCharacter.id}`,
-      );
+      const savedBills = localStorage.getItem(`t9_bills_${taCharacter.id}`);
       if (savedBills) {
         const parsed = JSON.parse(savedBills);
         setUserBills(parsed.userBills || []);
@@ -31479,7 +30846,7 @@ const T9Page = () => {
             userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}`;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       const charContext = `【记账角色设定】\n姓名:${taCharacter.name}\n性格:${taCharacter.profile?.personality || "无"}\n背景:${taCharacter.profile?.background || "无"}`;
 
@@ -31492,9 +30859,7 @@ const T9Page = () => {
         chatContext =
           "【最近聊天上下文】\n" +
           history
-            .map(
-              (m) => `${m.isMe ? "用户" : taCharacter.name}: ${m.text}`,
-            )
+            .map((m) => `${m.isMe ? "用户" : taCharacter.name}: ${m.text}`)
             .join("\n");
       }
 
@@ -31537,8 +30902,7 @@ const T9Page = () => {
                   type: item.type === "income" ? "income" : "expense",
                   category: item.category,
                   amount: parseFloat(item.amount) || 0,
-                  date:
-                    item.date || new Date().toISOString().split("T")[0],
+                  date: item.date || new Date().toISOString().split("T")[0],
                 }));
                 // 追加或覆盖均可，这里选择完全替换更新
                 setTaBills(formattedData);
@@ -31637,15 +31001,24 @@ const T9Page = () => {
   // 获取当前选定的 TA 角色
   const loadTaCharacter = async () => {
     const taId = localStorage.getItem("t9_ta_character_id");
-    if (!taId) return null;
-
     let allChars = [];
     if (window.chatCharacterStore) {
       allChars = await window.chatCharacterStore.getAll();
     } else {
-      allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+      try {
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+      } catch (e) {
+        allChars = [];
+      }
     }
-    const char = allChars.find((c) => String(c.id) === taId);
+    const validChars = allChars.filter(
+      (c) => !String(c.id).startsWith("group") && c.type !== "decor",
+    );
+    let char = validChars.find((c) => String(c.id) === taId);
+    if (!char && validChars.length > 0) {
+      char = validChars[0];
+      localStorage.setItem("t9_ta_character_id", char.id);
+    }
     setTaCharacter(char || null);
     return char;
   };
@@ -31715,9 +31088,7 @@ const T9Page = () => {
     setSessionState("active");
     setTimePassed(0);
     setAiMessage(
-      companionType === "quiet"
-        ? "静静地陪伴着你..."
-        : "（正在酝酿情绪...）",
+      companionType === "quiet" ? "静静地陪伴着你..." : "（正在酝酿情绪...）",
     );
 
     // 开启计时器 (每秒更新)
@@ -31751,10 +31122,7 @@ const T9Page = () => {
       let allChars = [];
       if (window.chatCharacterStore)
         allChars = await window.chatCharacterStore.getAll();
-      else
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+      else allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       const char = allChars.find((c) => String(c.id) === taId);
       if (!char) {
         alert("未找到TA的角色配置，请重新选择");
@@ -31905,9 +31273,7 @@ const T9Page = () => {
 
   // 放弃当前拆解
   const handleCancelBreakdown = () => {
-    if (
-      confirm("确定要放弃当前的任务拆解吗？半途而废将无法获得小花哦。")
-    ) {
+    if (confirm("确定要放弃当前的任务拆解吗？半途而废将无法获得小花哦。")) {
       const cancelled = {
         ...currentBreakdown,
         status: "cancelled",
@@ -31988,99 +31354,90 @@ const T9Page = () => {
   ];
 
   return (
-    <div
-      id="t9-root"
-      style={{ overflowY: "auto" }}
-      className="no-scrollbar"
-    >
-      <T9Header />
+    <>
+      <div id="t9-root" style={{ overflowY: "auto" }} className="no-scrollbar">
+        <T9Header taCharacter={taCharacter} setTaCharacter={setTaCharacter} />
 
-      {/* 功能入口网格区域 */}
-      <div
-        style={{
-          padding: "0 24px",
-          marginTop: "15px",
-          paddingBottom: "40px",
-        }}
-      >
+        {/* 功能入口网格区域 */}
         <div
           style={{
-            display: "grid",
-            gridTemplateColumns: "repeat(4, 1fr)",
-            gap: "12px 10px",
+            padding: "0 24px",
+            marginTop: "15px",
+            paddingBottom: "40px",
           }}
         >
-          {features.map((item, index) => (
-            <div
-              key={index}
-              className={
-                index < 4 ? `active-press ${item.colorClass}` : ""
-              }
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                alignItems: "center",
-                gap: "10px",
-                background:
-                  index >= 5 ? "rgba(255,255,255,0.4)" : undefined,
-                padding: "16px 6px",
-                borderRadius: "20px",
-                boxShadow: "0 4px 12px rgba(140, 145, 123, 0.05)",
-                cursor: index < 5 ? "pointer" : "not-allowed",
-                opacity: index >= 5 ? 0.6 : 1,
-                border: "1px solid rgba(255,255,255,0.5)",
-              }}
-              onClick={() => {
-                if (index === 0) {
-                  setShowModal(true);
-                } else if (index === 1) {
-                  setShowTaskModal(true);
-                } else if (index === 2) {
-                  if (!taCharacter)
-                    return alert("请先在上方头像处选择 TA 的身份！");
-                  setShowBillingModal(true);
-                } else if (index === 4) {
-                  if (!taCharacter)
-                    return alert("请先在上方头像处选择 TA 的身份！");
-                  setShowGuessGame(true);
-                } else if (index === 3 || index > 4) {
-                  alert("模块升级部署中，敬请期待！");
-                }
-              }}
-            >
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(4, 1fr)",
+              gap: "12px 10px",
+            }}
+          >
+            {features.map((item, index) => (
               <div
+                key={index}
+                className={index < 4 ? `active-press ${item.colorClass}` : ""}
                 style={{
-                  width: "40px",
-                  height: "40px",
-                  borderRadius: "14px",
-                  background: "rgba(255,255,255,0.8)",
                   display: "flex",
+                  flexDirection: "column",
                   alignItems: "center",
-                  justifyContent: "center",
-                  boxShadow:
-                    "inset 0 2px 4px rgba(255,255,255,0.5), 0 2px 6px rgba(0,0,0,0.05)",
+                  gap: "10px",
+                  background: index >= 5 ? "rgba(255,255,255,0.4)" : undefined,
+                  padding: "16px 6px",
+                  borderRadius: "20px",
+                  boxShadow: "0 4px 12px rgba(140, 145, 123, 0.05)",
+                  cursor: index < 5 ? "pointer" : "not-allowed",
+                  opacity: index >= 5 ? 0.6 : 1,
+                  border: "1px solid rgba(255,255,255,0.5)",
+                }}
+                onClick={() => {
+                  if (index === 0) {
+                    setShowModal(true);
+                  } else if (index === 1) {
+                    setShowTaskModal(true);
+                  } else if (index === 2) {
+                    setShowBillingModal(true);
+                  } else if (index === 4) {
+                    setShowGuessGame(true);
+                  } else if (index === 3 || index > 4) {
+                    alert("模块升级部署中，敬请期待！");
+                  }
                 }}
               >
-                <i
-                  className={`ph-fill ph-${item.icon}`}
+                <div
                   style={{
-                    fontSize: "22px",
-                    color: index < 4 ? "#8fa99d" : "#ccc",
+                    width: "40px",
+                    height: "40px",
+                    borderRadius: "14px",
+                    background: "rgba(255,255,255,0.8)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow:
+                      "inset 0 2px 4px rgba(255,255,255,0.5), 0 2px 6px rgba(0,0,0,0.05)",
                   }}
-                ></i>
+                >
+                  <i
+                    className={`ph-fill ph-${item.icon}`}
+                    style={{
+                      fontSize: "22px",
+                      color: index < 4 ? "#8fa99d" : "#ccc",
+                    }}
+                  ></i>
+                </div>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "#5a5f4d",
+                    fontWeight: "bold",
+                    textAlign: "center",
+                  }}
+                >
+                  {item.title}
+                </span>
               </div>
-              <span
-                style={{
-                  fontSize: "11px",
-                  color: "#5a5f4d",
-                  fontWeight: "bold",
-                  textAlign: "center",
-                }}
-              >
-                {item.title}
-              </span>
-            </div>
-          ))}
+            ))}
+          </div>
         </div>
       </div>
 
@@ -32090,8 +31447,31 @@ const T9Page = () => {
           <div
             className="t9-companion-mask"
             onClick={closeCompanion}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              zIndex: 1000,
+              backdropFilter: "blur(2px)",
+            }}
           ></div>
-          <div className="t9-companion-modal">
+          <div
+            className="t9-companion-modal no-scrollbar"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "85vh",
+              overflowY: "auto",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              padding: "24px",
+              zIndex: 1001,
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
+              animation: "slideUp 0.3s ease-out",
+            }}
+          >
             <div
               style={{
                 display: "flex",
@@ -32136,9 +31516,7 @@ const T9Page = () => {
                   />
                 </div>
                 <div className="companion-form-group">
-                  <label className="companion-label">
-                    预计时长 (分钟)
-                  </label>
+                  <label className="companion-label">预计时长 (分钟)</label>
                   <select
                     className="companion-input"
                     value={duration}
@@ -32158,11 +31536,8 @@ const T9Page = () => {
                       className="companion-type-btn"
                       style={{
                         background:
-                          companionType === "quiet"
-                            ? "#A8C8BA"
-                            : "#F5F6F8",
-                        color:
-                          companionType === "quiet" ? "#fff" : "#8c917b",
+                          companionType === "quiet" ? "#A8C8BA" : "#F5F6F8",
+                        color: companionType === "quiet" ? "#fff" : "#8c917b",
                         border:
                           companionType === "quiet"
                             ? "none"
@@ -32176,11 +31551,8 @@ const T9Page = () => {
                       className="companion-type-btn"
                       style={{
                         background:
-                          companionType === "verbal"
-                            ? "#E8C3A8"
-                            : "#F5F6F8",
-                        color:
-                          companionType === "verbal" ? "#fff" : "#8c917b",
+                          companionType === "verbal" ? "#E8C3A8" : "#F5F6F8",
+                        color: companionType === "verbal" ? "#fff" : "#8c917b",
                         border:
                           companionType === "verbal"
                             ? "none"
@@ -32407,21 +31779,14 @@ const T9Page = () => {
                       lineHeight: "1.8",
                     }}
                   >
-                    <span
-                      style={{ fontWeight: "bold", color: "#D6724B" }}
-                    >
+                    <span style={{ fontWeight: "bold", color: "#D6724B" }}>
                       {taCharacter?.name || "未知"}
                     </span>{" "}
                     陪伴你进行了
-                    <span style={{ fontWeight: "bold" }}>
-                      {" "}
-                      {taskName}{" "}
-                    </span>
+                    <span style={{ fontWeight: "bold" }}> {taskName} </span>
                     <br />
                     共计{" "}
-                    <span
-                      style={{ fontWeight: "bold", color: "#A8C8BA" }}
-                    >
+                    <span style={{ fontWeight: "bold", color: "#A8C8BA" }}>
                       {records[0]?.timeStr}
                     </span>
                     。
@@ -32453,318 +31818,414 @@ const T9Page = () => {
       )}
 
       {/* ================== [新增] 任务拆解弹窗 ================== */}
-      {showTaskModal && (
-        <>
-          <div
-            className="t9-companion-mask"
-            onClick={() => setShowTaskModal(false)}
-          ></div>
-          <div
-            className="t9-companion-modal"
-            style={{ background: "#F5F6F8" }}
-          >
-            <div
-              style={{
+      showTaskModal &&
+      ReactDOM.createPortal(
+        /* @__PURE__ */ React.createElement(
+          React.Fragment,
+          null,
+          /* 1. 遮罩层：全屏固定 */
+          /* @__PURE__ */ React.createElement("div", {
+            style: {
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0, 0, 0, 0.5)",
+              zIndex: 99998,
+              backdropFilter: "blur(2px)",
+            },
+            onClick: () => setShowTaskModal(false),
+          }),
+          /* 2. 底部抽屉弹窗：固定贴底，限制最大高度 */
+          /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              className: "no-scrollbar",
+              style: {
+                position: "fixed",
+                bottom: 0,
+                left: 0,
+                right: 0,
+                maxHeight: "80vh",
+                overflowY: "auto",
+                backgroundColor: "#F5F6F8",
+                borderTopLeftRadius: "24px",
+                borderTopRightRadius: "24px",
+                padding: "24px",
+                boxShadow: "0 -10px 40px rgba(0, 0, 0, 0.2)",
+                zIndex: 99999,
                 display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h2
-                style={{
-                  fontSize: "20px",
-                  fontWeight: "bold",
-                  color: "#5a5f4d",
+                flexDirection: "column",
+                animation: "slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)",
+              },
+            },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              {
+                style: {
                   display: "flex",
+                  justifyContent: "space-between",
                   alignItems: "center",
-                  gap: "6px",
-                }}
-              >
-                <i
-                  className="ph-fill ph-list-checks"
-                  style={{ color: "#8fa99d" }}
-                ></i>
-                任务拆解
-              </h2>
-              <button
-                onClick={() => setShowTaskModal(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#999",
-                  cursor: "pointer",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* 吐司提示 */}
-            {taskFeedback && (
-              <div
-                style={{
-                  background: "rgba(90, 95, 77, 0.9)",
-                  color: "white",
-                  padding: "10px 16px",
-                  borderRadius: "12px",
-                  fontSize: "13px",
-                  textAlign: "center",
-                  marginBottom: "16px",
-                  animation: "popIn 0.3s ease-out",
-                }}
-              >
-                {taskFeedback}
-              </div>
-            )}
-
-            {/* 如果没有正在进行的任务，显示表单 */}
-            {!currentBreakdown ? (
-              <div className="animate-fadeIn bg-white p-5 rounded-3xl shadow-sm border border-[#EAE6D6]">
-                <div className="companion-form-group">
-                  <label className="companion-label">任务名称</label>
-                  <input
-                    type="text"
-                    className="companion-input"
-                    style={{ background: "#F9F7F5" }}
-                    placeholder="你想做点什么？"
-                    value={taskBreakName}
-                    onChange={(e) => setTaskBreakName(e.target.value)}
-                  />
-                </div>
-                <div className="companion-form-group">
-                  <label className="companion-label">任务简介</label>
-                  <textarea
-                    className="companion-input"
-                    style={{
-                      background: "#F9F7F5",
-                      height: "80px",
-                      resize: "none",
-                    }}
-                    placeholder="简要描述一下情况，方便 TA 帮你拆解..."
-                    value={taskBreakDesc}
-                    onChange={(e) => setTaskBreakDesc(e.target.value)}
-                  />
-                </div>
-                <button
-                  onClick={handleGenerateBreakdown}
-                  disabled={isBreakingDown}
-                  style={{
-                    width: "100%",
-                    padding: "16px",
-                    borderRadius: "20px",
-                    background: isBreakingDown
-                      ? "#CCC"
-                      : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
-                    color: "white",
-                    fontSize: "16px",
+                  marginBottom: "20px",
+                },
+              },
+              /* @__PURE__ */ React.createElement(
+                "h2",
+                {
+                  style: {
+                    fontSize: "20px",
                     fontWeight: "bold",
+                    color: "#5a5f4d",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  },
+                },
+                /* @__PURE__ */ React.createElement("i", {
+                  className: "ph-fill ph-list-checks",
+                  style: { color: "#8fa99d" },
+                }),
+                "任务拆解",
+              ),
+              /* @__PURE__ */ React.createElement(
+                "button",
+                {
+                  onClick: () => setShowTaskModal(false),
+                  style: {
+                    background: "none",
                     border: "none",
-                    boxShadow: isBreakingDown
-                      ? "none"
-                      : "0 8px 20px rgba(168, 200, 186, 0.4)",
-                    cursor: isBreakingDown ? "not-allowed" : "pointer",
-                  }}
-                  className="active-press"
-                >
-                  {isBreakingDown ? "TA 正在筹划中..." : "呼叫 TA 拆解"}
-                </button>
-              </div>
-            ) : (
-              /* 正在进行的任务面板 */
-              <div className="animate-fadeIn">
-                <div
-                  style={{
-                    background: "#E8F1ED",
-                    padding: "16px",
-                    borderRadius: "20px",
-                    marginBottom: "16px",
-                    border: "1px solid #A8C8BA",
-                  }}
-                >
-                  <div
-                    style={{
-                      fontSize: "16px",
-                      fontWeight: "bold",
-                      color: "#5A8F6D",
-                      marginBottom: "6px",
-                    }}
-                  >
-                    {currentBreakdown.taskName}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "13px",
-                      color: "#5a5f4d",
-                      fontStyle: "italic",
-                      borderLeft: "3px solid #8FA99D",
-                      paddingLeft: "8px",
-                    }}
-                  >
-                    "{currentBreakdown.greeting}" —{" "}
-                    {currentBreakdown.charName}
-                  </div>
-                </div>
-
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "10px",
-                    maxHeight: "300px",
-                    overflowY: "auto",
-                  }}
-                  className="no-scrollbar"
-                >
-                  {currentBreakdown.steps.map((step) => (
-                    <div
-                      key={step.id}
-                      onClick={() => {
-                        if (!step.isDone)
-                          handleCompleteStep(step.id, step.minutes);
-                      }}
-                      style={{
-                        background: "#fff",
-                        padding: "16px",
-                        borderRadius: "16px",
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        cursor: step.isDone ? "default" : "pointer",
-                        opacity: step.isDone ? 0.6 : 1,
-                        boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
-                        border: "1px solid #EAE6D6",
-                      }}
-                      className={!step.isDone ? "active-press" : ""}
-                    >
-                      <div
-                        style={{
-                          flex: 1,
-                          textDecoration: step.isDone
-                            ? "line-through"
-                            : "none",
-                          color: step.isDone ? "#999" : "#5a5f4d",
-                          fontSize: "14px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {step.title}
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "12px",
-                          color: "#A8C8BA",
-                          background: "#F2F7F4",
-                          padding: "4px 8px",
-                          borderRadius: "8px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        ~{step.minutes}m
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <button
-                  onClick={handleCancelBreakdown}
-                  style={{
-                    width: "100%",
-                    padding: "14px",
-                    marginTop: "20px",
-                    borderRadius: "16px",
-                    background: "#F2E6E6",
-                    color: "#D6724B",
-                    border: "1px dashed #DFA9A9",
-                    fontWeight: "bold",
+                    fontSize: "24px",
+                    color: "#999",
                     cursor: "pointer",
-                  }}
-                >
-                  放弃该任务
-                </button>
-              </div>
-            )}
-
-            {/* 历史记录区 */}
-            <div style={{ marginTop: "30px" }}>
-              <div
-                style={{
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  color: "#8c917b",
-                  marginBottom: "12px",
-                }}
-              >
-                归档履历
-              </div>
-              {breakdownHistory.length === 0 ? (
-                <div
-                  style={{
+                  },
+                },
+                "×",
+              ),
+            ),
+            taskFeedback &&
+              /* @__PURE__ */ React.createElement(
+                "div",
+                {
+                  style: {
+                    background: "rgba(90, 95, 77, 0.9)",
+                    color: "white",
+                    padding: "10px 16px",
+                    borderRadius: "12px",
+                    fontSize: "13px",
                     textAlign: "center",
-                    color: "#bbb",
-                    fontSize: "12px",
-                    padding: "20px",
-                  }}
-                >
-                  尚未有任何拆解记录
-                </div>
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "12px",
-                    maxHeight: "200px",
-                    overflowY: "auto",
-                  }}
-                  className="no-scrollbar"
-                >
-                  {breakdownHistory.map((record) => (
-                    <div
-                      key={record.id}
-                      style={{
-                        background: "#fff",
-                        padding: "12px 16px",
-                        borderRadius: "16px",
-                        borderLeft: record.hasFlower
-                          ? "4px solid #DFA9A9"
-                          : "4px solid #ccc",
+                    marginBottom: "16px",
+                    animation: "popIn 0.3s ease-out",
+                  },
+                },
+                taskFeedback,
+              ),
+            !currentBreakdown
+              ? /* @__PURE__ */ React.createElement(
+                  "div",
+                  {
+                    className:
+                      "animate-fadeIn bg-white p-5 rounded-3xl shadow-sm border border-[#EAE6D6]",
+                  },
+                  /* @__PURE__ */ React.createElement(
+                    "div",
+                    { className: "companion-form-group" },
+                    /* @__PURE__ */ React.createElement(
+                      "label",
+                      { className: "companion-label" },
+                      "任务名称",
+                    ),
+                    /* @__PURE__ */ React.createElement("input", {
+                      type: "text",
+                      className: "companion-input",
+                      style: { background: "#F9F7F5" },
+                      placeholder: "你想做点什么？",
+                      value: taskBreakName,
+                      onChange: (e) => setTaskBreakName(e.target.value),
+                    }),
+                  ),
+                  /* @__PURE__ */ React.createElement(
+                    "div",
+                    { className: "companion-form-group" },
+                    /* @__PURE__ */ React.createElement(
+                      "label",
+                      { className: "companion-label" },
+                      "任务简介",
+                    ),
+                    /* @__PURE__ */ React.createElement("textarea", {
+                      className: "companion-input",
+                      style: {
+                        background: "#F9F7F5",
+                        height: "80px",
+                        resize: "none",
+                      },
+                      placeholder:
+                        "简要描述一下情况，方便 TA 帮你拆解...",
+                      value: taskBreakDesc,
+                      onChange: (e) => setTaskBreakDesc(e.target.value),
+                    }),
+                  ),
+                  /* @__PURE__ */ React.createElement(
+                    "button",
+                    {
+                      onClick: handleGenerateBreakdown,
+                      disabled: isBreakingDown,
+                      style: {
+                        width: "100%",
+                        padding: "16px",
+                        borderRadius: "20px",
+                        background: isBreakingDown
+                          ? "#CCC"
+                          : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                        color: "white",
+                        fontSize: "16px",
+                        fontWeight: "bold",
+                        border: "none",
+                        boxShadow: isBreakingDown
+                          ? "none"
+                          : "0 8px 20px rgba(168, 200, 186, 0.4)",
+                        cursor: isBreakingDown ? "not-allowed" : "pointer",
+                      },
+                      className: "active-press",
+                    },
+                    isBreakingDown
+                      ? "TA 正在筹划中..."
+                      : "呼叫 TA 拆解",
+                  ),
+                )
+              : /* 正在进行的任务面板 */
+                /* @__PURE__ */ React.createElement(
+                  "div",
+                  { className: "animate-fadeIn" },
+                  /* @__PURE__ */ React.createElement(
+                    "div",
+                    {
+                      style: {
+                        background: "#E8F1ED",
+                        padding: "16px",
+                        borderRadius: "20px",
+                        marginBottom: "16px",
+                        border: "1px solid #A8C8BA",
+                      },
+                    },
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          fontSize: "16px",
+                          fontWeight: "bold",
+                          color: "#5A8F6D",
+                          marginBottom: "6px",
+                        },
+                      },
+                      currentBreakdown.taskName,
+                    ),
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          fontSize: "13px",
+                          color: "#5a5f4d",
+                          fontStyle: "italic",
+                          borderLeft: "3px solid #8FA99D",
+                          paddingLeft: "8px",
+                        },
+                      },
+                      '"',
+                      currentBreakdown.greeting,
+                      '" —',
+                      " ",
+                      currentBreakdown.charName,
+                    ),
+                  ),
+                  /* @__PURE__ */ React.createElement(
+                    "div",
+                    {
+                      style: {
                         display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
-                    >
-                      <div>
-                        <div
-                          style={{
-                            fontSize: "14px",
-                            fontWeight: "bold",
-                            color: "#5a5f4d",
-                            marginBottom: "4px",
-                          }}
-                        >
-                          {record.taskName}
-                        </div>
-                        <div style={{ fontSize: "11px", color: "#999" }}>
-                          {record.charName} 督办 · {record.completedAt}
-                        </div>
-                      </div>
-                      {record.hasFlower ? (
-                        <div style={{ fontSize: "24px" }}>🌸</div>
-                      ) : (
-                        <div style={{ fontSize: "12px", color: "#ccc" }}>
-                          已放弃
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </>
-      )}
+                        flexDirection: "column",
+                        gap: "10px",
+                        maxHeight: "300px",
+                        overflowY: "auto",
+                      },
+                      className: "no-scrollbar",
+                    },
+                    currentBreakdown.steps.map((step) =>
+                      /* @__PURE__ */ React.createElement(
+                        "div",
+                        {
+                          key: step.id,
+                          onClick: () => {
+                            if (!step.isDone)
+                              handleCompleteStep(step.id, step.minutes);
+                          },
+                          style: {
+                            background: "#fff",
+                            padding: "16px",
+                            borderRadius: "16px",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            cursor: step.isDone ? "default" : "pointer",
+                            opacity: step.isDone ? 0.6 : 1,
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                            border: "1px solid #EAE6D6",
+                          },
+                          className: !step.isDone ? "active-press" : "",
+                        },
+                        /* @__PURE__ */ React.createElement(
+                          "div",
+                          {
+                            style: {
+                              flex: 1,
+                              textDecoration: step.isDone
+                                ? "line-through"
+                                : "none",
+                              color: step.isDone ? "#999" : "#5a5f4d",
+                              fontSize: "14px",
+                              fontWeight: "bold",
+                            },
+                          },
+                          step.title,
+                        ),
+                        /* @__PURE__ */ React.createElement(
+                          "div",
+                          {
+                            style: {
+                              fontSize: "12px",
+                              color: "#A8C8BA",
+                              background: "#F2F7F4",
+                              padding: "4px 8px",
+                              borderRadius: "8px",
+                              fontWeight: "bold",
+                            },
+                          },
+                          "~",
+                          step.minutes,
+                          "m",
+                        ),
+                      ),
+                    ),
+                  ),
+                  /* @__PURE__ */ React.createElement(
+                    "button",
+                    {
+                      onClick: handleCancelBreakdown,
+                      style: {
+                        width: "100%",
+                        padding: "14px",
+                        marginTop: "20px",
+                        borderRadius: "16px",
+                        background: "#F2E6E6",
+                        color: "#D6724B",
+                        border: "1px dashed #DFA9A9",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                      },
+                    },
+                    "放弃该任务",
+                  ),
+                ),
+            /* 归档履历 */
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { marginTop: "30px" } },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                {
+                  style: {
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    color: "#8c917b",
+                    marginBottom: "12px",
+                  },
+                },
+                "归档履历",
+              ),
+              breakdownHistory.length === 0
+                ? /* @__PURE__ */ React.createElement(
+                    "div",
+                    {
+                      style: {
+                        textAlign: "center",
+                        color: "#bbb",
+                        fontSize: "12px",
+                        padding: "20px",
+                      },
+                    },
+                    "尚未有任何拆解记录",
+                  )
+                : /* @__PURE__ */ React.createElement(
+                    "div",
+                    {
+                      style: {
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "12px",
+                        maxHeight: "200px",
+                        overflowY: "auto",
+                      },
+                      className: "no-scrollbar",
+                    },
+                    breakdownHistory.map((record) =>
+                      /* @__PURE__ */ React.createElement(
+                        "div",
+                        {
+                          key: record.id,
+                          style: {
+                            background: "#fff",
+                            padding: "12px 16px",
+                            borderRadius: "16px",
+                            borderLeft: record.hasFlower
+                              ? "4px solid #DFA9A9"
+                              : "4px solid #ccc",
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                          },
+                        },
+                        /* @__PURE__ */ React.createElement(
+                          "div",
+                          null,
+                          /* @__PURE__ */ React.createElement(
+                            "div",
+                            {
+                              style: {
+                                fontSize: "14px",
+                                fontWeight: "bold",
+                                color: "#5a5f4d",
+                                marginBottom: "4px",
+                              },
+                            },
+                            record.taskName,
+                          ),
+                          /* @__PURE__ */ React.createElement(
+                            "div",
+                            { style: { fontSize: "11px", color: "#999" } },
+                            record.charName,
+                            " 督办 · ",
+                            record.completedAt,
+                          ),
+                        ),
+                        record.hasFlower
+                          ? /* @__PURE__ */ React.createElement(
+                              "div",
+                              { style: { fontSize: "24px" } },
+                              "🌸",
+                            )
+                          : /* @__PURE__ */ React.createElement(
+                              "div",
+                              { style: { fontSize: "12px", color: "#ccc" } },
+                              "已放弃",
+                            ),
+                      ),
+                    ),
+                  ),
+            ),
+          ),
+        ),
+        document.body,
+      )
       {/* ================== [结束] 任务拆解弹窗 ================== */}
 
       {/* ================== [新增] 共同记账弹窗 ================== */}
@@ -32772,11 +32233,32 @@ const T9Page = () => {
         <>
           <div
             className="t9-companion-mask"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              zIndex: 1000,
+              backdropFilter: "blur(2px)",
+            }}
             onClick={() => setShowBillingModal(false)}
           ></div>
           <div
-            className="t9-companion-modal"
-            style={{ background: "#F9E8E6" }}
+            className="t9-companion-modal no-scrollbar"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "85vh",
+              overflowY: "auto",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              padding: "24px",
+              zIndex: 1001,
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
+              animation: "slideUp 0.3s ease-out",
+              background: "#F9E8E6",
+            }}
           >
             <div
               style={{
@@ -32796,10 +32278,7 @@ const T9Page = () => {
                   gap: "6px",
                 }}
               >
-                <i
-                  className="ph-fill ph-coin"
-                  style={{ color: "#d6724b" }}
-                ></i>
+                <i className="ph-fill ph-coin" style={{ color: "#d6724b" }}></i>
                 共同记账
               </h2>
               <button
@@ -32950,9 +32429,7 @@ const T9Page = () => {
                           <span
                             style={{
                               color:
-                                b.type === "expense"
-                                  ? "#D6724B"
-                                  : "#5A8F6D",
+                                b.type === "expense" ? "#D6724B" : "#5A8F6D",
                               fontWeight: "bold",
                               fontSize: "14px",
                             }}
@@ -33100,9 +32577,7 @@ const T9Page = () => {
                           <span
                             style={{
                               color:
-                                b.type === "expense"
-                                  ? "#D6724B"
-                                  : "#5A8F6D",
+                                b.type === "expense" ? "#D6724B" : "#5A8F6D",
                               fontWeight: "bold",
                               fontSize: "14px",
                             }}
@@ -33127,9 +32602,7 @@ const T9Page = () => {
               </div>
             </div>
 
-            <div
-              style={{ display: "flex", gap: "12px", marginTop: "20px" }}
-            >
+            <div style={{ display: "flex", gap: "12px", marginTop: "20px" }}>
               <button
                 onClick={() => setShowAddBillModal(true)}
                 style={{
@@ -33213,9 +32686,7 @@ const T9Page = () => {
                   }}
                 >
                   <button
-                    onClick={() =>
-                      setNewBill({ ...newBill, type: "expense" })
-                    }
+                    onClick={() => setNewBill({ ...newBill, type: "expense" })}
                     style={{
                       flex: 1,
                       padding: "10px",
@@ -33226,17 +32697,14 @@ const T9Page = () => {
                           : "1px solid #eee",
                       background:
                         newBill.type === "expense" ? "#FDF0E6" : "#fff",
-                      color:
-                        newBill.type === "expense" ? "#D6724B" : "#999",
+                      color: newBill.type === "expense" ? "#D6724B" : "#999",
                       fontWeight: "bold",
                     }}
                   >
                     支出
                   </button>
                   <button
-                    onClick={() =>
-                      setNewBill({ ...newBill, type: "income" })
-                    }
+                    onClick={() => setNewBill({ ...newBill, type: "income" })}
                     style={{
                       flex: 1,
                       padding: "10px",
@@ -33247,8 +32715,7 @@ const T9Page = () => {
                           : "1px solid #eee",
                       background:
                         newBill.type === "income" ? "#E8F1ED" : "#fff",
-                      color:
-                        newBill.type === "income" ? "#5A8F6D" : "#999",
+                      color: newBill.type === "income" ? "#5A8F6D" : "#999",
                       fontWeight: "bold",
                     }}
                   >
@@ -33384,11 +32851,32 @@ const T9Page = () => {
         <>
           <div
             className="t9-companion-mask"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              zIndex: 1000,
+              backdropFilter: "blur(2px)",
+            }}
             onClick={() => setShowGuessGame(false)}
           ></div>
           <div
-            className="t9-companion-modal"
-            style={{ background: "#FDFCF8", padding: "24px" }}
+            className="t9-companion-modal no-scrollbar"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "85vh",
+              overflowY: "auto",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              padding: "24px",
+              zIndex: 1001,
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
+              animation: "slideUp 0.3s ease-out",
+              background: "#FDFCF8",
+            }}
           >
             <div
               style={{
@@ -33480,9 +32968,7 @@ const T9Page = () => {
                     {guessState.charScore}
                   </div>
                 </div>
-                <div
-                  style={{ width: "1px", background: "#EAEAEA" }}
-                ></div>
+                <div style={{ width: "1px", background: "#EAEAEA" }}></div>
                 <div style={{ textAlign: "center" }}>
                   <div style={{ fontSize: "12px", color: "#8C917B" }}>
                     我 ({mePersona?.name || "玩家"})
@@ -33563,9 +33049,7 @@ const T9Page = () => {
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
-                      cursor: isGuessGenerating
-                        ? "not-allowed"
-                        : "pointer",
+                      cursor: isGuessGenerating ? "not-allowed" : "pointer",
                       boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
                     }}
                   >
@@ -33626,7 +33110,7 @@ const T9Page = () => {
               ) : (
                 <>
                   {guessState.turn === "user" &&
-                    guessState.status === "idle" ? (
+                  guessState.status === "idle" ? (
                     <textarea
                       value={guessInput}
                       onChange={(e) => setGuessInput(e.target.value)}
@@ -33715,7 +33199,7 @@ const T9Page = () => {
                 >
                   {taCharacter?.avatar ? (
                     typeof taCharacter.avatar === "string" &&
-                      taCharacter.avatar.startsWith("data:image") ? (
+                    taCharacter.avatar.startsWith("data:image") ? (
                       <img
                         src={taCharacter.avatar}
                         style={{
@@ -33727,9 +33211,7 @@ const T9Page = () => {
                     ) : (
                       <T8AvatarLoader
                         avatarId={taCharacter.avatar}
-                        fallbackColor={
-                          taCharacter?.avatarColor || "#D6724B"
-                        }
+                        fallbackColor={taCharacter?.avatarColor || "#D6724B"}
                       />
                     )
                   ) : (
@@ -33743,7 +33225,7 @@ const T9Page = () => {
 
               <div style={{ flex: 1, padding: "0 15px" }}>
                 {guessState.status === "judged" &&
-                  guessState.turn === "char" ? (
+                guessState.turn === "char" ? (
                   <button
                     onClick={() => handleNextTurn()}
                     className="active-press"
@@ -33881,16 +33363,14 @@ const T9Page = () => {
                     mePersona?.name[0] || "我"
                   )}
                 </div>
-                <span style={{ fontSize: "10px", color: "#8C917B" }}>
-                  我
-                </span>
+                <span style={{ fontSize: "10px", color: "#8C917B" }}>我</span>
               </div>
             </div>
           </div>
         </>
       )}
       {/* ================== [结束] 我问你猜互动弹窗 ================== */}
-    </div>
+    </>
   );
 };
 
@@ -34020,9 +33500,7 @@ const T13Header = () => (
       <button className="active-press p-1">
         <i className="ph ph-list text-2xl"></i>
       </button>
-      <h1 className="text-xl font-medium tracking-wide opacity-90">
-        休闲一刻
-      </h1>
+      <h1 className="text-xl font-medium tracking-wide opacity-90">休闲一刻</h1>
     </div>
 
     <div className="bg-white/95 h-12 rounded-xl flex items-center px-4 shadow-[var(--shadow-soft)] active-press transition-all mb-4">
@@ -34052,15 +33530,17 @@ const T13TabSection = ({ activeTab, setActiveTab }) => (
             className={`
                                                                                                                                         flex-1 h-14 rounded-2xl flex items-center justify-center gap-2 text-sm font-medium shadow-[var(--shadow-soft)]
                                                                                                                                         active-press transition-all duration-300 border border-white/50
-                                                                                                                                        ${isActive
-                ? "bg-[var(--accent-primary)] text-white shadow-[var(--shadow-button)] transform -translate-y-1"
-                : "bg-white text-[var(--text-main)]"
-              }
+                                                                                                                                        ${
+                                                                                                                                          isActive
+                                                                                                                                            ? "bg-[var(--accent-primary)] text-white shadow-[var(--shadow-button)] transform -translate-y-1"
+                                                                                                                                            : "bg-white text-[var(--text-main)]"
+                                                                                                                                        }
                                                                                                                                       `}
           >
             <i
-              className={`ph ${tab.icon} text-lg ${isActive ? "opacity-100" : "opacity-60"
-                }`}
+              className={`ph ${tab.icon} text-lg ${
+                isActive ? "opacity-100" : "opacity-60"
+              }`}
             ></i>
             {tab.name}
           </button>
@@ -34124,11 +33604,11 @@ const T13BottomNav = () => {
             className="flex flex-col items-center justify-center gap-1 w-16 h-full active-press relative"
           >
             <i
-              className={`ph ${isActive ? item.icon + "-fill" : item.icon
-                } text-2xl transition-colors ${isActive
-                  ? "text-[var(--accent-primary)]"
-                  : "text-gray-400"
-                }`}
+              className={`ph ${
+                isActive ? item.icon + "-fill" : item.icon
+              } text-2xl transition-colors ${
+                isActive ? "text-[var(--accent-primary)]" : "text-gray-400"
+              }`}
             ></i>
             {isActive && (
               <span className="absolute -bottom-1 w-1 h-1 bg-[var(--accent-primary)] rounded-full"></span>
@@ -34261,14 +33741,7 @@ const loadAnalyses = async () => {
 
 const T13StatisticsPage = ({ onBack }) => {
   const { useState, useEffect, useRef } = React;
-  const industries = [
-    "农业",
-    "林业",
-    "畜牧业",
-    "手工业",
-    "渔业",
-    "调味制造业",
-  ];
+  const industries = ["农业", "林业", "畜牧业", "手工业", "渔业", "调味制造业"];
   const allProvinces = [
     "冀州",
     "徐州",
@@ -34316,10 +33789,7 @@ const T13StatisticsPage = ({ onBack }) => {
       const storedData = await loadData();
       if (storedData) {
         // 确保 heights 是正确的对象结构
-        if (
-          storedData.heights &&
-          typeof storedData.heights === "object"
-        ) {
+        if (storedData.heights && typeof storedData.heights === "object") {
           // 检查是否所有产业都有数据
           const validHeights = { ...storedData.heights };
           industries.forEach((industry) => {
@@ -34332,8 +33802,7 @@ const T13StatisticsPage = ({ onBack }) => {
           });
           setHeights(validHeights);
         }
-        if (storedData.customItems)
-          setCustomItems(storedData.customItems);
+        if (storedData.customItems) setCustomItems(storedData.customItems);
         if (storedData.idx !== undefined)
           setIdx(Math.min(storedData.idx, industries.length - 1));
       }
@@ -34548,10 +34017,7 @@ const T13StatisticsPage = ({ onBack }) => {
               saveAnalysis({
                 province,
                 industry: industries[idx],
-                value:
-                  heights[industries[idx]][
-                  allProvinces.indexOf(province)
-                  ],
+                value: heights[industries[idx]][allProvinces.indexOf(province)],
                 content: reply,
               });
             } catch (e) {
@@ -34577,7 +34043,53 @@ const T13StatisticsPage = ({ onBack }) => {
 
   return (
     <div className="stats-page-container fade-in">
-      {/* 分析弹窗 */}
+      {/* 顶部清晰返回导航栏 */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "16px 20px 8px",
+          width: "100%",
+          zIndex: 100,
+          position: "relative",
+        }}
+      >
+        <div
+          className="back-btn active-press"
+          onClick={onBack}
+          style={{
+            width: "36px",
+            height: "36px",
+            borderRadius: "50%",
+            background: "rgba(255, 255, 255, 0.9)",
+            backdropFilter: "blur(8px)",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+          }}
+        >
+          <iconify-icon
+            icon="line-md:arrow-left"
+            style={{ fontSize: "20px", color: "#5a5f4d" }}
+          ></iconify-icon>
+        </div>
+        <div
+          style={{
+            fontSize: "16px",
+            fontWeight: "bold",
+            color: "#5a5f4d",
+            letterSpacing: "1px",
+          }}
+        >
+          州郡统计年表
+        </div>
+        <div style={{ width: "36px" }}></div>
+      </div>
+
+      {/* 弹窗 */}
       {showAnalysisModal && (
         <div
           style={{
@@ -34768,9 +34280,7 @@ const T13StatisticsPage = ({ onBack }) => {
               {">"}
             </span>
           </div>
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "15px" }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
             {/* 加载/同步按钮 */}
             <div
               onClick={handleAiUpdate}
@@ -34782,9 +34292,7 @@ const T13StatisticsPage = ({ onBack }) => {
             >
               <iconify-icon
                 icon={
-                  isAiLoading
-                    ? "line-md:loading-twotone-loop"
-                    : "line-md:gauge"
+                  isAiLoading ? "line-md:loading-twotone-loop" : "line-md:gauge"
                 }
                 style={{ fontSize: "28px" }}
               ></iconify-icon>
@@ -35056,10 +34564,7 @@ const CountyMapViewer = ({ regionName, countyName, mapData, onBack }) => {
     vegetation.forEach((veg, index) => {
       const vegGroup = vegetationGroup
         .append("g")
-        .attr(
-          "transform",
-          `translate(${xScale(veg.x)}, ${yScale(veg.y)})`,
-        );
+        .attr("transform", `translate(${xScale(veg.x)}, ${yScale(veg.y)})`);
 
       if (veg.type === "tree") {
         // 绘制树
@@ -35116,10 +34621,7 @@ const CountyMapViewer = ({ regionName, countyName, mapData, onBack }) => {
       .enter()
       .append("g")
       .attr("class", "node")
-      .attr(
-        "transform",
-        (d) => `translate(${xScale(d.x)}, ${yScale(d.y)})`,
-      )
+      .attr("transform", (d) => `translate(${xScale(d.x)}, ${yScale(d.y)})`)
       .style("cursor", "pointer")
       .on("click", function (event, d) {
         event.stopPropagation();
@@ -35154,20 +34656,14 @@ const CountyMapViewer = ({ regionName, countyName, mapData, onBack }) => {
           type.includes("军营")
         )
           return "#8AA6C1";
-        if (
-          type.includes("酒") ||
-          type.includes("客栈") ||
-          type.includes("坊")
-        )
+        if (type.includes("酒") || type.includes("客栈") || type.includes("坊"))
           return "#E8C3A8";
         return "#A8C8BA"; // 默认如布庄、药铺、寺庙
       })
       .attr("stroke", (d) =>
         d.owner && d.owner.trim() !== "" ? "#FFD93D" : "#fff",
       )
-      .attr("stroke-width", (d) =>
-        d.owner && d.owner.trim() !== "" ? 3 : 2,
-      )
+      .attr("stroke-width", (d) => (d.owner && d.owner.trim() !== "" ? 3 : 2))
       .style("filter", "drop-shadow(0 4px 6px rgba(0,0,0,0.15))");
 
     // 中心类型字
@@ -35466,20 +34962,13 @@ const T13MapPage = ({ onBack }) => {
                     let x, y;
 
                     while (!valid && attempts < 50) {
-                      x = Math.min(
-                        90,
-                        Math.max(10, Math.random() * 80 + 10),
-                      );
-                      y = Math.min(
-                        90,
-                        Math.max(10, Math.random() * 80 + 10),
-                      );
+                      x = Math.min(90, Math.max(10, Math.random() * 80 + 10));
+                      y = Math.min(90, Math.max(10, Math.random() * 80 + 10));
 
                       valid = true;
                       for (const coord of coordinates) {
                         const distance = Math.sqrt(
-                          Math.pow(x - coord.x, 2) +
-                          Math.pow(y - coord.y, 2),
+                          Math.pow(x - coord.x, 2) + Math.pow(y - coord.y, 2),
                         );
                         if (distance < minDistance) {
                           valid = false;
@@ -35494,9 +34983,7 @@ const T13MapPage = ({ onBack }) => {
                   return coordinates;
                 };
 
-                const coordinates = generateSparseCoordinates(
-                  data.length,
-                );
+                const coordinates = generateSparseCoordinates(data.length);
                 data.forEach((d, index) => {
                   d.x = coordinates[index].x;
                   d.y = coordinates[index].y;
@@ -35751,14 +35238,7 @@ const T13MapPage = ({ onBack }) => {
       points: "400,120 490,130 470,200 380,220",
       center: { x: 430, y: 165 },
       desc: "临海产盐，黄巾发源。治所：临淄。",
-      counties: [
-        "平原郡",
-        "济南国",
-        "乐安国",
-        "北海国",
-        "东莱郡",
-        "齐国",
-      ],
+      counties: ["平原郡", "济南国", "乐安国", "北海国", "东莱郡", "齐国"],
     },
     {
       id: "司隶",
@@ -35856,14 +35336,7 @@ const T13MapPage = ({ onBack }) => {
       points: "300,350 450,320 480,480 380,420",
       center: { x: 390, y: 390 },
       desc: "水乡泽国，江东基业。治所：历阳。",
-      counties: [
-        "九江郡",
-        "庐江郡",
-        "丹阳郡",
-        "吴郡",
-        "豫章郡",
-        "会稽郡",
-      ],
+      counties: ["九江郡", "庐江郡", "丹阳郡", "吴郡", "豫章郡", "会稽郡"],
     },
     {
       id: "交州",
@@ -36006,9 +35479,7 @@ const T13MapPage = ({ onBack }) => {
       </div>
 
       {/* 操作按钮区 */}
-      <div
-        style={{ display: "flex", gap: "12px", padding: "0 24px 10px" }}
-      >
+      <div style={{ display: "flex", gap: "12px", padding: "0 24px 10px" }}>
         <button
           onClick={() => {
             setSelectionMode("start");
@@ -36019,13 +35490,8 @@ const T13MapPage = ({ onBack }) => {
             padding: "12px",
             borderRadius: "20px",
             background:
-              selectionMode === "start" || startPoint
-                ? "#B8BEDD"
-                : "#D6DF9C",
-            color:
-              selectionMode === "start" || startPoint
-                ? "#fff"
-                : "#4A453D",
+              selectionMode === "start" || startPoint ? "#B8BEDD" : "#D6DF9C",
+            color: selectionMode === "start" || startPoint ? "#fff" : "#4A453D",
             border: "none",
             fontWeight: "bold",
             fontSize: "14px",
@@ -36090,12 +35556,8 @@ const T13MapPage = ({ onBack }) => {
                     cursor: "pointer",
                     transition: "all 0.3s ease",
                   }}
-                  onMouseEnter={(e) =>
-                    (e.target.style.background = "#F2EFDE")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.target.style.background = "none")
-                  }
+                  onMouseEnter={(e) => (e.target.style.background = "#F2EFDE")}
+                  onMouseLeave={(e) => (e.target.style.background = "none")}
                 >
                   {option.name}
                 </button>
@@ -36114,17 +35576,14 @@ const T13MapPage = ({ onBack }) => {
             borderRadius: "20px",
             background:
               selectionMode === "end" || endPoint ? "#B8BEDD" : "#A1CDA8",
-            color:
-              selectionMode === "end" || endPoint ? "#fff" : "#4A453D",
+            color: selectionMode === "end" || endPoint ? "#fff" : "#4A453D",
             border: "none",
             fontWeight: "bold",
             fontSize: "14px",
             boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
           }}
         >
-          {endPoint
-            ? `${endPoint.region}·${endPoint.county}`
-            : "终点选择"}
+          {endPoint ? `${endPoint.region}·${endPoint.county}` : "终点选择"}
         </button>
       </div>
 
@@ -36304,9 +35763,7 @@ const T13MapPage = ({ onBack }) => {
               </button>
             </div>
             <div style={{ marginBottom: "16px" }}>
-              <span style={{ fontSize: "14px", color: "#8C917B" }}>
-                州：
-              </span>
+              <span style={{ fontSize: "14px", color: "#8C917B" }}>州：</span>
               <span
                 style={{
                   fontSize: "16px",
@@ -36434,7 +35891,7 @@ const T13MapPage = ({ onBack }) => {
                 style={{
                   background:
                     routeData.feasible.includes("否") ||
-                      routeData.feasible.includes("危险")
+                    routeData.feasible.includes("危险")
                       ? "#F2D0D0"
                       : "#D6EAD6",
                   color: "#5A5F4D",
@@ -36561,65 +36018,57 @@ const T13MapPage = ({ onBack }) => {
             </div>
           </div>
         ) : /* 情况B：点击地图区域显示的默认详情 */
-          activeRegion && !showCountyModal ? (
-            <>
-              <div className="map-info-title">
-                <span
-                  style={{
-                    fontSize: "32px",
-                    fontFamily: '"Zhi Mang Xing", serif',
-                    color: activeRegion.color,
-                    filter: "saturate(0.8) brightness(0.6)",
-                  }}
-                >
-                  {activeRegion.name}
-                </span>
-                <span className="map-info-tag">汉十三州</span>
-              </div>
-              <div
+        activeRegion && !showCountyModal ? (
+          <>
+            <div className="map-info-title">
+              <span
                 style={{
-                  fontSize: "15px",
-                  color: "#8C917B",
-                  lineHeight: "1.8",
-                  marginTop: "16px",
+                  fontSize: "32px",
+                  fontFamily: '"Zhi Mang Xing", serif',
+                  color: activeRegion.color,
+                  filter: "saturate(0.8) brightness(0.6)",
                 }}
               >
-                {activeRegion.desc}
-              </div>
+                {activeRegion.name}
+              </span>
+              <span className="map-info-tag">汉十三州</span>
+            </div>
+            <div
+              style={{
+                fontSize: "15px",
+                color: "#8C917B",
+                lineHeight: "1.8",
+                marginTop: "16px",
+              }}
+            >
+              {activeRegion.desc}
+            </div>
 
-              <div style={{ marginTop: "20px" }}>
-                <button
-                  onClick={() => setShowCountyModal(true)}
-                  style={{
-                    padding: "12px 24px",
-                    borderRadius: "12px",
-                    background: activeRegion.color,
-                    color: "#fff",
-                    border: "none",
-                    fontWeight: "bold",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                    transition: "all 0.3s ease",
-                  }}
-                  onMouseEnter={(e) =>
-                    (e.target.style.transform = "scale(1.05)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.target.style.transform = "scale(1)")
-                  }
-                  onMouseDown={(e) =>
-                    (e.target.style.transform = "scale(0.95)")
-                  }
-                  onMouseUp={(e) =>
-                    (e.target.style.transform = "scale(1.05)")
-                  }
-                >
-                  查看郡县
-                </button>
-              </div>
-            </>
-          ) : null}
+            <div style={{ marginTop: "20px" }}>
+              <button
+                onClick={() => setShowCountyModal(true)}
+                style={{
+                  padding: "12px 24px",
+                  borderRadius: "12px",
+                  background: activeRegion.color,
+                  color: "#fff",
+                  border: "none",
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                  transition: "all 0.3s ease",
+                }}
+                onMouseEnter={(e) => (e.target.style.transform = "scale(1.05)")}
+                onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}
+                onMouseDown={(e) => (e.target.style.transform = "scale(0.95)")}
+                onMouseUp={(e) => (e.target.style.transform = "scale(1.05)")}
+              >
+                查看郡县
+              </button>
+            </div>
+          </>
+        ) : null}
       </div>
 
       {isGeneratingMap && (
@@ -36656,20 +36105,17 @@ const T13MapPage = ({ onBack }) => {
         </div>
       )}
 
-      {showCountyMap &&
-        countyMapData &&
-        selectedCounty &&
-        activeRegion && (
-          <CountyMapViewer
-            regionName={activeRegion.name}
-            countyName={selectedCounty}
-            mapData={countyMapData}
-            onBack={() => {
-              setShowCountyMap(false);
-              setCountyMapData(null);
-            }}
-          />
-        )}
+      {showCountyMap && countyMapData && selectedCounty && activeRegion && (
+        <CountyMapViewer
+          regionName={activeRegion.name}
+          countyName={selectedCounty}
+          mapData={countyMapData}
+          onBack={() => {
+            setShowCountyMap(false);
+            setCountyMapData(null);
+          }}
+        />
+      )}
     </div>
   );
 };
@@ -36716,8 +36162,7 @@ const T13FortunePage = ({ onBack }) => {
   const [dashedText, setDashedText] = useState("");
   const [isEditingText, setIsEditingText] = useState(false);
 
-  const isAllSelected =
-    pieces[0].color && pieces[1].text && pieces[2].pattern;
+  const isAllSelected = pieces[0].color && pieces[1].text && pieces[2].pattern;
   const [isGenerating, setIsGenerating] = useState(false);
   const [fortuneResult, setFortuneResult] = useState(null);
   const [showCharacterSelect, setShowCharacterSelect] = useState(false);
@@ -36770,7 +36215,7 @@ const T13FortunePage = ({ onBack }) => {
             userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "无"}, 背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       const profile = char.profile || {};
       const charContext = `【角色设定】\n姓名:${char.name}\n性别:${profile.gender || "未知"}\nMBTI:${profile.mbti || "无"}\n星座:${profile.constellation || "无"}\n性格:${profile.personality || "无"}\n背景:${profile.background || "无"}\n说话风格:${profile.style || "无"}`;
@@ -36832,11 +36277,8 @@ const T13FortunePage = ({ onBack }) => {
 
   const handleGenerateFortune = async () => {
     if (!isAllSelected)
-      return alert(
-        "请先点击三个图形，完成天时、地利、人和盘的属性选择！",
-      );
-    if (!dashedText.trim())
-      return alert("请在下方虚线处输入您想卜问之事！");
+      return alert("请先点击三个图形，完成天时、地利、人和盘的属性选择！");
+    if (!dashedText.trim()) return alert("请在下方虚线处输入您想卜问之事！");
 
     setIsGenerating(true);
     try {
@@ -36873,9 +36315,7 @@ const T13FortunePage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const data = JSON.parse(
-                reply.replace(/```json|```/g, "").trim(),
-              );
+              const data = JSON.parse(reply.replace(/```json|```/g, "").trim());
               setFortuneResult(data);
             } catch (e) {
               console.error("解析失败", e, reply);
@@ -37054,9 +36494,7 @@ const T13FortunePage = ({ onBack }) => {
               fontSize: "12px",
               color: "#fff",
               fontWeight: "bold",
-              boxShadow: fortuneResult
-                ? "0 2px 4px rgba(0,0,0,0.1)"
-                : "none",
+              boxShadow: fortuneResult ? "0 2px 4px rgba(0,0,0,0.1)" : "none",
             }}
           >
             {fortuneResult ? "请人解签" : "请先占卜"}
@@ -37279,9 +36717,7 @@ const T13FortunePage = ({ onBack }) => {
                       <path
                         d={paths[i]}
                         fill={
-                          i === 0 && p.color
-                            ? p.color
-                            : "rgba(255,255,255,0.4)"
+                          i === 0 && p.color ? p.color : "rgba(255,255,255,0.4)"
                         }
                         stroke="white"
                         strokeWidth="2"
@@ -37369,10 +36805,7 @@ const T13FortunePage = ({ onBack }) => {
                       const centerX = rect.left + rect.width / 2;
                       const centerY = rect.top + rect.height / 2;
                       const angle =
-                        (Math.atan2(
-                          e.clientY - centerY,
-                          e.clientX - centerX,
-                        ) *
+                        (Math.atan2(e.clientY - centerY, e.clientX - centerX) *
                           180) /
                         Math.PI;
                       const normalizedAngle = (angle + 90 + 360) % 360;
@@ -37431,9 +36864,7 @@ const T13FortunePage = ({ onBack }) => {
                       }}
                       onClick={() => {
                         setPieces((prev) =>
-                          prev.map((p) =>
-                            p.id === 1 ? { ...p, text: n } : p,
-                          ),
+                          prev.map((p) => (p.id === 1 ? { ...p, text: n } : p)),
                         );
                         setShowNumPicker(false);
                       }}
@@ -37448,9 +36879,7 @@ const T13FortunePage = ({ onBack }) => {
         </div>
 
         {/* 虚线与文本输入 */}
-        <div
-          style={{ display: "flex", alignItems: "center", gap: "10px" }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
           <div
             style={{
               flex: 1,
@@ -37499,9 +36928,7 @@ const T13FortunePage = ({ onBack }) => {
           </div>
           <div
             onClick={handleGenerateFortune}
-            disabled={
-              !isAllSelected || !dashedText.trim() || isGenerating
-            }
+            disabled={!isAllSelected || !dashedText.trim() || isGenerating}
             style={{
               width: "40px",
               height: "40px",
@@ -37892,9 +37319,7 @@ const T13EmperorPage = ({ onBack }) => {
         if (window.chatCharacterStore) {
           allChars = await window.chatCharacterStore.getAll();
         } else {
-          allChars = JSON.parse(
-            localStorage.getItem("t8_chat_list") || "[]",
-          );
+          allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
         }
         // 过滤掉群组和装饰组件
         const validChars = allChars.filter(
@@ -37966,7 +37391,7 @@ const T13EmperorPage = ({ onBack }) => {
             userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "无"}, 背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       const profile = char.profile || {};
       const charContext = `【传信角色设定】\n姓名:${char.name}\n性别:${profile.gender || "未知"}\nMBTI:${profile.mbti || "无"}\n星座:${profile.constellation || "无"}\n性格:${profile.personality || "无"}\n背景:${profile.background || "无"}\n说话风格:${profile.style || "无"}`;
@@ -38037,8 +37462,7 @@ const T13EmperorPage = ({ onBack }) => {
                   0,
                   Math.min(
                     100,
-                    prev.patience +
-                    (data.patienceChange || 0) * scaleFactor,
+                    prev.patience + (data.patienceChange || 0) * scaleFactor,
                   ),
                 ),
                 puppet: Math.max(
@@ -38051,14 +37475,10 @@ const T13EmperorPage = ({ onBack }) => {
               }));
 
               // 更新白色显示框的内容
-              setDisplayText(
-                `【${char.name}的带信回执】：\n\n${data.reply}`,
-              );
+              setDisplayText(`【${char.name}的带信回执】：\n\n${data.reply}`);
             } catch (e) {
               console.error("AI 响应解析失败", e, reply);
-              setDisplayText(
-                "信件在途中遭遇盘查丢失了，解析失败，请重试。",
-              );
+              setDisplayText("信件在途中遭遇盘查丢失了，解析失败，请重试。");
             } finally {
               setIsLoading(false);
             }
@@ -38089,15 +37509,50 @@ const T13EmperorPage = ({ onBack }) => {
 
   return (
     <div className="emperor-bg fade-in">
-      {/* 返回按钮 */}
+      {/* 顶部清晰返回导航栏 */}
       <div
-        style={{ position: "absolute", top: 15, right: 15, zIndex: 100 }}
-        onClick={onBack}
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "16px 20px 8px",
+          width: "100%",
+          zIndex: 100,
+          position: "relative",
+        }}
       >
-        <iconify-icon
-          icon="line-md:close-circle"
-          style={{ fontSize: "24px", color: "#fff" }}
-        ></iconify-icon>
+        <div
+          className="back-btn active-press"
+          onClick={onBack}
+          style={{
+            width: "36px",
+            height: "36px",
+            borderRadius: "50%",
+            background: "rgba(255, 255, 255, 0.9)",
+            backdropFilter: "blur(8px)",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+          }}
+        >
+          <iconify-icon
+            icon="line-md:arrow-left"
+            style={{ fontSize: "20px", color: "#5a5f4d" }}
+          ></iconify-icon>
+        </div>
+        <div
+          style={{
+            fontSize: "16px",
+            fontWeight: "bold",
+            color: "#5a5f4d",
+            letterSpacing: "1px",
+          }}
+        >
+          献帝晴雨表
+        </div>
+        <div style={{ width: "36px" }}></div>
       </div>
 
       {/* 顶部数值与头像区 */}
@@ -38133,18 +37588,9 @@ const T13EmperorPage = ({ onBack }) => {
           </button>
         </div>
         <div className="traffic-lights">
-          <div
-            className="light"
-            style={{ backgroundColor: "#FF6B6B" }}
-          ></div>
-          <div
-            className="light"
-            style={{ backgroundColor: "#FFD93D" }}
-          ></div>
-          <div
-            className="light"
-            style={{ backgroundColor: "#95B8A3" }}
-          ></div>
+          <div className="light" style={{ backgroundColor: "#FF6B6B" }}></div>
+          <div className="light" style={{ backgroundColor: "#FFD93D" }}></div>
+          <div className="light" style={{ backgroundColor: "#95B8A3" }}></div>
         </div>
       </div>
 
@@ -38323,18 +37769,10 @@ const T13EmperorPage = ({ onBack }) => {
               "transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
             boxShadow: "0 2px 8px rgba(255, 107, 107, 0.5)",
           }}
-          onMouseEnter={(e) =>
-            (e.currentTarget.style.transform = "scale(1.2)")
-          }
-          onMouseLeave={(e) =>
-            (e.currentTarget.style.transform = "scale(1)")
-          }
-          onMouseDown={(e) =>
-            (e.currentTarget.style.transform = "scale(0.9)")
-          }
-          onMouseUp={(e) =>
-            (e.currentTarget.style.transform = "scale(1.2)")
-          }
+          onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.2)")}
+          onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+          onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.9)")}
+          onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1.2)")}
         ></div>
 
         {/* 前后键按钮 - 用于切换情报 */}
@@ -38354,9 +37792,7 @@ const T13EmperorPage = ({ onBack }) => {
                 applyPieChange(politicalNews[prevIndex].pieChange);
               }
             }}
-            disabled={
-              politicalNews.length === 0 || currentNewsIndex === 0
-            }
+            disabled={politicalNews.length === 0 || currentNewsIndex === 0}
             style={{
               width: "24px",
               height: "24px",
@@ -38405,17 +37841,17 @@ const T13EmperorPage = ({ onBack }) => {
               border: "1px solid #8c917b",
               background:
                 politicalNews.length > 0 &&
-                  currentNewsIndex < politicalNews.length - 1
+                currentNewsIndex < politicalNews.length - 1
                   ? "#fff"
                   : "rgba(255,255,255,0.5)",
               color:
                 politicalNews.length > 0 &&
-                  currentNewsIndex < politicalNews.length - 1
+                currentNewsIndex < politicalNews.length - 1
                   ? "#8c917b"
                   : "rgba(140,145,123,0.5)",
               cursor:
                 politicalNews.length > 0 &&
-                  currentNewsIndex < politicalNews.length - 1
+                currentNewsIndex < politicalNews.length - 1
                   ? "pointer"
                   : "not-allowed",
               display: "flex",
@@ -38465,9 +37901,7 @@ const T13EmperorPage = ({ onBack }) => {
                 marginBottom: "15px",
               }}
             >
-              <h3
-                style={{ margin: 0, fontSize: "16px", color: "#8c917b" }}
-              >
+              <h3 style={{ margin: 0, fontSize: "16px", color: "#8c917b" }}>
                 请选择为您传信的角色
               </h3>
               <button
@@ -38516,8 +37950,7 @@ const T13EmperorPage = ({ onBack }) => {
                       {char.name}
                     </div>
                     <div style={{ fontSize: "12px", color: "#999" }}>
-                      {char.profile?.personality?.substring(0, 8) ||
-                        "无设定"}
+                      {char.profile?.personality?.substring(0, 8) || "无设定"}
                     </div>
                   </div>
                 ))
@@ -38703,28 +38136,16 @@ const T13GamblingPage = ({ onBack }) => {
         <div className="tg-square" style={{ right: "30px", top: "30px" }}>
           🐟
         </div>
-        <div
-          className="tg-square"
-          style={{ left: "30px", bottom: "30px" }}
-        >
+        <div className="tg-square" style={{ left: "30px", bottom: "30px" }}>
           🐟
         </div>
-        <div
-          className="tg-square"
-          style={{ right: "30px", bottom: "30px" }}
-        >
+        <div className="tg-square" style={{ right: "30px", bottom: "30px" }}>
           🐟
         </div>
 
         {/* 四个大圆球 */}
-        <div
-          className="tg-circle"
-          style={{ left: "65px", top: "95px" }}
-        ></div>
-        <div
-          className="tg-circle"
-          style={{ right: "65px", top: "95px" }}
-        ></div>
+        <div className="tg-circle" style={{ left: "65px", top: "95px" }}></div>
+        <div className="tg-circle" style={{ right: "65px", top: "95px" }}></div>
         <div
           className="tg-circle"
           style={{ left: "65px", bottom: "95px" }}
@@ -38735,18 +38156,9 @@ const T13GamblingPage = ({ onBack }) => {
         ></div>
 
         {/* 红色阵列 - 纵向中轴 */}
-        <div
-          className="tg-pill"
-          style={{ left: "164px", top: "10px" }}
-        ></div>
-        <div
-          className="tg-pill v"
-          style={{ left: "155px", top: "35px" }}
-        ></div>
-        <div
-          className="tg-pill v"
-          style={{ left: "155px", top: "75px" }}
-        ></div>
+        <div className="tg-pill" style={{ left: "164px", top: "10px" }}></div>
+        <div className="tg-pill v" style={{ left: "155px", top: "35px" }}></div>
+        <div className="tg-pill v" style={{ left: "155px", top: "75px" }}></div>
 
         {/* 底部中轴 */}
         <div
@@ -38757,10 +38169,7 @@ const T13GamblingPage = ({ onBack }) => {
           className="tg-pill v"
           style={{ left: "170px", bottom: "75px" }}
         ></div>
-        <div
-          className="tg-pill"
-          style={{ left: "170px", top: "225px" }}
-        ></div>
+        <div className="tg-pill" style={{ left: "170px", top: "225px" }}></div>
         <div
           className="tg-pill"
           style={{ left: "135px", bottom: "15px" }}
@@ -38771,14 +38180,8 @@ const T13GamblingPage = ({ onBack }) => {
           className="tg-pill"
           style={{ left: "10px", top: "155px", width: "20px" }}
         ></div>
-        <div
-          className="tg-pill"
-          style={{ left: "35px", top: "175px" }}
-        ></div>
-        <div
-          className="tg-pill"
-          style={{ left: "70px", top: "175px" }}
-        ></div>
+        <div className="tg-pill" style={{ left: "35px", top: "175px" }}></div>
+        <div className="tg-pill" style={{ left: "70px", top: "175px" }}></div>
         <div
           className="tg-pill v"
           style={{ left: "115px", top: "145px" }}
@@ -38792,14 +38195,8 @@ const T13GamblingPage = ({ onBack }) => {
           className="tg-pill v"
           style={{ right: "15px", top: "185px" }}
         ></div>
-        <div
-          className="tg-pill"
-          style={{ right: "40px", top: "175px" }}
-        ></div>
-        <div
-          className="tg-pill"
-          style={{ right: "75px", top: "175px" }}
-        ></div>
+        <div className="tg-pill" style={{ right: "40px", top: "175px" }}></div>
+        <div className="tg-pill" style={{ right: "75px", top: "175px" }}></div>
         <div
           className="tg-pill v"
           style={{ right: "115px", top: "135px" }}
@@ -38810,18 +38207,9 @@ const T13GamblingPage = ({ onBack }) => {
         ></div>
 
         {/* 补充细节：中心周围的小pill */}
-        <div
-          className="tg-pill"
-          style={{ left: "140px", top: "225px" }}
-        ></div>
-        <div
-          className="tg-pill"
-          style={{ right: "180px", top: "115px" }}
-        ></div>
-        <div
-          className="tg-pill"
-          style={{ right: "140px", top: "115px" }}
-        ></div>
+        <div className="tg-pill" style={{ left: "140px", top: "225px" }}></div>
+        <div className="tg-pill" style={{ right: "180px", top: "115px" }}></div>
+        <div className="tg-pill" style={{ right: "140px", top: "115px" }}></div>
       </div>
       <div
         style={{
@@ -38917,9 +38305,7 @@ const T13FlashcardPage = ({
 
   // 获取当前闪卡对应的颜色
   const getCardColor = () => {
-    return morandiColors[
-      (levelIndex + currentIndex) % morandiColors.length
-    ];
+    return morandiColors[(levelIndex + currentIndex) % morandiColors.length];
   };
 
   const cardColor = getCardColor();
@@ -38936,10 +38322,7 @@ const T13FlashcardPage = ({
 
   // 保存收藏状态
   React.useEffect(() => {
-    localStorage.setItem(
-      "flashcardFavorites",
-      JSON.stringify([...favorites]),
-    );
+    localStorage.setItem("flashcardFavorites", JSON.stringify([...favorites]));
   }, [favorites]);
 
   // 切换收藏状态
@@ -39052,9 +38435,7 @@ const T13FlashcardPage = ({
                       {currentCard.sentence}
                     </p>
                     <div className="w-32 h-10 bg-primary/10 border-2 border-dashed border-primary rounded-lg flex items-center justify-center">
-                      <span className="text-primary font-bold">
-                        _____
-                      </span>
+                      <span className="text-primary font-bold">_____</span>
                     </div>
                   </div>
                 ) : (
@@ -39158,9 +38539,7 @@ const T13FlashcardPage = ({
             className="flex-1 h-14 bg-gradient-to-br from-[#A8C8BA] to-[#8FA99D] text-white rounded-full flex items-center justify-center gap-2 shadow-lg shadow-[#A8C8BA]/40 active:scale-95 transition-transform"
           >
             <span className="text-sm font-semibold">
-              {currentIndex === flashcards.length - 1
-                ? "完成关卡"
-                : "下一张"}
+              {currentIndex === flashcards.length - 1 ? "完成关卡" : "下一张"}
             </span>
             <span className="material-symbols-outlined text-lg">
               {currentIndex === flashcards.length - 1
@@ -39190,8 +38569,7 @@ const T13LearningPage = ({ onBack }) => {
   const [newCourseLevel, setNewCourseLevel] = useState("一般");
 
   // 从 courses 派生当前课程的数据
-  const activeCourse =
-    courses.find((c) => c.id === activeCourseId) || null;
+  const activeCourse = courses.find((c) => c.id === activeCourseId) || null;
   const courseContent = activeCourse?.content || "";
   const courseLevel = activeCourse?.level || "一般";
   const selectedTeachers = activeCourse?.teachers || [];
@@ -39203,9 +38581,7 @@ const T13LearningPage = ({ onBack }) => {
   const updateActiveCourse = (updates) => {
     if (!activeCourseId) return;
     setCourses((prev) =>
-      prev.map((c) =>
-        c.id === activeCourseId ? { ...c, ...updates } : c,
-      ),
+      prev.map((c) => (c.id === activeCourseId ? { ...c, ...updates } : c)),
     );
   };
 
@@ -39276,11 +38652,7 @@ const T13LearningPage = ({ onBack }) => {
         isToday: date.toLocaleDateString() === today.toLocaleDateString(),
         isPast:
           date <
-          new Date(
-            today.getFullYear(),
-            today.getMonth(),
-            today.getDate(),
-          ),
+          new Date(today.getFullYear(), today.getMonth(), today.getDate()),
       };
     });
   };
@@ -39466,13 +38838,10 @@ const T13LearningPage = ({ onBack }) => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       const validChars = allChars.filter(
-        (c) =>
-          c && !String(c.id).startsWith("group") && c.type !== "decor",
+        (c) => c && !String(c.id).startsWith("group") && c.type !== "decor",
       );
 
       // 随机抽取最多3个已有角色，避免Token超长
@@ -39591,9 +38960,7 @@ const T13LearningPage = ({ onBack }) => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
 
       // 组装选中老师的详细 Prompt
@@ -39712,9 +39079,7 @@ const T13LearningPage = ({ onBack }) => {
                   learnedConcepts: [...learnedConcepts, ...newConcepts],
                 });
 
-                alert(
-                  `第 ${targetLevel} 关《${data.title}》已生成完毕！`,
-                );
+                alert(`第 ${targetLevel} 关《${data.title}》已生成完毕！`);
               } else {
                 throw new Error("数据结构不符");
               }
@@ -39768,30 +39133,26 @@ const T13LearningPage = ({ onBack }) => {
             userContext = `姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       // 3. 获取传讯列表中的角色
       let allChars = [];
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       const validChars = allChars.filter(
         (c) => !String(c.id).startsWith("group") && c.type !== "decor",
       );
       const charsInfo = validChars
         .map(
-          (c) =>
-            `【角色】${c.name} (性格:${c.profile?.personality || "未知"})`,
+          (c) => `【角色】${c.name} (性格:${c.profile?.personality || "未知"})`,
         )
         .join("; ");
 
       // 4. 构建 Prompt
-      const sysPrompt =
-        "你是一个东汉末年书院的教书先生兼幽默榜单生成器。";
+      const sysPrompt = "你是一个东汉末年书院的教书先生兼幽默榜单生成器。";
       const userPrompt = `
                     【世界设定】
                     ${worldContext}
@@ -39870,11 +39231,7 @@ const T13LearningPage = ({ onBack }) => {
 
   // 如果 leaderboardData 为空，初始化时尝试生成一次
   useEffect(() => {
-    if (
-      showLeaderboard &&
-      leaderboardData.length === 0 &&
-      !isGeneratingRank
-    ) {
+    if (showLeaderboard && leaderboardData.length === 0 && !isGeneratingRank) {
       generateLeaderboardData();
     }
   }, [showLeaderboard]);
@@ -39894,8 +39251,9 @@ const T13LearningPage = ({ onBack }) => {
 
       {/* --- 莫兰迪色侧边栏 --- */}
       <div
-        className={`fixed top-0 right-0 h-full w-64 bg-[#FDFCF8] shadow-[-10px_0_30px_rgba(0,0,0,0.1)] z-[70] transition-transform duration-300 ${isSidebarOpen ? "translate-x-0" : "translate-x-full"
-          } border-l border-[#EAE6D6] flex flex-col`}
+        className={`fixed top-0 right-0 h-full w-64 bg-[#FDFCF8] shadow-[-10px_0_30px_rgba(0,0,0,0.1)] z-[70] transition-transform duration-300 ${
+          isSidebarOpen ? "translate-x-0" : "translate-x-full"
+        } border-l border-[#EAE6D6] flex flex-col`}
       >
         <div className="p-5 flex justify-between items-center border-b border-[#EAE6D6] bg-white">
           <span className="font-bold text-[#5A5F4D] text-lg tracking-widest">
@@ -39917,9 +39275,7 @@ const T13LearningPage = ({ onBack }) => {
               setIsSidebarOpen(false);
             }}
           >
-            <span className="material-symbols-outlined">
-              auto_stories
-            </span>
+            <span className="material-symbols-outlined">auto_stories</span>
             切换/新建课程
           </button>
           <button
@@ -40089,9 +39445,7 @@ const T13LearningPage = ({ onBack }) => {
                 onClick={() => setShowTeacherModal(false)}
                 className="w-8 h-8 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#8C8C8C] active:scale-90 transition-transform"
               >
-                <span className="material-symbols-outlined text-sm">
-                  close
-                </span>
+                <span className="material-symbols-outlined text-sm">close</span>
               </button>
             </div>
           </div>
@@ -40114,8 +39468,7 @@ const T13LearningPage = ({ onBack }) => {
                     key={teacher.id}
                     className={`bg-white rounded-3xl p-5 shadow-sm border-2 flex flex-col relative cursor-pointer active:scale-[0.98] transition-all ${selectedTeachers.includes(teacher.id) ? "border-[#DFA9A9] bg-[#FFF5F5] shadow-md" : "border-[#EAE6D6] hover:border-[#DFA9A9]/50"}`}
                     onClick={() => {
-                      const currentTeachers =
-                        activeCourse?.teachers || [];
+                      const currentTeachers = activeCourse?.teachers || [];
                       if (currentTeachers.includes(teacher.id)) {
                         updateActiveCourse({
                           teachers: currentTeachers.filter(
@@ -40131,8 +39484,7 @@ const T13LearningPage = ({ onBack }) => {
                   >
                     <div className="flex items-center gap-4 mb-3">
                       <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-md shrink-0 bg-[#F2F7F4] flex items-center justify-center">
-                        {teacher.avatar &&
-                          teacher.avatar.startsWith("#") ? (
+                        {teacher.avatar && teacher.avatar.startsWith("#") ? (
                           <div
                             style={{
                               width: "100%",
@@ -40238,9 +39590,7 @@ const T13LearningPage = ({ onBack }) => {
                 className="absolute top-4 left-4 bg-white p-2 rounded-full shadow-md"
                 onClick={() => setShowLeaderboard(false)}
               >
-                <span className="material-symbols-outlined">
-                  arrow_back
-                </span>
+                <span className="material-symbols-outlined">arrow_back</span>
               </button>
               <div
                 className={`inline-flex items-center justify-center bg-[#A8DADC] text-[#2B4F60] px-6 py-2 rounded-full text-xs font-bold tracking-widest uppercase cursor-pointer active:scale-95 transition-transform ${isGeneratingRank ? "opacity-70" : ""}`}
@@ -40542,9 +39892,7 @@ const T13LearningPage = ({ onBack }) => {
                   当前研修
                 </span>
                 <h1 className="text-2xl font-extrabold text-on-primary-container mb-2 tracking-tight line-clamp-2">
-                  {courseContent
-                    ? courseContent
-                    : "请点击侧边栏 -> 选择课程"}
+                  {courseContent ? courseContent : "请点击侧边栏 -> 选择课程"}
                 </h1>
                 <p className="text-on-primary-container opacity-80 leading-relaxed text-sm font-bold">
                   {courseContent
@@ -40841,9 +40189,7 @@ const T13LearningPage = ({ onBack }) => {
                             ? colorObj.gradientFrom
                             : colorObj.bg,
                           border: `2px solid ${isSelected ? colorObj.border : "transparent"}`,
-                          transform: isSelected
-                            ? "translateY(-4px)"
-                            : "none",
+                          transform: isSelected ? "translateY(-4px)" : "none",
                           boxShadow: isSelected
                             ? `0 10px 25px ${colorObj.border}40`
                             : "0 4px 12px rgba(0,0,0,0.05)",
@@ -40878,8 +40224,7 @@ const T13LearningPage = ({ onBack }) => {
                           className="relative z-10 w-full py-2.5 bg-white/90 rounded-xl text-xs font-bold shadow-sm hover:bg-white flex justify-center items-center gap-1 transition-all"
                           style={{ color: colorObj.text }}
                         >
-                          回到主页{" "}
-                          <i className="ph-bold ph-arrow-right"></i>
+                          回到主页 <i className="ph-bold ph-arrow-right"></i>
                         </button>
                       </div>
                     );
@@ -40938,17 +40283,13 @@ const T13LearningPage = ({ onBack }) => {
                   {(() => {
                     // 安全索引约束
                     const safeIndex =
-                      reviewIndex >= favCardsToReview.length
-                        ? 0
-                        : reviewIndex;
+                      reviewIndex >= favCardsToReview.length ? 0 : reviewIndex;
                     const currentReviewCard = favCardsToReview[safeIndex];
 
                     return (
                       <div
                         className={`relative w-full h-full preserve-3d cursor-pointer ${isReviewFlipped ? "flip-active" : ""}`}
-                        onClick={() =>
-                          setIsReviewFlipped(!isReviewFlipped)
-                        }
+                        onClick={() => setIsReviewFlipped(!isReviewFlipped)}
                       >
                         {/* 正面 */}
                         <div className="absolute inset-0 backface-hidden bg-[#FDFCF8] rounded-3xl shadow-[0_12px_30px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center p-8 border-2 border-[#EAE6D6]">
@@ -41035,8 +40376,7 @@ const T13LearningPage = ({ onBack }) => {
                                       {currentReviewCard.teacherName[0]}
                                     </div>
                                     <span className="text-xs font-black text-[#D6724B]">
-                                      {currentReviewCard.teacherName}{" "}
-                                      讲道：
+                                      {currentReviewCard.teacherName} 讲道：
                                     </span>
                                   </div>
                                   <p className="text-[13px] text-[#5A5F4D] leading-relaxed relative z-10 font-medium">
@@ -41054,9 +40394,7 @@ const T13LearningPage = ({ onBack }) => {
                           >
                             <button
                               onClick={() =>
-                                handleRememberCard(
-                                  currentReviewCard.cardId,
-                                )
+                                handleRememberCard(currentReviewCard.cardId)
                               }
                               className="flex-1 py-4 bg-[#E8F1ED] text-[#5A8F6D] border-2 border-[#A8C8BA] rounded-2xl font-extrabold text-sm shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1.5"
                             >
@@ -41111,9 +40449,7 @@ const T13LearningPage = ({ onBack }) => {
                 onClick={() => setShowRankDetailModal(false)}
                 className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 active:scale-95"
               >
-                <span className="material-symbols-outlined text-sm">
-                  close
-                </span>
+                <span className="material-symbols-outlined text-sm">close</span>
               </button>
             </div>
 
@@ -41229,16 +40565,14 @@ const T13LearningPage = ({ onBack }) => {
                 近期钻研案卷
               </h4>
               <div className="flex flex-wrap gap-2">
-                {(selectedRankUser.recentCourses || []).map(
-                  (course, idx) => (
-                    <div
-                      key={idx}
-                      className="bg-white border border-[#EAEAEA] px-3 py-1.5 rounded-lg text-xs font-bold text-[#5A5F4D] shadow-sm"
-                    >
-                      《{course}》
-                    </div>
-                  ),
-                )}
+                {(selectedRankUser.recentCourses || []).map((course, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-white border border-[#EAEAEA] px-3 py-1.5 rounded-lg text-xs font-bold text-[#5A5F4D] shadow-sm"
+                  >
+                    《{course}》
+                  </div>
+                ))}
               </div>
             </div>
           </div>
@@ -41338,16 +40672,10 @@ const T13Page = ({
       {showGambling && (
         <T13GamblingPage onBack={() => setShowGambling(false)} />
       )}
-      {showStats && (
-        <T13StatisticsPage onBack={() => setShowStats(false)} />
-      )}
+      {showStats && <T13StatisticsPage onBack={() => setShowStats(false)} />}
       {showMap && <T13MapPage onBack={() => setShowMap(false)} />}
-      {showFortune && (
-        <T13FortunePage onBack={() => setShowFortune(false)} />
-      )}
-      {showEmperor && (
-        <T13EmperorPage onBack={() => setShowEmperor(false)} />
-      )}
+      {showFortune && <T13FortunePage onBack={() => setShowFortune(false)} />}
+      {showEmperor && <T13EmperorPage onBack={() => setShowEmperor(false)} />}
       {showLearning && (
         <T13LearningPage onBack={() => setShowLearning(false)} />
       )}
@@ -41355,10 +40683,7 @@ const T13Page = ({
         <T13Header />
 
         <main className="relative">
-          <T13TabSection
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-          />
+          <T13TabSection activeTab={activeTab} setActiveTab={setActiveTab} />
 
           <div className="pt-2 pb-8 min-h-[500px]">
             {currentContent.map((item) => (
@@ -41534,9 +40859,7 @@ const RelativeDeductionPage = ({ onBack }) => {
         if (window.chatCharacterStore) {
           chars = await window.chatCharacterStore.getAll();
         } else {
-          chars = JSON.parse(
-            localStorage.getItem("t8_chat_list") || "[]",
-          );
+          chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
         }
         // 过滤掉群组和装饰
         const validChars = chars.filter(
@@ -41579,7 +40902,7 @@ const RelativeDeductionPage = ({ onBack }) => {
             userContext = `【用户/导演设定】\n姓名:${activeUser.name}\n性格:${activeUser.personality || "未知"}\n背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       // 3. 获取演员设定
       const actorsInfo = selectedActors
@@ -41614,8 +40937,7 @@ const RelativeDeductionPage = ({ onBack }) => {
 
       // 【新增】：提取当前用户已上传的立绘和背景名称，告诉AI有哪些可用
       const availableBgs =
-        sceneConfig.backgrounds.map((b) => b.name).join("、") ||
-        "无特定背景";
+        sceneConfig.backgrounds.map((b) => b.name).join("、") || "无特定背景";
       const availableSprites =
         [...sceneConfig.mainSprites, ...sceneConfig.otherSprites]
           .map((s) => s.name)
@@ -41800,10 +41122,7 @@ const RelativeDeductionPage = ({ onBack }) => {
     <div className="fixed inset-0 z-[600] bg-[#F9F7F5] flex flex-col fade-in">
       <div className="t11-nav">
         <div className="back-btn" onClick={onBack}>
-          <i
-            className="ph ph-caret-left"
-            style={{ fontSize: "24px" }}
-          ></i>
+          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
         <div className="title">相对演绎</div>
       </div>
@@ -41921,9 +41240,7 @@ const RelativeDeductionPage = ({ onBack }) => {
               {scriptPages.length > 1 &&
                 currentScriptPage < scriptPages.length - 1 && (
                   <button
-                    onClick={() =>
-                      setCurrentScriptPage((prev) => prev + 1)
-                    }
+                    onClick={() => setCurrentScriptPage((prev) => prev + 1)}
                     className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 bg-gray-100 rounded-full flex items-center justify-center text-gray-500 shadow-md z-10 active:scale-90 opacity-70 hover:opacity-100"
                   >
                     <i className="ph-bold ph-caret-right"></i>
@@ -41949,51 +41266,47 @@ const RelativeDeductionPage = ({ onBack }) => {
                 /* 渲染生成的剧本 */
                 <div className="w-full text-left flex flex-col h-full overflow-y-auto no-scrollbar px-6">
                   <h3 className="text-[#5A5F4D] text-lg font-bold mb-4 border-b border-[#EAEAEA] pb-2 text-center font-serif">
-                    {selectedContent.title} - 第 {currentScriptPage + 1}{" "}
-                    幕
+                    {selectedContent.title} - 第 {currentScriptPage + 1} 幕
                   </h3>
 
                   <div className="flex-1">
-                    {scriptPages[currentScriptPage].lines.map(
-                      (line, idx) => {
-                        if (line.type === "narration") {
-                          return (
-                            <div
-                              key={idx}
-                              className="bg-[#F9F7F5] border border-[#EAEAEA] p-4 text-center text-[#8C917B] rounded-xl my-4 shadow-sm font-serif leading-relaxed text-sm"
-                            >
+                    {scriptPages[currentScriptPage].lines.map((line, idx) => {
+                      if (line.type === "narration") {
+                        return (
+                          <div
+                            key={idx}
+                            className="bg-[#F9F7F5] border border-[#EAEAEA] p-4 text-center text-[#8C917B] rounded-xl my-4 shadow-sm font-serif leading-relaxed text-sm"
+                          >
+                            {line.text}
+                          </div>
+                        );
+                      } else {
+                        // 匹配演员头像颜色
+                        const actor = selectedActors.find(
+                          (a) => a.name === line.speaker,
+                        );
+                        const avatarColor = actor?.avatarColor || "#D4AB90";
+
+                        return (
+                          <div key={idx} className="mb-4 flex flex-col">
+                            <div className="flex items-center gap-2 mb-1">
+                              <div
+                                className="w-5 h-5 rounded-full text-white flex items-center justify-center text-[10px] font-bold shadow-inner"
+                                style={{ backgroundColor: avatarColor }}
+                              >
+                                {line.speaker[0]}
+                              </div>
+                              <span className="text-xs font-bold text-[#89A89A]">
+                                {line.speaker}
+                              </span>
+                            </div>
+                            <div className="text-[#5A5F4D] text-[15px] leading-relaxed pl-7">
                               {line.text}
                             </div>
-                          );
-                        } else {
-                          // 匹配演员头像颜色
-                          const actor = selectedActors.find(
-                            (a) => a.name === line.speaker,
-                          );
-                          const avatarColor =
-                            actor?.avatarColor || "#D4AB90";
-
-                          return (
-                            <div key={idx} className="mb-4 flex flex-col">
-                              <div className="flex items-center gap-2 mb-1">
-                                <div
-                                  className="w-5 h-5 rounded-full text-white flex items-center justify-center text-[10px] font-bold shadow-inner"
-                                  style={{ backgroundColor: avatarColor }}
-                                >
-                                  {line.speaker[0]}
-                                </div>
-                                <span className="text-xs font-bold text-[#89A89A]">
-                                  {line.speaker}
-                                </span>
-                              </div>
-                              <div className="text-[#5A5F4D] text-[15px] leading-relaxed pl-7">
-                                {line.text}
-                              </div>
-                            </div>
-                          );
-                        }
-                      },
-                    )}
+                          </div>
+                        );
+                      }
+                    })}
                   </div>
 
                   {/* 如果是最新一页，显示分支选项 */}
@@ -42164,25 +41477,22 @@ const RelativeDeductionPage = ({ onBack }) => {
                   allActors.map((actor) => (
                     <label
                       key={actor.id}
-                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${selectedActors.some((a) => a.id === actor.id)
+                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
+                        selectedActors.some((a) => a.id === actor.id)
                           ? "bg-[#F2F7F4] border-[#89A89A] shadow-sm"
                           : "bg-white border-[#EAEAEA]"
-                        }`}
+                      }`}
                     >
                       <input
                         type="checkbox"
                         className="w-5 h-5 accent-[#89A89A] rounded-sm"
-                        checked={selectedActors.some(
-                          (a) => a.id === actor.id,
-                        )}
+                        checked={selectedActors.some((a) => a.id === actor.id)}
                         onChange={(e) => {
                           if (e.target.checked)
                             setSelectedActors([...selectedActors, actor]);
                           else
                             setSelectedActors(
-                              selectedActors.filter(
-                                (a) => a.id !== actor.id,
-                              ),
+                              selectedActors.filter((a) => a.id !== actor.id),
                             );
                         }}
                       />
@@ -42307,9 +41617,7 @@ const OddFarmPage = ({ onBack }) => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       const validChars = allChars.filter(
         (c) => !String(c.id).startsWith("group") && c.type !== "decor",
@@ -42322,8 +41630,7 @@ const OddFarmPage = ({ onBack }) => {
         )
         .join("\n");
 
-      const sysPrompt =
-        "你是一个东汉末年背景下的古风奇幻农场订单生成器。";
+      const sysPrompt = "你是一个东汉末年背景下的古风奇幻农场订单生成器。";
       const userPrompt = `
                       【世界设定】
                       ${worldContext}
@@ -42469,8 +41776,7 @@ const OddFarmPage = ({ onBack }) => {
   const [otherFarmData, setOtherFarmData] = useState(Array(9).fill(null));
   const [otherCoins, setOtherCoins] = useState(0);
   const [otherCompletedOrders, setOtherCompletedOrders] = useState(0);
-  const [showCharSelectForFarm, setShowCharSelectForFarm] =
-    useState(false);
+  const [showCharSelectForFarm, setShowCharSelectForFarm] = useState(false);
   const [availableFarmChars, setAvailableFarmChars] = useState([]);
   const [isBlurring, setIsBlurring] = useState(false);
   const [isLoadingOtherFarm, setIsLoadingOtherFarm] = useState(false);
@@ -42485,9 +41791,7 @@ const OddFarmPage = ({ onBack }) => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       const validChars = allChars.filter(
         (c) => !String(c.id).startsWith("group") && c.type !== "decor",
@@ -42568,8 +41872,7 @@ const OddFarmPage = ({ onBack }) => {
                   id: item.id,
                   germinated: item.stage !== "seed",
                   blooming:
-                    item.stage === "blooming" ||
-                    item.stage === "fruiting",
+                    item.stage === "blooming" || item.stage === "fruiting",
                   fruiting: item.stage === "fruiting",
                   wilted: false,
                   logTime: item.logTime,
@@ -42639,11 +41942,7 @@ const OddFarmPage = ({ onBack }) => {
             );
             setCoins((prev) => {
               const newBalance = Math.max(0, prev - 50);
-              window.addTransactionRecord(
-                "expense",
-                50,
-                `偷割灵植被抓罚款`,
-              );
+              window.addTransactionRecord("expense", 50, `偷割灵植被抓罚款`);
               return newBalance;
             });
           } else {
@@ -42811,15 +42110,31 @@ const OddFarmPage = ({ onBack }) => {
   };
 
   return (
-    <div className="farm-overlay animate-fadeIn">
-      {/* 顶部返回 */}
+    <div className="farm-overlay open animate-fadeIn">
+            {/* 顶部清晰返回导航按钮 */}
       <div
-        style={{ position: "absolute", top: 20, left: 20, zIndex: 100 }}
+        className="active-press"
         onClick={onBack}
+        style={{
+          position: "absolute",
+          top: 16,
+          left: 16,
+          zIndex: 100,
+          width: "38px",
+          height: "38px",
+          borderRadius: "50%",
+          background: "rgba(255, 255, 255, 0.9)",
+          backdropFilter: "blur(8px)",
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.15)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+        }}
       >
         <iconify-icon
           icon="line-md:arrow-left"
-          style={{ fontSize: 30, color: "#fff" }}
+          style={{ fontSize: "22px", color: "#5a5f4d" }}
         ></iconify-icon>
       </div>
 
@@ -42972,10 +42287,7 @@ const OddFarmPage = ({ onBack }) => {
                                   `【警报】你偷割灵植时，惊动了${viewingCharacter?.name || "未知"}部下的暗哨！\n按大汉律例，以盗窃论处，罚铜五十铢！`,
                                 );
                                 setCoins((prev) => {
-                                  const newBalance = Math.max(
-                                    0,
-                                    prev - 50,
-                                  );
+                                  const newBalance = Math.max(0, prev - 50);
                                   window.addTransactionRecord(
                                     "expense",
                                     50,
@@ -43065,10 +42377,7 @@ const OddFarmPage = ({ onBack }) => {
                               clearInterval(interval);
                               // 添加开花动画
                               setBloomingPatch(currentIndex);
-                              setTimeout(
-                                () => setBloomingPatch(null),
-                                300,
-                              );
+                              setTimeout(() => setBloomingPatch(null), 300);
                               // 倒计时结束，变为开花状态
                               setField((prevField) => {
                                 const newField = [...prevField];
@@ -43113,10 +42422,7 @@ const OddFarmPage = ({ onBack }) => {
                               clearInterval(interval);
                               // 添加结果动画
                               setFruitingPatch(currentIndex);
-                              setTimeout(
-                                () => setFruitingPatch(null),
-                                300,
-                              );
+                              setTimeout(() => setFruitingPatch(null), 300);
                               // 倒计时结束，变为结果状态
                               setField((prevField) => {
                                 const newField = [...prevField];
@@ -43130,10 +42436,7 @@ const OddFarmPage = ({ onBack }) => {
                               const wiltTimer = setTimeout(() => {
                                 // 先设置枯萎动画
                                 setWiltingPatch(currentIndex);
-                                setTimeout(
-                                  () => setWiltingPatch(null),
-                                  300,
-                                );
+                                setTimeout(() => setWiltingPatch(null), 300);
                                 setField((prevField) => {
                                   const newField = [...prevField];
                                   const item = newField[currentIndex];
@@ -43151,8 +42454,7 @@ const OddFarmPage = ({ onBack }) => {
                                     setTimeout(() => {
                                       setField((prevField2) => {
                                         const newField2 = [...prevField2];
-                                        const item2 =
-                                          newField2[currentIndex];
+                                        const item2 = newField2[currentIndex];
                                         if (
                                           item2 &&
                                           typeof item2 === "object" &&
@@ -43315,10 +42617,7 @@ const OddFarmPage = ({ onBack }) => {
 
       {/* 底部按钮 */}
       <div className="farm-footer">
-        <div
-          className="farm-btn"
-          onClick={() => setDrawerOpen(!drawerOpen)}
-        >
+        <div className="farm-btn" onClick={() => setDrawerOpen(!drawerOpen)}>
           物品
         </div>
         <div className="farm-btn" onClick={() => setShowOrderModal(true)}>
@@ -43485,10 +42784,7 @@ const OddFarmPage = ({ onBack }) => {
                   style={{ position: "relative", cursor: "pointer" }}
                   onClick={() => handleFruitClick(fruitId)}
                 >
-                  <img
-                    src={getFruitImage(fruitId)}
-                    style={{ width: 50 }}
-                  />
+                  <img src={getFruitImage(fruitId)} style={{ width: 50 }} />
                   {count > 1 && (
                     <div
                       style={{
@@ -43565,8 +42861,7 @@ const OddFarmPage = ({ onBack }) => {
             }}
           >
             {draggedItem === "shovel" && "已选中铲子，请点击土地清除种子"}
-            {draggedItem === "sickle" &&
-              "已选中镰刀，请点击土地收割成熟果实"}
+            {draggedItem === "sickle" && "已选中镰刀，请点击土地收割成熟果实"}
             {draggedItem === "watering" &&
               "已选中浇水工具，请点击枯萎的果实进行恢复"}
             {typeof draggedItem === "object" &&
@@ -43648,9 +42943,7 @@ const OddFarmPage = ({ onBack }) => {
                       <div className="text-xs font-bold text-[#D6724B] flex items-center gap-1 bg-[#FFF5F3] px-2 py-1 rounded-md border border-[#FADBD8]">
                         <iconify-icon icon="ph:timer-bold"></iconify-icon>
                         {Math.floor(order.timeLeft / 60)}:
-                        {(order.timeLeft % 60)
-                          .toString()
-                          .padStart(2, "0")}
+                        {(order.timeLeft % 60).toString().padStart(2, "0")}
                       </div>
                     </div>
 
@@ -43688,8 +42981,7 @@ const OddFarmPage = ({ onBack }) => {
 
                       <button
                         onClick={async () => {
-                          const currentStock =
-                            inventory[order.itemId] || 0;
+                          const currentStock = inventory[order.itemId] || 0;
                           if (currentStock >= order.quantity) {
                             // 1. 扣除库存
                             setInventory((prev) => ({
@@ -43713,9 +43005,8 @@ const OddFarmPage = ({ onBack }) => {
 
                               if (farmSubs.length > 0) {
                                 const savedProjects = JSON.parse(
-                                  (await dbManager.get(
-                                    "charity_projects",
-                                  )) || "[]",
+                                  (await dbManager.get("charity_projects")) ||
+                                    "[]",
                                 );
                                 let updatedProjects = [...savedProjects];
 
@@ -43738,8 +43029,7 @@ const OddFarmPage = ({ onBack }) => {
                                         if (p.title === sub.projectName) {
                                           return {
                                             ...p,
-                                            raised:
-                                              p.raised + donateAmount,
+                                            raised: p.raised + donateAmount,
                                             donors: p.donors + 1,
                                             history: [
                                               ...(p.history || []),
@@ -43801,10 +43091,11 @@ const OddFarmPage = ({ onBack }) => {
                             );
                           }
                         }}
-                        className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 ${(inventory[order.itemId] || 0) >= order.quantity
+                        className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 ${
+                          (inventory[order.itemId] || 0) >= order.quantity
                             ? "bg-gradient-to-r from-[#A8C8BA] to-[#8FA99D] text-white shadow-[0_4px_10px_rgba(168,200,186,0.4)]"
                             : "bg-[#F5F5F5] text-[#B0B0B0] cursor-not-allowed border border-[#EAEAEA]"
-                          }`}
+                        }`}
                       >
                         {(inventory[order.itemId] || 0) >= order.quantity
                           ? "交付物资"
@@ -43817,9 +43108,7 @@ const OddFarmPage = ({ onBack }) => {
             ) : (
               <div className="text-center text-[#8C917B] mt-24">
                 <i className="ph-fill ph-scroll text-6xl mb-4 opacity-40"></i>
-                <p className="font-bold text-lg text-[#5A5F4D]">
-                  悬赏榜单暂空
-                </p>
+                <p className="font-bold text-lg text-[#5A5F4D]">悬赏榜单暂空</p>
                 <p className="text-sm mt-2 opacity-80">
                   快去劳作一番，点击上方按钮招揽买家吧
                 </p>
@@ -43835,9 +43124,7 @@ const OddFarmPage = ({ onBack }) => {
           <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md animate-slide-up">
             {/* 弹窗头部 */}
             <div className="p-5 flex justify-between items-center border-b border-gray-100">
-              <h3 className="text-xl font-bold text-[#5A5F4D]">
-                果实详情
-              </h3>
+              <h3 className="text-xl font-bold text-[#5A5F4D]">果实详情</h3>
               <button
                 onClick={() => setShowFruitDetail(false)}
                 className="w-8 h-8 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#8C8C8C] active:scale-90 transition-transform"
@@ -43862,9 +43149,7 @@ const OddFarmPage = ({ onBack }) => {
                   <h4 className="text-lg font-bold text-[#5A5F4D]">
                     {selectedFruit.name}
                   </h4>
-                  <p className="text-sm text-[#8C917B] mt-1">
-                    点击查看详情
-                  </p>
+                  <p className="text-sm text-[#8C917B] mt-1">点击查看详情</p>
                 </div>
               </div>
 
@@ -43886,9 +43171,7 @@ const OddFarmPage = ({ onBack }) => {
       {showCharSelectForFarm && (
         <div className="fixed inset-x-0 bottom-0 bg-[#FDFCF8] rounded-t-3xl shadow-2xl z-[1000] animate-slide-up h-[60vh] flex flex-col">
           <div className="p-5 flex justify-between items-center border-b border-[#F2EFDE]">
-            <h3 className="text-lg font-bold text-[#5A5F4D]">
-              潜入谁的农场？
-            </h3>
+            <h3 className="text-lg font-bold text-[#5A5F4D]">潜入谁的农场？</h3>
             <button
               onClick={() => setShowCharSelectForFarm(false)}
               className="text-[#8C8C8C] text-xl"
@@ -43912,9 +43195,7 @@ const OddFarmPage = ({ onBack }) => {
                   {(char.name || "")[0] || "?"}
                 </div>
                 <div className="flex flex-col">
-                  <span className="font-bold text-[#5A5F4D]">
-                    {char.name}
-                  </span>
+                  <span className="font-bold text-[#5A5F4D]">{char.name}</span>
                   <span className="text-xs text-gray-400 mt-1 truncate w-48">
                     性格：{char.profile?.personality || "高深莫测"}
                   </span>
@@ -44564,9 +43845,7 @@ const T8ChatItem = ({
         </div>
 
         {/* 内容 */}
-        <div
-          style={{ flex: 1, overflow: "hidden", paddingRight: "24px" }}
-        >
+        <div style={{ flex: 1, overflow: "hidden", paddingRight: "24px" }}>
           <div
             style={{
               display: "flex",
@@ -44608,9 +43887,7 @@ const T8ChatItem = ({
         </div>
 
         {/* 右侧状态区 */}
-        <div
-          style={{ position: "relative", width: "20px", height: "20px" }}
-        >
+        <div style={{ position: "relative", width: "20px", height: "20px" }}>
           {data.section === "all" && data.status === "read" ? (
             <div style={{ opacity: 0.5 }}>
               <T8Icons.DoubleCheck />
@@ -44665,9 +43942,7 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
           if (initialData.avatar) {
             try {
               // 从IndexedDB加载头像数据
-              const avatarItem = await avatarStore.get(
-                initialData.avatar,
-              );
+              const avatarItem = await avatarStore.get(initialData.avatar);
               if (avatarItem && avatarItem.avatarData) {
                 avatarData = avatarItem.avatarData;
               }
@@ -44794,14 +44069,9 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
             alignItems: "center",
           }}
         >
-          <i
-            data-lucide="chevron-left"
-            style={{ width: 24, height: 24 }}
-          ></i>
+          <i data-lucide="chevron-left" style={{ width: 24, height: 24 }}></i>
           {/* [修改] 若为群聊显示返回，否则显示取消 */}
-          <span style={{ fontSize: "16px" }}>
-            {isGroup ? "返回" : "取消"}
-          </span>
+          <span style={{ fontSize: "16px" }}>{isGroup ? "返回" : "取消"}</span>
         </div>
         <div style={{ fontSize: "18px", fontWeight: "700" }}>
           {/* [修改] 动态变更标题 */}
@@ -44955,10 +44225,7 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
                   onSave &&
                   initialData?.name !== e.target.value.trim()
                 ) {
-                  onSave(
-                    { ...formData, name: e.target.value.trim() },
-                    true,
-                  );
+                  onSave({ ...formData, name: e.target.value.trim() }, true);
                   // === [新增] 派发修改群名的中央提示事件 ===
                   window.dispatchEvent(
                     new CustomEvent("insertCenterMessage", {
@@ -45044,7 +44311,7 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
                     >
                       {member.avatar ? (
                         typeof member.avatar === "string" &&
-                          member.avatar.startsWith("data:image/") ? (
+                        member.avatar.startsWith("data:image/") ? (
                           <img
                             src={member.avatar}
                             style={{
@@ -45147,9 +44414,7 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
                     justifyContent: "center",
                   }}
                 >
-                  <span style={{ fontSize: "10px", color: "white" }}>
-                    修改
-                  </span>
+                  <span style={{ fontSize: "10px", color: "white" }}>修改</span>
                 </div>
               </div>
               <input
@@ -45341,8 +44606,7 @@ const GroupChatSettingsModal = ({
   onUpdateChat, // 新增：用于更新群聊信息
   onLeaveGroup, // 新增：用于退出群聊
 }) => {
-  const [isGeneratingAnnounce, setIsGeneratingAnnounce] =
-    React.useState(false);
+  const [isGeneratingAnnounce, setIsGeneratingAnnounce] = React.useState(false);
   const [tempAnnouncement, setTempAnnouncement] = React.useState(
     chatData?.profile?.announcement || "",
   );
@@ -45352,15 +44616,14 @@ const GroupChatSettingsModal = ({
 
   // [新增] 读取长期记忆列表与处理挂载切换
   const [memoriesList, setMemoriesList] = React.useState([]);
-  const [showMemoryDropdown, setShowMemoryDropdown] =
-    React.useState(false);
+  const [showMemoryDropdown, setShowMemoryDropdown] = React.useState(false);
   React.useEffect(() => {
     try {
       const savedMem = JSON.parse(
         localStorage.getItem("t8_memory_config") || "{}",
       );
       setMemoriesList(savedMem.memories || []);
-    } catch (e) { }
+    } catch (e) {}
   }, []);
 
   const toggleMemoryMount = (memId) => {
@@ -45414,9 +44677,7 @@ const GroupChatSettingsModal = ({
           20,
         ); // 取最近20条
         chatHistory = (res.messages || [])
-          .map(
-            (m) => `${m.sender || (m.isMe ? "用户" : "未知")}: ${m.text}`,
-          )
+          .map((m) => `${m.sender || (m.isMe ? "用户" : "未知")}: ${m.text}`)
           .join("\n");
       }
       const membersInfo = (chatData.profile?.members || [])
@@ -45459,15 +44720,13 @@ const GroupChatSettingsModal = ({
               }),
             };
             if (window.chatHistoryStore) {
-              window.chatHistoryStore
-                .getMessages(chatData.id)
-                .then((res) => {
-                  window.chatHistoryStore.saveMessages(chatData.id, [
-                    ...(res.messages || []),
-                    sysMsg,
-                  ]);
-                  window.dispatchEvent(new CustomEvent("reloadChats"));
-                });
+              window.chatHistoryStore.getMessages(chatData.id).then((res) => {
+                window.chatHistoryStore.saveMessages(chatData.id, [
+                  ...(res.messages || []),
+                  sysMsg,
+                ]);
+                window.dispatchEvent(new CustomEvent("reloadChats"));
+              });
             }
 
             setIsGeneratingAnnounce(false);
@@ -45549,9 +44808,7 @@ const GroupChatSettingsModal = ({
           <textarea
             value={tempAnnouncement}
             onChange={(e) => setTempAnnouncement(e.target.value)}
-            onBlur={() =>
-              handleSaveProfile("announcement", tempAnnouncement)
-            }
+            onBlur={() => handleSaveProfile("announcement", tempAnnouncement)}
             placeholder="点击编辑群公告..."
             style={{
               width: "100%",
@@ -45600,9 +44857,7 @@ const GroupChatSettingsModal = ({
         <div className="cs-row">
           <div>
             <div className="cs-label">线上剧情模式</div>
-            <div className="cs-desc">
-              模拟网络聊天，发表情包，用语网感化
-            </div>
+            <div className="cs-desc">模拟网络聊天，发表情包，用语网感化</div>
           </div>
           <label className="toggle-switch">
             <input
@@ -45668,8 +44923,9 @@ const GroupChatSettingsModal = ({
                     : "选择记忆"}
                 </span>
                 <i
-                  className={`ph-bold ${showMemoryDropdown ? "ph-caret-up" : "ph-caret-down"
-                    }`}
+                  className={`ph-bold ${
+                    showMemoryDropdown ? "ph-caret-up" : "ph-caret-down"
+                  }`}
                   style={{ fontSize: "14px" }}
                 ></i>
               </button>
@@ -45704,9 +44960,9 @@ const GroupChatSettingsModal = ({
                     >
                       <input
                         type="checkbox"
-                        checked={(
-                          settings.mountedMemories || []
-                        ).includes(mem.id)}
+                        checked={(settings.mountedMemories || []).includes(
+                          mem.id,
+                        )}
                         onChange={() => toggleMemoryMount(mem.id)}
                         style={{
                           accentColor: "#d6724b",
@@ -45748,9 +45004,7 @@ const GroupChatSettingsModal = ({
         <div className="cs-row">
           <div>
             <div className="cs-label">主动回复</div>
-            <div className="cs-desc">
-              群内角色主动发起话题，产出多人回复
-            </div>
+            <div className="cs-desc">群内角色主动发起话题，产出多人回复</div>
           </div>
           <label className="toggle-switch">
             <input
@@ -45900,8 +45154,7 @@ const ChatSettingsModal = ({
 }) => {
   // [新增] 读取长期记忆列表与处理挂载切换
   const [memoriesList, setMemoriesList] = React.useState([]);
-  const [showMemoryDropdown, setShowMemoryDropdown] =
-    React.useState(false);
+  const [showMemoryDropdown, setShowMemoryDropdown] = React.useState(false);
 
   // ======= 【修改处1：新增】异步获取可用群聊列表状态 =======
   const [availableGroups, setAvailableGroups] = React.useState([]);
@@ -45923,8 +45176,7 @@ const ChatSettingsModal = ({
       }
       // 筛选出所有的群聊
       const groupChats = allChars.filter(
-        (c) =>
-          String(c.id).startsWith("group_chat") || c.type === "group",
+        (c) => String(c.id).startsWith("group_chat") || c.type === "group",
       );
       setAvailableGroups(groupChats);
     };
@@ -45939,9 +45191,7 @@ const ChatSettingsModal = ({
   // 导出当前角色数据
   const handleExportCurrent = async () => {
     try {
-      const history = await window.chatHistoryStore.getMessages(
-        chatData.id,
-      );
+      const history = await window.chatHistoryStore.getMessages(chatData.id);
       const exportData = {
         type: "single_character_backup",
         character: chatData,
@@ -45969,18 +45219,14 @@ const ChatSettingsModal = ({
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
 
       const allData = [];
       for (const char of allChars) {
         // 排除不需要备份的系统配置（例如装饰、朋友圈容器）
         if (char.type === "decor" || char.type === "moments") continue;
-        const history = await window.chatHistoryStore.getMessages(
-          char.id,
-        );
+        const history = await window.chatHistoryStore.getMessages(char.id);
         allData.push({
           character: char,
           messages: history.messages || [],
@@ -46063,7 +45309,7 @@ const ChatSettingsModal = ({
         localStorage.getItem("t8_memory_config") || "{}",
       );
       setMemoriesList(savedMem.memories || []);
-    } catch (e) { }
+    } catch (e) {}
   }, []);
 
   const toggleMemoryMount = (memId) => {
@@ -46155,7 +45401,7 @@ const ChatSettingsModal = ({
             userContext = `【用户身份】\n姓名:${activeUser.name}\n性格:${activeUser.personality || "无"}\n背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       // 3. 获取世界书信息
       const worldContext = window.getWorldBookContext
@@ -46174,7 +45420,7 @@ const ChatSettingsModal = ({
           const recentMessages = chatHistory.slice(-5);
           conversationContext = `【最近对话】\n${recentMessages.map((msg) => `${msg.sender}: ${msg.content}`).join("\n")}`;
         }
-      } catch (e) { }
+      } catch (e) {}
 
       // 5. 构建Prompt
       const prompt = `
@@ -46229,9 +45475,7 @@ const ChatSettingsModal = ({
                       STORES.USER_SETTINGS,
                       "readonly",
                     );
-                    const store = transaction.objectStore(
-                      STORES.USER_SETTINGS,
-                    );
+                    const store = transaction.objectStore(STORES.USER_SETTINGS);
                     const result = await store.get("pixabay_api_key");
                     pixabayApiKey = result?.value || "";
                   }
@@ -46270,9 +45514,7 @@ const ChatSettingsModal = ({
                     avatar: character.avatar || null, // [新增]
                     avatarColor: character.avatarColor || "#85C9D9", // [新增]
                     avatarBg:
-                      character.avatarBg ||
-                      character.avatarColor ||
-                      "#85C9D9",
+                      character.avatarBg || character.avatarColor || "#85C9D9",
                     iconColor: character.iconColor || "#666",
                     themeColor: character.themeColor || "#EAD6D6",
                   },
@@ -46366,9 +45608,7 @@ const ChatSettingsModal = ({
         <div className="cs-row">
           <div>
             <div className="cs-label">线上剧情模式</div>
-            <div className="cs-desc">
-              模拟网络聊天，发表情包，用语网感化
-            </div>
+            <div className="cs-desc">模拟网络聊天，发表情包，用语网感化</div>
           </div>
           <label className="toggle-switch">
             <input
@@ -46384,9 +45624,7 @@ const ChatSettingsModal = ({
         <div className="cs-row">
           <div>
             <div className="cs-label">线下剧情模式</div>
-            <div className="cs-desc">
-              模拟面对面互动，描写动作、神态、环境
-            </div>
+            <div className="cs-desc">模拟面对面互动，描写动作、神态、环境</div>
           </div>
           <label className="toggle-switch">
             <input
@@ -46403,9 +45641,7 @@ const ChatSettingsModal = ({
         <div className="cs-row">
           <div>
             <div className="cs-label">时间感知</div>
-            <div className="cs-desc">
-              AI会根据当前时间调整回复内容和行为
-            </div>
+            <div className="cs-desc">AI会根据当前时间调整回复内容和行为</div>
           </div>
           <label className="toggle-switch">
             <input
@@ -46458,8 +45694,9 @@ const ChatSettingsModal = ({
                     : "选择记忆"}
                 </span>
                 <i
-                  className={`ph-bold ${showMemoryDropdown ? "ph-caret-up" : "ph-caret-down"
-                    }`}
+                  className={`ph-bold ${
+                    showMemoryDropdown ? "ph-caret-up" : "ph-caret-down"
+                  }`}
                   style={{ fontSize: "14px" }}
                 ></i>
               </button>
@@ -46494,9 +45731,9 @@ const ChatSettingsModal = ({
                     >
                       <input
                         type="checkbox"
-                        checked={(
-                          settings.mountedMemories || []
-                        ).includes(mem.id)}
+                        checked={(settings.mountedMemories || []).includes(
+                          mem.id,
+                        )}
                         onChange={() => toggleMemoryMount(mem.id)}
                         style={{
                           accentColor: "#d6724b",
@@ -46838,9 +46075,7 @@ const ChatSettingsModal = ({
             <div className="cs-label" style={{ color: "#4a90e2" }}>
               备份与恢复
             </div>
-            <div className="cs-desc">
-              导出聊天数据或通过文件还原历史记录
-            </div>
+            <div className="cs-desc">导出聊天数据或通过文件还原历史记录</div>
           </div>
           <button
             style={{
@@ -46955,9 +46190,7 @@ const ChatSettingsModal = ({
         <div className="cs-row">
           <div>
             <div className="cs-label">Pixabay API配置</div>
-            <div className="cs-desc">
-              配置Pixabay API密钥以使用图片搜索功能
-            </div>
+            <div className="cs-desc">配置Pixabay API密钥以使用图片搜索功能</div>
           </div>
         </div>
 
@@ -46995,9 +46228,7 @@ const ChatSettingsModal = ({
                       STORES.USER_SETTINGS,
                       "readwrite",
                     );
-                    const store = transaction.objectStore(
-                      STORES.USER_SETTINGS,
-                    );
+                    const store = transaction.objectStore(STORES.USER_SETTINGS);
                     await store.put({
                       key: `pixabay_api_key`,
                       value: apiKey,
@@ -47049,9 +46280,7 @@ const ChatSettingsModal = ({
               </button>
             </div>
           </div>
-          <div
-            style={{ fontSize: "11px", color: "#888", marginTop: "5px" }}
-          >
+          <div style={{ fontSize: "11px", color: "#888", marginTop: "5px" }}>
             获取API密钥:{" "}
             <a
               href="https://pixabay.com/accounts/register/"
@@ -47108,9 +46337,7 @@ const ChatSettingsModal = ({
                       STORES.USER_SETTINGS,
                       "readwrite",
                     );
-                    const store = transaction.objectStore(
-                      STORES.USER_SETTINGS,
-                    );
+                    const store = transaction.objectStore(STORES.USER_SETTINGS);
                     await store.put({ key: `voice_id`, value: id });
                     console.log("Voice ID保存成功");
                   } catch (error) {
@@ -47175,9 +46402,7 @@ const ChatSettingsModal = ({
         <div className="cs-row">
           <div>
             <div className="cs-label">背景设置</div>
-            <div className="cs-desc">
-              更换聊天页面背景，支持图片和颜色
-            </div>
+            <div className="cs-desc">更换聊天页面背景，支持图片和颜色</div>
           </div>
           <div style={{ display: "flex", gap: "8px" }}>
             <button
@@ -47259,9 +46484,7 @@ const ChatSettingsModal = ({
                     STORES.USER_SETTINGS,
                     "readwrite",
                   );
-                  const store = transaction.objectStore(
-                    STORES.USER_SETTINGS,
-                  );
+                  const store = transaction.objectStore(STORES.USER_SETTINGS);
                   await store.delete(`page_background_${chatData.id}`);
                   console.log("背景恢复默认成功");
 
@@ -47310,9 +46533,7 @@ const ChatSettingsModal = ({
               onChange({ ...settings, backgroundOpacity: opacity });
 
               // 更新背景透明度
-              const overlay = document.querySelector(
-                ".chat-detail-overlay",
-              );
+              const overlay = document.querySelector(".chat-detail-overlay");
               if (overlay) {
                 overlay.style.backgroundColor = `rgba(255, 255, 255, ${1 - opacity})`;
               }
@@ -47588,9 +46809,7 @@ const ChatSettingsModal = ({
             >
               <div>
                 <div className="cs-label">设置头像框</div>
-                <div className="cs-desc">
-                  自定义用户和角色的头像框样式
-                </div>
+                <div className="cs-desc">自定义用户和角色的头像框样式</div>
               </div>
             </div>
 
@@ -47620,16 +46839,11 @@ const ChatSettingsModal = ({
                       backgroundColor: "#f9f6f0",
                     }}
                     value={userAvatarFrameCss}
-                    onChange={(e) =>
-                      setUserAvatarFrameCss(e.target.value)
-                    }
+                    onChange={(e) => setUserAvatarFrameCss(e.target.value)}
                     onBlur={async (e) => {
                       let css = e.target.value;
                       // 移除URL中的空格
-                      css = css.replace(
-                        /url\("\s*(.*?)\s*"\)/g,
-                        'url("$1")',
-                      );
+                      css = css.replace(/url\("\s*(.*?)\s*"\)/g, 'url("$1")');
                       try {
                         const db = await openDB();
                         const transaction = db.transaction(
@@ -47663,10 +46877,7 @@ const ChatSettingsModal = ({
                       // 实时预览功能
                       let css = e.target.value;
                       // 移除URL中的空格
-                      css = css.replace(
-                        /url\("\s*(.*?)\s*"\)/g,
-                        'url("$1")',
-                      );
+                      css = css.replace(/url\("\s*(.*?)\s*"\)/g, 'url("$1")');
 
                       // 清除之前的临时样式标签
                       const existingTempStyle = document.getElementById(
@@ -47678,8 +46889,7 @@ const ChatSettingsModal = ({
 
                       // 创建临时样式标签用于预览
                       if (css) {
-                        const tempStyleTag =
-                          document.createElement("style");
+                        const tempStyleTag = document.createElement("style");
                         tempStyleTag.id = `avatar-frame-style-temp-${chatData.id}`;
 
                         let tempCssRules = "";
@@ -47740,9 +46950,7 @@ const ChatSettingsModal = ({
                           const store = transaction.objectStore(
                             STORES.USER_SETTINGS,
                           );
-                          store.delete(
-                            `user_avatar_frame_${chatData.id}`,
-                          );
+                          store.delete(`user_avatar_frame_${chatData.id}`);
                           console.log("用户头像框样式已清除");
                         });
                       } catch (error) {
@@ -47780,16 +46988,11 @@ const ChatSettingsModal = ({
                       backgroundColor: "#f9f6f0",
                     }}
                     value={roleAvatarFrameCss}
-                    onChange={(e) =>
-                      setRoleAvatarFrameCss(e.target.value)
-                    }
+                    onChange={(e) => setRoleAvatarFrameCss(e.target.value)}
                     onBlur={async (e) => {
                       let css = e.target.value;
                       // 移除URL中的空格
-                      css = css.replace(
-                        /url\("\s*(.*?)\s*"\)/g,
-                        'url("$1")',
-                      );
+                      css = css.replace(/url\("\s*(.*?)\s*"\)/g, 'url("$1")');
                       try {
                         const db = await openDB();
                         const transaction = db.transaction(
@@ -47823,10 +47026,7 @@ const ChatSettingsModal = ({
                       // 实时预览功能
                       let css = e.target.value;
                       // 移除URL中的空格
-                      css = css.replace(
-                        /url\("\s*(.*?)\s*"\)/g,
-                        'url("$1")',
-                      );
+                      css = css.replace(/url\("\s*(.*?)\s*"\)/g, 'url("$1")');
 
                       // 清除之前的临时样式标签
                       const existingTempStyle = document.getElementById(
@@ -47838,8 +47038,7 @@ const ChatSettingsModal = ({
 
                       // 创建临时样式标签用于预览
                       if (css) {
-                        const tempStyleTag =
-                          document.createElement("style");
+                        const tempStyleTag = document.createElement("style");
                         tempStyleTag.id = `avatar-frame-style-temp-role-${chatData.id}`;
 
                         let tempCssRules = "";
@@ -47900,9 +47099,7 @@ const ChatSettingsModal = ({
                           const store = transaction.objectStore(
                             STORES.USER_SETTINGS,
                           );
-                          store.delete(
-                            `role_avatar_frame_${chatData.id}`,
-                          );
+                          store.delete(`role_avatar_frame_${chatData.id}`);
                           console.log("角色头像框样式已清除");
                         });
                       } catch (error) {
@@ -47971,10 +47168,7 @@ const ChatSettingsModal = ({
                           });
                           console.log("你拍了拍对方后缀保存成功");
                         } catch (error) {
-                          console.error(
-                            "保存你拍了拍对方后缀失败:",
-                            error,
-                          );
+                          console.error("保存你拍了拍对方后缀失败:", error);
                         }
                       }}
                     />
@@ -48021,10 +47215,7 @@ const ChatSettingsModal = ({
                           });
                           console.log("对方拍了拍你后缀保存成功");
                         } catch (error) {
-                          console.error(
-                            "保存对方拍了拍你后缀失败:",
-                            error,
-                          );
+                          console.error("保存对方拍了拍你后缀失败:", error);
                         }
                       }}
                     />
@@ -48083,9 +47274,7 @@ const ChatSettingsModal = ({
                       STORES.USER_SETTINGS,
                       "readwrite",
                     );
-                    const store = transaction.objectStore(
-                      STORES.USER_SETTINGS,
-                    );
+                    const store = transaction.objectStore(STORES.USER_SETTINGS);
                     await store.put({
                       key: `user_dialog_${chatData.id}`,
                       value: css,
@@ -48227,9 +47416,7 @@ const ChatSettingsModal = ({
                       STORES.USER_SETTINGS,
                       "readwrite",
                     );
-                    const store = transaction.objectStore(
-                      STORES.USER_SETTINGS,
-                    );
+                    const store = transaction.objectStore(STORES.USER_SETTINGS);
                     await store.put({
                       key: `role_dialog_${chatData.id}`,
                       value: css,
@@ -48353,19 +47540,14 @@ const VoiceCallPage = ({
     const loadSavedAvatar = async () => {
       try {
         const db = await openDB();
-        const transaction = db.transaction(
-          STORES.USER_SETTINGS,
-          "readonly",
-        );
+        const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
         const store = transaction.objectStore(STORES.USER_SETTINGS);
         const request = store.get(`voice_call_avatar_${characterName}`);
 
         request.onsuccess = () => {
           const savedAvatar = request.result?.value;
           if (savedAvatar) {
-            const placeholder = document.querySelector(
-              ".vc-user-placeholder",
-            );
+            const placeholder = document.querySelector(".vc-user-placeholder");
             if (placeholder) {
               placeholder.style.backgroundImage = `url(${savedAvatar})`;
               placeholder.style.backgroundSize = "contain";
@@ -48473,8 +47655,7 @@ const VoiceCallPage = ({
         <div
           className="vc-actions"
           style={{
-            justifyContent:
-              callType === "user" ? "center" : "space-between",
+            justifyContent: callType === "user" ? "center" : "space-between",
           }}
         >
           {/* 拒绝/挂断/取消 */}
@@ -48511,11 +47692,7 @@ const VoiceCallPage = ({
               style={{ left: "40px", transformOrigin: "top right" }}
             >
               <svg viewBox="0 0 100 100">
-                <path
-                  d="M40,20 L60,80"
-                  stroke="#b0967a"
-                  strokeWidth="4"
-                />
+                <path d="M40,20 L60,80" stroke="#b0967a" strokeWidth="4" />
                 <circle cx="60" cy="80" r="10" fill="#b0967a" />
               </svg>
             </div>
@@ -48554,11 +47731,7 @@ const VoiceCallPage = ({
                 style={{ right: "40px", transformOrigin: "top left" }}
               >
                 <svg viewBox="0 0 100 100">
-                  <path
-                    d="M60,20 L40,80"
-                    stroke="#b0967a"
-                    strokeWidth="4"
-                  />
+                  <path d="M60,20 L40,80" stroke="#b0967a" strokeWidth="4" />
                   <circle cx="40" cy="80" r="10" fill="#b0967a" />
                 </svg>
               </div>
@@ -48620,9 +47793,7 @@ const CollapsibleShoppingCard = ({ msg }) => {
           marginBottom: isExpanded ? "12px" : "0",
         }}
       >
-        <div
-          style={{ display: "flex", alignItems: "center", gap: "8px" }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           <svg
             width="18"
             height="18"
@@ -48725,9 +47896,7 @@ const CollapsibleShoppingCard = ({ msg }) => {
                       : "2px 12px 12px 12px",
                     fontSize: "13px",
                     maxWidth: "90%",
-                    border: m.isMe
-                      ? "1px solid #F5C6C1"
-                      : "1px solid #EAE6D6",
+                    border: m.isMe ? "1px solid #F5C6C1" : "1px solid #EAE6D6",
                   }}
                 >
                   {m.text}
@@ -48767,8 +47936,7 @@ const T8ChatDetail = ({
 
   // ======= 【修改处2：新增】提取判断当前是否为群聊 =======
   const isGroupChat =
-    String(chatData?.id).startsWith("group_chat") ||
-    chatData?.type === "group";
+    String(chatData?.id).startsWith("group_chat") || chatData?.type === "group";
 
   // ================== [新增] 1. 用户头像读取与居中提示消息监听 ==================
   const [userAvatar, setUserAvatar] = React.useState(null);
@@ -48786,7 +47954,7 @@ const T8ChatDetail = ({
           setUserAvatar(activeUser.avatar);
         }
       }
-    } catch (e) { }
+    } catch (e) {}
   }, [isOpen]);
 
   React.useEffect(() => {
@@ -48818,8 +47986,7 @@ const T8ChatDetail = ({
   // =========================================================================
 
   // ===== [新增] 消息整合功能状态 =====
-  const [showConsolidateModal, setShowConsolidateModal] =
-    React.useState(false);
+  const [showConsolidateModal, setShowConsolidateModal] = React.useState(false);
   const [consolidateMode, setConsolidateMode] = React.useState("manual"); // 'manual' | 'auto'
   const [consolidateTitle, setConsolidateTitle] = React.useState("");
   const [consolidateContent, setConsolidateContent] = React.useState("");
@@ -48835,9 +48002,7 @@ const T8ChatDetail = ({
     // 提取选中的消息文本
     const selectedTexts = messages
       .filter((m) => selectedMsgIds.includes(m.id))
-      .map(
-        (m) => `${m.isMe ? "我" : m.sender || chatData.name}: ${m.text}`,
-      )
+      .map((m) => `${m.isMe ? "我" : m.sender || chatData.name}: ${m.text}`)
       .join("\n");
 
     const sysPrompt = "你是一个专业的情报分析和对话总结助手。";
@@ -48960,12 +48125,10 @@ const T8ChatDetail = ({
   const [roleAvatarFrameCss, setRoleAvatarFrameCss] = React.useState("");
 
   // 活动选择状态
-  const [showActivitySelect, setShowActivitySelect] =
-    React.useState(false);
+  const [showActivitySelect, setShowActivitySelect] = React.useState(false);
 
   // 购物意图监测状态
-  const [showShoppingPrompt, setShowShoppingPrompt] =
-    React.useState(false);
+  const [showShoppingPrompt, setShowShoppingPrompt] = React.useState(false);
 
   // ===== [新增] 表情包专属状态 =====
   const [showEmojiPanel, setShowEmojiPanel] = React.useState(false);
@@ -49096,8 +48259,7 @@ const T8ChatDetail = ({
   // [新增] 日记内容状态
   const [diaryContent, setDiaryContent] = React.useState(null);
   // [新增] 轨迹页面状态
-  const [showTrajectoryPage, setShowTrajectoryPage] =
-    React.useState(false);
+  const [showTrajectoryPage, setShowTrajectoryPage] = React.useState(false);
   // [新增] 轨迹数据状态
   const [trajectoryData, setTrajectoryData] = React.useState(null);
 
@@ -49116,10 +48278,7 @@ const T8ChatDetail = ({
       const loadSavedAvatar = async () => {
         try {
           const db = await openDB();
-          const transaction = db.transaction(
-            STORES.USER_SETTINGS,
-            "readonly",
-          );
+          const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
           const store = transaction.objectStore(STORES.USER_SETTINGS);
           const request = store.get(`voice_call_avatar_${chatData.name}`);
 
@@ -49208,8 +48367,7 @@ const T8ChatDetail = ({
       });
       const recorder = new MediaRecorder(stream);
       audioChunksRef.current = [];
-      recorder.ondataavailable = (e) =>
-        audioChunksRef.current.push(e.data);
+      recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
       recorder.onstop = () => {
         const blob = new Blob(audioChunksRef.current, {
           type: "audio/webm",
@@ -49357,10 +48515,7 @@ const T8ChatDetail = ({
     };
     window.addEventListener("appendShoppingSummary", handleAppendSummary);
     return () =>
-      window.removeEventListener(
-        "appendShoppingSummary",
-        handleAppendSummary,
-      );
+      window.removeEventListener("appendShoppingSummary", handleAppendSummary);
   }, [chatData?.id]);
 
   // ========== [新增] 背景更新和初始化 ==========
@@ -49396,10 +48551,7 @@ const T8ChatDetail = ({
 
       try {
         const db = await openDB();
-        const transaction = db.transaction(
-          STORES.USER_SETTINGS,
-          "readonly",
-        );
+        const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
         const store = transaction.objectStore(STORES.USER_SETTINGS);
         const request = store.get(`chat_settings_${chatData.id}`);
 
@@ -49427,10 +48579,7 @@ const T8ChatDetail = ({
 
       try {
         const db = await openDB();
-        const transaction = db.transaction(
-          STORES.USER_SETTINGS,
-          "readwrite",
-        );
+        const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
         const store = transaction.objectStore(STORES.USER_SETTINGS);
 
         // 只保存需要持久化的设置，排除动态状态
@@ -49496,10 +48645,7 @@ const T8ChatDetail = ({
 
     window.addEventListener("backgroundUpdated", handleBackgroundUpdated);
     return () =>
-      window.removeEventListener(
-        "backgroundUpdated",
-        handleBackgroundUpdated,
-      );
+      window.removeEventListener("backgroundUpdated", handleBackgroundUpdated);
   }, [settings.backgroundOpacity, chatData?.id]);
 
   // 加载头像的通用函数
@@ -49508,10 +48654,7 @@ const T8ChatDetail = ({
 
     try {
       const db = await openDB();
-      const transaction = db.transaction(
-        STORES.USER_SETTINGS,
-        "readonly",
-      );
+      const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
       const store = transaction.objectStore(STORES.USER_SETTINGS);
 
       // 加载用户头像
@@ -49596,16 +48739,10 @@ const T8ChatDetail = ({
 
           // 生成CSS规则
           let userCssRules = "";
-          if (
-            userAvatarFrame.includes("{") &&
-            userAvatarFrame.includes("}")
-          ) {
+          if (userAvatarFrame.includes("{") && userAvatarFrame.includes("}")) {
             // 替换选择器，添加chatId前缀
             userCssRules = userAvatarFrame
-              .replace(
-                /\.user-avatar/g,
-                `.chat-${chatData.id} .user-avatar`,
-              )
+              .replace(/\.user-avatar/g, `.chat-${chatData.id} .user-avatar`)
               .replace(
                 /\.settings-user-avatar/g,
                 `.chat-${chatData.id} .settings-user-avatar`,
@@ -49644,16 +48781,10 @@ const T8ChatDetail = ({
 
           // 生成CSS规则
           let roleCssRules = "";
-          if (
-            roleAvatarFrame.includes("{") &&
-            roleAvatarFrame.includes("}")
-          ) {
+          if (roleAvatarFrame.includes("{") && roleAvatarFrame.includes("}")) {
             // 替换选择器，添加chatId前缀
             roleCssRules = roleAvatarFrame
-              .replace(
-                /\.role-avatar/g,
-                `.chat-${chatData.id} .role-avatar`,
-              )
+              .replace(/\.role-avatar/g, `.chat-${chatData.id} .role-avatar`)
               .replace(
                 /\.settings-role-avatar/g,
                 `.chat-${chatData.id} .settings-role-avatar`,
@@ -49669,9 +48800,7 @@ const T8ChatDetail = ({
       };
 
       // 加载拍一拍后缀
-      const tapSuffixYouRequest = store.get(
-        `tap_suffix_you_${chatData.id}`,
-      );
+      const tapSuffixYouRequest = store.get(`tap_suffix_you_${chatData.id}`);
       tapSuffixYouRequest.onsuccess = () => {
         const tapSuffixYouValue = tapSuffixYouRequest.result?.value;
         if (tapSuffixYouValue) {
@@ -49679,9 +48808,7 @@ const T8ChatDetail = ({
         }
       };
 
-      const tapSuffixThemRequest = store.get(
-        `tap_suffix_them_${chatData.id}`,
-      );
+      const tapSuffixThemRequest = store.get(`tap_suffix_them_${chatData.id}`);
       tapSuffixThemRequest.onsuccess = () => {
         const tapSuffixThemValue = tapSuffixThemRequest.result?.value;
         if (tapSuffixThemValue) {
@@ -49710,10 +48837,7 @@ const T8ChatDetail = ({
 
           // 生成CSS规则
           let userCssRules = "";
-          if (
-            userDialogValue.includes("{") &&
-            userDialogValue.includes("}")
-          ) {
+          if (userDialogValue.includes("{") && userDialogValue.includes("}")) {
             // 替换选择器，添加chatId前缀
             userCssRules = userDialogValue.replace(
               /\.msg-bubble\.me/g,
@@ -49748,10 +48872,7 @@ const T8ChatDetail = ({
 
           // 生成CSS规则
           let roleCssRules = "";
-          if (
-            roleDialogValue.includes("{") &&
-            roleDialogValue.includes("}")
-          ) {
+          if (roleDialogValue.includes("{") && roleDialogValue.includes("}")) {
             // 替换选择器，添加chatId前缀
             roleCssRules = roleDialogValue.replace(
               /\.msg-bubble\.them/g,
@@ -49808,9 +48929,7 @@ const T8ChatDetail = ({
 
         // 更新设置界面中的头像
         const settingsAvatars = document.querySelectorAll(
-          type === "user"
-            ? ".settings-user-avatar"
-            : ".settings-role-avatar",
+          type === "user" ? ".settings-user-avatar" : ".settings-role-avatar",
         );
         settingsAvatars.forEach((element) => {
           element.style.backgroundImage = `url(${avatar})`;
@@ -49870,10 +48989,7 @@ const T8ChatDetail = ({
     };
 
     window.addEventListener("avatarUpdated", handleAvatarUpdated);
-    window.addEventListener(
-      "avatarFrameUpdated",
-      handleAvatarFrameUpdated,
-    );
+    window.addEventListener("avatarFrameUpdated", handleAvatarFrameUpdated);
     return () => {
       window.removeEventListener("avatarUpdated", handleAvatarUpdated);
       window.removeEventListener(
@@ -49904,13 +49020,11 @@ const T8ChatDetail = ({
             // 1. 获取成员单聊头像
             if (member.avatar) {
               try {
-                const avatarItem = await window.avatarStore.get(
-                  member.avatar,
-                );
+                const avatarItem = await window.avatarStore.get(member.avatar);
                 if (avatarItem && avatarItem.avatarData) {
                   groupStyles += `.chat-${chatData.id} .role-avatar-member-${member.id} { background-image: url(${avatarItem.avatarData}) !important; background-size: cover; background-position: center; color: transparent !important; background-color: transparent !important; }\n`;
                 }
-              } catch (e) { }
+              } catch (e) {}
             }
 
             // 2. 读取单聊头像框样式
@@ -49926,10 +49040,7 @@ const T8ChatDetail = ({
               r.onerror = () => res(null);
             });
             if (frameReq) {
-              let css = frameReq.replace(
-                /url\("\s*(.*?)\s*"\)/g,
-                'url("$1")',
-              );
+              let css = frameReq.replace(/url\("\s*(.*?)\s*"\)/g, 'url("$1")');
               groupStyles += `.chat-${chatData.id} .role-avatar-member-${member.id} { ${css} }\n`;
             }
 
@@ -49940,10 +49051,7 @@ const T8ChatDetail = ({
               r.onerror = () => res(null);
             });
             if (dialogReq) {
-              let css = dialogReq.replace(
-                /url\("\s*(.*?)\s*"\)/g,
-                'url("$1")',
-              );
+              let css = dialogReq.replace(/url\("\s*(.*?)\s*"\)/g, 'url("$1")');
               groupStyles += `.chat-${chatData.id} .msg-bubble-member-${member.id}.them { ${css} }\n`;
             }
           }
@@ -49981,19 +49089,14 @@ const T8ChatDetail = ({
 
       try {
         const db = await openDB();
-        const transaction = db.transaction(
-          STORES.USER_SETTINGS,
-          "readonly",
-        );
+        const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
         const store = transaction.objectStore(STORES.USER_SETTINGS);
         const request = store.get(`page_background_${chatData.id}`);
 
         request.onsuccess = () => {
           const background = request.result?.value;
           if (background) {
-            const overlay = document.querySelector(
-              ".chat-detail-overlay",
-            );
+            const overlay = document.querySelector(".chat-detail-overlay");
             if (overlay) {
               overlay.style.backgroundImage = `url(${background})`;
               overlay.style.backgroundSize = "cover";
@@ -50002,9 +49105,7 @@ const T8ChatDetail = ({
 
               // 应用透明度，只影响背景图片
               const opacity = settings.backgroundOpacity || 1;
-              let bgOverlay = overlay.querySelector(
-                ".bg-opacity-overlay",
-              );
+              let bgOverlay = overlay.querySelector(".bg-opacity-overlay");
               if (!bgOverlay) {
                 bgOverlay = document.createElement("div");
                 bgOverlay.className = "bg-opacity-overlay";
@@ -50054,8 +49155,7 @@ const T8ChatDetail = ({
         [
           {
             role: "system",
-            content:
-              "你是一个情绪分析专家，擅长分析对话对角色情绪的影响。",
+            content: "你是一个情绪分析专家，擅长分析对话对角色情绪的影响。",
           },
           { role: "user", content: analysisPrompt },
         ],
@@ -50085,16 +49185,14 @@ const T8ChatDetail = ({
                 60,
                 Math.min(
                   120,
-                  prev.currentHeartRate +
-                  (analysisData.heartRateChange || 0),
+                  prev.currentHeartRate + (analysisData.heartRateChange || 0),
                 ),
               );
               return {
                 ...prev,
                 currentHeartRate: newHeartRate,
                 currentMood: analysisData.mood || prev.currentMood,
-                currentActivity:
-                  analysisData.activity || prev.currentActivity,
+                currentActivity: analysisData.activity || prev.currentActivity,
               };
             });
           } catch (e) {
@@ -50106,8 +49204,7 @@ const T8ChatDetail = ({
                 60,
                 Math.min(
                   120,
-                  prev.currentHeartRate +
-                  Math.floor(Math.random() * 10 - 5),
+                  prev.currentHeartRate + Math.floor(Math.random() * 10 - 5),
                 ),
               ),
               currentMood: ["开心", "害羞", "沉思", "激动"][
@@ -50216,10 +49313,7 @@ const T8ChatDetail = ({
                           let analysisData;
                           try {
                             analysisData = JSON.parse(analysisResult);
-                            console.log(
-                              "解析分析数据成功:",
-                              analysisData,
-                            );
+                            console.log("解析分析数据成功:", analysisData);
                           } catch (e) {
                             console.error("解析分析结果失败:", e);
                             // 如果解析失败，使用默认值
@@ -50234,10 +49328,7 @@ const T8ChatDetail = ({
                                 Math.floor(Math.random() * 4)
                               ],
                             };
-                            console.log(
-                              "使用默认分析数据:",
-                              analysisData,
-                            );
+                            console.log("使用默认分析数据:", analysisData);
                           }
 
                           // 更新心率、心情和动向
@@ -50247,7 +49338,7 @@ const T8ChatDetail = ({
                               Math.min(
                                 120,
                                 prev.currentHeartRate +
-                                (analysisData.heartRateChange || 0),
+                                  (analysisData.heartRateChange || 0),
                               ),
                             );
                             const updatedSettings = {
@@ -50256,8 +49347,7 @@ const T8ChatDetail = ({
                               currentMood:
                                 analysisData.mood || prev.currentMood,
                               currentActivity:
-                                analysisData.activity ||
-                                prev.currentActivity,
+                                analysisData.activity || prev.currentActivity,
                             };
                             console.log("更新角色状态:", updatedSettings);
                             return updatedSettings;
@@ -50273,21 +49363,15 @@ const T8ChatDetail = ({
                                 Math.min(
                                   120,
                                   prev.currentHeartRate +
-                                  Math.floor(Math.random() * 10 - 5),
+                                    Math.floor(Math.random() * 10 - 5),
                                 ),
                               ),
-                              currentMood: [
-                                "开心",
-                                "害羞",
-                                "沉思",
-                                "激动",
-                              ][Math.floor(Math.random() * 4)],
-                              currentActivity: [
-                                "待机",
-                                "思考",
-                                "微笑",
-                                "点头",
-                              ][Math.floor(Math.random() * 4)],
+                              currentMood: ["开心", "害羞", "沉思", "激动"][
+                                Math.floor(Math.random() * 4)
+                              ],
+                              currentActivity: ["待机", "思考", "微笑", "点头"][
+                                Math.floor(Math.random() * 4)
+                              ],
                             };
                             console.log(
                               "使用默认值更新角色状态:",
@@ -50308,18 +49392,15 @@ const T8ChatDetail = ({
                               Math.min(
                                 120,
                                 prev.currentHeartRate +
-                                Math.floor(Math.random() * 4 - 2),
+                                  Math.floor(Math.random() * 4 - 2),
                               ),
                             ),
                             currentMood: ["开心", "害羞", "沉思", "激动"][
                               Math.floor(Math.random() * 4)
                             ],
-                            currentActivity: [
-                              "待机",
-                              "思考",
-                              "微笑",
-                              "点头",
-                            ][Math.floor(Math.random() * 4)],
+                            currentActivity: ["待机", "思考", "微笑", "点头"][
+                              Math.floor(Math.random() * 4)
+                            ],
                           };
                           console.log(
                             "API错误时使用默认值更新角色状态:",
@@ -50354,8 +49435,7 @@ const T8ChatDetail = ({
                       setTimeout(() => {
                         // 构建分析函数
                         const analyzeAfterLoad = () => {
-                          const recentMessages =
-                            migratedMessages.slice(-10);
+                          const recentMessages = migratedMessages.slice(-10);
                           const messageContext = recentMessages
                             .map((msg) => {
                               const sender = msg.isMe ? "用户" : "角色";
@@ -50382,26 +49462,19 @@ const T8ChatDetail = ({
                                 // 解析AI返回的结果
                                 let analysisData;
                                 try {
-                                  analysisData =
-                                    JSON.parse(analysisResult);
+                                  analysisData = JSON.parse(analysisResult);
                                 } catch (e) {
                                   // 如果解析失败，使用默认值
                                   analysisData = {
                                     heartRateChange: Math.floor(
                                       Math.random() * 10 - 5,
                                     ),
-                                    mood: [
-                                      "开心",
-                                      "害羞",
-                                      "沉思",
-                                      "激动",
-                                    ][Math.floor(Math.random() * 4)],
-                                    activity: [
-                                      "待机",
-                                      "思考",
-                                      "微笑",
-                                      "点头",
-                                    ][Math.floor(Math.random() * 4)],
+                                    mood: ["开心", "害羞", "沉思", "激动"][
+                                      Math.floor(Math.random() * 4)
+                                    ],
+                                    activity: ["待机", "思考", "微笑", "点头"][
+                                      Math.floor(Math.random() * 4)
+                                    ],
                                   };
                                 }
 
@@ -50412,16 +49485,14 @@ const T8ChatDetail = ({
                                     Math.min(
                                       120,
                                       prev.currentHeartRate +
-                                      (analysisData.heartRateChange ||
-                                        0),
+                                        (analysisData.heartRateChange || 0),
                                     ),
                                   );
                                   return {
                                     ...prev,
                                     currentHeartRate: newHeartRate,
                                     currentMood:
-                                      analysisData.mood ||
-                                      prev.currentMood,
+                                      analysisData.mood || prev.currentMood,
                                     currentActivity:
                                       analysisData.activity ||
                                       prev.currentActivity,
@@ -50437,17 +49508,12 @@ const T8ChatDetail = ({
                                     Math.min(
                                       120,
                                       prev.currentHeartRate +
-                                      Math.floor(
-                                        Math.random() * 10 - 5,
-                                      ),
+                                        Math.floor(Math.random() * 10 - 5),
                                     ),
                                   ),
-                                  currentMood: [
-                                    "开心",
-                                    "害羞",
-                                    "沉思",
-                                    "激动",
-                                  ][Math.floor(Math.random() * 4)],
+                                  currentMood: ["开心", "害羞", "沉思", "激动"][
+                                    Math.floor(Math.random() * 4)
+                                  ],
                                   currentActivity: [
                                     "待机",
                                     "思考",
@@ -50467,15 +49533,12 @@ const T8ChatDetail = ({
                                   Math.min(
                                     120,
                                     prev.currentHeartRate +
-                                    Math.floor(Math.random() * 4 - 2),
+                                      Math.floor(Math.random() * 4 - 2),
                                   ),
                                 ),
-                                currentMood: [
-                                  "开心",
-                                  "害羞",
-                                  "沉思",
-                                  "激动",
-                                ][Math.floor(Math.random() * 4)],
+                                currentMood: ["开心", "害羞", "沉思", "激动"][
+                                  Math.floor(Math.random() * 4)
+                                ],
                                 currentActivity: [
                                   "待机",
                                   "思考",
@@ -50626,9 +49689,7 @@ const T8ChatDetail = ({
         const newText = prompt("编辑消息内容", msg.text);
         if (newText && newText.trim() !== "") {
           setMessages((prev) =>
-            prev.map((m) =>
-              m.id === msg.id ? { ...m, text: newText } : m,
-            ),
+            prev.map((m) => (m.id === msg.id ? { ...m, text: newText } : m)),
           );
         }
         break;
@@ -50660,10 +49721,7 @@ const T8ChatDetail = ({
                   console.log("从IndexedDB删除重说的消息记录成功");
                 })
                 .catch((error) => {
-                  console.error(
-                    "从IndexedDB删除重说的消息记录失败:",
-                    error,
-                  );
+                  console.error("从IndexedDB删除重说的消息记录失败:", error);
                 });
             }
           }
@@ -50795,14 +49853,7 @@ const T8ChatDetail = ({
 
   // 检测用户消息中是否需要图片搜索
   const checkImageSearchRequest = (message) => {
-    const imageKeywords = [
-      "图片",
-      "照片",
-      "image",
-      "photo",
-      "picture",
-      "搜图",
-    ];
+    const imageKeywords = ["图片", "照片", "image", "photo", "picture", "搜图"];
     return imageKeywords.some((keyword) =>
       message.toLowerCase().includes(keyword),
     );
@@ -50810,10 +49861,7 @@ const T8ChatDetail = ({
 
   // 触发 AI 回复
   // [修改] 触发 AI 回复 (增加线下模式的描写解析逻辑和Pixabay图片搜索功能)
-  const handleAITrigger = async (
-    customHistory = null,
-    lastUserMsg = null,
-  ) => {
+  const handleAITrigger = async (customHistory = null, lastUserMsg = null) => {
     console.log("开始调用handleAITrigger");
     if (isTyping) {
       console.log("正在输入中，跳过触发AI回复");
@@ -50847,7 +49895,7 @@ const T8ChatDetail = ({
             .join("\n");
         }
       }
-    } catch (e) { }
+    } catch (e) {}
 
     const currentHistory = customHistory || messages;
     let historyForPrompt = [...currentHistory];
@@ -50889,7 +49937,7 @@ const T8ChatDetail = ({
             userContext = `【玩家设定】原名：${activeUser.name}，目前在本群的昵称为：【${groupNickname}】。性格：${activeUser.personality || "未知"}`;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       const membersInfo = chatData.profile.members
         .map(
@@ -51032,8 +50080,7 @@ const T8ChatDetail = ({
           });
           if (
             m.content &&
-            (m.content.startsWith("http") ||
-              m.content.startsWith("data:image"))
+            (m.content.startsWith("http") || m.content.startsWith("data:image"))
           ) {
             console.log("图片格式有效，转换为多模态格式");
             // ======= 【修改处3：重排数组项与补充核心提示】 =======
@@ -51059,16 +50106,12 @@ const T8ChatDetail = ({
         };
       }),
     ];
-    console.log(
-      "最终发送给AI的消息:",
-      JSON.stringify(apiMessages, null, 2),
-    );
+    console.log("最终发送给AI的消息:", JSON.stringify(apiMessages, null, 2));
 
     // === [新增] 群聊旁观者模式触发逻辑 ===
     // 判断：如果是群聊，且用户并没有刚发出新消息，且历史最后一条是AI（角色）发出的
     const isGroupChat =
-      String(chatData.id).startsWith("group_chat") &&
-      chatData.profile?.members;
+      String(chatData.id).startsWith("group_chat") && chatData.profile?.members;
     const isUserBystander =
       !lastUserMsg &&
       historyForPrompt.length > 0 &&
@@ -51229,19 +50272,12 @@ const T8ChatDetail = ({
           if (cleanReply.trim()) {
             if (String(chatData.id).startsWith("group_chat")) {
               // 【群聊解析逻辑】：匹配 "[名字]: 文本" 形式
-              const lines = cleanReply
-                .split("\n")
-                .filter((l) => l.trim());
+              const lines = cleanReply.split("\n").filter((l) => l.trim());
 
               let lastKnownSpeaker = "系统"; // 记录上一个说话的人，防止换行掉名字
 
               // 【新增】接龙相关的标签列表，这些不应被识别为说话人名字
-              const jielongTags = [
-                "主题",
-                "截止时间",
-                "格式要求",
-                "接龙",
-              ];
+              const jielongTags = ["主题", "截止时间", "格式要求", "接龙"];
 
               // 【新增】接龙内容缓存，用于合并连续的接龙行
               let jielongBuffer = [];
@@ -51259,9 +50295,7 @@ const T8ChatDetail = ({
                   // 如果是 #接龙 开头的行，加入接龙缓存
                   if (!jielongSpeaker) {
                     jielongSpeaker =
-                      lastKnownSpeaker !== "系统"
-                        ? lastKnownSpeaker
-                        : "群成员";
+                      lastKnownSpeaker !== "系统" ? lastKnownSpeaker : "群成员";
                   }
                   jielongBuffer.push(line.trim());
                 } else if (match) {
@@ -51343,10 +50377,7 @@ const T8ChatDetail = ({
                 }
 
                 // 处理最后一行后，检查是否还有未处理的接龙缓存
-                if (
-                  idx === lines.length - 1 &&
-                  jielongBuffer.length > 0
-                ) {
+                if (idx === lines.length - 1 && jielongBuffer.length > 0) {
                   msgIdCounter++;
                   newAiMsgs.push({
                     id: msgIdCounter,
@@ -51371,8 +50402,7 @@ const T8ChatDetail = ({
                 parts.forEach((part, idx) => {
                   const trimmedPart = part.trim();
                   const isNarration =
-                    /^[（\(]/.test(trimmedPart) &&
-                    /[）\)]$/.test(trimmedPart);
+                    /^[（\(]/.test(trimmedPart) && /[）\)]$/.test(trimmedPart);
                   const content = trimmedPart
                     .replace(/^[（\(]|[）\)]$/g, "")
                     .trim();
@@ -51427,10 +50457,7 @@ const T8ChatDetail = ({
           if (imageSearchMatch && pixabayApiKey) {
             const searchQuery = imageSearchMatch[1].trim();
             if (searchQuery) {
-              console.log(
-                "检测到AI图片搜索请求，搜索关键词:",
-                searchQuery,
-              );
+              console.log("检测到AI图片搜索请求，搜索关键词:", searchQuery);
               const aiImageResults = await searchPixabayImages(
                 searchQuery,
                 pixabayApiKey,
@@ -51595,8 +50622,7 @@ const T8ChatDetail = ({
                 const personas = JSON.parse(
                   localStorage.getItem("user_personas") || "[]",
                 );
-                const activeId =
-                  localStorage.getItem("active_persona_id");
+                const activeId = localStorage.getItem("active_persona_id");
                 if (activeId) {
                   const activePersona = personas.find(
                     (p) => String(p.id) === String(activeId),
@@ -51613,16 +50639,11 @@ const T8ChatDetail = ({
             };
 
             // 创建日记生成提示
-            const recentMessages = Array.isArray(messages)
-              ? messages
-              : [];
+            const recentMessages = Array.isArray(messages) ? messages : [];
             const userPersonaInfo = getUserPersonaInfo();
             const diaryPrompt = `请以${chatData.name}的身份写一篇日记，基于以下信息：\n\n1. 人物设定：${chatData.profile?.description || chatData.name}\n\n2. 详细信息：\n性别：${chatData.profile?.gender || "未知"}\n性格：${chatData.profile?.personality || "未知"}\n背景：${chatData.profile?.background || "未知"}\nMBTI：${chatData.profile?.mbti || "未知"}\n星座：${chatData.profile?.constellation || "未知"}\n语言风格：${chatData.profile?.style || "默认风格"}\n\n3. 用户身份信息：\n${userPersonaInfo}\n\n4. 最近的聊天内容：\n${recentMessages
               .slice(-50)
-              .map(
-                (msg) =>
-                  `${msg.isMe ? "我" : chatData.name}: ${msg.text}`,
-              )
+              .map((msg) => `${msg.isMe ? "我" : chatData.name}: ${msg.text}`)
               .join(
                 "\n",
               )}\n\n5. 世界背景：${chatData.worldInfo || "默认世界"}\n\n【必须遵守的规则】：\n1. 日记中，角色觉得一般重要的文字，使用红色斜体（用<em style="color: red;">文字</em>）。\n2. 日记中，角色颇感烦躁，不知道怎么写，犹豫纠结的文字，给那段文字添加中划线（用<del>文字</del>）。\n3. 用户觉得非常重要的文字，采用浅灰色高亮（用<mark style="background-color: #f0f0f0;">文字</mark>）。\n4. 以角色的设定，世界书和上下文为参考，允许日记中出现涂鸦和画圈的地方。画圈要求用红色椭圆形圈出来（用<span style="display: inline-block; border: 2px solid red; border-radius: 50%; padding: 2px 4px;">文字</span>），涂鸦采用emoji表示。但一定不可以脱离本身人设，出现与原作悖离的行为。\n5. 日记中角色的语言风格【必须】和角色设定的语言风格一致！\n\n请用第一人称撰写，风格符合人物性格，内容真实自然，包含具体的事件和感受。`;
@@ -51669,9 +50690,7 @@ const T8ChatDetail = ({
               const stemIndex = baseYear % 10;
               const branchIndex = baseYear % 12;
 
-              return (
-                heavenlyStems[stemIndex] + earthlyBranches[branchIndex]
-              );
+              return heavenlyStems[stemIndex] + earthlyBranches[branchIndex];
             };
 
             // 生成固定格式的标题
@@ -51696,8 +50715,7 @@ const T8ChatDetail = ({
                   // 使用固定格式的标题
                   const title = fixedTitle;
                   // 跳过AI生成的标题，使用剩余内容作为段落
-                  const paragraphs =
-                    lines.length > 1 ? lines.slice(1) : lines;
+                  const paragraphs = lines.length > 1 ? lines.slice(1) : lines;
 
                   // 更新日记内容
                   setDiaryContent({
@@ -51837,14 +50855,7 @@ const T8ChatDetail = ({
                   stroke="currentColor"
                   strokeWidth="2"
                 >
-                  <rect
-                    x="6"
-                    y="6"
-                    width="12"
-                    height="12"
-                    rx="2"
-                    ry="2"
-                  ></rect>
+                  <rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect>
                 </svg>
               ) : (
                 <svg
@@ -52224,7 +51235,7 @@ const T8ChatDetail = ({
                   <input
                     type="checkbox"
                     checked={selectedMsgIds.includes(msg.id)}
-                    onChange={() => { }}
+                    onChange={() => {}}
                     style={{
                       transform: "scale(1.2)",
                       pointerEvents: "none",
@@ -52240,18 +51251,14 @@ const T8ChatDetail = ({
                     style={{
                       display: "flex",
                       alignItems: "flex-end",
-                      justifyContent: msg.isMe
-                        ? "flex-end"
-                        : "flex-start",
+                      justifyContent: msg.isMe ? "flex-end" : "flex-start",
                       width: "100%",
                       marginBottom: "6px",
                     }}
                   >
                     {/* 左侧头像占位符 */}
                     {settings.showAvatars && !msg.isMe && (
-                      <div
-                        style={{ marginRight: "10px", width: "50px" }}
-                      ></div>
+                      <div style={{ marginRight: "10px", width: "50px" }}></div>
                     )}
 
                     {/* 引用栏内容 */}
@@ -52276,9 +51283,7 @@ const T8ChatDetail = ({
 
                     {/* 右侧头像占位符 */}
                     {settings.showAvatars && msg.isMe && (
-                      <div
-                        style={{ marginLeft: "10px", width: "50px" }}
-                      ></div>
+                      <div style={{ marginLeft: "10px", width: "50px" }}></div>
                     )}
                   </div>
                 )}
@@ -52306,9 +51311,7 @@ const T8ChatDetail = ({
                           : "rgba(255,255,255,0.4)",
                         padding: msg.tap ? "0" : "4px 12px",
                         borderRadius: msg.tap ? "0" : "12px",
-                        border: msg.tap
-                          ? "none"
-                          : "1px solid rgba(0,0,0,0.02)",
+                        border: msg.tap ? "none" : "1px solid rgba(0,0,0,0.02)",
                         maxWidth: "85%",
                         cursor: msg.tap ? "default" : "pointer",
                         fontStyle: msg.tap ? "italic" : "normal",
@@ -52338,25 +51341,20 @@ const T8ChatDetail = ({
                           onClick={(e) => e.stopPropagation()}
                           style={{
                             left: "50%",
-                            transform:
-                              "translateX(-50%) translateY(-20px)",
+                            transform: "translateX(-50%) translateY(-20px)",
                             zIndex: 1000,
                             position: "absolute",
                           }}
                         >
                           <button
                             className="msg-menu-btn"
-                            onClick={(e) =>
-                              handleMenuAction("quote", msg, e)
-                            }
+                            onClick={(e) => handleMenuAction("quote", msg, e)}
                           >
                             引用
                           </button>
                           <button
                             className="msg-menu-btn"
-                            onClick={(e) =>
-                              handleMenuAction("edit", msg, e)
-                            }
+                            onClick={(e) => handleMenuAction("edit", msg, e)}
                           >
                             编辑
                           </button>
@@ -52389,9 +51387,7 @@ const T8ChatDetail = ({
                           <button
                             className="msg-menu-btn"
                             style={{ color: "#ff6b6b" }}
-                            onClick={(e) =>
-                              handleMenuAction("delete", msg, e)
-                            }
+                            onClick={(e) => handleMenuAction("delete", msg, e)}
                           >
                             删除
                           </button>
@@ -52404,9 +51400,7 @@ const T8ChatDetail = ({
                     style={{
                       display: "flex",
                       alignItems: "flex-end",
-                      justifyContent: msg.isMe
-                        ? "flex-end"
-                        : "flex-start",
+                      justifyContent: msg.isMe ? "flex-end" : "flex-start",
                       width: "100%",
                     }}
                   >
@@ -52433,8 +51427,7 @@ const T8ChatDetail = ({
                             }}
                             onDoubleClick={() => {
                               const suffix = tapSuffixYou || "";
-                              const targetName =
-                                msg.sender || chatData.name;
+                              const targetName = msg.sender || chatData.name;
                               showTapNotification(
                                 `你拍了拍 ${targetName}${suffix ? ` ${suffix}` : ""}`,
                                 true,
@@ -52526,60 +51519,55 @@ const T8ChatDetail = ({
                               </svg>
                               同行选购记录
                             </div>
-                            {(msg.content?.messages || []).map(
-                              (item, idx) => (
-                                <div
-                                  key={item.id}
-                                  style={{
-                                    marginBottom: "8px",
-                                    fontSize: "13px",
-                                    lineHeight: "1.4",
-                                  }}
-                                >
-                                  {item.type === "order_card" ? (
+                            {(msg.content?.messages || []).map((item, idx) => (
+                              <div
+                                key={item.id}
+                                style={{
+                                  marginBottom: "8px",
+                                  fontSize: "13px",
+                                  lineHeight: "1.4",
+                                }}
+                              >
+                                {item.type === "order_card" ? (
+                                  <div
+                                    style={{
+                                      backgroundColor: "#fff",
+                                      borderRadius: "8px",
+                                      padding: "10px",
+                                      border: "1px solid #EAEAEA",
+                                    }}
+                                  >
                                     <div
                                       style={{
-                                        backgroundColor: "#fff",
-                                        borderRadius: "8px",
-                                        padding: "10px",
-                                        border: "1px solid #EAEAEA",
+                                        color: "#333",
+                                        fontWeight: "bold",
                                       }}
                                     >
-                                      <div
-                                        style={{
-                                          color: "#333",
-                                          fontWeight: "bold",
-                                        }}
-                                      >
-                                        {item.content.itemName}
-                                      </div>
-                                      <div
-                                        style={{
-                                          color: "#666",
-                                          fontSize: "11px",
-                                        }}
-                                      >
-                                        {item.content.shop} ·{" "}
-                                        {item.content.price}
-                                      </div>
+                                      {item.content.itemName}
                                     </div>
-                                  ) : (
                                     <div
                                       style={{
-                                        color: item.isMe
-                                          ? "#5d4e37"
-                                          : "#5a5f4d",
+                                        color: "#666",
+                                        fontSize: "11px",
                                       }}
                                     >
-                                      {item.isMe
-                                        ? "我"
-                                        : msg.characterName || "AI"}
-                                      : {item.text}
+                                      {item.content.shop} · {item.content.price}
                                     </div>
-                                  )}
-                                </div>
-                              ),
-                            )}
+                                  </div>
+                                ) : (
+                                  <div
+                                    style={{
+                                      color: item.isMe ? "#5d4e37" : "#5a5f4d",
+                                    }}
+                                  >
+                                    {item.isMe
+                                      ? "我"
+                                      : msg.characterName || "AI"}
+                                    : {item.text}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
                         ) : msg.type === "image" ? (
                           <div style={{ position: "relative" }}>
@@ -52654,14 +51642,13 @@ const T8ChatDetail = ({
                               onClick={(e) => {
                                 e.stopPropagation();
                                 if (msg.content) {
-                                        /* 原来的播放逻辑 */ setMessages(
-                                  (prev) =>
+                                  /* 原来的播放逻辑 */ setMessages((prev) =>
                                     prev.map((m) =>
                                       m.id === msg.id
                                         ? { ...m, showText: true }
                                         : m,
                                     ),
-                                );
+                                  );
                                 }
                               }}
                             >
@@ -52772,23 +51759,17 @@ const T8ChatDetail = ({
                         {activeMsgId === msg.id && !isMultiSelectMode && (
                           <div
                             className="msg-menu-bar"
-                            onClick={(e) =>
-                              handleMenuAction("delete", msg, e)
-                            }
+                            onClick={(e) => handleMenuAction("delete", msg, e)}
                           >
                             <button
                               className="msg-menu-btn"
-                              onClick={(e) =>
-                                handleMenuAction("quote", msg, e)
-                              }
+                              onClick={(e) => handleMenuAction("quote", msg, e)}
                             >
                               引用
                             </button>
                             <button
                               className="msg-menu-btn"
-                              onClick={(e) =>
-                                handleMenuAction("edit", msg, e)
-                              }
+                              onClick={(e) => handleMenuAction("edit", msg, e)}
                             >
                               编辑
                             </button>
@@ -52861,8 +51842,7 @@ const T8ChatDetail = ({
                             );
                           }}
                         >
-                          {userAvatar ? "" : "我"}{" "}
-                          {/* 有图片时不显示"我"字 */}
+                          {userAvatar ? "" : "我"} {/* 有图片时不显示"我"字 */}
                         </div>
                       </div>
                     )}
@@ -52911,10 +51891,7 @@ const T8ChatDetail = ({
               gap: "4px",
             }}
           >
-            <div
-              className="typing-dot"
-              style={{ animationDelay: "0s" }}
-            ></div>
+            <div className="typing-dot" style={{ animationDelay: "0s" }}></div>
             <div
               className="typing-dot"
               style={{ animationDelay: "0.2s" }}
@@ -52964,8 +51941,7 @@ const T8ChatDetail = ({
             {/* [新增] 整合按钮 */}
             <button
               onClick={() => {
-                if (selectedMsgIds.length === 0)
-                  return alert("请先选择消息！");
+                if (selectedMsgIds.length === 0) return alert("请先选择消息！");
                 setConsolidateTitle("");
                 setConsolidateContent("");
                 setConsolidateMode("manual");
@@ -52987,9 +51963,7 @@ const T8ChatDetail = ({
               onClick={() => {
                 if (selectedMsgIds.length === 0) return;
                 if (
-                  confirm(
-                    `确定删除选中的 ${selectedMsgIds.length} 条消息吗？`,
-                  )
+                  confirm(`确定删除选中的 ${selectedMsgIds.length} 条消息吗？`)
                 ) {
                   const newMessages = messages.filter(
                     (m) => !selectedMsgIds.includes(m.id),
@@ -53030,10 +52004,7 @@ const T8ChatDetail = ({
                   onClick={() => setQuotingMsg(null)}
                   style={{ cursor: "pointer", padding: "4px" }}
                 >
-                  <i
-                    data-lucide="x"
-                    style={{ width: 14, height: 14 }}
-                  ></i>
+                  <i data-lucide="x" style={{ width: 14, height: 14 }}></i>
                 </div>
               </div>
             )}
@@ -53073,8 +52044,7 @@ const T8ChatDetail = ({
                   }
                   onMouseLeave={(e) =>
                     !showImagePanel &&
-                    (e.currentTarget.style.backgroundColor =
-                      "transparent")
+                    (e.currentTarget.style.backgroundColor = "transparent")
                   }
                   onClick={() => {
                     setShowImagePanel(!showImagePanel);
@@ -53082,10 +52052,8 @@ const T8ChatDetail = ({
                     setShowToolPanel(false); // 新增互斥
                     // 打开图片面板时收起键盘
                     if (
-                      document.activeElement instanceof
-                      HTMLInputElement ||
-                      document.activeElement instanceof
-                      HTMLTextAreaElement
+                      document.activeElement instanceof HTMLInputElement ||
+                      document.activeElement instanceof HTMLTextAreaElement
                     ) {
                       document.activeElement.blur();
                     }
@@ -53119,8 +52087,7 @@ const T8ChatDetail = ({
                   }
                   onMouseLeave={(e) =>
                     !showEmojiPanel &&
-                    (e.currentTarget.style.backgroundColor =
-                      "transparent")
+                    (e.currentTarget.style.backgroundColor = "transparent")
                   }
                   onClick={() => {
                     setShowEmojiPanel(!showEmojiPanel);
@@ -53130,10 +52097,8 @@ const T8ChatDetail = ({
                     setIsEmojiManageMode(false);
                     // 打开表情包面板时收起键盘
                     if (
-                      document.activeElement instanceof
-                      HTMLInputElement ||
-                      document.activeElement instanceof
-                      HTMLTextAreaElement
+                      document.activeElement instanceof HTMLInputElement ||
+                      document.activeElement instanceof HTMLTextAreaElement
                     ) {
                       document.activeElement.blur();
                     }
@@ -53168,8 +52133,7 @@ const T8ChatDetail = ({
                     }
                     onMouseLeave={(e) =>
                       !showToolPanel &&
-                      (e.currentTarget.style.backgroundColor =
-                        "transparent")
+                      (e.currentTarget.style.backgroundColor = "transparent")
                     }
                     onClick={() => {
                       setShowToolPanel(!showToolPanel);
@@ -53177,10 +52141,8 @@ const T8ChatDetail = ({
                       setShowEmojiPanel(false);
                       // 打开工具面板时收起键盘
                       if (
-                        document.activeElement instanceof
-                        HTMLInputElement ||
-                        document.activeElement instanceof
-                        HTMLTextAreaElement
+                        document.activeElement instanceof HTMLInputElement ||
+                        document.activeElement instanceof HTMLTextAreaElement
                       ) {
                         document.activeElement.blur();
                       }
@@ -53207,12 +52169,11 @@ const T8ChatDetail = ({
                       position: "relative",
                     }}
                     onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor =
-                      "rgba(255, 255, 255, 0.9)")
+                      (e.currentTarget.style.backgroundColor =
+                        "rgba(255, 255, 255, 0.9)")
                     }
                     onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor =
-                      "transparent")
+                      (e.currentTarget.style.backgroundColor = "transparent")
                     }
                     onClick={() => {
                       // 1. 立即弹出呼叫等待 UI（不再干等 AI 返回）
@@ -53261,12 +52222,11 @@ const T8ChatDetail = ({
                       position: "relative",
                     }}
                     onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor =
-                      "rgba(255, 255, 255, 0.9)")
+                      (e.currentTarget.style.backgroundColor =
+                        "rgba(255, 255, 255, 0.9)")
                     }
                     onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor =
-                      "transparent")
+                      (e.currentTarget.style.backgroundColor = "transparent")
                     }
                     onClick={() => {
                       setShowDiaryPage(true);
@@ -53294,12 +52254,11 @@ const T8ChatDetail = ({
                       position: "relative",
                     }}
                     onMouseEnter={(e) =>
-                    (e.currentTarget.style.backgroundColor =
-                      "rgba(255, 255, 255, 0.9)")
+                      (e.currentTarget.style.backgroundColor =
+                        "rgba(255, 255, 255, 0.9)")
                     }
                     onMouseLeave={(e) =>
-                    (e.currentTarget.style.backgroundColor =
-                      "transparent")
+                      (e.currentTarget.style.backgroundColor = "transparent")
                     }
                     onClick={() => {
                       // 打开轨迹页面
@@ -53422,8 +52381,7 @@ const T8ChatDetail = ({
                       onClick={() => setImageTab("local")}
                       style={{
                         fontSize: "14px",
-                        color:
-                          imageTab === "local" ? "#d6724b" : "#8c917b",
+                        color: imageTab === "local" ? "#d6724b" : "#8c917b",
                         fontWeight: "bold",
                         cursor: "pointer",
                         borderBottom:
@@ -53440,8 +52398,7 @@ const T8ChatDetail = ({
                       onClick={() => setImageTab("desc")}
                       style={{
                         fontSize: "14px",
-                        color:
-                          imageTab === "desc" ? "#d6724b" : "#8c917b",
+                        color: imageTab === "desc" ? "#d6724b" : "#8c917b",
                         fontWeight: "bold",
                         cursor: "pointer",
                         borderBottom:
@@ -53515,9 +52472,7 @@ const T8ChatDetail = ({
                                 const reader = new FileReader();
                                 reader.onload = (event) => {
                                   loadedImages.push(event.target.result);
-                                  if (
-                                    loadedImages.length === files.length
-                                  ) {
+                                  if (loadedImages.length === files.length) {
                                     setSelectedImages((prev) => [
                                       ...prev,
                                       ...loadedImages,
@@ -53594,11 +52549,13 @@ const T8ChatDetail = ({
                             if (selectedImages.length === 0) return;
 
                             const newMsgs = [];
-                            const currentTime =
-                              new Date().toLocaleTimeString([], {
+                            const currentTime = new Date().toLocaleTimeString(
+                              [],
+                              {
                                 hour: "2-digit",
                                 minute: "2-digit",
-                              });
+                              },
+                            );
 
                             selectedImages.forEach((img, idx) => {
                               newMsgs.push({
@@ -53614,10 +52571,7 @@ const T8ChatDetail = ({
                             // 将所有选中的图片更新到消息流
                             setMessages((prev) => {
                               const finalMsgs = [...prev, ...newMsgs];
-                              setTimeout(
-                                () => handleAITrigger(finalMsgs),
-                                50,
-                              ); // 触发AI回应
+                              setTimeout(() => handleAITrigger(finalMsgs), 50); // 触发AI回应
                               return finalMsgs;
                             });
 
@@ -53633,9 +52587,7 @@ const T8ChatDetail = ({
                           style={{
                             padding: "10px 24px",
                             background:
-                              selectedImages.length > 0
-                                ? "#d6724b"
-                                : "#ccc",
+                              selectedImages.length > 0 ? "#d6724b" : "#ccc",
                             color: "white",
                             border: "none",
                             borderRadius: "16px",
@@ -53705,17 +52657,12 @@ const T8ChatDetail = ({
 
                             setMessages((prev) => {
                               const newMsgs = [...prev, descMsg];
-                              setTimeout(
-                                () => handleAITrigger(newMsgs),
-                                50,
-                              ); // 触发AI回应
+                              setTimeout(() => handleAITrigger(newMsgs), 50); // 触发AI回应
                               return newMsgs;
                             });
 
                             if (onMessageUpdate)
-                              onMessageUpdate(
-                                `[图片描述] ${descImageText}`,
-                              );
+                              onMessageUpdate(`[图片描述] ${descImageText}`);
 
                             setDescImageText("");
                             setShowImagePanel(false);
@@ -53857,8 +52804,7 @@ const T8ChatDetail = ({
                                 }),
                               };
                               setMessages((prev) => [...prev, emojiMsg]);
-                              if (onMessageUpdate)
-                                onMessageUpdate("[表情包]");
+                              if (onMessageUpdate) onMessageUpdate("[表情包]");
                               setShowEmojiPanel(false); // 发送完毕后自动关闭
                             }}
                           >
@@ -53877,13 +52823,9 @@ const T8ChatDetail = ({
                                 onClick={async (e) => {
                                   e.stopPropagation();
                                   if (confirm("确定要移出这个表情吗？")) {
-                                    await window.emojiStore.delete(
-                                      emoji.id,
-                                    );
+                                    await window.emojiStore.delete(emoji.id);
                                     setSavedEmojis((prev) =>
-                                      prev.filter(
-                                        (e) => e.id !== emoji.id,
-                                      ),
+                                      prev.filter((e) => e.id !== emoji.id),
                                     );
                                   }
                                 }}
@@ -53973,9 +52915,7 @@ const T8ChatDetail = ({
                         </div>
                         <button
                           onClick={() =>
-                            document
-                              .getElementById("emoji-file-upload")
-                              .click()
+                            document.getElementById("emoji-file-upload").click()
                           }
                           style={{
                             padding: "8px 20px",
@@ -54007,10 +52947,7 @@ const T8ChatDetail = ({
                                   timestamp: Date.now(),
                                 };
                                 await window.emojiStore.save(newEmoji);
-                                setSavedEmojis((prev) => [
-                                  newEmoji,
-                                  ...prev,
-                                ]);
+                                setSavedEmojis((prev) => [newEmoji, ...prev]);
                                 setEmojiTab("list");
                                 alert("表情导入成功！");
                               };
@@ -54047,9 +52984,7 @@ const T8ChatDetail = ({
                             type="text"
                             placeholder="请粘贴以 http 开头的图片链接"
                             value={newEmojiUrl}
-                            onChange={(e) =>
-                              setNewEmojiUrl(e.target.value)
-                            }
+                            onChange={(e) => setNewEmojiUrl(e.target.value)}
                             style={{
                               flex: 1,
                               padding: "10px 14px",
@@ -54073,10 +53008,7 @@ const T8ChatDetail = ({
                                 timestamp: Date.now(),
                               };
                               await window.emojiStore.save(newEmoji);
-                              setSavedEmojis((prev) => [
-                                newEmoji,
-                                ...prev,
-                              ]);
+                              setSavedEmojis((prev) => [newEmoji, ...prev]);
                               setNewEmojiUrl("");
                               setEmojiTab("list");
                               alert("表情获取成功！");
@@ -54090,8 +53022,7 @@ const T8ChatDetail = ({
                               cursor: "pointer",
                               fontSize: "13px",
                               fontWeight: "bold",
-                              boxShadow:
-                                "0 4px 10px rgba(214,114,75,0.3)",
+                              boxShadow: "0 4px 10px rgba(214,114,75,0.3)",
                             }}
                           >
                             吸纳
@@ -54174,9 +53105,7 @@ const T8ChatDetail = ({
                             setShowToolPanel(false);
                             setShowJielongModal(true);
                           } else {
-                            alert(
-                              `您点击了群功能：${tool.name} (待开发)`,
-                            );
+                            alert(`您点击了群功能：${tool.name} (待开发)`);
                           }
                         }}
                       >
@@ -54416,8 +53345,7 @@ const T8ChatDetail = ({
                             return newMessages;
                           });
 
-                          if (onMessageUpdate)
-                            onMessageUpdate("[发起接龙]");
+                          if (onMessageUpdate) onMessageUpdate("[发起接龙]");
                           setShowJielongModal(false);
                           setJielongData({
                             topic: "",
@@ -54438,8 +53366,7 @@ const T8ChatDetail = ({
                           fontWeight: "bold",
                           fontSize: "15px",
                           cursor: "pointer",
-                          boxShadow:
-                            "0 4px 10px rgba(168, 200, 186, 0.4)",
+                          boxShadow: "0 4px 10px rgba(168, 200, 186, 0.4)",
                         }}
                       >
                         发送接龙
@@ -54474,8 +53401,7 @@ const T8ChatDetail = ({
                   const personas = JSON.parse(
                     localStorage.getItem("user_personas") || "[]",
                   );
-                  const activeId =
-                    localStorage.getItem("active_persona_id");
+                  const activeId = localStorage.getItem("active_persona_id");
                   if (activeId) {
                     const activePersona = personas.find(
                       (p) => String(p.id) === String(activeId),
@@ -54492,16 +53418,11 @@ const T8ChatDetail = ({
               };
 
               // 创建轨迹生成提示
-              const recentMessages = Array.isArray(messages)
-                ? messages
-                : [];
+              const recentMessages = Array.isArray(messages) ? messages : [];
               const userPersonaInfo = getUserPersonaInfo();
               const trajectoryPrompt = `请为${chatData.name}生成一天的完整轨迹，基于以下信息：\n\n1. 角色设定：${chatData.profile?.description || chatData.name}\n\n2. 详细信息：\n性别：${chatData.profile?.gender || "未知"}\n性格：${chatData.profile?.personality || "未知"}\n背景：${chatData.profile?.background || "未知"}\nMBTI：${chatData.profile?.mbti || "未知"}\n星座：${chatData.profile?.constellation || "未知"}\n语言风格：${chatData.profile?.style || "默认风格"}\n\n3. 用户身份信息：\n${userPersonaInfo}\n\n4. 最近的聊天内容：\n${recentMessages
                 .slice(-50)
-                .map(
-                  (msg) =>
-                    `${msg.isMe ? "我" : chatData.name}: ${msg.text}`,
-                )
+                .map((msg) => `${msg.isMe ? "我" : chatData.name}: ${msg.text}`)
                 .join(
                   "\n",
                 )}\n\n5. 世界背景：${chatData.worldInfo || "默认世界"}\n\n【必须遵守的规则】：\n1. 生成内容必须严格参考角色设定、世界书设置、用户身份配置和30-50条上下文。\n2. 事件按照「上午（辰时、巳时、午初）、中午（午正、未初、未正）、下午（申时、酉初、酉正）、晚间（戌时、亥初、亥正）」的时辰划分。\n3. 每个事件用莫兰迪浅色卡片展示，对应「外出 / 访客 / 私人 / 军务」分类。\n4. 生成一天内的完整日程，包含公务、社交、私人活动等，事件之间有逻辑关联。\n5. 卡片内包含：事件标题、简短描述。\n6. 确保一天内的事件数量合理，覆盖主要时段，避免过于密集或稀疏。\n\n请直接输出最终的轨迹表，无需额外解释。\n\n输出格式要求：\n以JSON格式输出，包含以下结构：\n{\n  \"events\": [\n    {\n      \"time\": \"上午-辰时\",\n      \"category\": \"军务\",\n      \"title\": \"处理军务\",\n      \"description\": \"处理日常军务文件\",\n      \"position\": { \"top\": \"10px\", \"left\": \"10px\" },\n      \"style\": \"orange\"\n    }\n  ]\n}`;
@@ -54525,8 +53446,7 @@ const T8ChatDetail = ({
                     console.log("原始回复:", reply);
 
                     // 提取```json代码块中的内容
-                    const codeBlockMatch =
-                      reply.match(/```json[\s\S]*?```/);
+                    const codeBlockMatch = reply.match(/```json[\s\S]*?```/);
                     if (codeBlockMatch) {
                       jsonContent = codeBlockMatch[0]
                         .replace(/```json|```/g, "")
@@ -54535,8 +53455,7 @@ const T8ChatDetail = ({
                     }
                     // 提取```代码块中的内容
                     else {
-                      const plainCodeBlockMatch =
-                        reply.match(/```[\s\S]*?```/);
+                      const plainCodeBlockMatch = reply.match(/```[\s\S]*?```/);
                       if (plainCodeBlockMatch) {
                         jsonContent = plainCodeBlockMatch[0]
                           .replace(/```/g, "")
@@ -54550,10 +53469,7 @@ const T8ChatDetail = ({
                     console.log("轨迹数据:", parsedData);
 
                     // 为每个事件生成合理的位置
-                    if (
-                      parsedData.events &&
-                      Array.isArray(parsedData.events)
-                    ) {
+                    if (parsedData.events && Array.isArray(parsedData.events)) {
                       const positionedEvents = parsedData.events.map(
                         (event, index) => {
                           // 根据时辰生成位置
@@ -54741,9 +53657,7 @@ const T8ChatDetail = ({
             });
             // 立即添加初始问候消息到通话中页面
             setTimeout(() => {
-              setInCallMessages([
-                { text: "你好，有什么事吗？", isMe: false },
-              ]);
+              setInCallMessages([{ text: "你好，有什么事吗？", isMe: false }]);
             }, 100);
             // 跳转到通话中页面
             setTimeout(() => setShowInCallUI(true), 300);
@@ -54798,9 +53712,7 @@ const T8ChatDetail = ({
               animation: "popIn 0.3s ease-out",
             }}
           >
-            <div style={{ fontSize: "40px", marginBottom: "10px" }}>
-              🛒
-            </div>
+            <div style={{ fontSize: "40px", marginBottom: "10px" }}>🛒</div>
             <h3
               style={{
                 color: "#5a5f4d",
@@ -54961,10 +53873,8 @@ const T8ChatDetail = ({
                         if (avatarElement) {
                           avatarElement.style.backgroundImage = `url(${imageUrl})`;
                           avatarElement.style.backgroundSize = "contain";
-                          avatarElement.style.backgroundPosition =
-                            "center";
-                          avatarElement.style.backgroundRepeat =
-                            "no-repeat";
+                          avatarElement.style.backgroundPosition = "center";
+                          avatarElement.style.backgroundRepeat = "no-repeat";
                           avatarElement.style.border =
                             "3px dashed rgba(200, 200, 200, 0.5)";
                         }
@@ -55192,9 +54102,7 @@ const T8ChatDetail = ({
                 marginBottom: "20px",
               }}
             >
-              <h3
-                style={{ margin: 0, fontSize: "18px", color: "#5a5f4d" }}
-              >
+              <h3 style={{ margin: 0, fontSize: "18px", color: "#5a5f4d" }}>
                 整合选中的 {selectedMsgIds.length} 条记录
               </h3>
               <button
@@ -55476,8 +54384,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
     const namePrompt = prompt(
       `请为该${type === "bg" ? "背景" : "立绘"}命名（如：微笑、庭院等）：`,
     );
-    if (!namePrompt || !namePrompt.trim())
-      return alert("必须命名才可保存！");
+    if (!namePrompt || !namePrompt.trim()) return alert("必须命名才可保存！");
 
     compressImage(file, (base64Url) => {
       const newItem = {
@@ -55537,7 +54444,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
             userContext = `【用户/导演设定】\n姓名:${activeUser.name}\n性格:${activeUser.personality || "未知"}\n背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) { }
+      } catch (e) {}
 
       let universeSetup = "";
       if (universeParams) {
@@ -55557,9 +54464,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
           "【前情提要】\n" +
           scriptData
             .map((line) =>
-              line.name
-                ? `${line.name}：${line.text}`
-                : `旁白：${line.text}`,
+              line.name ? `${line.name}：${line.text}` : `旁白：${line.text}`,
             )
             .join("\n");
         if (userChoice) {
@@ -55790,8 +54695,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
       id: Date.now(),
       time: new Date().toLocaleString(),
       title: selectedContent?.title || "自定义演绎",
-      lineText:
-        (currentLine?.text?.substring(0, 15) || "暂无内容") + "...",
+      lineText: (currentLine?.text?.substring(0, 15) || "暂无内容") + "...",
       scriptData: [...scriptData],
       currentIndex: currentLineIndex,
       sceneConfig: { ...sceneConfig },
@@ -55989,8 +54893,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
                 </button>
                 <button
                   onClick={() => {
-                    if (!userActionText.trim())
-                      return alert("请先输入内容！");
+                    if (!userActionText.trim()) return alert("请先输入内容！");
                     handleGenerateScript(userActionText);
                   }}
                   disabled={isGeneratingScript || !userActionText.trim()}
@@ -56006,9 +54909,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
                     fontWeight: "bold",
                     cursor: "pointer",
                     opacity:
-                      isGeneratingScript || !userActionText.trim()
-                        ? 0.5
-                        : 1,
+                      isGeneratingScript || !userActionText.trim() ? 0.5 : 1,
                   }}
                 >
                   自行输入
@@ -56071,8 +54972,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
               height: "60vh",
               position: "relative",
               overflow: "hidden",
-              animation:
-                "slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards",
+              animation: "slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) forwards",
             }}
             onClick={(e) => e.stopPropagation()}
           >
@@ -56087,8 +54987,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
                     : menuView === "scene_settings"
                       ? "translateX(-33.33%)"
                       : "translateX(-66.66%)" /* 新增 Saves 页面的位移 */,
-                transition:
-                  "transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)",
+                transition: "transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)",
               }}
             >
               {/* === 第一页：主菜单 === */}
@@ -56149,9 +55048,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
                   布景与立绘
                 </button>
                 <button
-                  onClick={() =>
-                    setMenuView("saves")
-                  } /* [修改] 唤起存档页 */
+                  onClick={() => setMenuView("saves")} /* [修改] 唤起存档页 */
                   style={{
                     width: "100%",
                     padding: "16px",
@@ -56309,15 +55206,12 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            if (
-                              confirm(`确定删除「${sprite.name}」吗？`)
-                            ) {
+                            if (confirm(`确定删除「${sprite.name}」吗？`)) {
                               saveSceneToDB({
                                 ...sceneConfig,
-                                mainSprites:
-                                  sceneConfig.mainSprites.filter(
-                                    (s) => s.id !== sprite.id,
-                                  ),
+                                mainSprites: sceneConfig.mainSprites.filter(
+                                  (s) => s.id !== sprite.id,
+                                ),
                                 activeMainId:
                                   sceneConfig.activeMainId === sprite.id
                                     ? null
@@ -56475,18 +55369,14 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (
-                                confirm(`确定删除「${sprite.name}」吗？`)
-                              ) {
+                              if (confirm(`确定删除「${sprite.name}」吗？`)) {
                                 saveSceneToDB({
                                   ...sceneConfig,
-                                  otherSprites:
-                                    sceneConfig.otherSprites.filter(
-                                      (s) => s.id !== sprite.id,
-                                    ),
+                                  otherSprites: sceneConfig.otherSprites.filter(
+                                    (s) => s.id !== sprite.id,
+                                  ),
                                   activeOtherId:
-                                    sceneConfig.activeOtherId ===
-                                      sprite.id
+                                    sceneConfig.activeOtherId === sprite.id
                                       ? null
                                       : sceneConfig.activeOtherId,
                                 });
@@ -56617,10 +55507,9 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
                             if (confirm(`确定删除「${bg.name}」吗？`)) {
                               saveSceneToDB({
                                 ...sceneConfig,
-                                backgrounds:
-                                  sceneConfig.backgrounds.filter(
-                                    (b) => b.id !== bg.id,
-                                  ),
+                                backgrounds: sceneConfig.backgrounds.filter(
+                                  (b) => b.id !== bg.id,
+                                ),
                                 activeBgId:
                                   sceneConfig.activeBgId === bg.id
                                     ? null
@@ -56838,8 +55727,7 @@ const BellsPage = ({ onBack, chatData }) => {
 
   // ======== [核心修改] 替换为底部卡片逻辑 ========
   const [activeBottomCard, setActiveBottomCard] = React.useState(null);
-  const [isGeneratingIdentity, setIsGeneratingIdentity] =
-    React.useState(false);
+  const [isGeneratingIdentity, setIsGeneratingIdentity] = React.useState(false);
   const [myPersona, setMyPersona] = React.useState(null);
 
   // --- 新增：文风预设的系列状态 ---
@@ -56862,7 +55750,7 @@ const BellsPage = ({ onBack, chatData }) => {
           setMyPersona(activeUser);
         }
       }
-    } catch (e) { }
+    } catch (e) {}
   }, []);
 
   const [inputValues, setInputValues] = React.useState({
@@ -56945,9 +55833,7 @@ const BellsPage = ({ onBack, chatData }) => {
           "疯批美人",
         ];
         const res =
-          randomIdentities[
-          Math.floor(Math.random() * randomIdentities.length)
-          ];
+          randomIdentities[Math.floor(Math.random() * randomIdentities.length)];
         handleInputChange(
           target === "me" ? "myIdentity" : "theirIdentity",
           res,
@@ -56961,8 +55847,7 @@ const BellsPage = ({ onBack, chatData }) => {
 
   // --- 新增：文风模仿与采纳描述功能 ---
   const handleMimic = () => {
-    if (!styleText.trim())
-      return alert("请先在输入框输入3-5句示范文字！");
+    if (!styleText.trim()) return alert("请先在输入框输入3-5句示范文字！");
     setIsMimicking(true);
 
     const sysPrompt = "你是一个文学素养极高的文风模仿大师。";
@@ -57051,10 +55936,7 @@ const BellsPage = ({ onBack, chatData }) => {
         ></div>
       ))}
 
-      <div
-        className="bells-container"
-        onClick={(e) => e.stopPropagation()}
-      >
+      <div className="bells-container" onClick={(e) => e.stopPropagation()}>
         {/* 3. 红绳 (SVG 绘制) */}
         <svg
           className="red-string-svg"
@@ -57167,9 +56049,7 @@ const BellsPage = ({ onBack, chatData }) => {
                     {["搞笑风", "悬疑风", "权谋风"].map((style) => (
                       <button
                         key={style}
-                        onClick={() =>
-                          handleInputChange("storyTrend", style)
-                        }
+                        onClick={() => handleInputChange("storyTrend", style)}
                         className="flex-1 py-2 rounded-lg bg-[#E8C3A8] text-white font-bold text-sm shadow-sm active:scale-95 transition-transform"
                       >
                         {style}
@@ -57200,9 +56080,7 @@ const BellsPage = ({ onBack, chatData }) => {
                       disabled={isGeneratingIdentity}
                       className="w-full py-2.5 rounded-lg bg-gradient-to-r from-[#B8BEDD] to-[#9FBcd0] text-white font-bold text-sm shadow-sm active:scale-95 transition-transform disabled:opacity-50"
                     >
-                      {isGeneratingIdentity
-                        ? "宇宙降临中..."
-                        : "宇宙决定"}
+                      {isGeneratingIdentity ? "宇宙降临中..." : "宇宙决定"}
                     </button>
                   </div>
 
@@ -57224,9 +56102,7 @@ const BellsPage = ({ onBack, chatData }) => {
                       disabled={isGeneratingIdentity}
                       className="w-full py-2.5 rounded-lg bg-gradient-to-r from-[#DFA9A9] to-[#D6724B] text-white font-bold text-sm shadow-sm active:scale-95 transition-transform disabled:opacity-50"
                     >
-                      {isGeneratingIdentity
-                        ? "宇宙降临中..."
-                        : "宇宙决定"}
+                      {isGeneratingIdentity ? "宇宙降临中..." : "宇宙决定"}
                     </button>
                   </div>
                 </>
@@ -57317,9 +56193,7 @@ const BellsPage = ({ onBack, chatData }) => {
                       </div>
                       <textarea
                         value={styleDescription}
-                        onChange={(e) =>
-                          setStyleDescription(e.target.value)
-                        }
+                        onChange={(e) => setStyleDescription(e.target.value)}
                         placeholder="点击采纳后，AI将在此生成精炼的文风描述，您也可以直接手动修改编辑..."
                         className="flex-1 p-3 text-xs text-[#5A5F4D] bg-transparent outline-none resize-none no-scrollbar leading-relaxed"
                       />
@@ -57519,9 +56393,7 @@ const ActivitySelectionPage = ({ onBack, chatData }) => {
     e.stopPropagation();
     if (window.confirm("是否增添宇宙？")) {
       setNewCardName("新宇宙");
-      setNewCardColor(
-        "linear-gradient(135deg, #6B8E5C 0%, #4A6B3A 100%)",
-      );
+      setNewCardColor("linear-gradient(135deg, #6B8E5C 0%, #4A6B3A 100%)");
       setEditingCard(null);
       setIsEditModalOpen(true);
     }
@@ -57553,10 +56425,7 @@ const ActivitySelectionPage = ({ onBack, chatData }) => {
   // 如果有选中的活动，渲染子页面
   if (selectedActivity) {
     return (
-      <BellsPage
-        onBack={() => setSelectedActivity(null)}
-        chatData={chatData}
-      />
+      <BellsPage onBack={() => setSelectedActivity(null)} chatData={chatData} />
     );
   }
 
@@ -57765,10 +56634,7 @@ const ActivitySelectionPage = ({ onBack, chatData }) => {
             setIsEditModalOpen(false);
           }}
         >
-          <div
-            className="edit-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="edit-modal" onClick={(e) => e.stopPropagation()}>
             <h3>{editingCard ? "编辑宇宙" : "创建新宇宙"}</h3>
             <div className="edit-form">
               <div className="form-group">
@@ -57811,9 +56677,7 @@ const ActivitySelectionPage = ({ onBack, chatData }) => {
                 </button>
                 <button
                   className="save-btn"
-                  onClick={
-                    editingCard ? handleSaveEdit : handleCreateNewCard
-                  }
+                  onClick={editingCard ? handleSaveEdit : handleCreateNewCard}
                 >
                   {editingCard ? "保存" : "创建"}
                 </button>
@@ -58035,14 +56899,10 @@ const BambooDiaryPage = ({
     }
 
     const adjustRopeMask = () => {
-      const stripEl = document.querySelector(
-        ".bamboo-page-container .strip",
-      );
+      const stripEl = document.querySelector(".bamboo-page-container .strip");
       if (!stripEl) return;
       const stripWidth = stripEl.offsetWidth;
-      const ropeEls = document.querySelectorAll(
-        ".bamboo-page-container .rope",
-      );
+      const ropeEls = document.querySelectorAll(".bamboo-page-container .rope");
       const maskCSS = `repeating-linear-gradient(to right, black 0%, black ${stripWidth - 4}px, rgba(0,0,0,0.3) ${stripWidth - 2}px, black ${stripWidth}px)`;
 
       ropeEls.forEach((rope) => {
@@ -58092,8 +56952,7 @@ const BambooDiaryPage = ({
           transition: "background-color 0.2s ease",
         }}
         onMouseEnter={(e) =>
-        (e.currentTarget.style.backgroundColor =
-          "rgba(255, 255, 255, 0.3)")
+          (e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.3)")
         }
         onMouseLeave={(e) =>
           (e.currentTarget.style.backgroundColor = "transparent")
@@ -58123,10 +56982,7 @@ const BambooDiaryPage = ({
         <div className="content-layer">
           <h1 style={{ color: "#ff6b6b" }}>{content.title}</h1>
           {getCurrentPageContent().map((paragraph, index) => (
-            <p
-              key={index}
-              dangerouslySetInnerHTML={{ __html: paragraph }}
-            ></p>
+            <p key={index} dangerouslySetInnerHTML={{ __html: paragraph }}></p>
           ))}
         </div>
 
@@ -58184,9 +57040,7 @@ const BambooDiaryPage = ({
                 borderRadius: "4px",
                 color: "#3b2e21",
                 cursor:
-                  currentPage === totalPages - 1
-                    ? "not-allowed"
-                    : "pointer",
+                  currentPage === totalPages - 1 ? "not-allowed" : "pointer",
                 fontFamily: "STKaiti, KaiTi, serif",
                 fontSize: "14px",
               }}
@@ -58245,23 +57099,19 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
           const allItems = await window.chatCharacterStore.getAll();
 
           // 加载装饰图片
-          const decorItems = allItems.filter(
-            (item) => item.type === "decor",
-          );
+          const decorItems = allItems.filter((item) => item.type === "decor");
           const loadedImages = {
             left:
-              decorItems.find((item) => item.position === "left")
-                ?.imageData || null,
+              decorItems.find((item) => item.position === "left")?.imageData ||
+              null,
             right:
-              decorItems.find((item) => item.position === "right")
-                ?.imageData || null,
+              decorItems.find((item) => item.position === "right")?.imageData ||
+              null,
           };
           setDecorImages(loadedImages);
 
           // 加载朋友圈内容
-          const momentsItem = allItems.find(
-            (item) => item.type === "moments",
-          );
+          const momentsItem = allItems.find((item) => item.type === "moments");
           if (momentsItem && momentsItem.data) {
             setMoments(momentsItem.data);
           } else {
@@ -58349,9 +57199,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       // 过滤掉群聊和装饰图片记录
       const validChars = allChars.filter(
@@ -58390,7 +57238,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
           if (activeUser)
             userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality}`;
         }
-      } catch (e) { }
+      } catch (e) {}
 
       // 3. 收集角色设定和最近聊天记录
       let charsInfo = "";
@@ -58454,13 +57302,11 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
             // 为每个动态搜索图片
             const newMoments = await Promise.all(
               data.map(async (item, idx) => {
-                const char = validChars.find(
-                  (c) => c.id == item.charId,
-                ) ||
+                const char = validChars.find((c) => c.id == item.charId) ||
                   selectedChars[0] || {
-                  name: "未知角色",
-                  avatarColor: "#C9C9C1",
-                };
+                    name: "未知角色",
+                    avatarColor: "#C9C9C1",
+                  };
                 let imageUrl = null;
 
                 // 如果有Pixabay API密钥，搜索图片
@@ -58575,9 +57421,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
         if (window.chatCharacterStore) {
           allChars = await window.chatCharacterStore.getAll();
         } else {
-          allChars = JSON.parse(
-            localStorage.getItem("t8_chat_list") || "[]",
-          );
+          allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
         }
 
         // 过滤掉群聊和装饰图片记录
@@ -58587,21 +57431,15 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
 
         // 尝试通过名称匹配角色
         if (userInfo.name) {
-          const matchedRole = validChars.find(
-            (c) => c.name === userInfo.name,
-          );
+          const matchedRole = validChars.find((c) => c.name === userInfo.name);
           if (matchedRole) {
             userInfo = {
               name: matchedRole.name || "我",
               avatar: matchedRole.avatar,
               avatarColor:
-                matchedRole.avatarBg ||
-                matchedRole.avatarColor ||
-                "#85C9D9",
+                matchedRole.avatarBg || matchedRole.avatarColor || "#85C9D9",
               avatarBg:
-                matchedRole.avatarBg ||
-                matchedRole.avatarColor ||
-                "#85C9D9",
+                matchedRole.avatarBg || matchedRole.avatarColor || "#85C9D9",
               iconColor: matchedRole.iconColor || "#666",
               themeColor: matchedRole.themeColor || "#EAD6D6",
             };
@@ -58701,10 +57539,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
           );
 
           // 保存到localStorage
-          localStorage.setItem(
-            "t8_moments",
-            JSON.stringify(updatedMoments),
-          );
+          localStorage.setItem("t8_moments", JSON.stringify(updatedMoments));
 
           // 保存到IndexedDB
           if (window.chatCharacterStore) {
@@ -58714,11 +57549,9 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
               data: updatedMoments,
               updatedAt: new Date().toISOString(),
             };
-            window.chatCharacterStore
-              .save(momentsRecord)
-              .catch((error) => {
-                console.error("保存朋友圈内容失败:", error);
-              });
+            window.chatCharacterStore.save(momentsRecord).catch((error) => {
+              console.error("保存朋友圈内容失败:", error);
+            });
           }
 
           return updatedMoment;
@@ -58747,10 +57580,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
         );
 
         // 保存到localStorage
-        localStorage.setItem(
-          "t8_moments",
-          JSON.stringify(updatedMoments),
-        );
+        localStorage.setItem("t8_moments", JSON.stringify(updatedMoments));
 
         // 保存到IndexedDB
         if (window.chatCharacterStore) {
@@ -58784,9 +57614,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       // 过滤掉群聊和装饰图片记录
       const validChars = allChars.filter(
@@ -58836,7 +57664,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
           if (activeUser)
             userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality}`;
         }
-      } catch (e) { }
+      } catch (e) {}
 
       // 4. 收集现有评论
       const existingComments = momentData.comments || [];
@@ -58852,26 +57680,26 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
 
                                                                                                                                 【评论角色信息】
                                                                                                                                 ${selectedChars
-          .map(
-            (
-              char,
-              index,
-            ) => {
-              const profile =
-                char.profile ||
-                {};
-              return `角色${index + 1}:
+                                                                                                                                  .map(
+                                                                                                                                    (
+                                                                                                                                      char,
+                                                                                                                                      index,
+                                                                                                                                    ) => {
+                                                                                                                                      const profile =
+                                                                                                                                        char.profile ||
+                                                                                                                                        {};
+                                                                                                                                      return `角色${index + 1}:
                                                                                                                                   姓名:${char.name}
                                                                                                                                   MBTI:${profile.mbti || "无"}
                                                                                                                                   星座:${profile.constellation || "无"}
                                                                                                                                   语言风格:${profile.languageStyle || "无"}
                                                                                                                                   性格特点:${profile.personality || "无"}
                                                                                                                                   个人背景:${profile.background || "无"}`;
-            },
-          )
-          .join(
-            "\n\n",
-          )}
+                                                                                                                                    },
+                                                                                                                                  )
+                                                                                                                                  .join(
+                                                                                                                                    "\n\n",
+                                                                                                                                  )}
 
                                                                                                                                 【动态信息】
                                                                                                                                 发布者:${momentData.char.name}
@@ -58925,9 +57753,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
               const match = line.match(/\[(.*?)\]:\s*(.*)/);
               if (match) {
                 const [, author, text] = match;
-                const authorChar = validChars.find(
-                  (c) => c.name === author,
-                );
+                const authorChar = validChars.find((c) => c.name === author);
                 if (authorChar) {
                   newComments.push({
                     id: Date.now() + Math.random(),
@@ -59039,9 +57865,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
             position: "relative",
             overflow: "hidden",
           }}
-          onClick={() =>
-            document.getElementById("left-image-upload").click()
-          }
+          onClick={() => document.getElementById("left-image-upload").click()}
         >
           {decorImages.left ? (
             <img
@@ -59081,9 +57905,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
             position: "relative",
             overflow: "hidden",
           }}
-          onClick={() =>
-            document.getElementById("right-image-upload").click()
-          }
+          onClick={() => document.getElementById("right-image-upload").click()}
         >
           {decorImages.right ? (
             <img
@@ -59187,8 +58009,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                 width: "56px",
                 height: "56px",
                 borderRadius: "50%",
-                background:
-                  char?.avatarBg || char?.avatarColor || "#C9C9C1",
+                background: char?.avatarBg || char?.avatarColor || "#C9C9C1",
                 flexShrink: 0,
                 display: "flex",
                 alignItems: "center",
@@ -59287,9 +58108,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                     borderRadius: "50%",
                     overflow: "hidden",
                     background:
-                      item.char.avatarBg ||
-                      item.char.avatarColor ||
-                      "#C9C1",
+                      item.char.avatarBg || item.char.avatarColor || "#C9C1",
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -59299,7 +58118,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                   {item.char.avatar ? (
                     // 检查 avatar 是否是字符串类型且是 Base64 编码的图片数据（用户身份的头像）
                     typeof item.char.avatar === "string" &&
-                      item.char.avatar.startsWith("data:image/") ? (
+                    item.char.avatar.startsWith("data:image/") ? (
                       <img
                         src={item.char.avatar}
                         style={{
@@ -59345,7 +58164,13 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                   title="点赞"
                   onClick={() => handleButtonClick(item.id, "like")}
                 >
-                  <i className="ph ph-smiley" style={{ fontSize: "20px", color: buttonStates[item.id]?.like ? "#FF6B6B" : "#666" }}></i>
+                  <i
+                    className="ph ph-smiley"
+                    style={{
+                      fontSize: "20px",
+                      color: buttonStates[item.id]?.like ? "#FF6B6B" : "#666",
+                    }}
+                  ></i>
                 </button>
                 {/* 屏蔽按钮 */}
                 <button
@@ -59358,7 +58183,13 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                   title="屏蔽"
                   onClick={() => handleButtonClick(item.id, "block")}
                 >
-                  <i className="ph-fill ph-smiley-sad" style={{ fontSize: "20px", color: buttonStates[item.id]?.block ? "#4ECDC4" : "#666" }}></i>
+                  <i
+                    className="ph-fill ph-smiley-sad"
+                    style={{
+                      fontSize: "20px",
+                      color: buttonStates[item.id]?.block ? "#4ECDC4" : "#666",
+                    }}
+                  ></i>
                 </button>
                 {/* 无语按钮 */}
                 <button
@@ -59371,7 +58202,15 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                   title="无语"
                   onClick={() => handleButtonClick(item.id, "speechless")}
                 >
-                  <i className="ph ph-question" style={{ fontSize: "20px", color: buttonStates[item.id]?.speechless ? "#45B7D1" : "#666" }}></i>
+                  <i
+                    className="ph ph-question"
+                    style={{
+                      fontSize: "20px",
+                      color: buttonStates[item.id]?.speechless
+                        ? "#45B7D1"
+                        : "#666",
+                    }}
+                  ></i>
                 </button>
               </div>
             </div>
@@ -59426,7 +58265,10 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                 }}
                 title="删除动态"
               >
-                <i className="ph ph-x-circle" style={{ fontSize: "20px", color: "#666" }}></i>
+                <i
+                  className="ph ph-x-circle"
+                  style={{ fontSize: "20px", color: "#666" }}
+                ></i>
               </button>
               {/* 评论按钮 */}
               <button
@@ -59439,7 +58281,17 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                 }}
                 title="评论"
               >
-                <i className="ph ph-chat-circle-dots" style={{ fontSize: "20px", color: "#666", transition: "transform 0.3s ease", transform: expandedComments[item.id] ? "rotate(180deg)" : "rotate(0deg)" }}></i>
+                <i
+                  className="ph ph-chat-circle-dots"
+                  style={{
+                    fontSize: "20px",
+                    color: "#666",
+                    transition: "transform 0.3s ease",
+                    transform: expandedComments[item.id]
+                      ? "rotate(180deg)"
+                      : "rotate(0deg)",
+                  }}
+                ></i>
               </button>
               {/* 生成按钮 */}
               <button
@@ -59454,7 +58306,16 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                 }}
                 title="生成评论"
               >
-                <i className="ph ph-spinner" style={{ fontSize: "20px", color: "#666", animation: isGeneratingComment ? "spin 1s linear infinite" : "none" }}></i>
+                <i
+                  className="ph ph-spinner"
+                  style={{
+                    fontSize: "20px",
+                    color: "#666",
+                    animation: isGeneratingComment
+                      ? "spin 1s linear infinite"
+                      : "none",
+                  }}
+                ></i>
               </button>
             </div>
 
@@ -59633,29 +58494,25 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                 选择背景色
               </div>
               <div style={{ display: "flex", gap: "10px" }}>
-                {[
-                  "#EAD6D6",
-                  "#EAE2E2",
-                  "#D6EAD6",
-                  "#D6E0EA",
-                  "#EAD6EA",
-                ].map((color) => (
-                  <div
-                    key={color}
-                    onClick={() => setNewMomentColor(color)}
-                    style={{
-                      width: "36px",
-                      height: "36px",
-                      borderRadius: "50%",
-                      background: color,
-                      cursor: "pointer",
-                      border:
-                        newMomentColor === color
-                          ? "3px solid #333"
-                          : "1px solid #E0E0E0",
-                    }}
-                  />
-                ))}
+                {["#EAD6D6", "#EAE2E2", "#D6EAD6", "#D6E0EA", "#EAD6EA"].map(
+                  (color) => (
+                    <div
+                      key={color}
+                      onClick={() => setNewMomentColor(color)}
+                      style={{
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "50%",
+                        background: color,
+                        cursor: "pointer",
+                        border:
+                          newMomentColor === color
+                            ? "3px solid #333"
+                            : "1px solid #E0E0E0",
+                      }}
+                    />
+                  ),
+                )}
               </div>
             </div>
 
@@ -59730,18 +58587,14 @@ const T8Page = () => {
 
     setChats((prevChats) => {
       const updatedChats = prevChats.map((chat) =>
-        chat.id === chatId
-          ? { ...chat, unread: 0, status: "read" }
-          : chat,
+        chat.id === chatId ? { ...chat, unread: 0, status: "read" } : chat,
       );
 
       // 同步保存最新已读状态至 IndexedDB
       if (window.chatCharacterStore) {
         const chatToUpdate = updatedChats.find((c) => c.id === chatId);
         if (chatToUpdate) {
-          window.chatCharacterStore
-            .save(chatToUpdate)
-            .catch(console.error);
+          window.chatCharacterStore.save(chatToUpdate).catch(console.error);
         }
       }
       return updatedChats;
@@ -59781,10 +58634,7 @@ const T8Page = () => {
         if (window.openDB) {
           try {
             const db = await window.openDB();
-            const transaction = db.transaction(
-              "user_settings",
-              "readonly",
-            );
+            const transaction = db.transaction("user_settings", "readonly");
             const store = transaction.objectStore("user_settings");
             const request = store.get("pixabay_api_key");
             request.onsuccess = () => {
@@ -59834,11 +58684,7 @@ const T8Page = () => {
         if (chatCharacterStore) {
           try {
             await chatCharacterStore.saveAll(chats);
-            console.log(
-              "保存到IndexedDB成功，共",
-              chats.length,
-              "个角色",
-            );
+            console.log("保存到IndexedDB成功，共", chats.length, "个角色");
           } catch (e) {
             console.error("保存到IndexedDB失败:", e);
             if (chats.length > 0) {
@@ -59866,9 +58712,7 @@ const T8Page = () => {
 
   const handleDismissBadge = (id) => {
     setChats((prevChats) =>
-      prevChats.map((chat) =>
-        chat.id === id ? { ...chat, unread: 0 } : chat,
-      ),
+      prevChats.map((chat) => (chat.id === id ? { ...chat, unread: 0 } : chat)),
     );
   };
 
@@ -59946,10 +58790,7 @@ const T8Page = () => {
       await window.chatCharacterStore.delete(groupData.id);
 
     // 2. 触发退群质问逻辑 (群内成员分别私聊玩家)
-    if (
-      groupData.profile?.members &&
-      groupData.profile.members.length > 0
-    ) {
+    if (groupData.profile?.members && groupData.profile.members.length > 0) {
       alert(`你已退出群聊。群成员们察觉到了你的离去...`);
 
       for (const member of groupData.profile.members) {
@@ -60010,11 +58851,8 @@ const T8Page = () => {
                   return new Date(b.time) - new Date(a.time);
                 });
                 if (window.chatCharacterStore) {
-                  const updatedChar = updated.find(
-                    (c) => c.id === member.id,
-                  );
-                  if (updatedChar)
-                    window.chatCharacterStore.save(updatedChar);
+                  const updatedChar = updated.find((c) => c.id === member.id);
+                  if (updatedChar) window.chatCharacterStore.save(updatedChar);
                 }
                 return updated;
               });
@@ -60180,16 +59018,16 @@ const T8Page = () => {
             prevChats.map((chat) =>
               chat.id === activeChatId
                 ? {
-                  ...chat,
-                  msg: latestMessage,
-                  time: new Date().toLocaleTimeString([], {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  }),
-                  // 当用户在聊天详情页时，消息已读，清除未读状态
-                  unread: 0,
-                  status: "read",
-                }
+                    ...chat,
+                    msg: latestMessage,
+                    time: new Date().toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }),
+                    // 当用户在聊天详情页时，消息已读，清除未读状态
+                    unread: 0,
+                    status: "read",
+                  }
                 : chat,
             ),
           );
@@ -60198,9 +59036,7 @@ const T8Page = () => {
 
       {/* 活动选择页面 */}
       {showActivitySelect && (
-        <ActivitySelectionPage
-          onBack={() => setShowActivitySelect(false)}
-        />
+        <ActivitySelectionPage onBack={() => setShowActivitySelect(false)} />
       )}
 
       {/* 群聊角色选择弹窗 */}
@@ -60278,15 +59114,10 @@ const T8Page = () => {
                       checked={selectedMembers.includes(role.id)}
                       onChange={(e) => {
                         if (e.target.checked) {
-                          setSelectedMembers([
-                            ...selectedMembers,
-                            role.id,
-                          ]);
+                          setSelectedMembers([...selectedMembers, role.id]);
                         } else {
                           setSelectedMembers(
-                            selectedMembers.filter(
-                              (id) => id !== role.id,
-                            ),
+                            selectedMembers.filter((id) => id !== role.id),
                           );
                         }
                       }}
@@ -60373,10 +59204,9 @@ const T8Page = () => {
                   // 2. 保存进 IndexedDB
                   if (window.chatHistoryStore) {
                     try {
-                      await window.chatHistoryStore.saveMessages(
-                        newGroupId,
-                        [sysMsg],
-                      );
+                      await window.chatHistoryStore.saveMessages(newGroupId, [
+                        sysMsg,
+                      ]);
                     } catch (e) {
                       console.error("保存群聊初始化消息失败", e);
                     }
@@ -60421,21 +59251,16 @@ const T8Page = () => {
         <div style={{ opacity: 0.9 }}>
           <T8Icons.Menu />
         </div>
-        <div
-          style={{ display: "flex", alignItems: "center", gap: "8px" }}
-        >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           {/* 传讯 Tab */}
           <div
             onClick={() => setSubTab("chat")}
             style={{
               padding: "6px 16px",
-              background:
-                subTab === "chat" ? "var(--c-accent)" : "transparent",
+              background: subTab === "chat" ? "var(--c-accent)" : "transparent",
               borderRadius: "12px",
               color:
-                subTab === "chat"
-                  ? "var(--c-white)"
-                  : "rgba(255,255,255,0.7)",
+                subTab === "chat" ? "var(--c-white)" : "rgba(255,255,255,0.7)",
               fontSize: "18px",
               fontWeight: "600",
               cursor: "pointer",
@@ -60603,16 +59428,16 @@ const T8Page = () => {
                       chat.msg.toLowerCase().includes(searchLower)
                     );
                   }).length === 0 && (
-                      <div
-                        style={{
-                          padding: "40px 20px",
-                          textAlign: "center",
-                          color: "#999",
-                        }}
-                      >
-                        未找到匹配的消息
-                      </div>
-                    )}
+                    <div
+                      style={{
+                        padding: "40px 20px",
+                        textAlign: "center",
+                        color: "#999",
+                      }}
+                    >
+                      未找到匹配的消息
+                    </div>
+                  )}
                 </div>
               ) : (
                 <>
@@ -60747,11 +59572,8 @@ const APISettingsPage = () => {
         const parsed = JSON.parse(savedConfigs);
         setConfigs(parsed);
         if (parsed.length > 0) {
-          const index = savedSelectedIndex
-            ? parseInt(savedSelectedIndex)
-            : 0;
-          const validIndex =
-            index >= 0 && index < parsed.length ? index : 0;
+          const index = savedSelectedIndex ? parseInt(savedSelectedIndex) : 0;
+          const validIndex = index >= 0 && index < parsed.length ? index : 0;
           setSelectedConfigIndex(validIndex);
           setCurrentConfig({ ...parsed[validIndex] });
         }
@@ -60789,10 +59611,7 @@ const APISettingsPage = () => {
     try {
       // 检查 URL 是否包含协议
       let endpoint = currentConfig.url;
-      if (
-        !endpoint.startsWith("http://") &&
-        !endpoint.startsWith("https://")
-      ) {
+      if (!endpoint.startsWith("http://") && !endpoint.startsWith("https://")) {
         // 默认使用 https
         endpoint = "https://" + endpoint;
       }
@@ -60817,9 +59636,7 @@ const APISettingsPage = () => {
       });
 
       if (!response.ok) {
-        throw new Error(
-          `HTTP ${response.status}: ${response.statusText}`,
-        );
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
 
       const data = await response.json();
@@ -61057,13 +59874,13 @@ const APISettingsPage = () => {
             style={{
               flex: 1,
               padding: "12px",
-              border: `2px solid ${currentConfig.type === "official" ? "#4a90e2" : "#ddd"
-                }`,
+              border: `2px solid ${
+                currentConfig.type === "official" ? "#4a90e2" : "#ddd"
+              }`,
               borderRadius: "8px",
               backgroundColor:
                 currentConfig.type === "official" ? "#e8f4ff" : "white",
-              color:
-                currentConfig.type === "official" ? "#4a90e2" : "#666",
+              color: currentConfig.type === "official" ? "#4a90e2" : "#666",
               fontSize: "14px",
               fontWeight: "500",
               cursor: "pointer",
@@ -61079,8 +59896,9 @@ const APISettingsPage = () => {
             style={{
               flex: 1,
               padding: "12px",
-              border: `2px solid ${currentConfig.type === "public" ? "#4a90e2" : "#ddd"
-                }`,
+              border: `2px solid ${
+                currentConfig.type === "public" ? "#4a90e2" : "#ddd"
+              }`,
               borderRadius: "8px",
               backgroundColor:
                 currentConfig.type === "public" ? "#e8f4ff" : "white",
@@ -61372,9 +60190,7 @@ const APISettingsPage = () => {
           >
             API 存储库
           </h3>
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "12px" }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
             <div
               style={{
                 fontSize: "12px",
@@ -61461,8 +60277,9 @@ const APISettingsPage = () => {
                 onClick={() => selectConfig(index)}
                 style={{
                   padding: "16px",
-                  border: `2px solid ${selectedConfigIndex === index ? "#4a90e2" : "#f0f0f0"
-                    }`,
+                  border: `2px solid ${
+                    selectedConfigIndex === index ? "#4a90e2" : "#f0f0f0"
+                  }`,
                   borderRadius: "12px",
                   backgroundColor:
                     selectedConfigIndex === index ? "#f0f8ff" : "#fafafa",
@@ -61471,12 +60288,12 @@ const APISettingsPage = () => {
                   position: "relative",
                 }}
                 onMouseOver={(e) =>
-                (e.currentTarget.style.backgroundColor =
-                  selectedConfigIndex === index ? "#e8f4ff" : "#f5f5f5")
+                  (e.currentTarget.style.backgroundColor =
+                    selectedConfigIndex === index ? "#e8f4ff" : "#f5f5f5")
                 }
                 onMouseOut={(e) =>
-                (e.currentTarget.style.backgroundColor =
-                  selectedConfigIndex === index ? "#f0f8ff" : "#fafafa")
+                  (e.currentTarget.style.backgroundColor =
+                    selectedConfigIndex === index ? "#f0f8ff" : "#fafafa")
                 }
               >
                 <div
@@ -61509,13 +60326,9 @@ const APISettingsPage = () => {
                           padding: "2px 8px",
                           fontSize: "10px",
                           backgroundColor:
-                            config.type === "official"
-                              ? "#e8f4ff"
-                              : "#f0e8ff",
+                            config.type === "official" ? "#e8f4ff" : "#f0e8ff",
                           color:
-                            config.type === "official"
-                              ? "#4a90e2"
-                              : "#8a4baf",
+                            config.type === "official" ? "#4a90e2" : "#8a4baf",
                           borderRadius: "4px",
                           fontWeight: "500",
                         }}
@@ -61551,8 +60364,7 @@ const APISettingsPage = () => {
                         marginTop: "8px",
                       }}
                     >
-                      保存于:{" "}
-                      {new Date(config.lastUpdated).toLocaleString()}
+                      保存于: {new Date(config.lastUpdated).toLocaleString()}
                     </div>
                   </div>
                   <button
@@ -61568,9 +60380,7 @@ const APISettingsPage = () => {
                       cursor: "pointer",
                       fontSize: "12px",
                     }}
-                    onMouseOver={(e) =>
-                      (e.target.style.color = "#ff4757")
-                    }
+                    onMouseOver={(e) => (e.target.style.color = "#ff4757")}
                     onMouseOut={(e) => (e.target.style.color = "#ff6b6b")}
                   >
                     <i className="ph ph-trash"></i>
@@ -61592,9 +60402,7 @@ const APISettingsPage = () => {
             color: "#666",
           }}
         >
-          <p style={{ marginBottom: "8px", fontWeight: "500" }}>
-            使用说明：
-          </p>
+          <p style={{ marginBottom: "8px", fontWeight: "500" }}>使用说明：</p>
           <ul style={{ paddingLeft: "20px", margin: 0 }}>
             <li>选择 API 类型（官方或公益站）</li>
             <li>填写 API URL 和 Key</li>
@@ -61618,13 +60426,22 @@ const APISettingsPage = () => {
 const APISettingsOverlay = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
   return (
-    <div
-      className="settings-overlay open"
-      style={{ zIndex: 1000 }}
-    >
+    <div className="settings-overlay open" style={{ zIndex: 1000 }}>
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </div>
         <div className="title">API 设置</div>
       </div>
@@ -62034,13 +60851,22 @@ const WorldBookPage = () => {
 const WorldBookOverlay = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
   return (
-    <div
-      className="settings-overlay open"
-      style={{ zIndex: 202 }}
-    >
+    <div className="settings-overlay open" style={{ zIndex: 202 }}>
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </div>
         <div className="title">世界书 (World Book)</div>
       </div>
@@ -62312,10 +61138,7 @@ const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
                 删除
               </button>
             )}
-            <button
-              className="pf-btn pf-btn-primary"
-              onClick={handleSave}
-            >
+            <button className="pf-btn pf-btn-primary" onClick={handleSave}>
               保存
             </button>
           </div>
@@ -62345,8 +61168,7 @@ const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
               style={{ padding: "8px 16px", fontSize: "12px" }}
               onClick={() => startEdit(null)}
             >
-              <i data-lucide="plus" style={{ width: 14, height: 14 }}></i>{" "}
-              新建
+              <i data-lucide="plus" style={{ width: 14, height: 14 }}></i> 新建
             </button>
           </div>
 
@@ -62367,8 +61189,9 @@ const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
               personas.map((p) => (
                 <div
                   key={p.id}
-                  className={`persona-card ${activeId === p.id ? "active" : ""
-                    }`}
+                  className={`persona-card ${
+                    activeId === p.id ? "active" : ""
+                  }`}
                   onClick={() => handleSelect(p.id)}
                   // [修改点1] 给右侧留出足够的安全距离，防止文字和编辑按钮重叠
                   style={{
@@ -62422,9 +61245,7 @@ const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
                       }}
                     >
                       <span className="persona-name">{p.name}</span>
-                      {p.age && (
-                        <span className="persona-tag">{p.age}岁</span>
-                      )}
+                      {p.age && <span className="persona-tag">{p.age}岁</span>}
                     </div>
                     <div className="persona-desc">
                       {p.personality || "暂无性格描述"}
@@ -62508,13 +61329,22 @@ const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
 const UserProfileOverlay = ({ isOpen, onClose, onUpdateActiveUser }) => {
   if (!isOpen) return null;
   return (
-    <div
-      className="settings-overlay open"
-      style={{ zIndex: 1001 }}
-    >
+    <div className="settings-overlay open" style={{ zIndex: 1001 }}>
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </div>
         <div className="title">身份配置库</div>
       </div>
@@ -62602,9 +61432,7 @@ const ReaderDetailPage = ({
           ],
           null,
           (reply) => {
-            const newContent = reply
-              .replace(/```[a-z]*|```/gi, "")
-              .trim();
+            const newContent = reply.replace(/```[a-z]*|```/gi, "").trim();
             const updatedFullText = book.fullText + "\n\n" + newContent;
 
             if (onUpdateBookContent) {
@@ -62650,10 +61478,7 @@ const ReaderDetailPage = ({
 
         // 4. 得出每页字符数 (减去 50 个字符作为“安全缓冲”，防止标点符号溢出)
         // 最小值设为 50 防止极端情况
-        const charsPerPage = Math.max(
-          50,
-          linesPerPage * charsPerLine - 50,
-        );
+        const charsPerPage = Math.max(50, linesPerPage * charsPerLine - 50);
 
         // 5. 执行切分
         const totalLength = book.fullText.length;
@@ -62664,9 +61489,7 @@ const ReaderDetailPage = ({
           const start = i * charsPerPage;
           // 简单切分可能截断单词，但对于中文阅读影响较小
           // 进阶做法是寻找最近的标点符号换页，这里为了性能保持按字切分
-          newPages.push(
-            book.fullText.substring(start, start + charsPerPage),
-          );
+          newPages.push(book.fullText.substring(start, start + charsPerPage));
         }
 
         setPages(newPages);
@@ -62717,9 +61540,7 @@ const ReaderDetailPage = ({
     const rawText = pages[currentPage];
     if (!rawText) return "";
 
-    const pageNotes = annotations.filter(
-      (n) => n.pageIndex === currentPage,
-    );
+    const pageNotes = annotations.filter((n) => n.pageIndex === currentPage);
     if (pageNotes.length === 0) return rawText;
 
     let elements = [];
@@ -62795,9 +61616,7 @@ const ReaderDetailPage = ({
   // 统一 LLM 请求处理 (支持多条批注 & JSON格式)
   const triggerLLM = (mode) => {
     setIsAiTyping(true);
-    setAiBubble(
-      mode === "annotate" ? "正在阅读并思考批注..." : "正在思考...",
-    );
+    setAiBubble(mode === "annotate" ? "正在阅读并思考批注..." : "正在思考...");
 
     const currentText = pages[currentPage] || "";
     // 适当增加上下文长度以便 AI 更好理解
@@ -62829,13 +61648,15 @@ const ReaderDetailPage = ({
       userPrompt = `
                                                                                                                      【当前情境】你正在陪用户阅读书籍《${book.title}》。
                                                                                                                      【正文片段】“${textSnippet.substring(0, 500)}...”
-                                                                                                                     【用户刚才说】“${userBubble ===
-          "点击输入感想..."
-          ? "(用户沉默)"
-          : userBubble
-        }”
-                                                                                                                     【指令】请根据正文和用户感想，以“${activeChar.name
-        }”的身份发表简短评论。50字以内。
+                                                                                                                     【用户刚才说】“${
+                                                                                                                       userBubble ===
+                                                                                                                       "点击输入感想..."
+                                                                                                                         ? "(用户沉默)"
+                                                                                                                         : userBubble
+                                                                                                                     }”
+                                                                                                                     【指令】请根据正文和用户感想，以“${
+                                                                                                                       activeChar.name
+                                                                                                                     }”的身份发表简短评论。50字以内。
                                                                                                                      `;
     }
 
@@ -62883,9 +61704,7 @@ const ReaderDetailPage = ({
 
               if (addedCount > 0) {
                 setAnnotations((prev) => [...prev, ...newNotes]);
-                setAiBubble(
-                  `我标注了 ${addedCount} 处我觉得有意思的地方。`,
-                );
+                setAiBubble(`我标注了 ${addedCount} 处我觉得有意思的地方。`);
               } else {
                 setAiBubble("（看了一遍，好像没有特别想标注的...）");
               }
@@ -62928,8 +61747,9 @@ const ReaderDetailPage = ({
 
   return (
     <div
-      className={`reader-detail-overlay ${isOpen ? "open" : ""} ${showMenu ? "reader-menu-visible" : ""
-        }`}
+      className={`reader-detail-overlay ${isOpen ? "open" : ""} ${
+        showMenu ? "reader-menu-visible" : ""
+      }`}
     >
       {/* 1. 顶部菜单 */}
       <div className="reader-menu-bar menu-top">
@@ -62942,7 +61762,19 @@ const ReaderDetailPage = ({
             cursor: "pointer",
           }}
         >
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
           <span style={{ fontSize: "14px" }}>书架</span>
         </div>
 
@@ -63153,10 +61985,7 @@ const ReaderDetailPage = ({
                   color: "#8fa38f",
                 }}
               >
-                <i
-                  data-lucide="pen-tool"
-                  style={{ width: 18, height: 18 }}
-                ></i>
+                <i data-lucide="pen-tool" style={{ width: 18, height: 18 }}></i>
               </button>
             </div>
           </div>
@@ -63170,9 +61999,7 @@ const ReaderDetailPage = ({
               {isInputMode ? (
                 <textarea
                   className="cr-input"
-                  value={
-                    userBubble === "点击输入感想..." ? "" : userBubble
-                  }
+                  value={userBubble === "点击输入感想..." ? "" : userBubble}
                   onChange={(e) => setUserBubble(e.target.value)}
                   onBlur={() => setIsInputMode(false)}
                   autoFocus
@@ -63191,10 +62018,7 @@ const ReaderDetailPage = ({
       {/* 4. 批注详情弹窗 */}
       {activeNote && activeNote.quote && activeNote.comment && (
         <>
-          <div
-            className="note-mask"
-            onClick={() => setActiveNote(null)}
-          ></div>
+          <div className="note-mask" onClick={() => setActiveNote(null)}></div>
           <div className="note-bubble-modal">
             <div className="note-header">
               <div
@@ -63347,10 +62171,7 @@ const AIBookRecommender = ({ books, onConfirm }) => {
       .map((b) => `ID:${b.id},《${b.title}》`)
       .join("; ");
     const charsInfo = selectedChars
-      .map(
-        (c) =>
-          `角色名:${c.name}, 人设:${c.profile?.personality || "未知"}`,
-      )
+      .map((c) => `角色名:${c.name}, 人设:${c.profile?.personality || "未知"}`)
       .join("\n");
 
     const systemPrompt = "你正在扮演一个多角色互动的场景。";
@@ -63418,9 +62239,7 @@ const AIBookRecommender = ({ books, onConfirm }) => {
     setStatus("loading_reactions");
 
     const winnersName = rec.char.name;
-    const losers = recommendations.filter(
-      (r) => r.char.name !== winnersName,
-    );
+    const losers = recommendations.filter((r) => r.char.name !== winnersName);
 
     // 构建反应 Prompt
     const losersInfo = losers
@@ -63470,9 +62289,7 @@ const AIBookRecommender = ({ books, onConfirm }) => {
               charName: item.charName,
               content: item.content,
               isWinner: item.charName === winnersName,
-              avatarColor: originalChar
-                ? originalChar.avatarColor
-                : "#ccc",
+              avatarColor: originalChar ? originalChar.avatarColor : "#ccc",
             };
           });
 
@@ -63518,32 +62335,31 @@ const AIBookRecommender = ({ books, onConfirm }) => {
             </div>
 
             {/* Loading 状态 */}
-            {(status === "loading_recs" ||
-              status === "loading_reactions") && (
-                <div
+            {(status === "loading_recs" || status === "loading_reactions") && (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "30px",
+                  color: "#999",
+                }}
+              >
+                <i
+                  data-lucide="loader-2"
+                  className="animate-spin"
                   style={{
-                    textAlign: "center",
-                    padding: "30px",
-                    color: "#999",
+                    width: 32,
+                    height: 32,
+                    animation: "spin 1s linear infinite",
+                    margin: "0 auto 10px",
                   }}
-                >
-                  <i
-                    data-lucide="loader-2"
-                    className="animate-spin"
-                    style={{
-                      width: 32,
-                      height: 32,
-                      animation: "spin 1s linear infinite",
-                      margin: "0 auto 10px",
-                    }}
-                  ></i>
-                  <div>
-                    {status === "loading_recs"
-                      ? "角色们正在争论..."
-                      : "有人欢喜有人忧..."}
-                  </div>
+                ></i>
+                <div>
+                  {status === "loading_recs"
+                    ? "角色们正在争论..."
+                    : "有人欢喜有人忧..."}
                 </div>
-              )}
+              </div>
+            )}
 
             {/* 阶段一：选择推荐 */}
             {status === "selecting" && (
@@ -63581,9 +62397,7 @@ const AIBookRecommender = ({ books, onConfirm }) => {
                           borderRadius: 4,
                         }}
                       ></div>
-                      <div
-                        style={{ fontSize: "13px", fontWeight: "500" }}
-                      >
+                      <div style={{ fontSize: "13px", fontWeight: "500" }}>
                         {rec.book.title}
                       </div>
                     </div>
@@ -63608,8 +62422,9 @@ const AIBookRecommender = ({ books, onConfirm }) => {
                         {r.charName[0]}
                       </div>
                       <div
-                        className={`reaction-content ${r.isWinner ? "winner" : "loser"
-                          }`}
+                        className={`reaction-content ${
+                          r.isWinner ? "winner" : "loser"
+                        }`}
                       >
                         {r.content}
                         {r.isWinner && (
@@ -63782,8 +62597,8 @@ const LongTermMemoryPage = () => {
           </span>
         </div>
         <div className="wb-content" style={{ marginBottom: "16px" }}>
-          每次对话发送给 AI 的历史消息数量。条数越多记忆越连贯，但消耗
-          Token 越多。
+          每次对话发送给 AI 的历史消息数量。条数越多记忆越连贯，但消耗 Token
+          越多。
         </div>
         <input
           type="range"
@@ -63822,9 +62637,7 @@ const LongTermMemoryPage = () => {
           >
             核心记忆卷宗
           </div>
-          <div
-            style={{ fontSize: "12px", color: "#999", marginTop: "4px" }}
-          >
+          <div style={{ fontSize: "12px", color: "#999", marginTop: "4px" }}>
             通过传讯页多选消息[整合]生成，AI 会永远铭记这些设定。
           </div>
         </div>
@@ -63836,8 +62649,7 @@ const LongTermMemoryPage = () => {
             gap: "12px",
           }}
         >
-          {!memoryConfig.memories ||
-            memoryConfig.memories.length === 0 ? (
+          {!memoryConfig.memories || memoryConfig.memories.length === 0 ? (
             <div
               style={{
                 textAlign: "center",
@@ -63991,17 +62803,16 @@ const LongTermMemoryPage = () => {
                         </button>
                         <button
                           onClick={() => {
-                            if (!editTitle.trim())
-                              return alert("标题不能为空");
+                            if (!editTitle.trim()) return alert("标题不能为空");
                             const newMemories = (
                               memoryConfig.memories || []
                             ).map((m) =>
                               m.id === mem.id
                                 ? {
-                                  ...m,
-                                  title: editTitle,
-                                  content: editContent,
-                                }
+                                    ...m,
+                                    title: editTitle,
+                                    content: editContent,
+                                  }
                                 : m,
                             );
                             saveConfig({
@@ -64054,13 +62865,22 @@ const LongTermMemoryPage = () => {
 const LongTermMemoryOverlay = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
   return (
-    <div
-      className="settings-overlay open"
-      style={{ zIndex: 203 }}
-    >
+    <div className="settings-overlay open" style={{ zIndex: 203 }}>
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </div>
         <div className="title">长期记忆设置</div>
       </div>
@@ -64218,7 +63038,19 @@ const FontSettingsPage = ({ onClose }) => {
     <div className={`settings-overlay open`} style={styles.container}>
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </div>
         <div className="title">字体设置</div>
       </div>
@@ -64484,7 +63316,19 @@ const ThemeSettingsPage = ({
     <div className={`settings-overlay open`} style={styles.container}>
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </div>
         <div className="title">主题设置</div>
       </div>
@@ -64561,9 +63405,7 @@ const ThemeSettingsPage = ({
 
         {/* 2. 主题模式 */}
         <div style={styles.sectionTitle}>显示模式</div>
-        <div
-          style={{ display: "flex", gap: "10px", marginBottom: "12px" }}
-        >
+        <div style={{ display: "flex", gap: "10px", marginBottom: "12px" }}>
           {["light", "dark", "system"].map((mode) => (
             <div
               key={mode}
@@ -64571,8 +63413,7 @@ const ThemeSettingsPage = ({
                 ...styles.themeBtn,
                 background: currentTheme === mode ? "#A8C8BA" : "#FFF",
                 color: currentTheme === mode ? "#FFF" : "#666",
-                borderColor:
-                  currentTheme === mode ? "#A8C8BA" : "#EAEAEA",
+                borderColor: currentTheme === mode ? "#A8C8BA" : "#EAEAEA",
               }}
               onClick={() => onUpdateTheme(mode)}
             >
@@ -64603,9 +63444,7 @@ const ThemeSettingsPage = ({
                     width: "36px",
                     height: "36px",
                     borderRadius: "10px",
-                    background: item.iconImage
-                      ? "transparent"
-                      : item.color,
+                    background: item.iconImage ? "transparent" : item.color,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -64665,9 +63504,7 @@ const ThemeSettingsPage = ({
                 <div
                   style={styles.imgUpload}
                   onClick={() =>
-                    document
-                      .getElementById(`icon-upload-${index}`)
-                      .click()
+                    document.getElementById(`icon-upload-${index}`).click()
                   }
                   title="上传图片"
                 >
@@ -64885,29 +63722,17 @@ const TrajectoryPage = ({
           </div>
           {/* 中午 */}
           <div className="traj-period-group">
-            <div
-              className="traj-period-label"
-              style={{ background: "#999" }}
-            >
+            <div className="traj-period-label" style={{ background: "#999" }}>
               中午
             </div>
             <div className="traj-slots">
-              <div
-                className="traj-slot-cell"
-                style={{ background: "#BBB" }}
-              >
+              <div className="traj-slot-cell" style={{ background: "#BBB" }}>
                 午正
               </div>
-              <div
-                className="traj-slot-cell"
-                style={{ background: "#BBB" }}
-              >
+              <div className="traj-slot-cell" style={{ background: "#BBB" }}>
                 未初
               </div>
-              <div
-                className="traj-slot-cell"
-                style={{ background: "#BBB" }}
-              >
+              <div className="traj-slot-cell" style={{ background: "#BBB" }}>
                 未正
               </div>
             </div>
@@ -64921,22 +63746,13 @@ const TrajectoryPage = ({
               下午
             </div>
             <div className="traj-slots">
-              <div
-                className="traj-slot-cell"
-                style={{ background: "#DBC2B1" }}
-              >
+              <div className="traj-slot-cell" style={{ background: "#DBC2B1" }}>
                 申时
               </div>
-              <div
-                className="traj-slot-cell"
-                style={{ background: "#DBC2B1" }}
-              >
+              <div className="traj-slot-cell" style={{ background: "#DBC2B1" }}>
                 酉初
               </div>
-              <div
-                className="traj-slot-cell"
-                style={{ background: "#DBC2B1" }}
-              >
+              <div className="traj-slot-cell" style={{ background: "#DBC2B1" }}>
                 酉正
               </div>
             </div>
@@ -64950,22 +63766,13 @@ const TrajectoryPage = ({
               晚间
             </div>
             <div className="traj-slots">
-              <div
-                className="traj-slot-cell"
-                style={{ background: "#B8C8E8" }}
-              >
+              <div className="traj-slot-cell" style={{ background: "#B8C8E8" }}>
                 戌时
               </div>
-              <div
-                className="traj-slot-cell"
-                style={{ background: "#B8C8E8" }}
-              >
+              <div className="traj-slot-cell" style={{ background: "#B8C8E8" }}>
                 亥初
               </div>
-              <div
-                className="traj-slot-cell"
-                style={{ background: "#B8C8E8" }}
-              >
+              <div className="traj-slot-cell" style={{ background: "#B8C8E8" }}>
                 亥正
               </div>
             </div>
@@ -64984,9 +63791,7 @@ const TrajectoryPage = ({
                 height: "30px",
                 color: event.style === "" ? "#D6724B" : "white",
                 boxShadow:
-                  event.style === ""
-                    ? "none"
-                    : "2px 2px 5px rgba(0,0,0,0.1)",
+                  event.style === "" ? "none" : "2px 2px 5px rgba(0,0,0,0.1)",
                 textAlign: "left",
                 padding: "4px 8px",
                 // 移除滚动条相关属性
@@ -65230,9 +64035,7 @@ const MinimaxSettingsPage = ({ onClose }) => {
           <input
             type="password"
             value={config.apiKey}
-            onChange={(e) =>
-              setConfig({ ...config, apiKey: e.target.value })
-            }
+            onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
             placeholder="输入您的 Minimax API Key"
             style={inputStyle}
           />
@@ -65256,9 +64059,7 @@ const MinimaxSettingsPage = ({ onClose }) => {
           <input
             type="text"
             value={config.groupId}
-            onChange={(e) =>
-              setConfig({ ...config, groupId: e.target.value })
-            }
+            onChange={(e) => setConfig({ ...config, groupId: e.target.value })}
             placeholder="输入您的 Group ID"
             style={inputStyle}
           />
@@ -65281,9 +64082,7 @@ const MinimaxSettingsPage = ({ onClose }) => {
 
           <select
             value={config.model}
-            onChange={(e) =>
-              setConfig({ ...config, model: e.target.value })
-            }
+            onChange={(e) => setConfig({ ...config, model: e.target.value })}
             style={{ ...inputStyle, cursor: "pointer" }}
           >
             <option value="abab6.5s-chat">abab6.5s-chat (推荐/快)</option>
@@ -65311,16 +64110,12 @@ const MinimaxSettingsPage = ({ onClose }) => {
 
           <select
             value={config.ttsModel || "Speech-2.8-HD"}
-            onChange={(e) =>
-              setConfig({ ...config, ttsModel: e.target.value })
-            }
+            onChange={(e) => setConfig({ ...config, ttsModel: e.target.value })}
             style={{ ...inputStyle, cursor: "pointer" }}
           >
             <option value="Speech-2.8-HD">Speech-2.8-HD (推荐)</option>
 
-            <option value="Speech-2.8-Turbo">
-              Speech-2.8-Turbo (快速)
-            </option>
+            <option value="Speech-2.8-Turbo">Speech-2.8-Turbo (快速)</option>
 
             <option value="Speech-2.6-HD">Speech-2.6-HD</option>
 
@@ -65331,9 +64126,7 @@ const MinimaxSettingsPage = ({ onClose }) => {
             <option value="Speech-02-Turbo">Speech-02-Turbo</option>
           </select>
 
-          <div
-            style={{ fontSize: "12px", color: "#999", marginTop: "5px" }}
-          >
+          <div style={{ fontSize: "12px", color: "#999", marginTop: "5px" }}>
             选择适合的语音合成模型，HD 系列音质更好，Turbo 系列速度更快
           </div>
         </div>
@@ -65363,6 +64156,7 @@ const MinimaxSettingsPage = ({ onClose }) => {
 };
 
 const MinimaxSettingsOverlay = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
   return (
     <div
       className={`settings-overlay ${isOpen ? "open" : ""}`}
@@ -65370,7 +64164,19 @@ const MinimaxSettingsOverlay = ({ isOpen, onClose }) => {
     >
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </div>
 
         <div className="title">Minimax 接入</div>
@@ -65399,21 +64205,18 @@ const CharityPage = ({ onClose }) => {
   // --- 新增：公益项目列表状态 ---
   const [recommends, setRecommends] = useState([]);
   const [isGeneratingRecs, setIsGeneratingRecs] = useState(false);
-  const [selectedProjectDetail, setSelectedProjectDetail] =
-    useState(null);
+  const [selectedProjectDetail, setSelectedProjectDetail] = useState(null);
   const [showDonateInput, setShowDonateInput] = useState(false);
   const [donateAmount, setDonateAmount] = useState("");
 
   // ==================== 新增：月捐相关状态与逻辑 START ====================
-  const [showMonthlyDonateModal, setShowMonthlyDonateModal] =
-    useState(false);
+  const [showMonthlyDonateModal, setShowMonthlyDonateModal] = useState(false);
   const [monthlyProject, setMonthlyProject] = useState("");
   const [monthlyAmount, setMonthlyAmount] = useState("");
   const [monthlySubscriptions, setMonthlySubscriptions] = useState([]);
 
   // ==================== 新增：收益捐相关状态与逻辑 START ====================
-  const [showIncomeDonateModal, setShowIncomeDonateModal] =
-    useState(false);
+  const [showIncomeDonateModal, setShowIncomeDonateModal] = useState(false);
   const [incomeProject, setIncomeProject] = useState("");
   const [incomeSource, setIncomeSource] = useState("古怪农场");
   const [incomePercentage, setIncomePercentage] = useState("10");
@@ -65549,15 +64352,10 @@ ${worldContext}
   };
 
   const handleCancelIncomeSubscription = (subId) => {
-    if (
-      confirm("确定要终止这项收益捐计划吗？终止后将不再自动抽取收益。")
-    ) {
+    if (confirm("确定要终止这项收益捐计划吗？终止后将不再自动抽取收益。")) {
       const newSubs = incomeSubscriptions.filter((s) => s.id !== subId);
       setIncomeSubscriptions(newSubs);
-      localStorage.setItem(
-        "charity_income_subs",
-        JSON.stringify(newSubs),
-      );
+      localStorage.setItem("charity_income_subs", JSON.stringify(newSubs));
     }
   };
   // ==================== 新增：收益捐相关状态与逻辑 END ====================
@@ -65568,9 +64366,7 @@ ${worldContext}
     );
 
     let needsUpdate = false;
-    let currentBalance = parseInt(
-      localStorage.getItem("farm_coins") || "500",
-    );
+    let currentBalance = parseInt(localStorage.getItem("farm_coins") || "500");
     const today = new Date();
 
     const updatedSubs = savedSubs.map((sub) => {
@@ -65598,18 +64394,14 @@ ${worldContext}
 
     if (needsUpdate) {
       localStorage.setItem("farm_coins", currentBalance.toString());
-      localStorage.setItem(
-        "charity_monthly_subs",
-        JSON.stringify(updatedSubs),
-      );
+      localStorage.setItem("charity_monthly_subs", JSON.stringify(updatedSubs));
     }
     setMonthlySubscriptions(updatedSubs);
   }, []);
 
   const handleConfirmMonthlyDonate = async () => {
     const amount = parseInt(monthlyAmount);
-    if (isNaN(amount) || amount <= 0)
-      return alert("请输入正确的善款金额！");
+    if (isNaN(amount) || amount <= 0) return alert("请输入正确的善款金额！");
     if (!monthlyProject) return alert("请选择捐助项目！");
 
     const currentBalance = parseInt(
@@ -65618,10 +64410,7 @@ ${worldContext}
     if (currentBalance < amount)
       return alert("金库余额不足！请前往我的钱包充值。");
 
-    localStorage.setItem(
-      "farm_coins",
-      (currentBalance - amount).toString(),
-    );
+    localStorage.setItem("farm_coins", (currentBalance - amount).toString());
     if (window.addTransactionRecord) {
       window.addTransactionRecord(
         "expense",
@@ -65673,10 +64462,7 @@ ${worldContext}
     if (confirm("确定要终止这项月捐计划吗？终止后下月将不再自动扣款。")) {
       const newSubs = monthlySubscriptions.filter((s) => s.id !== subId);
       setMonthlySubscriptions(newSubs);
-      localStorage.setItem(
-        "charity_monthly_subs",
-        JSON.stringify(newSubs),
-      );
+      localStorage.setItem("charity_monthly_subs", JSON.stringify(newSubs));
     }
   };
   // ==================== 新增：月捐相关状态与逻辑 END ====================
@@ -65750,9 +64536,7 @@ ${worldContext}
     setHasPunchedToday(true);
     setDonateCount((prev) => prev + 1);
     setSteps(0);
-    alert(
-      `打卡成功！感谢您为【${selectedProject}】项目捐赠了 ${steps} 步！`,
-    );
+    alert(`打卡成功！感谢您为【${selectedProject}】项目捐赠了 ${steps} 步！`);
     setShowWalkModal(false);
   };
 
@@ -65788,9 +64572,7 @@ ${worldContext}
               sub: "悬壶济世，救死扶伤",
               intro:
                 "兵燹过后，伤兵与无辜百姓多受病痛折磨。我们将邀请民间医工，筹集常见金创药与风寒草药，无偿为贫苦者诊治。",
-              history: [
-                { date: "初平二年十月", event: "药局筹设完成。" },
-              ],
+              history: [{ date: "初平二年十月", event: "药局筹设完成。" }],
               org: "谯县杏林馆",
               raised: 12000,
               donors: 105,
@@ -65816,8 +64598,7 @@ ${worldContext}
       const worldContext = window.getWorldBookContext
         ? await window.getWorldBookContext()
         : "无背景";
-      const sysPrompt =
-        "你是一个深谙东汉末年历史背景的公益救援项目策划专家。";
+      const sysPrompt = "你是一个深谙东汉末年历史背景的公益救援项目策划专家。";
       const userPrompt = `
               【世界设定】
               ${worldContext}
@@ -65851,10 +64632,7 @@ ${worldContext}
               const data = JSON.parse(cleanJson);
               if (Array.isArray(data) && data.length > 0) {
                 setRecommends(data);
-                await dbManager.set(
-                  "charity_projects",
-                  JSON.stringify(data),
-                );
+                await dbManager.set("charity_projects", JSON.stringify(data));
                 alert("已寻访各地，为您整理出最新急需援助的项目。");
               }
             } catch (e) {
@@ -65882,8 +64660,7 @@ ${worldContext}
 
   const handleConfirmDonate = async () => {
     const amount = parseInt(donateAmount);
-    if (isNaN(amount) || amount <= 0)
-      return alert("请输入正确的善款金额！");
+    if (isNaN(amount) || amount <= 0) return alert("请输入正确的善款金额！");
 
     const currentBalance = parseInt(
       localStorage.getItem("farm_coins") || "500",
@@ -65891,10 +64668,7 @@ ${worldContext}
     if (currentBalance < amount)
       return alert("金库余额不足！请前往我的钱包充值。");
 
-    localStorage.setItem(
-      "farm_coins",
-      (currentBalance - amount).toString(),
-    );
+    localStorage.setItem("farm_coins", (currentBalance - amount).toString());
     if (window.addTransactionRecord) {
       window.addTransactionRecord(
         "expense",
@@ -66322,12 +65096,9 @@ ${worldContext}
                   style={{
                     width: "100%",
                     height: "100px",
-                    background: [
-                      "#FADBD8",
-                      "#DCEADD",
-                      "#FDEBD0",
-                      "#E8DAEF",
-                    ][i % 4],
+                    background: ["#FADBD8", "#DCEADD", "#FDEBD0", "#E8DAEF"][
+                      i % 4
+                    ],
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
@@ -66501,9 +65272,7 @@ ${worldContext}
                 >
                   <iconify-icon
                     icon={
-                      hasPunchedToday
-                        ? "ph:check-bold"
-                        : "ph:footprints-fill"
+                      hasPunchedToday ? "ph:check-bold" : "ph:footprints-fill"
                     }
                   ></iconify-icon>
                 </div>
@@ -66824,39 +65593,35 @@ ${worldContext}
                     gap: "16px",
                   }}
                 >
-                  {(selectedProjectDetail.history || []).map(
-                    (item, idx) => (
-                      <div key={idx} style={{ position: "relative" }}>
-                        <div
-                          style={{
-                            position: "absolute",
-                            left: "-23px",
-                            top: "2px",
-                            width: "12px",
-                            height: "12px",
-                            borderRadius: "50%",
-                            background: "#D6724B",
-                            border: "2px solid #FDFCF8",
-                          }}
-                        ></div>
-                        <div
-                          style={{
-                            fontSize: "12px",
-                            color: "#8C917B",
-                            fontWeight: "bold",
-                            marginBottom: "4px",
-                          }}
-                        >
-                          {item.date}
-                        </div>
-                        <div
-                          style={{ fontSize: "13px", color: "#5A5F4D" }}
-                        >
-                          {item.event}
-                        </div>
+                  {(selectedProjectDetail.history || []).map((item, idx) => (
+                    <div key={idx} style={{ position: "relative" }}>
+                      <div
+                        style={{
+                          position: "absolute",
+                          left: "-23px",
+                          top: "2px",
+                          width: "12px",
+                          height: "12px",
+                          borderRadius: "50%",
+                          background: "#D6724B",
+                          border: "2px solid #FDFCF8",
+                        }}
+                      ></div>
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          color: "#8C917B",
+                          fontWeight: "bold",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        {item.date}
                       </div>
-                    ),
-                  )}
+                      <div style={{ fontSize: "13px", color: "#5A5F4D" }}>
+                        {item.event}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
             </div>
@@ -66868,8 +65633,7 @@ ${worldContext}
                 width: "100%",
                 padding: "16px",
                 borderRadius: "16px",
-                background:
-                  "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
+                background: "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
                 color: "#FFF",
                 border: "none",
                 fontWeight: "bold",
@@ -66925,8 +65689,7 @@ ${worldContext}
                 color: "#8C917B",
               }}
             >
-              当前金库余额：{localStorage.getItem("farm_coins") || "500"}{" "}
-              铢
+              当前金库余额：{localStorage.getItem("farm_coins") || "500"} 铢
             </div>
 
             <input
@@ -67101,9 +65864,7 @@ ${worldContext}
                       fontWeight: "bold",
                     }}
                   >
-                    <option value="">
-                      -- 下拉选择 为你精选 库中项目 --
-                    </option>
+                    <option value="">-- 下拉选择 为你精选 库中项目 --</option>
                     {recommends.map((proj) => (
                       <option key={proj.id} value={proj.title}>
                         {proj.title}
@@ -67246,15 +66007,11 @@ ${worldContext}
                             alignItems: "center",
                           }}
                         >
-                          <div
-                            style={{ fontSize: "12px", color: "#8C917B" }}
-                          >
+                          <div style={{ fontSize: "12px", color: "#8C917B" }}>
                             下次扣款：{sub.nextDeductDate}
                           </div>
                           <button
-                            onClick={() =>
-                              handleCancelSubscription(sub.id)
-                            }
+                            onClick={() => handleCancelSubscription(sub.id)}
                             style={{
                               background: "#FFF5F3",
                               color: "#D6724B",
@@ -67394,9 +66151,7 @@ ${worldContext}
                       fontWeight: "bold",
                     }}
                   >
-                    <option value="">
-                      -- 下拉选择 为你精选 库中项目 --
-                    </option>
+                    <option value="">-- 下拉选择 为你精选 库中项目 --</option>
                     {recommends.map((proj) => (
                       <option key={proj.id} value={proj.title}>
                         {proj.title}
@@ -67579,9 +66334,7 @@ ${worldContext}
                             alignItems: "center",
                           }}
                         >
-                          <div
-                            style={{ fontSize: "12px", color: "#8C917B" }}
-                          >
+                          <div style={{ fontSize: "12px", color: "#8C917B" }}>
                             来源：{sub.source}
                           </div>
                           <button
@@ -67755,9 +66508,7 @@ ${worldContext}
                     fontWeight: "bold",
                     fontSize: "15px",
                     cursor:
-                      isVerifying || !verifyOrg
-                        ? "not-allowed"
-                        : "pointer",
+                      isVerifying || !verifyOrg ? "not-allowed" : "pointer",
                     boxShadow:
                       isVerifying || !verifyOrg
                         ? "none"
@@ -67799,9 +66550,7 @@ ${worldContext}
                       style={{
                         fontSize: "16px",
                         fontWeight: "bold",
-                        color: verifyResult.isCorrupt
-                          ? "#D6724B"
-                          : "#5A8F6D",
+                        color: verifyResult.isCorrupt ? "#D6724B" : "#5A8F6D",
                         marginBottom: "12px",
                         display: "flex",
                         alignItems: "center",
@@ -67976,10 +66725,7 @@ const WalletPage = ({ onClose }) => {
     }, 1000);
 
     return () => {
-      window.removeEventListener(
-        "walletTransactionsUpdated",
-        loadWalletData,
-      );
+      window.removeEventListener("walletTransactionsUpdated", loadWalletData);
       clearInterval(timer);
     };
   }, []);
@@ -68046,7 +66792,19 @@ const WalletPage = ({ onClose }) => {
         }}
       >
         <div className="back-btn" onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </div>
         <div className="title" style={{ color: "#5A5F4D" }}>
           我的金库
@@ -68060,8 +66818,7 @@ const WalletPage = ({ onClose }) => {
         {/* 余额卡片 */}
         <div
           style={{
-            background:
-              "linear-gradient(135deg, #E8C3A8 0%, #D4AB90 100%)",
+            background: "linear-gradient(135deg, #E8C3A8 0%, #D4AB90 100%)",
             borderRadius: "20px",
             padding: "30px 20px",
             color: "white",
@@ -68106,9 +66863,7 @@ const WalletPage = ({ onClose }) => {
         </div>
 
         {/* 充值与查询按钮 */}
-        <div
-          style={{ display: "flex", gap: "15px", marginBottom: "15px" }}
-        >
+        <div style={{ display: "flex", gap: "15px", marginBottom: "15px" }}>
           <button
             onClick={() => setShowRecharge(true)}
             className="active-press"
@@ -68155,8 +66910,7 @@ const WalletPage = ({ onClose }) => {
             width: "100%",
             padding: "14px",
             borderRadius: "16px",
-            background:
-              "linear-gradient(135deg, #FADBD8 0%, #DFA9A9 100%)",
+            background: "linear-gradient(135deg, #FADBD8 0%, #DFA9A9 100%)",
             color: "white",
             border: "none",
             fontSize: "16px",
@@ -68259,9 +67013,7 @@ const WalletPage = ({ onClose }) => {
             ></iconify-icon>
           </div>
 
-          <div
-            style={{ display: "flex", alignItems: "center", gap: "10px" }}
-          >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <div
               style={{
                 flex: 1,
@@ -68424,10 +67176,7 @@ const WalletPage = ({ onClose }) => {
           }}
         >
           <div className="settings-nav" style={{ background: "#fff" }}>
-            <div
-              className="back-btn"
-              onClick={() => setShowHistory(false)}
-            >
+            <div className="back-btn" onClick={() => setShowHistory(false)}>
               <iconify-icon
                 icon="line-md:chevron-down"
                 style={{ fontSize: "24px" }}
@@ -68587,9 +67336,7 @@ const WalletPage = ({ onClose }) => {
       )}
 
       {/* ✅ 新增：渲染绣衣公益页面 */}
-      {showCharity && (
-        <CharityPage onClose={() => setShowCharity(false)} />
-      )}
+      {showCharity && <CharityPage onClose={() => setShowCharity(false)} />}
     </div>
   );
 };
@@ -68664,10 +67411,7 @@ const BackpackPage = ({ onClose }) => {
   });
 
   // 补齐空格子，使其像游戏一样具有固定网格感
-  const totalSlots = Math.max(
-    20,
-    Math.ceil(filteredItems.length / 4) * 4,
-  );
+  const totalSlots = Math.max(20, Math.ceil(filteredItems.length / 4) * 4);
   const displaySlots = [...filteredItems];
   while (displaySlots.length < totalSlots) {
     displaySlots.push(null);
@@ -68697,7 +67441,19 @@ const BackpackPage = ({ onClose }) => {
         }}
       >
         <div className="back-btn" onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </div>
         <div className="title" style={{ color: "#5A5F4D" }}>
           行囊 ({items.length})
@@ -68735,9 +67491,7 @@ const BackpackPage = ({ onClose }) => {
                 background: activeTab === tab.id ? "#fff" : "transparent",
                 color: activeTab === tab.id ? "#D6724B" : "#8C917B",
                 boxShadow:
-                  activeTab === tab.id
-                    ? "0 4px 10px rgba(0,0,0,0.05)"
-                    : "none",
+                  activeTab === tab.id ? "0 4px 10px rgba(0,0,0,0.05)" : "none",
                 cursor: "pointer",
               }}
             >
@@ -68959,10 +67713,10 @@ const BackpackPage = ({ onClose }) => {
 const PrivacySecurityPage = ({ onOpenMinimax }) => {
   const [activeSubPage, setActiveSubPage] = React.useState(null);
 
-  if (activeSubPage === 'wallet') {
+  if (activeSubPage === "wallet") {
     return <WalletPage onClose={() => setActiveSubPage(null)} />;
   }
-  if (activeSubPage === 'backpack') {
+  if (activeSubPage === "backpack") {
     return <BackpackPage onClose={() => setActiveSubPage(null)} />;
   }
 
@@ -69010,7 +67764,7 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
 
         {/* 我的钱包 */}
         <div
-          onClick={() => setActiveSubPage('wallet')}
+          onClick={() => setActiveSubPage("wallet")}
           style={{
             display: "flex",
             alignItems: "center",
@@ -69033,7 +67787,7 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
 
         {/* 我的背包 */}
         <div
-          onClick={() => setActiveSubPage('backpack')}
+          onClick={() => setActiveSubPage("backpack")}
           style={{
             display: "flex",
             alignItems: "center",
@@ -69088,14 +67842,19 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
           }}
         >
           <div>
-            <div style={{ fontSize: "14px", fontWeight: "500", color: "#D6724B" }}>
+            <div
+              style={{ fontSize: "14px", fontWeight: "500", color: "#D6724B" }}
+            >
               清理临时缓存
             </div>
             <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
               释放浏览器占用的临时资源空间
             </div>
           </div>
-          <i data-lucide="trash-2" style={{ color: "#D6724B", width: 18, height: 18 }}></i>
+          <i
+            data-lucide="trash-2"
+            style={{ color: "#D6724B", width: 18, height: 18 }}
+          ></i>
         </div>
       </div>
     </div>
@@ -69105,13 +67864,22 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
 const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
   if (!isOpen) return null;
   return (
-    <div
-      className="settings-overlay open"
-      style={{ zIndex: 1005 }}
-    >
+    <div className="settings-overlay open" style={{ zIndex: 1005 }}>
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
         </div>
         <div className="title">隐私与安全</div>
       </div>
@@ -69193,8 +67961,7 @@ const StarChartPage = ({ onBack }) => {
 
   // ===== 新增：他人寄语相关状态 =====
   const [showTributesModal, setShowTributesModal] = React.useState(false);
-  const [isGeneratingTributes, setIsGeneratingTributes] =
-    React.useState(false);
+  const [isGeneratingTributes, setIsGeneratingTributes] = React.useState(false);
   const [tributesList, setTributesList] = React.useState([]);
 
   // ===== 新增：处理生成他人寄语 =====
@@ -69216,9 +67983,7 @@ const StarChartPage = ({ onBack }) => {
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
       } else {
-        allChars = JSON.parse(
-          localStorage.getItem("t8_chat_list") || "[]",
-        );
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
       }
       const validChars = allChars.filter(
         (c) => !String(c.id).startsWith("group") && c.type !== "decor",
@@ -69426,7 +68191,7 @@ const StarChartPage = ({ onBack }) => {
   };
 
   return (
-    <div className="starchart-overlay fade-in">
+    <div className="starchart-overlay open fade-in">
       <div className="flex justify-between p-6 items-center z-10">
         <div className="flex items-center gap-4 flex-1">
           <input
@@ -69519,8 +68284,9 @@ const StarChartPage = ({ onBack }) => {
         {showText && !isGenerating && (
           <div className="absolute bottom-20 left-0 right-0 text-center pointer-events-none">
             <div
-              className={`text-white font-serif text-lg transition-all duration-1000 ease-in-out ${showText ? "opacity-100 blur-0" : "opacity-0 blur-md"
-                }`}
+              className={`text-white font-serif text-lg transition-all duration-1000 ease-in-out ${
+                showText ? "opacity-100 blur-0" : "opacity-0 blur-md"
+              }`}
             >
               {displayText}
             </div>
@@ -69559,17 +68325,13 @@ const StarChartPage = ({ onBack }) => {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                <div className="text-xs text-gray-400 mb-1">
-                  家族 / 出身
-                </div>
+                <div className="text-xs text-gray-400 mb-1">家族 / 出身</div>
                 <div className="font-medium text-[#1a1b3a]">
                   {selectedDeceased.family}
                 </div>
               </div>
               <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                <div className="text-xs text-gray-400 mb-1">
-                  职业 / 身份
-                </div>
+                <div className="text-xs text-gray-400 mb-1">职业 / 身份</div>
                 <div className="font-medium text-[#1a1b3a]">
                   {selectedDeceased.profession}
                 </div>
@@ -69791,8 +68553,7 @@ const ButterflyEffectPage = ({ onBack }) => {
         ? await window.getWorldBookContext()
         : "无特定背景设定";
 
-      const sysPrompt =
-        "你是一个精通东汉历史、蝴蝶效应推演及人性洞察的大师。";
+      const sysPrompt = "你是一个精通东汉历史、蝴蝶效应推演及人性洞察的大师。";
       const userPrompt = `
                         【世界设定】
                         ${worldContext}
@@ -69840,9 +68601,7 @@ const ButterflyEffectPage = ({ onBack }) => {
                 // 将数据通过 id 排序以便匹配
                 data.sort((a, b) => a.id - b.id);
                 setEffectData(data);
-                alert(
-                  "蝴蝶效应推演完成！\n请点击页面上的圆点查看命运分歧。",
-                );
+                alert("蝴蝶效应推演完成！\n请点击页面上的圆点查看命运分歧。");
               } else {
                 throw new Error("返回的数组长度不足或结构异常");
               }
@@ -69884,17 +68643,14 @@ const ButterflyEffectPage = ({ onBack }) => {
   };
 
   return (
-    <div className="butterfly-effect-overlay">
+    <div className="butterfly-effect-overlay open">
       {/* 顶部返回按钮 */}
       <div className="be-back-btn" onClick={onBack}>
         ✕
       </div>
 
       {/* 圆点排列舞台 */}
-      <div
-        className="be-infinity-container"
-        style={{ marginTop: "-60px" }}
-      >
+      <div className="be-infinity-container" style={{ marginTop: "-60px" }}>
         {dots.map((dot, i) => (
           <div
             key={i}
@@ -69914,8 +68670,7 @@ const ButterflyEffectPage = ({ onBack }) => {
                 effectData.length > 0
                   ? "2px solid rgba(255,255,255,0.8)"
                   : "none",
-              transition:
-                "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+              transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
             }}
           />
         ))}
@@ -69996,9 +68751,7 @@ const ButterflyEffectPage = ({ onBack }) => {
                 : "rgba(255, 155, 155, 0.3)",
             borderRadius: "50%",
             cursor:
-              inputText.trim() && !isGenerating
-                ? "pointer"
-                : "not-allowed",
+              inputText.trim() && !isGenerating ? "pointer" : "not-allowed",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -70075,8 +68828,7 @@ const ButterflyEffectPage = ({ onBack }) => {
                         : selectedDot.type === "坏结局"
                           ? "#A0A0A0"
                           : "#FF9B9B",
-                    color:
-                      selectedDot.type === "好结局" ? "#333" : "#FFF",
+                    color: selectedDot.type === "好结局" ? "#333" : "#FFF",
                     padding: "4px 12px",
                     borderRadius: "12px",
                     fontSize: "12px",
@@ -70268,7 +69020,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
           setUserAvatar(activeUser.avatar);
         }
       }
-    } catch (e) { }
+    } catch (e) {}
   }, [chatId]);
 
   // 【新增】内部拦截 "太疾驰" 发出的购买事件，转入悬浮窗内消化，不再抛给全局主聊天
@@ -70297,8 +69049,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
         const worldContext = window.getWorldBookContext
           ? await window.getWorldBookContext()
           : "";
-        const sysPrompt =
-          "用户刚刚买了一样东西/票，请简短地回复一句看法。";
+        const sysPrompt = "用户刚刚买了一样东西/票，请简短地回复一句看法。";
 
         // 【修复3】将悬浮窗历史记录转换为 Prompt 上下文
         const historyContext = currentSession
@@ -70445,7 +69196,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
         if (activeUser)
           userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}`;
       }
-    } catch (e) { }
+    } catch (e) {}
 
     const pageContext = window.currentT12Data
       ? `【用户当前在页面上看到的太疾驰商品/剧目详情】：\n${window.currentT12Data}`
@@ -70459,9 +69210,9 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
                   ${pageContext}
                   【最近对话】
                   ${messages
-        .slice(-4)
-        .map((m) => `${m.isMe ? "我" : character.name}: ${m.text}`)
-        .join("\n")}
+                    .slice(-4)
+                    .map((m) => `${m.isMe ? "我" : character.name}: ${m.text}`)
+                    .join("\n")}
                   我: ${myMsg.text}
                   【指令】请结合上述页面中正在卖的商品，回复用户刚才的话。字数控制在40字以内，语气必须符合人设。直接输出回复。
                 `;
@@ -70598,9 +69349,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
           ></span>
           与 {character.name} 同游选购中
         </span>
-        <div
-          style={{ display: "flex", gap: "10px", alignItems: "center" }}
-        >
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           {/* 收缩/展开按钮 */}
           <button
             onClick={() => setIsCollapsed(!isCollapsed)}
@@ -70681,7 +69430,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
               >
                 {character.avatar ? (
                   typeof character.avatar === "string" &&
-                    character.avatar.startsWith("data:image") ? (
+                  character.avatar.startsWith("data:image") ? (
                     <img
                       src={character.avatar}
                       style={{
@@ -70778,9 +69527,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
           </div>
 
           {/* 发送框 */}
-          <div
-            style={{ display: "flex", gap: "10px", alignItems: "center" }}
-          >
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
             <input
               type="text"
               value={inputText}
@@ -70847,8 +69594,7 @@ const MasterApp = () => {
   // 列星页面状态
   const [isStarChartOpen, setIsStarChartOpen] = useState(false);
   // 蝴蝶效应页面状态
-  const [isButterflyEffectOpen, setIsButterflyEffectOpen] =
-    useState(false);
+  const [isButterflyEffectOpen, setIsButterflyEffectOpen] = useState(false);
   // 沙盘模拟器页面状态
   const [isSandTableOpen, setIsSandTableOpen] = useState(false);
   // 相对演绎页面状态
@@ -71100,10 +69846,7 @@ const MasterApp = () => {
     window.addEventListener("startShoppingSession", handleStartShopping);
     window.addEventListener("t12OrderPlaced", handleOrderPlaced);
     return () => {
-      window.removeEventListener(
-        "startShoppingSession",
-        handleStartShopping,
-      );
+      window.removeEventListener("startShoppingSession", handleStartShopping);
       window.removeEventListener("t12OrderPlaced", handleOrderPlaced);
     };
   }, [shoppingSession]);
@@ -71211,12 +69954,15 @@ const MasterApp = () => {
   const [images, setImages] = useState([]);
   useEffect(() => {
     if (window.lockScreenStore) {
-      window.lockScreenStore.getAll().then(storedImages => {
-        if (storedImages && storedImages.length > 0) {
-          setImages(storedImages);
-          setCurrentImgIndex(storedImages.length - 1);
-        }
-      }).catch(e => console.error("读取锁屏图片失败", e));
+      window.lockScreenStore
+        .getAll()
+        .then((storedImages) => {
+          if (storedImages && storedImages.length > 0) {
+            setImages(storedImages);
+            setCurrentImgIndex(storedImages.length - 1);
+          }
+        })
+        .catch((e) => console.error("读取锁屏图片失败", e));
     }
   }, []);
   const [currentImgIndex, setCurrentImgIndex] = useState(-1);
@@ -71503,7 +70249,7 @@ const MasterApp = () => {
           );
           const lrcData = await lrcRes.json();
           if (lrcData.lyric) parsedLyrics = parseLRC(lrcData.lyric);
-        } catch (e) { }
+        } catch (e) {}
 
         const artistName = Array.isArray(song.artist)
           ? song.artist.join("/")
@@ -71589,8 +70335,7 @@ const MasterApp = () => {
 
               if (data.action === "force_change" && data.songName) {
                 setMusicAIBubble(
-                  (prev) =>
-                    prev + `\n(一把夺过手机搜索《${data.songName}》)`,
+                  (prev) => prev + `\n(一把夺过手机搜索《${data.songName}》)`,
                 );
                 const success = await performAIMusicSearchAndPlay(
                   data.songName,
@@ -71599,10 +70344,7 @@ const MasterApp = () => {
                   setMusicAIBubble(
                     (prev) => prev + "\n(没搜到这首歌，切歌失败...)",
                   );
-              } else if (
-                data.action === "request_change" &&
-                data.songName
-              ) {
+              } else if (data.action === "request_change" && data.songName) {
                 setAiRequestChangeSong({
                   charName: musicChar.name,
                   songName: data.songName,
@@ -71769,9 +70511,7 @@ const MasterApp = () => {
         const seconds = parseInt(match[2], 10);
         const milliseconds = match[3] ? parseInt(match[3], 10) : 0;
         const ms =
-          match[3] && match[3].length === 2
-            ? milliseconds * 10
-            : milliseconds;
+          match[3] && match[3].length === 2 ? milliseconds * 10 : milliseconds;
 
         const time = minutes * 60 + seconds + ms / 1000;
         const text = line.replace(timeExp, "").trim();
@@ -71791,9 +70531,7 @@ const MasterApp = () => {
     }
 
     result.sort((a, b) => a.time - b.time);
-    return result.length > 0
-      ? result
-      : [{ time: 0, text: "纯音乐 / 无歌词" }];
+    return result.length > 0 ? result : [{ time: 0, text: "纯音乐 / 无歌词" }];
   };
 
   // 2. 上传音乐 -> 加入播放列表
@@ -71890,9 +70628,7 @@ const MasterApp = () => {
   const playNext = () => {
     if (!currentSongId || playlist.length === 0) return;
     // 简单逻辑：按列表顺序下一首，找不到就停
-    const currentIndex = playlist.findIndex(
-      (s) => s.id === currentSongId,
-    );
+    const currentIndex = playlist.findIndex((s) => s.id === currentSongId);
     const nextSong = playlist[currentIndex + 1] || playlist[0]; // 循环播放
     if (nextSong) {
       setCurrentSongId(nextSong.id);
@@ -71940,8 +70676,7 @@ const MasterApp = () => {
   useEffect(() => {
     const lyricsCard = document.getElementById("lyricsCard");
     if (lyricsCard) {
-      const activeElement =
-        lyricsCard.querySelector(".lyric-line.active");
+      const activeElement = lyricsCard.querySelector(".lyric-line.active");
       if (activeElement) {
         // 平滑滚动到当前歌词
         lyricsCard.scrollTo({
@@ -71989,12 +70724,10 @@ const MasterApp = () => {
   const [isFontSettingsOpen, setIsFontSettingsOpen] = useState(false);
 
   // [新增] Minimax 配置页面状态
-  const [isMinimaxSettingsOpen, setIsMinimaxSettingsOpen] =
-    useState(false);
+  const [isMinimaxSettingsOpen, setIsMinimaxSettingsOpen] = useState(false);
 
   // [新增] 隐私与安全二级页面状态
-  const [isPrivacySecurityOpen, setIsPrivacySecurityOpen] =
-    useState(false);
+  const [isPrivacySecurityOpen, setIsPrivacySecurityOpen] = useState(false);
 
   // [ADD] 新增用户配置状态
   const [isProfileOpen, setIsProfileOpen] = useState(false);
@@ -72007,11 +70740,9 @@ const MasterApp = () => {
   // [新增] 天下书城相关状态
   const [storeRecommendBooks, setStoreRecommendBooks] = useState([]);
   const [storePopularBooks, setStorePopularBooks] = useState([]);
-  const [isGeneratingRecommend, setIsGeneratingRecommend] =
-    useState(false);
+  const [isGeneratingRecommend, setIsGeneratingRecommend] = useState(false);
   const [isGeneratingPopular, setIsGeneratingPopular] = useState(false);
-  const [isGeneratingMoreContent, setIsGeneratingMoreContent] =
-    useState(false);
+  const [isGeneratingMoreContent, setIsGeneratingMoreContent] = useState(false);
 
   // [新增] 书城每周打卡状态
   const [readerWeeklyPunch, setReaderWeeklyPunch] = useState([]);
@@ -72072,15 +70803,9 @@ const MasterApp = () => {
     // 持久化保存到数据库或localStorage
     if (window.bookStore) {
       await window.bookStore.save(newLocalBook);
-      await window.bookStore.saveContent(
-        newLocalBook.id,
-        bookToAdd.fullText,
-      );
+      await window.bookStore.saveContent(newLocalBook.id, bookToAdd.fullText);
     } else {
-      localStorage.setItem(
-        "morandi_books_meta",
-        JSON.stringify(updatedBooks),
-      );
+      localStorage.setItem("morandi_books_meta", JSON.stringify(updatedBooks));
       localStorage.setItem(
         `book_content_${newLocalBook.id}`,
         bookToAdd.fullText,
@@ -72162,16 +70887,12 @@ const MasterApp = () => {
                   isStoreBook: true,
                   fullText: "",
                   progress: 0,
-                  color:
-                    b.color ||
-                    fallbackColors[idx % fallbackColors.length],
+                  color: b.color || fallbackColors[idx % fallbackColors.length],
                 }));
                 setBooksState(formattedData);
                 // 保存到本地缓存
                 localStorage.setItem(
-                  isRecommend
-                    ? "store_recommend_books"
-                    : "store_popular_books",
+                  isRecommend ? "store_recommend_books" : "store_popular_books",
                   JSON.stringify(formattedData),
                 );
               }
@@ -72213,8 +70934,7 @@ const MasterApp = () => {
         ? await window.getWorldBookContext()
         : "无特定背景设定";
 
-      const sysPrompt =
-        "你是一位东汉时期的著书人，擅长撰写各种风格的文章。";
+      const sysPrompt = "你是一位东汉时期的著书人，擅长撰写各种风格的文章。";
       const userPrompt = `
                     【世界设定】
                     ${worldContext}
@@ -72441,8 +71161,7 @@ const MasterApp = () => {
                     id: 3,
                     title: "小王子",
                     author: "圣埃克苏佩里",
-                    summary:
-                      "所有的大人都曾经是小孩，虽然只有少数人记得。",
+                    summary: "所有的大人都曾经是小孩，虽然只有少数人记得。",
                     color: "#C9D6C8",
                     progress: 0,
                   },
@@ -72450,8 +71169,7 @@ const MasterApp = () => {
                     id: 4,
                     title: "百年孤独",
                     author: "马尔克斯",
-                    summary:
-                      "孤独是这种文化最好的注解。作者简介显示于此。",
+                    summary: "孤独是这种文化最好的注解。作者简介显示于此。",
                     color: "#B4C7E7",
                     progress: 0,
                   },
@@ -72578,8 +71296,7 @@ const MasterApp = () => {
             id: bookId,
             title: file.name.replace(".txt", ""),
             author: "本地导入",
-            summary:
-              fullText.substring(0, 80).replace(/\n/g, " ") + "...",
+            summary: fullText.substring(0, 80).replace(/\n/g, " ") + "...",
             progress: 0, // 初始进度为第0页
             color: ["#E8D9C7", "#B4C7E7", "#C9D6C8", "#A67B7B"][
               Math.floor(Math.random() * 4)
@@ -72637,10 +71354,7 @@ const MasterApp = () => {
         } else {
           // 兼容旧版本，从localStorage删除
           // 更新元数据存储
-          localStorage.setItem(
-            "morandi_books_meta",
-            JSON.stringify(newBooks),
-          );
+          localStorage.setItem("morandi_books_meta", JSON.stringify(newBooks));
           // 清理可能存在的全文内容 (释放空间)
           localStorage.removeItem(`book_content_${bookId}`);
           console.log("书籍从localStorage删除成功:", bookId);
@@ -72746,10 +71460,7 @@ const MasterApp = () => {
         const newImage = { url, name: file.name, id: Date.now() };
 
         setImages((prev) => {
-          const newList = [
-            ...prev,
-            newImage,
-          ];
+          const newList = [...prev, newImage];
           setCurrentImgIndex(newList.length - 1);
           return newList;
         });
@@ -72786,12 +71497,15 @@ const MasterApp = () => {
             className="e6-header"
             onClick={() => {
               images.forEach((i) => {
-                if (i.url && i.url.startsWith("blob:")) URL.revokeObjectURL(i.url);
+                if (i.url && i.url.startsWith("blob:"))
+                  URL.revokeObjectURL(i.url);
               });
               setImages([]);
               setCurrentImgIndex(-1);
               if (window.lockScreenStore) {
-                window.lockScreenStore.clearAll().catch(e => console.error(e));
+                window.lockScreenStore
+                  .clearAll()
+                  .catch((e) => console.error(e));
               }
             }}
           >
@@ -72809,8 +71523,9 @@ const MasterApp = () => {
           </div>
           <div className="stage-container">
             <div
-              className={`upload-placeholder ${images.length > 0 ? "no-border" : ""
-                }`}
+              className={`upload-placeholder ${
+                images.length > 0 ? "no-border" : ""
+              }`}
               onClick={triggerUpload}
             >
               {images.length === 0 ? (
@@ -72863,10 +71578,7 @@ const MasterApp = () => {
               </div>
             </div>
           </nav>
-          <div
-            className="fold-card"
-            onClick={() => setExpanded(!expanded)}
-          >
+          <div className="fold-card" onClick={() => setExpanded(!expanded)}>
             <div
               style={{
                 display: "flex",
@@ -72942,9 +71654,7 @@ const MasterApp = () => {
                   className="icon-box"
                   style={{
                     color: item.color,
-                    background: item.iconImage
-                      ? "transparent"
-                      : "#ffffff",
+                    background: item.iconImage ? "transparent" : "#ffffff",
                     boxShadow: item.iconImage
                       ? "none"
                       : "0 8px 20px rgba(0, 0, 0, 0.02)",
@@ -73006,17 +71716,10 @@ const MasterApp = () => {
                 gap: "10px",
               }}
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="#F2D06B"
-              >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="#F2D06B">
                 <circle cx="12" cy="12" r="10" />
               </svg>
-              <span
-                style={{ fontSize: "14px", color: "var(--text-light)" }}
-              >
+              <span style={{ fontSize: "14px", color: "var(--text-light)" }}>
                 此处为ai待办事项提醒
               </span>
             </div>
@@ -73031,21 +71734,27 @@ const MasterApp = () => {
       {/* SECONDARY PAGE: T1 设置中心 (Overlay) */}
       <div className={`settings-overlay ${isSettingsOpen ? "open" : ""}`}>
         <div className="settings-nav">
-          <div
-            className="back-btn"
-            onClick={() => setIsSettingsOpen(false)}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <div className="back-btn" onClick={() => setIsSettingsOpen(false)}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
           <div className="title">设置</div>
         </div>
 
         <div className="settings-content">
           {/* [MODIFY] 用户卡片：添加点击事件，绑定动态数据 */}
-          <div
-            className="user-card"
-            onClick={() => setIsProfileOpen(true)}
-          >
+          <div className="user-card" onClick={() => setIsProfileOpen(true)}>
             <div className="avatar">
               {currentUser.avatar ? (
                 <img
@@ -73079,10 +71788,7 @@ const MasterApp = () => {
                 {currentUser.age ? `${currentUser.age}岁` : "年龄未知"}
               </div>
             </div>
-            <i
-              data-lucide="chevron-right"
-              style={{ color: "#c7c7cc" }}
-            ></i>
+            <i data-lucide="chevron-right" style={{ color: "#c7c7cc" }}></i>
           </div>
 
           <div className="setting-list" style={{ marginTop: "8px" }}>
@@ -73146,11 +71852,20 @@ const MasterApp = () => {
       {/* THIRD PAGE: T3 天气页面 (Overlay) */}
       <div className={`weather-overlay ${isWeatherOpen ? "open" : ""}`}>
         <div className="weather-nav">
-          <div
-            className="back-btn"
-            onClick={() => setIsWeatherOpen(false)}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <div className="back-btn" onClick={() => setIsWeatherOpen(false)}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
           <div className="title">天气</div>
         </div>
@@ -73160,11 +71875,20 @@ const MasterApp = () => {
       {/* FOURTH PAGE: T4 日历页面 (Overlay) */}
       <div className={`calendar-overlay ${isCalendarOpen ? "open" : ""}`}>
         <div className="calendar-nav">
-          <div
-            className="back-btn"
-            onClick={() => setIsCalendarOpen(false)}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <div className="back-btn" onClick={() => setIsCalendarOpen(false)}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
           <div className="title">日历</div>
         </div>
@@ -73227,10 +71951,7 @@ const MasterApp = () => {
                 display: "flex",
               }}
             >
-              <i
-                data-lucide="search"
-                style={{ width: 16, height: 16 }}
-              ></i>
+              <i data-lucide="search" style={{ width: 16, height: 16 }}></i>
             </div>
           </div>
 
@@ -73269,8 +71990,7 @@ const MasterApp = () => {
               ref={(ref) => {
                 if (ref) {
                   // 自动滚动到当前歌词
-                  const activeElement =
-                    ref.querySelector(".lyric-line.active");
+                  const activeElement = ref.querySelector(".lyric-line.active");
                   if (activeElement) {
                     ref.scrollTop =
                       activeElement.offsetTop -
@@ -73290,9 +72010,7 @@ const MasterApp = () => {
                       lineHeight: "32px",
                       margin: "8px 0",
                       transform:
-                        idx === activeLyricIdx
-                          ? "scale(1.1)"
-                          : "scale(1)",
+                        idx === activeLyricIdx ? "scale(1.1)" : "scale(1)",
                       color:
                         idx === activeLyricIdx
                           ? "#5a5f4d"
@@ -73317,9 +72035,7 @@ const MasterApp = () => {
                           ? "#5a5f4d"
                           : "rgba(90, 95, 77, 0.4)";
                       e.currentTarget.style.transform =
-                        idx === activeLyricIdx
-                          ? "scale(1.1)"
-                          : "scale(1)";
+                        idx === activeLyricIdx ? "scale(1.1)" : "scale(1)";
                     }}
                   >
                     {line.text}
@@ -73373,9 +72089,7 @@ const MasterApp = () => {
                         <input
                           autoFocus
                           value={musicInputText}
-                          onChange={(e) =>
-                            setMusicInputText(e.target.value)
-                          }
+                          onChange={(e) => setMusicInputText(e.target.value)}
                           onBlur={() => {
                             setMusicInputMode(false);
                             if (musicInputText.trim())
@@ -73414,9 +72128,7 @@ const MasterApp = () => {
                       color: "#333",
                     }}
                   >
-                    {musicUserPersona
-                      ? musicUserPersona.name
-                      : "选择自己"}
+                    {musicUserPersona ? musicUserPersona.name : "选择自己"}
                   </div>
                 </div>
 
@@ -73542,9 +72254,7 @@ const MasterApp = () => {
                 className="btn"
                 onClick={() => {
                   // 上一首逻辑 (简单实现：找上一首)
-                  const idx = playlist.findIndex(
-                    (s) => s.id === currentSongId,
-                  );
+                  const idx = playlist.findIndex((s) => s.id === currentSongId);
                   const prev =
                     playlist[idx - 1] || playlist[playlist.length - 1];
                   if (prev) {
@@ -73681,9 +72391,7 @@ const MasterApp = () => {
                       style={{
                         flex: 1,
                         color:
-                          currentSongId === song.id
-                            ? "#d6724b"
-                            : "#4a4f55",
+                          currentSongId === song.id ? "#d6724b" : "#4a4f55",
                         fontWeight:
                           currentSongId === song.id ? "bold" : "normal",
                         fontSize: "15px",
@@ -73755,8 +72463,7 @@ const MasterApp = () => {
                   </div>
                 ))
               )}
-              <div style={{ height: "40px" }}></div>{" "}
-              {/* 底部留白防止遮挡 */}
+              <div style={{ height: "40px" }}></div> {/* 底部留白防止遮挡 */}
             </div>
           </div>
         )}
@@ -73832,9 +72539,7 @@ const MasterApp = () => {
                   type="text"
                   value={musicSearchQuery}
                   onChange={(e) => setMusicSearchQuery(e.target.value)}
-                  onKeyDown={(e) =>
-                    e.key === "Enter" && handleMusicSearch()
-                  }
+                  onKeyDown={(e) => e.key === "Enter" && handleMusicSearch()}
                   placeholder="输入歌曲名或歌手名"
                   style={{
                     flex: 1,
@@ -74052,8 +72757,7 @@ const MasterApp = () => {
                       {char.name}
                     </span>
                     <span style={{ fontSize: "12px", color: "#999" }}>
-                      {char.profile?.personality?.substring(0, 8) ||
-                        "无设定"}
+                      {char.profile?.personality?.substring(0, 8) || "无设定"}
                     </span>
                   </div>
                 ))}
@@ -74080,9 +72784,7 @@ const MasterApp = () => {
               className="weather-modal-box"
               style={{ textAlign: "center", maxWidth: "280px" }}
             >
-              <div style={{ fontSize: "40px", marginBottom: "10px" }}>
-                🎵
-              </div>
+              <div style={{ fontSize: "40px", marginBottom: "10px" }}>🎵</div>
               <div
                 style={{
                   color: "#333",
@@ -74126,8 +72828,7 @@ const MasterApp = () => {
                     setMusicAIBubble("正在为你搜歌...");
                     const success = await performAIMusicSearchAndPlay(q);
                     if (success) setMusicAIBubble("这首歌可是我的最爱！");
-                    else
-                      setMusicAIBubble("啊...好像找不到这首歌的音源。");
+                    else setMusicAIBubble("啊...好像找不到这首歌的音源。");
                   }}
                   style={{
                     flex: 1,
@@ -74150,11 +72851,20 @@ const MasterApp = () => {
       {/* SIXTH PAGE: T6 阅读页面 (Overlay) */}
       <div className={`reader-overlay ${isReaderOpen ? "open" : ""}`}>
         <div className="reader-nav">
-          <div
-            className="back-btn"
-            onClick={() => setIsReaderOpen(false)}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <div className="back-btn" onClick={() => setIsReaderOpen(false)}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
           {/* 下拉按钮：今日阅读 / 天下书城 */}
           <div className="relative">
@@ -74262,8 +72972,9 @@ const MasterApp = () => {
                 return (
                   <div
                     key={book.id}
-                    className={`book-card absolute w-full max-w-sm rounded-3xl p-6 flex flex-row items-center justify-between ${index === activeBookIndex ? "active-card" : ""
-                      }`}
+                    className={`book-card absolute w-full max-w-sm rounded-3xl p-6 flex flex-row items-center justify-between ${
+                      index === activeBookIndex ? "active-card" : ""
+                    }`}
                     style={{
                       backgroundColor: book.color,
                       transform: `translateY(${translateY}px) rotateX(${rotateX}deg) scale(${scale})`,
@@ -74408,9 +73119,7 @@ const MasterApp = () => {
                           </h3>
                           <p className="text-[0.6875rem] font-label text-outline uppercase tracking-wider mt-1 truncate flex justify-between">
                             <span>{book.author}</span>
-                            <span className="opacity-50">
-                              {book.category}
-                            </span>
+                            <span className="opacity-50">{book.category}</span>
                           </p>
                         </div>
                       ))
@@ -74467,9 +73176,7 @@ const MasterApp = () => {
                           </h3>
                           <p className="text-[0.6875rem] font-label text-outline uppercase tracking-wider mt-1 truncate flex justify-between">
                             <span>{book.author}</span>
-                            <span className="opacity-50">
-                              {book.category}
-                            </span>
+                            <span className="opacity-50">{book.category}</span>
                           </p>
                         </div>
                       ))
@@ -74504,8 +73211,7 @@ const MasterApp = () => {
                             const dayIndex = idx + 1; // 1代表周一，7代表周日
                             const today = new Date();
                             let currentDayIndex = today.getDay();
-                            if (currentDayIndex === 0)
-                              currentDayIndex = 7; // 转换周日
+                            if (currentDayIndex === 0) currentDayIndex = 7; // 转换周日
 
                             // 计算本周每天的具体日期字符串，用来比对是否打过卡
                             const dayDiff = dayIndex - currentDayIndex;
@@ -74524,10 +73230,11 @@ const MasterApp = () => {
                                 onClick={() =>
                                   handleReaderWeeklyPunch(dayIndex)
                                 }
-                                className={`w-12 h-12 backdrop-blur-sm rounded-lg flex items-center justify-center transition-all hover:bg-white/50 active:scale-95 ${isPunched
+                                className={`w-12 h-12 backdrop-blur-sm rounded-lg flex items-center justify-center transition-all hover:bg-white/50 active:scale-95 ${
+                                  isPunched
                                     ? "bg-white/90 shadow-md"
                                     : "bg-white/30"
-                                  }`}
+                                }`}
                                 style={{
                                   border:
                                     isToday && !isPunched
@@ -74536,10 +73243,11 @@ const MasterApp = () => {
                                 }}
                               >
                                 <span
-                                  className={`text-sm ${isPunched
+                                  className={`text-sm ${
+                                    isPunched
                                       ? "text-[#D6724B] font-bold text-lg"
                                       : "text-on-primary-container"
-                                    }`}
+                                  }`}
                                 >
                                   {isPunched ? "✓" : dayName}
                                 </span>
@@ -74627,14 +73335,9 @@ const MasterApp = () => {
 
                 // 如果IndexedDB中没有，尝试从localStorage获取
                 if (!content) {
-                  content = localStorage.getItem(
-                    `book_content_${book.id}`,
-                  );
+                  content = localStorage.getItem(`book_content_${book.id}`);
                   if (content) {
-                    console.log(
-                      "从localStorage获取书籍内容成功:",
-                      book.id,
-                    );
+                    console.log("从localStorage获取书籍内容成功:", book.id);
                   }
                 }
 
@@ -74667,31 +73370,18 @@ const MasterApp = () => {
                   // 优先从IndexedDB获取书籍内容
                   if (window.bookStore) {
                     try {
-                      content = await window.bookStore.getContent(
-                        meta.id,
-                      );
-                      console.log(
-                        "从IndexedDB获取书籍内容成功:",
-                        meta.id,
-                      );
+                      content = await window.bookStore.getContent(meta.id);
+                      console.log("从IndexedDB获取书籍内容成功:", meta.id);
                     } catch (error) {
-                      console.error(
-                        "从IndexedDB获取书籍内容失败:",
-                        error,
-                      );
+                      console.error("从IndexedDB获取书籍内容失败:", error);
                     }
                   }
 
                   // 如果IndexedDB中没有，尝试从localStorage获取
                   if (!content) {
-                    content = localStorage.getItem(
-                      `book_content_${meta.id}`,
-                    );
+                    content = localStorage.getItem(`book_content_${meta.id}`);
                     if (content) {
-                      console.log(
-                        "从localStorage获取书籍内容成功:",
-                        meta.id,
-                      );
+                      console.log("从localStorage获取书籍内容成功:", meta.id);
                     }
                   }
 
@@ -74736,9 +73426,7 @@ const MasterApp = () => {
               </button>
               {/* Library Inactive */}
               <button className="flex flex-col items-center justify-center text-stone-500 p-3 hover:text-stone-800 transition-colors">
-                <span className="material-symbols-outlined">
-                  auto_stories
-                </span>
+                <span className="material-symbols-outlined">auto_stories</span>
               </button>
             </footer>
           )}
@@ -74748,8 +73436,24 @@ const MasterApp = () => {
       {/* SEVENTH PAGE: T7 论坛页面 (Overlay) */}
       <div className={`forum-overlay ${isForumOpen ? "open" : ""}`}>
         <div className="forum-nav">
-          <div className="back-btn" onClick={() => setIsForumOpen(false)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <div
+            className="forum-back-btn"
+            style={{ cursor: "pointer", padding: "8px" }}
+            onClick={() => setIsForumOpen(false)}
+          >
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
         </div>
         <ForumPage />
@@ -74759,7 +73463,19 @@ const MasterApp = () => {
       <div className={`msg-overlay ${isMsgOpen ? "open" : ""}`}>
         <div className="msg-nav">
           <div className="back-btn" onClick={() => setIsMsgOpen(false)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
           <div className="title">传讯</div>
         </div>
@@ -74770,7 +73486,19 @@ const MasterApp = () => {
       <div className={`t9-overlay ${isT9Open ? "open" : ""}`}>
         <div className="t9-nav">
           <div className="back-btn" onClick={() => setIsT9Open(false)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
           <div className="title">我们的空间</div>
         </div>
@@ -74781,7 +73509,19 @@ const MasterApp = () => {
       <div className={`t10-overlay ${isT10Open ? "open" : ""}`}>
         <div className="t10-nav">
           <div className="back-btn" onClick={() => setIsT10Open(false)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
           <div className="title">诊疗咨询</div>
         </div>
@@ -74789,15 +73529,22 @@ const MasterApp = () => {
       </div>
 
       {/* DECOCTION PAGE: 煎药台页面 (Overlay) */}
-      <div
-        className={`decoction-overlay ${isDecoctionOpen ? "open" : ""}`}
-      >
+      <div className={`decoction-overlay ${isDecoctionOpen ? "open" : ""}`}>
         <div className="decoction-nav">
-          <div
-            className="back-btn"
-            onClick={() => setIsDecoctionOpen(false)}
-          >
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+          <div className="back-btn" onClick={() => setIsDecoctionOpen(false)}>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
           <div className="title">煎药台</div>
         </div>
@@ -74814,7 +73561,19 @@ const MasterApp = () => {
       <div className={`t12-overlay ${isT12Open ? "open" : ""}`}>
         <div className="t12-nav">
           <div className="back-btn" onClick={() => setIsT12Open(false)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
           <div className="title">太疾驰 - 温暖版</div>
         </div>
@@ -74825,7 +73584,19 @@ const MasterApp = () => {
       <div className={`t13-overlay ${isT13Open ? "open" : ""}`}>
         <div className="t13-nav">
           <div className="back-btn" onClick={() => setIsT13Open(false)}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+            <svg
+              xmlns="http://www.w3.org/2000/svg"
+              width="24"
+              height="24"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="m15 18-6-6 6-6" />
+            </svg>
           </div>
           <div className="title">休闲一刻</div>
         </div>
@@ -74906,9 +73677,7 @@ const MasterApp = () => {
         isOpen={isReadingDetailOpen}
         onClose={() => setIsReadingDetailOpen(false)}
         onProgressUpdate={handleUpdateProgress}
-        onAddToBookshelf={
-          handleAddToBookshelf
-        } /* [新增] 传入添加书架函数 */
+        onAddToBookshelf={handleAddToBookshelf} /* [新增] 传入添加书架函数 */
         onUpdateBookContent={async (updatedBook) => {
           setCurrentReadingBook(updatedBook);
 
@@ -74917,20 +73686,14 @@ const MasterApp = () => {
             const next = prev.map((b) =>
               b.id === updatedBook.id ? updatedBook : b,
             );
-            localStorage.setItem(
-              "store_recommend_books",
-              JSON.stringify(next),
-            );
+            localStorage.setItem("store_recommend_books", JSON.stringify(next));
             return next;
           });
           setStorePopularBooks((prev) => {
             const next = prev.map((b) =>
               b.id === updatedBook.id ? updatedBook : b,
             );
-            localStorage.setItem(
-              "store_popular_books",
-              JSON.stringify(next),
-            );
+            localStorage.setItem("store_popular_books", JSON.stringify(next));
             return next;
           });
 
@@ -75043,9 +73806,7 @@ const MasterApp = () => {
           top: ballState.y !== null ? ballState.y + "px" : undefined,
           right: ballState.x !== null ? "auto" : undefined,
           bottom: ballState.y !== null ? "auto" : undefined,
-          transition: ballDragRef.current.isDragging
-            ? "none"
-            : "all 0.3s ease",
+          transition: ballDragRef.current.isDragging ? "none" : "all 0.3s ease",
         }}
         onMouseDown={handleBallStart}
         onTouchStart={handleBallStart}
@@ -75079,14 +73840,14 @@ const MasterApp = () => {
               left:
                 ballState.x !== null
                   ? // 检查右侧空间是否足够，如果不够则显示在左侧
-                  ballState.x + 70 + 120 <= window.innerWidth
+                    ballState.x + 70 + 120 <= window.innerWidth
                     ? ballState.x + 70 + "px"
                     : Math.max(0, ballState.x - 130) + "px"
                   : "auto",
               top:
                 ballState.y !== null
                   ? // 检查底部空间是否足够，如果不够则向上调整
-                  Math.min(ballState.y, window.innerHeight - 210) + "px"
+                    Math.min(ballState.y, window.innerHeight - 210) + "px"
                   : "auto",
               right: ballState.x === null ? "30px" : "auto",
               bottom: ballState.y === null ? "200px" : "auto",
@@ -75113,9 +73874,7 @@ const MasterApp = () => {
                   : "auto",
               top:
                 ballState.y !== null
-                  ? Math.min(ballState.y, window.innerHeight - 210) +
-                  160 +
-                  "px"
+                  ? Math.min(ballState.y, window.innerHeight - 210) + 160 + "px"
                   : "auto",
               right: ballState.x === null ? "30px" : "auto",
               bottom: ballState.y === null ? "20px" : "auto",
@@ -75179,9 +73938,7 @@ const MasterApp = () => {
                   left: "0px",
                   top: "0px",
                   transform:
-                    selectedButton === "functional"
-                      ? "scale(1.1)"
-                      : "scale(1)",
+                    selectedButton === "functional" ? "scale(1.1)" : "scale(1)",
                   boxShadow:
                     selectedButton === "functional"
                       ? "0 4px 12px rgba(156, 137, 184, 0.4)"
@@ -75244,8 +74001,8 @@ const MasterApp = () => {
                 top:
                   ballState.y !== null
                     ? Math.min(ballState.y, window.innerHeight - 210) -
-                    80 +
-                    "px"
+                      80 +
+                      "px"
                     : "auto",
                 right: ballState.x === null ? "30px" : "auto",
                 bottom: ballState.y === null ? "360px" : "auto",
@@ -75291,9 +74048,7 @@ const MasterApp = () => {
                 }}
               >
                 <button
-                  onClick={() =>
-                    setReplyPage((prev) => Math.max(0, prev - 1))
-                  }
+                  onClick={() => setReplyPage((prev) => Math.max(0, prev - 1))}
                   disabled={replyPage === 0}
                   style={{
                     width: "15px",
@@ -75333,19 +74088,16 @@ const MasterApp = () => {
                     borderRadius: "50%",
                     border: "1px solid #b8bedd",
                     background:
-                      (replyPage + 1) * charsPerPage >=
-                        replyMessage.length
+                      (replyPage + 1) * charsPerPage >= replyMessage.length
                         ? "#f8f6f0"
                         : "#b8bedd",
                     color:
-                      (replyPage + 1) * charsPerPage >=
-                        replyMessage.length
+                      (replyPage + 1) * charsPerPage >= replyMessage.length
                         ? "#b8bedd"
                         : "white",
                     fontSize: "10px",
                     cursor:
-                      (replyPage + 1) * charsPerPage >=
-                        replyMessage.length
+                      (replyPage + 1) * charsPerPage >= replyMessage.length
                         ? "not-allowed"
                         : "pointer",
                     display: "flex",
@@ -75368,9 +74120,7 @@ const MasterApp = () => {
 
       {/* 蝴蝶效应页面 */}
       {isButterflyEffectOpen && (
-        <ButterflyEffectPage
-          onBack={() => setIsButterflyEffectOpen(false)}
-        />
+        <ButterflyEffectPage onBack={() => setIsButterflyEffectOpen(false)} />
       )}
 
       {/* 沙盘模拟器页面 */}
@@ -75417,8 +74167,7 @@ const SandTablePage = ({ onBack }) => {
   // --- 新增推演系统状态 ---
   const [simulationSteps, setSimulationSteps] = React.useState([]);
   const [currentStep, setCurrentStep] = React.useState(-1);
-  const [showSimulationModal, setShowSimulationModal] =
-    React.useState(false);
+  const [showSimulationModal, setShowSimulationModal] = React.useState(false);
   const [isSimulating, setIsSimulating] = React.useState(false);
   const [simulationModalCollapsed, setSimulationModalCollapsed] =
     React.useState(false);
@@ -75450,9 +74199,7 @@ const SandTablePage = ({ onBack }) => {
     if (!item.isInfinite) {
       setInventory((prev) =>
         prev.map((inv) =>
-          inv.id === item.id
-            ? { ...inv, quantity: inv.quantity - 1 }
-            : inv,
+          inv.id === item.id ? { ...inv, quantity: inv.quantity - 1 } : inv,
         ),
       );
     }
@@ -75517,8 +74264,7 @@ const SandTablePage = ({ onBack }) => {
     if (selectedElement && selectedElement !== targetId) {
       // 检查是否已经存在相同的连接
       const existingConnection = connections.find(
-        (conn) =>
-          conn.source === selectedElement && conn.target === targetId,
+        (conn) => conn.source === selectedElement && conn.target === targetId,
       );
 
       if (!existingConnection) {
@@ -75540,9 +74286,7 @@ const SandTablePage = ({ onBack }) => {
 
   // 移除连接
   const removeConnection = (connectionId) => {
-    setConnections(
-      connections.filter((conn) => conn.id !== connectionId),
-    );
+    setConnections(connections.filter((conn) => conn.id !== connectionId));
   };
 
   // --- 模拟推演核心逻辑 ---
@@ -75671,9 +74415,7 @@ const SandTablePage = ({ onBack }) => {
 
       // 1. 应用本步的主动绝对移动，并记录位移差 (dx, dy)
       stepData.moves.forEach((move) => {
-        const elIndex = simElements.findIndex(
-          (e) => e.id === move.elementId,
-        );
+        const elIndex = simElements.findIndex((e) => e.id === move.elementId);
         if (elIndex !== -1) {
           displacements[move.elementId] = {
             dx: move.targetX - simElements[elIndex].x,
@@ -75813,10 +74555,10 @@ const SandTablePage = ({ onBack }) => {
       prev.map((el) =>
         el.id === id
           ? {
-            ...el,
-            x: (clientX - 20) * scale,
-            y: (clientY - 80) * scale,
-          }
+              ...el,
+              x: (clientX - 20) * scale,
+              y: (clientY - 80) * scale,
+            }
           : el,
       ),
     );
@@ -75916,23 +74658,18 @@ const SandTablePage = ({ onBack }) => {
 
   const handleFlipElement = (id) => {
     setElements((prev) =>
-      prev.map((el) =>
-        el.id === id ? { ...el, flipped: !el.flipped } : el,
-      ),
+      prev.map((el) => (el.id === id ? { ...el, flipped: !el.flipped } : el)),
     );
   };
 
   return (
-    <div className="sand-table-overlay fade-in">
+    <div className="sand-table-overlay open fade-in">
       {/* 顶部磨砂栏 */}
       <div className={`top-glass-nav ${navCollapsed ? "collapsed" : ""}`}>
         <button className="morandi-glass-btn" onClick={onBack}>
           撤离
         </button>
-        <button
-          className="morandi-glass-btn"
-          onClick={() => setElements([])}
-        >
+        <button className="morandi-glass-btn" onClick={() => setElements([])}>
           清空
         </button>
         <button
@@ -76056,12 +74793,8 @@ const SandTablePage = ({ onBack }) => {
           {/* 渲染连接线 */}
           {showConnections &&
             connections.map((conn) => {
-              const sourceEl = elements.find(
-                (el) => el.id === conn.source,
-              );
-              const targetEl = elements.find(
-                (el) => el.id === conn.target,
-              );
+              const sourceEl = elements.find((el) => el.id === conn.source);
+              const targetEl = elements.find((el) => el.id === conn.target);
               if (sourceEl && targetEl) {
                 const sourceX = sourceEl.x / scale + 20;
                 const sourceY = sourceEl.y / scale + 20;
@@ -76187,9 +74920,7 @@ const SandTablePage = ({ onBack }) => {
         style={{ alignItems: "center" }}
       >
         {inventory.length === 0 ? (
-          <div
-            style={{ color: "#999", fontSize: "13px", margin: "auto" }}
-          >
+          <div style={{ color: "#999", fontSize: "13px", margin: "auto" }}>
             沙盘空空如也，请点击上方“书写”生成推演组件。
           </div>
         ) : (
@@ -76257,10 +74988,7 @@ const SandTablePage = ({ onBack }) => {
           className="modal-overlay"
           onClick={() => !isGenerating && setShowWriteModal(false)}
         >
-          <div
-            className="write-modal"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="write-modal" onClick={(e) => e.stopPropagation()}>
             <h3 style={{ color: "#5A5F4D" }}>推演背景书写</h3>
             <div className="write-input-container">
               <textarea
@@ -76338,9 +75066,7 @@ const SandTablePage = ({ onBack }) => {
                 style={{
                   width: "50px",
                   height: "50px",
-                  background: detailItem.isSpecial
-                    ? "#FADBD8"
-                    : "#E8F1ED",
+                  background: detailItem.isSpecial ? "#FADBD8" : "#E8F1ED",
                   borderRadius: "14px",
                   display: "flex",
                   justifyContent: "center",
@@ -76709,7 +75435,6 @@ const SandTablePage = ({ onBack }) => {
 
 // T9 情侣空间页面组件
 
-
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
@@ -76720,14 +75445,27 @@ class ErrorBoundary extends React.Component {
   }
   componentDidCatch(error, errorInfo) {
     this.setState({ errorInfo });
-    console.error('ErrorBoundary caught an error', error, errorInfo);
+    console.error("ErrorBoundary caught an error", error, errorInfo);
   }
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{ padding: '20px', background: '#fff', color: 'red', zIndex: 99999, position: 'absolute', top: 0, left: 0, width: '100%', height: '100%', overflow: 'auto' }}>
+        <div
+          style={{
+            padding: "20px",
+            background: "#fff",
+            color: "red",
+            zIndex: 99999,
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            overflow: "auto",
+          }}
+        >
           <h2>渲染出现错误</h2>
-          <details style={{ whiteSpace: 'pre-wrap' }}>
+          <details style={{ whiteSpace: "pre-wrap" }}>
             {this.state.error && this.state.error.toString()}
             <br />
             {this.state.errorInfo && this.state.errorInfo.componentStack}
@@ -76741,5 +75479,8 @@ class ErrorBoundary extends React.Component {
 }
 
 const root = ReactDOM.createRoot(document.getElementById("root"));
-root.render(<ErrorBoundary><MasterApp /></ErrorBoundary>);
-
+root.render(
+  <ErrorBoundary>
+    <MasterApp />
+  </ErrorBoundary>,
+);

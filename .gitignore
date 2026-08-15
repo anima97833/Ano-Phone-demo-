@@ -1,0 +1,9 @@
+scratch/
+*.py
+*.ps1
+scratch_*
+bump_cache.js
+extract.js
+fix_*.js
+inject_error.js
+replace_*.js
