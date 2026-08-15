@@ -31830,7 +31830,7 @@ const T9Page = () => {
       )}
 
       {/* ================== [新增] 任务拆解弹窗 ================== */}
-      showTaskModal &&
+      {showTaskModal &&
       ReactDOM.createPortal(
         /* @__PURE__ */ React.createElement(
           React.Fragment,
@@ -32237,7 +32237,7 @@ const T9Page = () => {
           ),
         ),
         document.body,
-      )
+      )}
       {/* ================== [结束] 任务拆解弹窗 ================== */}
 
       {/* ================== [新增] 共同记账弹窗 ================== */}
@@ -33525,35 +33525,35 @@ const T9Page = () => {
 const T13_GAMES = [
   {
     id: 1,
-    title: "通灵赌坊",
-    category: "社交",
+    title: "修武扬文",
+    category: "修习",
     imgColor: "#E8B4B8",
-    icon: "ph-heart-break",
+    icon: "ph-sword",
   },
   {
     id: 2,
     title: "古怪农场",
-    category: "创意",
+    category: "休闲",
     imgColor: "#95B8A3",
     icon: "ph-paint-brush",
   },
   {
     id: 3,
-    title: "你问我猜",
+    title: "画猜游戏",
     category: "益智",
     imgColor: "#D99E82",
     icon: "ph-question",
   },
   {
     id: 4,
-    title: "太空狼人杀",
+    title: "太白杀阵",
     category: "策略",
     imgColor: "#7A8B99",
     icon: "ph-alien",
   },
   {
     id: 5,
-    title: "谁是卧底",
+    title: "谁在说谎",
     category: "聚会",
     imgColor: "#B5A8BE",
     icon: "ph-detective",
@@ -38688,6 +38688,505 @@ const T13GamblingPage = ({ onBack }) => {
   );
 };
 
+// ==================== T13 修武扬文 - 训练主页面 & 小游戏 ====================
+
+// 木桩训练 (蓄力跳跃)
+const JumpGamePage = ({ onBack }) => {
+  const { useState, useEffect, useRef } = React;
+  const [visible, setVisible] = useState(false);
+  const [stage, setStage] = useState(1); // 1-10
+  const [retries, setRetries] = useState(5);
+  const [isCharging, setIsCharging] = useState(false);
+  const [chargeValue, setChargeValue] = useState(0); // 0-100
+  const [gameState, setGameState] = useState('idle'); // idle, charging, jumping, result
+  const [logs, setLogs] = useState([{ x: 40, w: 70, hasItem: false }, { x: 240, w: 70, hasItem: true }]); // x is center
+  const [charPos, setCharPos] = useState({ x: 40, y: 0 });
+  const [camX, setCamX] = useState(0);
+
+  // Custom Images
+  const [charImg, setCharImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ClqevymgmdqN8oAAbGwXpbrH5vAQ2cAArMnAAJrJthXTWQDSRPv8eA9BA.png");
+  const [itemImg, setItemImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-Cdqevx852wQyIhKkhpD5PHcRwKURQACsScAAmsm2FeVuGbPGveOSj0E.png");
+
+  // DOM refs for animation loops
+  const chargeRef = useRef(0);
+  const reqRef = useRef(null);
+  const pressTimeRef = useRef(0);
+
+  const charW = 75;
+  const charH = 100;
+  const logH = 120;
+
+  useEffect(() => {
+    if (window.settingsStore) {
+      window.settingsStore.getJumpGameCharImage().then(img => {
+        if (img) setCharImg(img);
+      });
+      window.settingsStore.getJumpGameItemImage().then(img => {
+        if (img) setItemImg(img);
+      });
+    }
+    const r = requestAnimationFrame(() => setVisible(true));
+    return () => cancelAnimationFrame(r);
+  }, []);
+
+  const handleUploadChar = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          setCharImg(dataUrl);
+          if (window.settingsStore) {
+            await window.settingsStore.setJumpGameCharImage(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  const handleUploadItem = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          setItemImg(dataUrl);
+          if (window.settingsStore) {
+            await window.settingsStore.setJumpGameItemImage(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  const handlePointerDown = (e) => {
+    if (gameState !== 'idle' || retries <= 0 || stage > 10) return;
+    setGameState('charging');
+    setIsCharging(true);
+    chargeRef.current = 0;
+    pressTimeRef.current = Date.now();
+
+    const loop = () => {
+      const dt = Date.now() - pressTimeRef.current;
+      chargeRef.current = Math.min((dt / 1200) * 100, 100);
+      setChargeValue(chargeRef.current);
+      reqRef.current = requestAnimationFrame(loop);
+    };
+    reqRef.current = requestAnimationFrame(loop);
+  };
+
+  const handlePointerUp = () => {
+    if (gameState !== 'charging') return;
+    cancelAnimationFrame(reqRef.current);
+    setGameState('jumping');
+    setIsCharging(false);
+
+    const power = chargeRef.current; // 0-100
+    const maxJumpDist = 450;
+    const jumpDist = (power / 100) * maxJumpDist + 15; // min 15px jump
+
+    const startX = charPos.x;
+    const targetX = startX + jumpDist;
+
+    const jumpDuration = 600; // ms
+    const startTime = Date.now();
+
+    const jumpLoop = () => {
+      const now = Date.now();
+      const p = Math.min((now - startTime) / jumpDuration, 1);
+      // Parabola
+      const h = 180;
+      const y = 4 * h * p * (1 - p);
+      const currentX = startX + (targetX - startX) * p;
+
+      setCharPos({ x: currentX, y });
+
+      if (p < 1) {
+        reqRef.current = requestAnimationFrame(jumpLoop);
+      } else {
+        checkLanding(targetX);
+      }
+    };
+    reqRef.current = requestAnimationFrame(jumpLoop);
+  };
+
+  const checkLanding = (finalX) => {
+    const nextLog = logs[1];
+    const hitMargin = nextLog.w / 2 + 10;
+
+    if (Math.abs(finalX - nextLog.x) <= hitMargin) {
+      // Success
+      setCharPos({ x: nextLog.x, y: 0 });
+
+      if (nextLog.hasItem) {
+        setLogs(prev => [prev[0], { ...prev[1], collected: true }]);
+      }
+
+      setTimeout(() => {
+        // 缩短木桩间距，保证两根木桩在手机竖屏中同框可见
+        const newLogX = nextLog.x + 100 + Math.random() * 120;
+        setLogs([{ ...nextLog, hasItem: false, collected: false }, { x: newLogX, w: 70, hasItem: Math.random() > 0.4 }]);
+        setCamX(nextLog.x - 40);
+
+        if (stage < 10) {
+          setStage(s => s + 1);
+          setGameState('idle');
+        } else {
+          setGameState('result');
+        }
+      }, 400);
+    } else {
+      // Fail
+      setCharPos(prev => ({ ...prev, y: -60 })); // sink
+      setRetries(r => r - 1);
+
+      setTimeout(() => {
+        if (retries - 1 > 0) {
+          setCharPos({ x: logs[0].x, y: 0 });
+          setGameState('idle');
+        } else {
+          setGameState('result');
+        }
+      }, 1000);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'absolute', inset: 0, zIndex: 300,
+        background: 'linear-gradient(to bottom, #d6ebf2 0%, #b8e0e6 100%)',
+        opacity: visible ? 1 : 0,
+        transition: 'opacity 0.4s ease',
+        fontFamily: '"GuanKiapTsingKhai", serif',
+        overflow: 'hidden',
+        touchAction: 'none', userSelect: 'none'
+      }}
+      onPointerDown={handlePointerDown}
+      onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
+      onContextMenu={e => e.preventDefault()}
+    >
+      {/* Scrolling background container */}
+      <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
+        <div style={{
+          position: 'absolute', left: 0, top: 0, bottom: 0, width: '300%',
+          backgroundImage: 'url(https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-NpqewkktE5b2FPccBEOWkWKmXUYtwACrigAAmsm2Ff6xpAtWbzL-D0E.png)',
+          backgroundSize: 'cover', backgroundPosition: 'bottom',
+          transform: `translateX(-${camX * 0.3}px)`,
+          transition: 'transform 0.5s ease-out'
+        }} />
+      </div>
+
+      {/* Gameplay Area */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, top: '40%',
+      }}>
+        <div style={{
+          position: 'absolute', bottom: 0, left: -camX, transition: 'left 0.5s ease-out',
+          width: 10000, height: '100%'
+        }}>
+          {/* Logs */}
+          {logs.map((log, i) => (
+            <div key={i} style={{ position: 'absolute', bottom: -20, left: log.x - log.w / 2, width: log.w, height: logH }}>
+              <img src="https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-CtqevzmzJax9UBc8Y0UcSvcx6pTAQACtScAAmsm2FcLGI-XpRi6Qz0E.png" style={{ width: '100%', height: '100%', objectFit: 'fill', filter: 'drop-shadow(0 10px 10px rgba(0,0,0,0.5))' }} draggable="false" />
+              {log.hasItem && (
+                <img src={itemImg}
+                  style={{
+                    position: 'absolute', bottom: logH - 20, left: '50%', transform: 'translateX(-50%)',
+                    width: 45, height: 45, objectFit: 'contain', filter: 'drop-shadow(0 0 8px rgba(255,255,100,0.8))',
+                    animation: log.collected ? 'itemCollect 0.4s ease forwards' : 'none'
+                  }} draggable="false" />
+              )}
+            </div>
+          ))}
+
+          {/* Character */}
+          <div style={{
+            position: 'absolute',
+            bottom: logH - 45 + charPos.y,
+            left: charPos.x - charW / 2,
+            width: charW, height: charH,
+            transition: gameState === 'idle' ? 'left 0.5s ease-out, bottom 0.2s' : 'none'
+          }}>
+            <img
+              src={charImg}
+              style={{
+                width: '100%', height: '100%', objectFit: 'contain',
+                transform: isCharging ? 'translateY(-2px)' : 'none',
+                transition: 'transform 0.1s',
+                filter: charPos.y < -20 ? 'blur(2px) opacity(0.5)' : 'none'
+              }}
+              draggable="false"
+            />
+            {/* Leaf Swirl Effect */}
+            {isCharging && (
+              <div style={{
+                position: 'absolute', inset: -20, animation: 'swirl 1s linear infinite', pointerEvents: 'none', zIndex: 10
+              }}>
+                <div style={{ position: 'absolute', top: 0, left: '50%', transform: 'translateX(-50%)', color: '#4CAF50', fontSize: '1.2rem', textShadow: '0 0 5px rgba(255,255,255,0.8)' }}>🍃</div>
+                <div style={{ position: 'absolute', bottom: 0, left: '50%', transform: 'translateX(-50%) rotate(180deg)', color: '#8BC34A', fontSize: '1.2rem', textShadow: '0 0 5px rgba(255,255,255,0.8)' }}>🍃</div>
+                <div style={{ position: 'absolute', top: '50%', left: -5, transform: 'translateY(-50%) rotate(-90deg)', color: '#4CAF50', fontSize: '1rem', textShadow: '0 0 5px rgba(255,255,255,0.8)' }}>🍃</div>
+                <div style={{ position: 'absolute', top: '50%', right: -5, transform: 'translateY(-50%) rotate(90deg)', color: '#8BC34A', fontSize: '1rem', textShadow: '0 0 5px rgba(255,255,255,0.8)' }}>🍃</div>
+              </div>
+            )}
+            {/* Charge effect ring */}
+            {isCharging && (
+              <div style={{
+                position: 'absolute', bottom: -5, left: '50%', transform: 'translateX(-50%)',
+                width: 50 + chargeValue * 0.8, height: 20, borderRadius: '50%',
+                background: `radial-gradient(ellipse, rgba(150, 255, 150, ${chargeValue / 100}) 0%, transparent 70%)`,
+                boxShadow: `0 0 ${chargeValue / 3}px rgba(100, 255, 100, 0.8)`
+              }} />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Water overlay */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '15%', background: 'linear-gradient(to top, rgba(150,210,220,0.8) 0%, rgba(180,230,235,0.4) 100%)', pointerEvents: 'none' }} />
+
+      {/* UI Overlay */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15 }} onClick={(e) => { e.stopPropagation(); onBack(); }}>
+        <div style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', padding: '6px 16px', borderRadius: 20, cursor: 'pointer', fontSize: '0.9rem', border: '1px solid rgba(255,255,255,0.2)' }}>
+          ←
+        </div>
+      </div>
+      
+      {/* Upload Buttons */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 15, display: 'flex', flexDirection: 'column', gap: '10px' }}>
+        <div onClick={(e) => { e.stopPropagation(); handleUploadChar(); }} style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', textAlign: 'center' }}>
+          更换角色
+        </div>
+        <div onClick={(e) => { e.stopPropagation(); handleUploadItem(); }} style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', textAlign: 'center' }}>
+          更换道具
+        </div>
+      </div>
+
+      {/* Top Progress Bar */}
+      <div style={{ position: 'absolute', top: 'max(20px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)', width: '60%', maxWidth: 350, display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: '4px 10px', pointerEvents: 'none', border: '1px solid rgba(255,255,255,0.1)' }}>
+        <div style={{ position: 'absolute', height: 6, background: '#4CAF50', left: 20, right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 1, width: `calc(${(stage - 1) / 9 * 100}% - 40px)`, transition: 'width 0.3s' }} />
+        <div style={{ position: 'absolute', height: 6, background: '#444', left: 20, right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 0 }} />
+
+        {Array.from({ length: 10 }).map((_, i) => (
+          <div key={i} style={{ position: 'relative', flex: 1, display: 'flex', justifyContent: 'center', zIndex: 2 }}>
+            <div style={{
+              width: 22, height: 22, borderRadius: '50%',
+              background: i + 1 < stage ? '#8BC34A' : (i + 1 === stage ? '#FFCA28' : '#333'),
+              border: '2px solid rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: 12, color: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
+            }}>
+              {i + 1 < stage ? '✓' : (i + 1 === stage ? <img src="https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ClqevymgmdqN8oAAbGwXpbrH5vAQ2cAArMnAAJrJthXTWQDSRPv8eA9BA.png" style={{ width: 20, height: 20, objectFit: 'cover', borderRadius: '50%' }} /> : '💰')}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Retries */}
+      <div style={{ position: 'absolute', top: 'max(60px, env(safe-area-inset-top) + 40px)', left: 15, background: 'rgba(0,0,0,0.4)', color: '#fff', padding: '6px 14px', borderRadius: 8, pointerEvents: 'none', fontSize: '0.85rem' }}>
+        剩余重跳机会：{retries}次
+      </div>
+
+      {/* Tutorial Text */}
+      {stage === 1 && gameState === 'idle' && (
+        <div style={{ position: 'absolute', bottom: '8%', left: '50%', transform: 'translateX(-50%)', color: '#fff', background: 'rgba(0,0,0,0.6)', padding: '8px 20px', borderRadius: 20, pointerEvents: 'none', animation: 'pulse 2s infinite', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
+          长按屏幕再释放，控制密探向前跳跃
+        </div>
+      )}
+
+      {/* Game Over / Win Modal */}
+      {gameState === 'result' && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400 }}>
+          <div style={{ background: 'linear-gradient(135deg, #FFEFBA 0%, #FFFFFF 100%)', padding: 40, borderRadius: 20, textAlign: 'center', color: '#333', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
+            <h2 style={{ color: stage >= 10 ? '#D32F2F' : '#455A64', marginBottom: 20 }}>{stage >= 10 ? '🎉 通关成功！' : '😔 机会耗尽'}</h2>
+            {stage >= 10 && <p style={{ color: '#555', marginBottom: 20 }}>恭喜大侠完成挑战！</p>}
+            <div style={{ marginTop: 20, display: 'flex', gap: 20, justifyContent: 'center' }}>
+              <button onClick={(e) => { e.stopPropagation(); setStage(1); setRetries(5); setLogs([{ x: 40, w: 70, hasItem: false }, { x: 240, w: 70, hasItem: true }]); setCamX(0); setCharPos({ x: 40, y: 0 }); setGameState('idle'); }} style={{ padding: '10px 24px', borderRadius: 25, border: 'none', background: '#D32F2F', color: '#fff', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>再玩一次</button>
+              <button onClick={(e) => { e.stopPropagation(); onBack(); }} style={{ padding: '10px 24px', borderRadius: 25, border: 'none', background: '#CFD8DC', color: '#455A64', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }}>返回</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+         @keyframes pulse {
+           0% { opacity: 0.5; transform: translateX(-50%) scale(0.98); }
+           50% { opacity: 1; transform: translateX(-50%) scale(1.02); }
+           100% { opacity: 0.5; transform: translateX(-50%) scale(0.98); }
+         }
+         @keyframes swirl {
+           from { transform: rotate(0deg) scale(1); }
+           to { transform: rotate(360deg) scale(1.1); }
+         }
+         @keyframes itemCollect {
+           0% { transform: translate(-50%, 0) scale(1); opacity: 1; filter: brightness(1); }
+           50% { transform: translate(-50%, -30px) scale(1.2); opacity: 0.8; filter: brightness(1.5); }
+           100% { transform: translate(-50%, -60px) scale(0.5); opacity: 0; filter: brightness(2); }
+         }
+       `}</style>
+    </div>
+  );
+};
+
+// 修武扬文 - 主页面组件
+const T13TrainingPage = ({ onBack }) => {
+  const { useState } = React;
+  const [trainingPageNum, setTrainingPageNum] = useState(0);
+  const [showJumpGame, setShowJumpGame] = useState(false);
+  const [tipMessage, setTipMessage] = useState(null);
+
+  const showComingSoon = (name) => {
+    setTipMessage(`${name}正在修缮中，敬请期待`);
+    setTimeout(() => setTipMessage(null), 2000);
+  };
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 250, background: '#FAFAFA', animation: 'fadeIn 0.3s ease-out', display: 'flex', flexDirection: 'column', fontFamily: '"GuanKiapTsingKhai", serif' }}>
+      {/* 顶部标题栏 */}
+      <div style={{ padding: '20px', paddingTop: 'max(40px, env(safe-area-inset-top))', display: 'flex', alignItems: 'center', background: '#fff', boxShadow: '0 2px 10px rgba(0,0,0,0.05)' }}>
+        <div onClick={onBack} style={{ cursor: 'pointer', padding: '5px 10px', marginLeft: '-10px', marginRight: '10px' }}>
+          <span style={{ fontSize: '1.2rem', color: '#666' }}>←</span>
+        </div>
+        <h2 style={{ margin: 0, fontSize: '1.4rem', color: '#333', fontWeight: 'bold' }}>修武扬文</h2>
+      </div>
+
+      {/* 主体区域（左右翻页） */}
+      <div style={{ flex: 1, display: 'flex', position: 'relative', overflow: 'hidden' }}>
+        {trainingPageNum > 0 && (
+          <div onClick={() => setTrainingPageNum(p => p - 1)} style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', padding: '20px 15px', cursor: 'pointer', zIndex: 10, fontSize: '2.5rem', color: '#aaa', userSelect: 'none' }}>‹</div>
+        )}
+        
+        <div style={{ flex: 1, padding: '20px', overflowY: 'auto', paddingLeft: '45px', paddingRight: '45px' }}>
+          {trainingPageNum === 0 && (
+            <>
+              <div
+                onClick={() => setShowJumpGame(true)}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #a8edea 0%, #fed6e3 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🎯</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>木桩训练</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+
+              <div
+                onClick={() => showComingSoon('蹴鞠训练')}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #d4fc79 0%, #96e6a1 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>⚽</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>蹴鞠训练</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+
+              <div
+                onClick={() => showComingSoon('射箭训练')}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #a1c4fd 0%, #c2e9fb 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🏹</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>射箭训练</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+
+              <div
+                onClick={() => showComingSoon('敏捷训练')}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>⚡</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>敏捷训练</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+
+              <div
+                onClick={() => showComingSoon('划船训练')}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🚣</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>划船训练</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+            </>
+          )}
+          {trainingPageNum === 1 && (
+            <>
+              <div
+                onClick={() => showComingSoon('音律训练')}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🎵</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>音律训练</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+            </>
+          )}
+        </div>
+
+        {trainingPageNum < 1 && (
+          <div onClick={() => setTrainingPageNum(p => p + 1)} style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', padding: '20px 15px', cursor: 'pointer', zIndex: 10, fontSize: '2.5rem', color: '#aaa', userSelect: 'none' }}>›</div>
+        )}
+      </div>
+
+      {/* 提示条 */}
+      {tipMessage && (
+        <div style={{
+          position: 'absolute', bottom: '30px', left: '50%', transform: 'translateX(-50%)',
+          background: 'rgba(0,0,0,0.75)', color: '#fff', padding: '8px 18px', borderRadius: '20px',
+          fontSize: '0.9rem', zIndex: 300, pointerEvents: 'none', animation: 'fadeIn 0.2s ease-out'
+        }}>
+          {tipMessage}
+        </div>
+      )}
+
+      {/* 木桩训练小游戏 */}
+      {showJumpGame && (
+        <JumpGamePage onBack={() => setShowJumpGame(false)} />
+      )}
+    </div>
+  );
+};
+
+
+
 // ==================== T13 闪卡页面组件 (支持AI动态数据) ====================
 const T13FlashcardPage = ({
   onBack,
@@ -41112,6 +41611,7 @@ const T13Page = ({
   const [showEmperor, setShowEmperor] = useState(false);
   const [showGambling, setShowGambling] = useState(false);
   const [showLearning, setShowLearning] = useState(false);
+  const [showTraining, setShowTraining] = useState(false);
 
   // 根据当前标签页获取对应内容
   const getContentByTab = () => {
@@ -41134,6 +41634,7 @@ const T13Page = ({
       {showGambling && (
         <T13GamblingPage onBack={() => setShowGambling(false)} />
       )}
+      {showTraining && <T13TrainingPage onBack={() => setShowTraining(false)} />}
       {showStats && <T13StatisticsPage onBack={() => setShowStats(false)} />}
       {showMap && <T13MapPage onBack={() => setShowMap(false)} />}
       {showFortune && <T13FortunePage onBack={() => setShowFortune(false)} />}
@@ -41152,25 +41653,27 @@ const T13Page = ({
               <div
                 key={item.id}
                 onClick={() => {
-                  if (item.title === "通灵赌坊") {
+                  if (item.title === "修武扬文") {
+                    setShowTraining(true);
+                  } else if (item.title === "通灵赌坊") {
                     setShowGambling(true);
-                  } else if (item.title === "州郡统计年表") {
+                  } else if (item.title === "金库统计" || item.title.includes("统计")) {
                     setShowStats(true);
-                  } else if (item.title === "东汉驿路通") {
+                  } else if (item.title === "东汉驿路通" || item.title.includes("驿路通") || item.title.includes("路通")) {
                     setShowMap(true);
-                  } else if (item.title === "谶纬小摊") {
+                  } else if (item.title === "八卦测算" || item.title.includes("测算") || item.title.includes("小摊")) {
                     setShowFortune(true);
-                  } else if (item.title === "献帝晴雨表") {
+                  } else if (item.title === "皇帝的新衣" || item.title.includes("皇帝")) {
                     setShowEmperor(true);
-                  } else if (item.title === "列星") {
+                  } else if (item.title === "星象图" || item.title.includes("星")) {
                     setIsStarChartOpen(true);
-                  } else if (item.title === "蝴蝶效应") {
+                  } else if (item.title === "蝴蝶效应" || item.title.includes("效应")) {
                     setIsButterflyEffectOpen(true);
-                  } else if (item.title === "沙盘模拟器") {
+                  } else if (item.title === "沙盘推演" || item.title.includes("沙盘")) {
                     setIsSandTableOpen(true);
-                  } else if (item.title === "相对演绎") {
+                  } else if (item.title === "推演重现" || item.actionId === "re_deduction") {
                     setIsRelativeOpen(true);
-                  } else if (item.title === "古怪农场") {
+                  } else if (item.title === "古怪农场" || item.title.includes("农场")) {
                     setIsFarmOpen(true);
                   } else if (item.title === "学习系统") {
                     setShowLearning(true);

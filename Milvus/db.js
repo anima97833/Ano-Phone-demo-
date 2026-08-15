@@ -418,6 +418,54 @@
             request.onerror = () => reject("保存页面背景失败");
           });
         },
+
+        // 获取木桩训练角色图片
+        getJumpGameCharImage: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("jumpgame_char_image");
+            request.onsuccess = () => resolve(request.result?.value || "");
+            request.onerror = () => reject("获取木桩训练角色图片失败");
+          });
+        },
+
+        // 设置木桩训练角色图片
+        setJumpGameCharImage: async (imageData) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "jumpgame_char_image", value: imageData });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存木桩训练角色图片失败");
+          });
+        },
+
+        // 获取木桩训练道具图片
+        getJumpGameItemImage: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("jumpgame_item_image");
+            request.onsuccess = () => resolve(request.result?.value || "");
+            request.onerror = () => reject("获取木桩训练道具图片失败");
+          });
+        },
+
+        // 设置木桩训练道具图片
+        setJumpGameItemImage: async (imageData) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "jumpgame_item_image", value: imageData });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存木桩训练道具图片失败");
+          });
+        },
       };
 
       // 迁移用户数据从 localStorage 到 IndexedDB（新增）
