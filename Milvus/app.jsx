@@ -39040,11 +39040,2751 @@ const JumpGamePage = ({ onBack }) => {
   );
 };
 
+// 蹴鞠训练 (弹射进洞)
+const CujuGamePage = ({ onBack }) => {
+  const { useState, useEffect, useRef } = React;
+  const [visible, setVisible] = useState(false);
+  const [stage, setStage] = useState(1);
+  const [retries, setRetries] = useState(5);
+  const [gameState, setGameState] = useState('idle'); // idle, aiming, moving, result
+  const [showRules, setShowRules] = useState(false);
+  const [avatarImg, setAvatarImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-VFqexSPovwtr3yIGoOEVx0yEHEwRgACNCkAAmsm2Fc0E3_MZ3vJwD0E.png");
+
+  const canvasRef = useRef(null);
+
+  // Physics and game state
+  const stateRef = useRef({
+    ball: { x: 180, y: 550, vx: 0, vy: 0, r: 24 },
+    hole: { x: 180, y: 150, r: 35 },
+    fences: [],
+    aimAngle: -Math.PI / 2,
+    isAiming: false,
+    dragStart: null,
+    lastTime: 0
+  });
+
+  const generateLevel = (levelIndex) => {
+    // Base outer fences
+    const fences = [
+      { x1: 20, y1: 100, x2: 20, y2: 600 },
+      { x1: 340, y1: 100, x2: 340, y2: 600 },
+      { x1: 20, y1: 100, x2: 340, y2: 100 },
+      { x1: 20, y1: 600, x2: 340, y2: 600 }
+    ];
+
+    // Random hole position in the top half (away from edges)
+    const holeX = 60 + Math.random() * 240;
+    const holeY = 150 + Math.random() * 150;
+
+    // Calculate number of obstacles based on stage, cap at 5
+    const numObstacles = Math.min(Math.floor(levelIndex * 0.8), 5);
+
+    const distSqToSegment = (px, py, x1, y1, x2, y2) => {
+      const l2 = (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+      if (l2 === 0) return (px - x1) * (px - x1) + (py - y1) * (py - y1);
+      let t = ((px - x1) * (x2 - x1) + (py - y1) * (y2 - y1)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      const projX = x1 + t * (x2 - x1);
+      const projY = y1 + t * (y2 - y1);
+      return (px - projX) * (px - projX) + (py - projY) * (py - projY);
+    };
+
+    for (let i = 0; i < numObstacles; i++) {
+      let valid = false;
+      let attempts = 0;
+      let fenceCandidate;
+
+      while (!valid && attempts < 20) {
+        attempts++;
+        const isHorizontal = Math.random() > 0.5;
+        const len = 60 + Math.random() * 80;
+
+        if (isHorizontal) {
+          const x = 40 + Math.random() * (280 - len);
+          const y = 200 + Math.random() * 250;
+          fenceCandidate = { x1: x, y1: y, x2: x + len, y2: y };
+        } else {
+          const x = 40 + Math.random() * 280;
+          const y = 200 + Math.random() * (250 - len);
+          fenceCandidate = { x1: x, y1: y, x2: x, y2: y + len };
+        }
+
+        // Ensure it doesn't overlap hole (r=35) or ball (r=24), keep 65 buffer
+        const distHoleSq = distSqToSegment(holeX, holeY, fenceCandidate.x1, fenceCandidate.y1, fenceCandidate.x2, fenceCandidate.y2);
+        const distBallSq = distSqToSegment(180, 550, fenceCandidate.x1, fenceCandidate.y1, fenceCandidate.x2, fenceCandidate.y2);
+
+        // Ensure it doesn't overlap other dynamically generated fences (buffer 40px)
+        const buffer = 40;
+        const cLeft = Math.min(fenceCandidate.x1, fenceCandidate.x2) - buffer;
+        const cRight = Math.max(fenceCandidate.x1, fenceCandidate.x2) + buffer;
+        const cTop = Math.min(fenceCandidate.y1, fenceCandidate.y2) - buffer;
+        const cBottom = Math.max(fenceCandidate.y1, fenceCandidate.y2) + buffer;
+
+        let overlapsOtherFence = false;
+        for (let j = 4; j < fences.length; j++) { // inner fences start at index 4
+          const f = fences[j];
+          const fLeft = Math.min(f.x1, f.x2);
+          const fRight = Math.max(f.x1, f.x2);
+          const fTop = Math.min(f.y1, f.y2);
+          const fBottom = Math.max(f.y1, f.y2);
+
+          if (cLeft < fRight && cRight > fLeft && cTop < fBottom && cBottom > fTop) {
+            overlapsOtherFence = true;
+            break;
+          }
+        }
+
+        if (distHoleSq > 4225 && distBallSq > 4225 && !overlapsOtherFence) { // 65^2 = 4225
+          valid = true;
+        }
+      }
+
+      if (valid && fenceCandidate) {
+        fences.push(fenceCandidate);
+      }
+    }
+
+    return {
+      ball: { x: 180, y: 550 },
+      hole: { x: holeX, y: holeY },
+      fences: fences
+    };
+  };
+
+  const loadLevel = (levelIndex) => {
+    const lvl = generateLevel(levelIndex);
+    stateRef.current.ball = { ...lvl.ball, vx: 0, vy: 0, r: 24 };
+    stateRef.current.hole = { ...lvl.hole, r: 35 };
+    stateRef.current.fences = lvl.fences;
+    stateRef.current.aimAngle = -Math.PI / 2;
+    setGameState('idle');
+  };
+
+  useEffect(() => {
+    if (window.settingsStore) {
+      window.settingsStore.getCujuGameAvatar().then(img => {
+        if (img) setAvatarImg(img);
+      });
+    }
+    requestAnimationFrame(() => setVisible(true));
+    loadLevel(1);
+  }, []);
+
+  useEffect(() => { loadLevel(stage); }, [stage]);
+
+  const handleUploadAvatar = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          setAvatarImg(dataUrl);
+          if (window.settingsStore) {
+            await window.settingsStore.setCujuGameAvatar(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  // Assets loading
+  const assetsRef = useRef({});
+  useEffect(() => {
+    const loadImg = (key, src) => {
+      const img = new Image();
+      img.src = src;
+      assetsRef.current[key] = img;
+    };
+    loadImg('bg', 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ZRqexq7oIWWDXhduvyU2yItA2tOQgAChCkAAmsm2FeWqoZnTDnEjz0E.png');
+    loadImg('fence', 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-U9qexRGth-A7WJHozu50m_t8Vs8bgACMikAAmsm2FfVFD3AIsKDXj0E.png');
+    loadImg('hole', 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-UtqexQhRSBJFnJcpy6PIhuZjKvr5gACLikAAmsm2FfztMHk5n0xjT0E.png');
+    loadImg('ball', 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-UpqexPs91Bp2UmZyRci4rZiUyxwzAACLCkAAmsm2Ff4fJ4G2EYsXj0E.png');
+  }, []);
+
+  // Game Loop
+  useEffect(() => {
+    let reqId;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+
+    const loop = (time) => {
+      reqId = requestAnimationFrame(loop);
+      const dt = Math.min((time - stateRef.current.lastTime) / 1000, 0.05);
+      stateRef.current.lastTime = time;
+
+      updatePhysics(dt);
+      render(ctx);
+    };
+    reqId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(reqId);
+  }, [gameState]);
+
+  const updatePhysics = (dt) => {
+    const state = stateRef.current;
+    if (gameState !== 'moving') return;
+
+    const ball = state.ball;
+
+    // Apply friction
+    ball.vx *= 0.985;
+    ball.vy *= 0.985;
+
+    // Stop if too slow
+    const speedSq = ball.vx * ball.vx + ball.vy * ball.vy;
+    if (speedSq < 100) {
+      ball.vx = 0; ball.vy = 0;
+      setGameState('idle');
+      setRetries(r => {
+        if (r - 1 <= 0) return 0;
+        return r - 1;
+      });
+      if (retries - 1 <= 0) setGameState('result');
+      return;
+    }
+
+    // Move
+    const nextX = ball.x + ball.vx * dt;
+    const nextY = ball.y + ball.vy * dt;
+
+    // Wall collision
+    let collided = false;
+    for (const fence of state.fences) {
+      // Line segment distance
+      const l2 = distSq(fence.x1, fence.y1, fence.x2, fence.y2);
+      let t = ((nextX - fence.x1) * (fence.x2 - fence.x1) + (nextY - fence.y1) * (fence.y2 - fence.y1)) / l2;
+      t = Math.max(0, Math.min(1, t));
+      const projX = fence.x1 + t * (fence.x2 - fence.x1);
+      const projY = fence.y1 + t * (fence.y2 - fence.y1);
+      const dist = Math.sqrt(distSq(nextX, nextY, projX, projY));
+
+      if (dist < ball.r + 10) { // 10 is fence half-thickness
+        // Normal vector
+        let nx = nextX - projX;
+        let ny = nextY - projY;
+        const len = Math.sqrt(nx * nx + ny * ny) || 1;
+        nx /= len; ny /= len;
+
+        // Reflect velocity
+        const dot = ball.vx * nx + ball.vy * ny;
+        if (dot < 0) {
+          ball.vx = ball.vx - 2 * dot * nx;
+          ball.vy = ball.vy - 2 * dot * ny;
+          collided = true;
+        }
+      }
+    }
+
+    if (!collided) {
+      ball.x = nextX;
+      ball.y = nextY;
+    } else {
+      ball.x += ball.vx * dt;
+      ball.y += ball.vy * dt;
+    }
+
+    // Hole collision
+    const distToHole = Math.sqrt(distSq(ball.x, ball.y, state.hole.x, state.hole.y));
+    if (distToHole < state.hole.r - 5) {
+      ball.vx = 0; ball.vy = 0;
+      setGameState('result');
+    }
+  };
+
+  const distSq = (x1, y1, x2, y2) => (x2 - x1) * (x2 - x1) + (y2 - y1) * (y2 - y1);
+
+  const render = (ctx) => {
+    const state = stateRef.current;
+    const assets = assetsRef.current;
+
+    // Clear
+    ctx.clearRect(0, 0, 360, 640);
+
+    // Bg
+    if (assets.bg && assets.bg.complete) {
+      ctx.drawImage(assets.bg, 0, 0, 360, 640);
+    } else {
+      ctx.fillStyle = '#C8E6C9';
+      ctx.fillRect(0, 0, 360, 640);
+    }
+
+    // Hole
+    if (assets.hole && assets.hole.complete) {
+      ctx.drawImage(assets.hole, state.hole.x - 55, state.hole.y - 55, 110, 110);
+    } else {
+      ctx.fillStyle = '#3E2723';
+      ctx.beginPath(); ctx.arc(state.hole.x, state.hole.y, state.hole.r, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Fences
+    ctx.lineWidth = 14;
+    ctx.lineCap = 'round';
+    ctx.strokeStyle = 'transparent'; // drawn with image if possible
+    for (const fence of state.fences) {
+      ctx.beginPath();
+      ctx.moveTo(fence.x1, fence.y1);
+      ctx.lineTo(fence.x2, fence.y2);
+      ctx.stroke();
+
+      if (assets.fence && assets.fence.complete) {
+        const len = Math.sqrt(distSq(fence.x1, fence.y1, fence.x2, fence.y2));
+        const segs = Math.max(1, Math.floor(len / 80));
+        for (let i = 0; i < segs; i++) {
+          const cx = fence.x1 + (fence.x2 - fence.x1) * (i + 0.5) / segs;
+          const cy = fence.y1 + (fence.y2 - fence.y1) * (i + 0.5) / segs;
+          const ang = Math.atan2(fence.y2 - fence.y1, fence.x2 - fence.x1);
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.rotate(ang);
+          ctx.drawImage(assets.fence, -40, -15, 80, 30);
+          ctx.restore();
+        }
+      } else {
+        ctx.strokeStyle = '#8D6E63';
+        ctx.stroke();
+      }
+    }
+
+    // Ball
+    if (assets.ball && assets.ball.complete) {
+      ctx.drawImage(assets.ball, state.ball.x - state.ball.r, state.ball.y - state.ball.r, state.ball.r * 2, state.ball.r * 2);
+    } else {
+      ctx.fillStyle = '#8D6E63';
+      ctx.beginPath(); ctx.arc(state.ball.x, state.ball.y, state.ball.r, 0, Math.PI * 2); ctx.fill();
+    }
+
+    // Aim arrow
+    if (gameState === 'idle' || gameState === 'aiming') {
+      if (!state.isAiming && gameState === 'idle') {
+        state.aimAngle = -Math.PI / 2 + Math.sin(Date.now() / 300) * 0.8;
+      }
+
+      ctx.save();
+      ctx.translate(state.ball.x, state.ball.y);
+      ctx.rotate(state.aimAngle);
+      ctx.fillStyle = 'rgba(255,255,255,0.7)';
+      ctx.beginPath();
+      ctx.moveTo(35, -12); ctx.lineTo(95, -12); ctx.lineTo(95, -25);
+      ctx.lineTo(130, 0); ctx.lineTo(95, 25); ctx.lineTo(95, 12); ctx.lineTo(35, 12);
+      ctx.fill();
+      ctx.restore();
+    }
+  };
+
+  const handleDown = (e) => {
+    if (gameState !== 'idle') return;
+    setGameState('aiming');
+    stateRef.current.isAiming = true;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    stateRef.current.dragStart = { x, y };
+  };
+
+  const handleMove = (e) => {
+    if (gameState !== 'aiming') return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+
+    const dx = stateRef.current.dragStart.x - x;
+    const dy = stateRef.current.dragStart.y - y;
+    if (dx * dx + dy * dy > 100) {
+      stateRef.current.aimAngle = Math.atan2(dy, dx);
+    }
+  };
+
+  const handleUp = () => {
+    if (gameState !== 'aiming') return;
+    setGameState('moving');
+    stateRef.current.isAiming = false;
+
+    const power = 900;
+    stateRef.current.ball.vx = Math.cos(stateRef.current.aimAngle) * power;
+    stateRef.current.ball.vy = Math.sin(stateRef.current.aimAngle) * power;
+  };
+
+  const isWin = () => {
+    const state = stateRef.current;
+    return Math.sqrt(distSq(state.ball.x, state.ball.y, state.hole.x, state.hole.y)) < state.hole.r;
+  };
+
+  return (
+    <div
+      style={{
+        position: 'absolute', inset: 0, zIndex: 300,
+        background: '#C8E6C9',
+        opacity: visible ? 1 : 0, transition: 'opacity 0.4s',
+        fontFamily: '"GuanKiapTsingKhai", serif', overflow: 'hidden'
+      }}
+    >
+      <canvas
+        ref={canvasRef} width={360} height={640}
+        style={{ width: '100%', height: '100%', touchAction: 'none' }}
+        onPointerDown={handleDown} onPointerMove={handleMove}
+        onPointerUp={handleUp} onPointerCancel={handleUp}
+      />
+
+      {/* Header UI */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, right: 15, display: 'flex', justifyContent: 'space-between', zIndex: 10 }}>
+        <div style={{ display: 'flex', gap: 10 }}>
+          <div onClick={onBack} style={{ width: 40, height: 40, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', cursor: 'pointer' }}>←</div>
+          <div onClick={(e) => { e.stopPropagation(); handleUploadAvatar(); }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '0 15px', borderRadius: 20, display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '0.85rem', border: '1px solid rgba(255,255,255,0.2)' }}>
+            更换头像
+          </div>
+        </div>
+        <div onClick={() => setShowRules(true)} style={{ background: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: '0 15px', color: '#fff', display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
+          玩法说明 ℹ️
+        </div>
+      </div>
+
+      {/* Footer UI */}
+      <div style={{ position: 'absolute', bottom: '5%', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'none', zIndex: 10 }}>
+        <img src={avatarImg} style={{ width: 60, height: 60, borderRadius: '50%', border: '3px solid #fff', boxShadow: '0 4px 8px rgba(0,0,0,0.2)', marginBottom: 10, objectFit: 'cover' }} />
+        <div style={{ color: '#333', fontSize: '1.1rem', fontWeight: 'bold', textShadow: '0 1px 2px #fff', marginBottom: 5 }}>还有 {retries} 次踢球机会</div>
+        <div style={{ color: '#555', fontSize: '0.9rem' }}>点击并向后拖拽屏幕，踢出蹴鞠球</div>
+      </div>
+
+      {/* Result Modal */}
+      {gameState === 'result' && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: 'linear-gradient(135deg, #F0F4C3 0%, #FFFFFF 100%)', padding: '40px 30px', borderRadius: 20, textAlign: 'center', position: 'relative', width: '70%', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+            <img src={avatarImg} style={{ width: 80, height: 80, borderRadius: '50%', position: 'absolute', top: -40, left: '50%', transform: 'translateX(-50%)', border: '4px solid #fff', objectFit: 'cover' }} />
+
+            {isWin() ? (
+              <>
+                <h2 style={{ color: '#D84315', fontSize: '2rem', margin: '30px 0 10px 0' }}>一击即中</h2>
+                <div style={{ background: '#fff', padding: '5px 15px', borderRadius: 20, color: '#333', display: 'inline-block', marginBottom: 30, boxShadow: '0 2px 5px rgba(0,0,0,0.1)', fontSize: '0.9rem' }}>“有我必胜！”</div>
+                <div>
+                  <button onClick={() => { setStage(s => s + 1); setRetries(5); }} style={{ padding: '12px 30px', background: '#D84315', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>进入第{stage + 1}关</button>
+                </div>
+              </>
+            ) : (
+              <>
+                <h2 style={{ color: '#455A64', fontSize: '1.5rem', margin: '30px 0 20px 0' }}>再接再厉</h2>
+                <div>
+                  <button onClick={() => { setRetries(5); loadLevel(stage); }} style={{ padding: '12px 30px', background: '#455A64', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>再试一次</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Rules Modal */}
+      {showRules && (
+        <div onClick={() => setShowRules(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div style={{ background: '#fff', padding: 30, borderRadius: 16, width: '75%', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 20px 0', color: '#333' }}>蹴鞠训练玩法</h3>
+            <p style={{ textAlign: 'left', lineHeight: 1.6, color: '#555', margin: '0 0 25px 0' }}>1. 观察围栏，寻找反弹角度。<br />2. 触摸屏幕并<strong style={{ color: '#D84315' }}>反向拖拽</strong>调整瞄准箭头，松开踢出。<br />3. 在规定次数内将球踢入终点红旗坑洞即可过关。</p>
+            <button onClick={() => setShowRules(false)} style={{ padding: '10px 24px', borderRadius: 20, border: 'none', background: '#4CAF50', color: '#fff', fontSize: '1rem', cursor: 'pointer' }}>知道了</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 射箭训练 (滑翔忍者击落)
+const ArcheryGamePage = ({ onBack }) => {
+  const { useState, useEffect, useRef } = React;
+  const [visible, setVisible] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [score, setScore] = useState(0);
+  const [stage, setStage] = useState(1);
+  const targetScore = stage * 30 + 20;
+  const [gameState, setGameState] = useState('playing'); // playing, result
+  const [char1Img, setChar1Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-iVqeyuuPP-viWLmeWFK7gxHr9FkbAACMSoAAmsm2Fe_FOX9k1u1Dz0E.png");
+  const [char2Img, setChar2Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ihqeyvVK_wNnLFsi6ZeuvfcYtDGFgACNCoAAmsm2FeJMbyGDdEl0D0E.png");
+  const canvasRef = useRef(null);
+
+  const stateRef = useRef({
+    ninjas: [],
+    arrows: [],
+    particles: [],
+    popups: [],
+    lastTime: 0,
+    spawnTimer: 0,
+    score: 0,
+    bowAngle: 0
+  });
+
+  const ASSETS = {
+    bg: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-jRqeyxqS4HdK8t-iId66j-sU9SyEgACQSoAAmsm2FeUj9XVer1neD0E.png',
+    bow: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ixqeywHpPJuoDvPoHB6oTpy8ktzgwACOSoAAmsm2FcvPG8BrgRrDT0E.png',
+    arrow: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-rFqezZ6rvDJDNgxujr6RJx-4ltXlwAC3CoAAmsm2FfwyjTogRXkGD0E.png',
+    normal: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-iVqeyuuPP-viWLmeWFK7gxHr9FkbAACMSoAAmsm2Fe_FOX9k1u1Dz0E.png',
+    special: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ihqeyvVK_wNnLFsi6ZeuvfcYtDGFgACNCoAAmsm2FeJMbyGDdEl0D0E.png'
+  };
+
+  const imgsRef = useRef({});
+
+  useEffect(() => {
+    if (window.settingsStore) {
+      window.settingsStore.getArcheryGameChar1Image().then(img => {
+        if (img) {
+          setChar1Img(img);
+          const image = new Image();
+          image.src = img;
+          imgsRef.current['normal'] = image;
+        }
+      });
+      window.settingsStore.getArcheryGameChar2Image().then(img => {
+        if (img) {
+          setChar2Img(img);
+          const image = new Image();
+          image.src = img;
+          imgsRef.current['special'] = image;
+        }
+      });
+    }
+    requestAnimationFrame(() => setVisible(true));
+
+    // Load assets
+    Object.entries(ASSETS).forEach(([key, src]) => {
+      const img = new Image();
+      img.src = src;
+      imgsRef.current[key] = img;
+    });
+  }, []);
+
+  const handleUploadChar1 = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          setChar1Img(dataUrl);
+          const image = new Image();
+          image.src = dataUrl;
+          imgsRef.current['normal'] = image;
+          if (window.settingsStore) {
+            await window.settingsStore.setArcheryGameChar1Image(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  const handleUploadChar2 = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          setChar2Img(dataUrl);
+          const image = new Image();
+          image.src = dataUrl;
+          imgsRef.current['special'] = image;
+          if (window.settingsStore) {
+            await window.settingsStore.setArcheryGameChar2Image(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  // Game Loop
+  useEffect(() => {
+    let reqId;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+
+    let timer = setInterval(() => {
+      if (gameState === 'playing') {
+        setTimeLeft(t => {
+          if (t <= 1) {
+            setGameState('result');
+            return 0;
+          }
+          return t - 1;
+        });
+      }
+    }, 1000);
+
+    const loop = (time) => {
+      reqId = requestAnimationFrame(loop);
+      if (gameState !== 'playing') {
+        render(ctx); // render static result background
+        return;
+      }
+
+      const dt = Math.min((time - stateRef.current.lastTime) / 1000, 0.05);
+      stateRef.current.lastTime = time;
+
+      update(dt);
+      render(ctx);
+    };
+    reqId = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(reqId);
+      clearInterval(timer);
+    };
+  }, [gameState]);
+
+  const update = (dt) => {
+    const state = stateRef.current;
+
+    // Spawn Ninjas
+    state.spawnTimer -= dt;
+    if (state.spawnTimer <= 0) {
+      const isSpecial = Math.random() < 0.2;
+      // spawn top or sides
+      let x, y, vx, vy;
+      const side = Math.floor(Math.random() * 3);
+      if (side === 0) { // top
+        x = 40 + Math.random() * 280;
+        y = -50;
+        vx = (Math.random() - 0.5) * 100;
+        vy = 180 + Math.random() * 100;
+      } else if (side === 1) { // left
+        x = -50;
+        y = 50 + Math.random() * 150;
+        vx = 120 + Math.random() * 80;
+        vy = 100 + Math.random() * 80;
+      } else { // right
+        x = 410;
+        y = 50 + Math.random() * 150;
+        vx = -120 - Math.random() * 80;
+        vy = 100 + Math.random() * 80;
+      }
+
+      // Time left and stage affects speed
+      const speedMult = 1 + (60 - timeLeft) / 25 + (stage - 1) * 0.15;
+
+      state.ninjas.push({
+        id: Math.random(),
+        type: isSpecial ? 'special' : 'normal',
+        x, y,
+        vx: vx * speedMult, vy: vy * speedMult,
+        width: 80, height: 110
+      });
+
+      // Ensure enough ninjas spawn to meet the target score with a 40% margin
+      const requiredSpawns = (stage * 30 + 20) * 1.4;
+      const avgInterval = 60 / requiredSpawns;
+      state.spawnTimer = avgInterval * (0.6 + Math.random() * 0.8);
+      if (state.spawnTimer < 0.05) state.spawnTimer = 0.05;
+    }
+
+    // Move Ninjas
+    for (let i = state.ninjas.length - 1; i >= 0; i--) {
+      const n = state.ninjas[i];
+      n.x += n.vx * dt;
+      n.y += n.vy * dt;
+      if (n.y > 700 || n.x < -100 || n.x > 460) {
+        state.ninjas.splice(i, 1);
+      }
+    }
+
+    // Move Arrows
+    for (let i = state.arrows.length - 1; i >= 0; i--) {
+      const a = state.arrows[i];
+      a.x += a.vx * dt;
+      a.y += a.vy * dt;
+      if (a.y < -50 || a.x < -50 || a.x > 410) {
+        state.arrows.splice(i, 1);
+        continue;
+      }
+
+      // Collision Check
+      for (let j = state.ninjas.length - 1; j >= 0; j--) {
+        const n = state.ninjas[j];
+        const dx = a.x - n.x;
+        const dy = a.y - n.y;
+        if (Math.sqrt(dx * dx + dy * dy) < 45) {
+          // HIT!
+          const points = n.type === 'special' ? 3 : 1;
+          setScore(s => {
+            const newScore = s + points;
+            state.score = newScore;
+            return newScore;
+          });
+
+          // Add particles (smoke)
+          for (let k = 0; k < 12; k++) {
+            state.particles.push({
+              x: n.x, y: n.y,
+              vx: (Math.random() - 0.5) * 200,
+              vy: (Math.random() - 0.5) * 200,
+              life: 1.0,
+              radius: 10 + Math.random() * 15
+            });
+          }
+
+          // Add popup text
+          state.popups.push({
+            x: n.x, y: n.y - 20,
+            text: '+' + points,
+            color: points === 3 ? '#4CAF50' : '#FF9800',
+            life: 1.0
+          });
+
+          state.ninjas.splice(j, 1);
+          state.arrows.splice(i, 1);
+          break;
+        }
+      }
+    }
+
+    // Move Particles
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= 0.92; p.vy *= 0.92;
+      p.life -= dt * 1.5;
+      if (p.life <= 0) state.particles.splice(i, 1);
+    }
+
+    // Move Popups
+    for (let i = state.popups.length - 1; i >= 0; i--) {
+      const p = state.popups[i];
+      p.y -= 50 * dt;
+      p.life -= dt * 1.2;
+      if (p.life <= 0) state.popups.splice(i, 1);
+    }
+  };
+
+  const render = (ctx) => {
+    const state = stateRef.current;
+    const imgs = imgsRef.current;
+
+    ctx.clearRect(0, 0, 360, 640);
+
+    // Bg
+    if (imgs.bg && imgs.bg.complete) {
+      ctx.drawImage(imgs.bg, 0, 0, 360, 640);
+    } else {
+      ctx.fillStyle = '#87CEEB';
+      ctx.fillRect(0, 0, 360, 640);
+    }
+
+    // Ninjas
+    for (const n of state.ninjas) {
+      const img = imgs[n.type];
+      if (img && img.complete && img.naturalWidth && img.naturalHeight) {
+        const aspect = img.naturalWidth / img.naturalHeight;
+        let drawW = n.width;
+        let drawH = n.height;
+        if (aspect > 80 / 110) {
+          drawH = drawW / aspect;
+        } else {
+          drawW = drawH * aspect;
+        }
+        ctx.drawImage(img, n.x - drawW / 2, n.y - drawH / 2, drawW, drawH);
+      } else if (img && img.complete) {
+        ctx.drawImage(img, n.x - n.width / 2, n.y - n.height / 2, n.width, n.height);
+      } else {
+        ctx.fillStyle = n.type === 'special' ? 'green' : 'black';
+        ctx.fillRect(n.x - 20, n.y - 20, 40, 40);
+      }
+    }
+
+    // Particles
+    for (const p of state.particles) {
+      ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Bow (bottom center)
+    const bowX = 180;
+    const bowY = 600;
+    ctx.save();
+    ctx.translate(bowX, bowY);
+    ctx.rotate(state.bowAngle);
+    if (imgs.bow && imgs.bow.complete) {
+      ctx.drawImage(imgs.bow, -60, -40, 120, 80);
+    } else {
+      ctx.fillStyle = '#5D4037';
+      ctx.fillRect(-40, -10, 80, 20);
+    }
+    ctx.restore();
+
+    // Arrows
+    for (const a of state.arrows) {
+      ctx.save();
+      ctx.translate(a.x, a.y);
+      ctx.rotate(a.angle);
+      if (imgs.arrow && imgs.arrow.complete) {
+        ctx.drawImage(imgs.arrow, -10, -30, 20, 60);
+      } else {
+        ctx.fillStyle = '#795548';
+        ctx.fillRect(-2, -15, 4, 30);
+      }
+      ctx.restore();
+    }
+
+    // Popups
+    ctx.font = 'bold 24px "GuanKiapTsingKhai", serif';
+    for (const p of state.popups) {
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = p.life;
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 3;
+      ctx.strokeText(p.text, p.x - 10, p.y);
+      ctx.fillText(p.text, p.x - 10, p.y);
+      ctx.globalAlpha = 1.0;
+    }
+  };
+
+  const handlePointerDown = (e) => {
+    if (gameState !== 'playing') return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const targetX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const targetY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+
+    const bowX = 180;
+    const bowY = 600;
+    const dx = targetX - bowX;
+    const dy = targetY - bowY;
+    const angle = Math.atan2(dy, dx);
+
+    // Only shoot upwards
+    if (dy > 0) return;
+
+    stateRef.current.bowAngle = angle + Math.PI / 2;
+
+    const speed = 1200;
+    stateRef.current.arrows.push({
+      x: bowX, y: bowY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      angle: angle + Math.PI / 2
+    });
+  };
+
+  const handlePointerMove = (e) => {
+    if (gameState !== 'playing') return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const targetX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
+    const targetY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
+    const bowX = 180;
+    const bowY = 600;
+    const dx = targetX - bowX;
+    const dy = targetY - bowY;
+    if (dy < 0) {
+      stateRef.current.bowAngle = Math.atan2(dy, dx) + Math.PI / 2;
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'absolute', inset: 0, zIndex: 300,
+        background: '#87CEEB',
+        opacity: visible ? 1 : 0, transition: 'opacity 0.4s',
+        fontFamily: '"GuanKiapTsingKhai", serif', overflow: 'hidden'
+      }}
+    >
+      <canvas
+        ref={canvasRef} width={360} height={640}
+        style={{ width: '100%', height: '100%', touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+      />
+
+      {/* Header UI - Top Left Back */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, zIndex: 10 }}>
+        <div onClick={onBack} style={{ width: 40, height: 40, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', cursor: 'pointer' }}>←</div>
+      </div>
+
+      {/* Top Center Timer */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
+        <div style={{ fontSize: '2.5rem', color: '#FFB300', textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontWeight: 'bold' }}>
+          {timeLeft}
+        </div>
+      </div>
+
+      {/* Top Right Actions */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 15, display: 'flex', gap: '8px', zIndex: 20 }}>
+        <div onClick={(e) => { e.stopPropagation(); handleUploadChar1(); }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)' }}>
+          更换角色1
+        </div>
+        <div onClick={(e) => { e.stopPropagation(); handleUploadChar2(); }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)' }}>
+          更换角色2
+        </div>
+      </div>
+
+      {/* Top Right Scroll UI */}
+      <div style={{ position: 'absolute', top: 'max(65px, env(safe-area-inset-top) + 45px)', right: 15, zIndex: 10, background: 'url(https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ihqeyvVK_wNnLFsi6ZeuvfcYtDGFgACNCoAAmsm2FeJMbyGDdEl0D0E.png)', backgroundSize: '100% 100%' }}>
+        <div style={{ background: '#F5E6C8', padding: '8px 15px', borderRadius: '4px', border: '2px solid #D7CCC8', display: 'flex', flexDirection: 'column', gap: '4px', boxShadow: '2px 2px 8px rgba(0,0,0,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <span style={{ color: '#5D4037', fontSize: '0.8rem' }}>第{stage}关目标:</span>
+            <span style={{ color: '#5D4037', fontSize: '1rem', fontWeight: 'bold' }}>{targetScore}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <span style={{ color: '#5D4037', fontSize: '0.9rem' }}>当前积分:</span>
+            <span style={{ color: '#D84315', fontSize: '1.2rem', fontWeight: 'bold' }}>{score}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Result Modal */}
+      {gameState === 'result' && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s' }}>
+          <div style={{ background: 'linear-gradient(135deg, #F5E6C8 0%, #FFFFFF 100%)', padding: '40px 30px', borderRadius: 20, textAlign: 'center', position: 'relative', width: '75%', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '4px solid #8D6E63' }}>
+
+            <h2 style={{ color: score >= targetScore ? '#D84315' : '#3E2723', fontSize: '1.8rem', margin: '10px 0 20px 0' }}>
+              {score >= targetScore ? '挑战成功' : '挑战失败'}
+            </h2>
+            <div style={{ fontSize: '1.2rem', color: '#5D4037', marginBottom: '10px' }}>本次击落总分 (目标:{targetScore})</div>
+            <div style={{ fontSize: '3rem', color: '#D84315', fontWeight: 'bold', marginBottom: '30px', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{score}</div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {score >= targetScore ? (
+                <button onClick={() => {
+                  setStage(s => s + 1);
+                  setGameState('playing');
+                  setTimeLeft(60);
+                  setScore(0);
+                  stateRef.current.ninjas = [];
+                  stateRef.current.arrows = [];
+                  stateRef.current.particles = [];
+                  stateRef.current.popups = [];
+                }} style={{ padding: '12px 30px', background: '#D84315', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>进入第{stage + 1}关</button>
+              ) : (
+                <button onClick={() => {
+                  setGameState('playing');
+                  setTimeLeft(60);
+                  setScore(0);
+                  stateRef.current.ninjas = [];
+                  stateRef.current.arrows = [];
+                  stateRef.current.particles = [];
+                  stateRef.current.popups = [];
+                }} style={{ padding: '12px 30px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>再试一次</button>
+              )}
+
+              <button onClick={onBack} style={{ padding: '12px 30px', background: 'transparent', color: '#795548', border: '2px solid #795548', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer' }}>返回修武扬文</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 敏捷训练 (农田保卫战 / 打地鼠)
+const AgilityGamePage = ({ onBack }) => {
+  const { useState, useEffect, useRef } = React;
+  const [visible, setVisible] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [score, setScore] = useState(0);
+  const [stage, setStage] = useState(1);
+  const [lives, setLives] = useState(3);
+  const targetScore = stage * 30 + 10;
+  const [gameState, setGameState] = useState('playing'); // playing, result
+  const canvasRef = useRef(null);
+
+  const stateRef = useRef({
+    grid: Array(9).fill(null).map(() => ({ state: 'idle', timer: 0, thiefType: null, yOffset: 0 })), // idle, popping, escaping, hit
+    particles: [],
+    popups: [],
+    hammers: [],
+    lastTime: 0,
+    spawnTimer: 0,
+  });
+
+  const ASSETS = {
+    bg: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_gNqe9DpCznAORrqCNeDFlOWlp-hKwACHCcAAkWI4FeC1X2vy4YzYj0E.png',
+    bush: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_ttqe9af4oefRwN_xLlDVwTPORjX0QACDSgAAkWI4FdyYgYlgdAI1D0E.png',
+    thief1_idle: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_iBqe9Gsm0GFagZ1TDPzgl4WB1QlagACPicAAkWI4FeNig-3o2880j0E.png',
+    thief1_hit: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_iNqe9HOTh-UDIfYdb09UZCX6UeX0AACQScAAkWI4FeogY0oJaqQsz0E.png',
+    thief2_idle: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_hBqe9FQpPs92cXchkxwcu-8v7T7bgACKicAAkWI4FcRqK6HUSnb7D0E.png',
+    thief2_hit: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_hVqe9F3hNzbMe2Ey3oe2pzrjTttowACMCcAAkWI4FdKbZXE2EsvRz0E.png',
+    hammer: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_mdqe9OSSA_l7anAmKyDaXi4vFGrsgACiCcAAkWI4FeYEpjJDULLxT0E.png'
+  };
+
+  const imgsRef = useRef({});
+
+  useEffect(() => {
+    requestAnimationFrame(() => setVisible(true));
+    Object.entries(ASSETS).forEach(([key, src]) => {
+      const img = new Image();
+      img.src = src;
+      imgsRef.current[key] = img;
+    });
+  }, []);
+
+  useEffect(() => {
+    let reqId;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+
+    let timer = setInterval(() => {
+      if (gameState === 'playing') {
+        setTimeLeft(t => {
+          if (t <= 1) {
+            setGameState('result');
+            return 0;
+          }
+          return t - 1;
+        });
+      }
+    }, 1000);
+
+    stateRef.current.lastTime = performance.now();
+
+    const loop = (time) => {
+      reqId = requestAnimationFrame(loop);
+      if (gameState !== 'playing') {
+        render(ctx);
+        return;
+      }
+      const dt = Math.min((time - stateRef.current.lastTime) / 1000, 0.05);
+      stateRef.current.lastTime = time;
+      update(dt);
+      render(ctx);
+    };
+    reqId = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(reqId);
+      clearInterval(timer);
+    };
+  }, [gameState]);
+
+  const update = (dt) => {
+    const state = stateRef.current;
+
+    // Spawn Logic
+    state.spawnTimer -= dt;
+    if (state.spawnTimer <= 0) {
+      const idleCells = state.grid.map((c, i) => c.state === 'idle' ? i : -1).filter(i => i !== -1);
+      if (idleCells.length > 0) {
+        const idx = idleCells[Math.floor(Math.random() * idleCells.length)];
+        const cell = state.grid[idx];
+        cell.state = 'popping';
+        cell.thiefType = Math.random() < 0.2 ? 'thief2' : 'thief1'; // thief2 is elite
+        // Stay duration is faster for later stages and less time
+        const duration = Math.max(0.6, 1.2 - (stage - 1) * 0.1 - (60 - timeLeft) / 60 * 0.3);
+        cell.timer = cell.thiefType === 'thief2' ? duration * 0.8 : duration;
+        cell.yOffset = 50; // starts hidden
+      }
+      const requiredSpawns = (stage * 30 + 10) * 1.5;
+      const avgInterval = 60 / requiredSpawns;
+      state.spawnTimer = avgInterval * (0.5 + Math.random() * 0.8);
+      if (state.spawnTimer < 0.1) state.spawnTimer = 0.1;
+    }
+
+    // Update Grid Cells
+    let escapedThisFrame = 0;
+    state.grid.forEach(cell => {
+      if (cell.state === 'popping') {
+        if (cell.yOffset > 0) cell.yOffset -= 250 * dt; // Pop up animation
+        else cell.yOffset = 0;
+
+        cell.timer -= dt;
+        if (cell.timer <= 0) {
+          cell.state = 'escaping';
+        }
+      } else if (cell.state === 'escaping') {
+        cell.yOffset += 200 * dt; // Hide animation
+        if (cell.yOffset >= 50) {
+          cell.state = 'idle';
+          cell.yOffset = 0;
+          escapedThisFrame++;
+        }
+      } else if (cell.state === 'hit') {
+        cell.timer -= dt;
+        if (cell.timer <= 0) {
+          cell.yOffset += 200 * dt; // Hide after hit
+          if (cell.yOffset >= 50) {
+            cell.state = 'idle';
+            cell.yOffset = 0;
+          }
+        }
+      }
+    });
+
+    if (escapedThisFrame > 0) {
+      setLives(l => {
+        const newLives = l - escapedThisFrame;
+        if (newLives <= 0 && gameState === 'playing') {
+          setGameState('result');
+        }
+        return Math.max(0, newLives);
+      });
+    }
+
+    // Particles
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= 0.92; p.vy *= 0.92;
+      p.life -= dt * 1.5;
+      if (p.life <= 0) state.particles.splice(i, 1);
+    }
+
+    // Popups
+    for (let i = state.popups.length - 1; i >= 0; i--) {
+      const p = state.popups[i];
+      p.y -= 50 * dt;
+      p.life -= dt * 1.2;
+      if (p.life <= 0) state.popups.splice(i, 1);
+    }
+
+    // Hammers
+    for (let i = state.hammers.length - 1; i >= 0; i--) {
+      const h = state.hammers[i];
+      h.timer -= dt;
+      if (h.timer <= 0) state.hammers.splice(i, 1);
+    }
+  };
+
+  const handlePointerDown = (e) => {
+    if (gameState !== 'playing') return;
+    const rect = canvasRef.current.getBoundingClientRect();
+    const touch = e.touches ? e.touches[0] : e;
+    const scaleX = 360 / rect.width;
+    const scaleY = 640 / rect.height;
+    const tx = (touch.clientX - rect.left) * scaleX;
+    const ty = (touch.clientY - rect.top) * scaleY;
+
+    const state = stateRef.current;
+    let hit = false;
+
+    for (let i = 0; i < 9; i++) {
+      const cell = state.grid[i];
+      if (cell.state === 'popping' || cell.state === 'escaping') {
+        const col = i % 3;
+        const row = Math.floor(i / 3);
+        const cx = 35 + col * 105 + 40; // 35 padding, 105 spacing, 40 center
+        const cy = 250 + row * 115 + 40 + cell.yOffset;
+
+        const dx = tx - cx;
+        const dy = ty - cy;
+        if (Math.abs(dx) < 45 && Math.abs(dy) < 55) {
+          // Hit!
+          hit = true;
+          cell.state = 'hit';
+          cell.timer = 0.3; // Stun duration
+
+          const points = cell.thiefType === 'thief2' ? 3 : 1;
+          setScore(s => s + points);
+
+          // FX
+          for (let k = 0; k < 8; k++) {
+            state.particles.push({
+              x: cx, y: cy,
+              vx: (Math.random() - 0.5) * 150,
+              vy: (Math.random() - 0.5) * 150,
+              life: 1.0,
+              radius: 5 + Math.random() * 8,
+              color: points === 3 ? '#a0e8af' : '#ffd54f'
+            });
+          }
+          state.popups.push({
+            x: cx, y: cy - 30,
+            text: '+' + points,
+            color: points === 3 ? '#4CAF50' : '#FF9800',
+            life: 1.0
+          });
+          state.hammers.push({
+            x: cx + 20, y: cy - 20, timer: 0.2
+          });
+          break;
+        }
+      }
+    }
+
+    if (!hit) {
+      state.hammers.push({
+        x: tx + 10, y: ty - 10, timer: 0.2
+      });
+    }
+  };
+
+  const render = (ctx) => {
+    const state = stateRef.current;
+    const imgs = imgsRef.current;
+
+    ctx.clearRect(0, 0, 360, 640);
+
+    // Bg
+    if (imgs.bg && imgs.bg.complete) {
+      ctx.drawImage(imgs.bg, 0, 0, 360, 640);
+    } else {
+      ctx.fillStyle = '#C8E6C9';
+      ctx.fillRect(0, 0, 360, 640);
+    }
+
+    // Grid
+    for (let i = 0; i < 9; i++) {
+      const cell = state.grid[i];
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const cellX = 35 + col * 105;
+      const cellY = 250 + row * 115;
+
+      // Draw Thief Behind Bush
+      if (cell.state !== 'idle') {
+        const thiefState = cell.state === 'hit' ? '_hit' : '_idle';
+        const img = imgs[cell.thiefType + thiefState];
+        if (img && img.complete) {
+          ctx.drawImage(img, cellX + 17, cellY - 25 + cell.yOffset, 55, 55);
+        }
+      }
+
+      // Draw Bush in Front with Breathing Effect
+      const breatheScale = 1 + Math.sin(state.lastTime / 400 + i * 0.7) * 0.03; // +/- 3%
+      ctx.save();
+      // center point of the bush
+      const bushCenterX = cellX + 45;
+      const bushCenterY = cellY + 55;
+      ctx.translate(bushCenterX, bushCenterY);
+      ctx.scale(breatheScale, breatheScale);
+
+      if (imgs.bush && imgs.bush.complete) {
+        ctx.drawImage(imgs.bush, -45, -35, 90, 70);
+      } else {
+        ctx.fillStyle = '#4CAF50';
+        ctx.beginPath();
+        ctx.ellipse(0, -5, 45, 30, 0, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+
+    // Particles
+    for (const p of state.particles) {
+      ctx.fillStyle = p.color || '#FFF';
+      ctx.globalAlpha = p.life;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius * p.life, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.globalAlpha = 1;
+    }
+
+    // Popups
+    ctx.font = 'bold 24px Arial';
+    ctx.textAlign = 'center';
+    for (const p of state.popups) {
+      ctx.globalAlpha = p.life;
+      ctx.fillStyle = '#fff';
+      ctx.fillText(p.text, p.x, p.y);
+      ctx.fillStyle = p.color;
+      ctx.fillText(p.text, p.x, p.y - 1);
+      ctx.globalAlpha = 1;
+    }
+
+    // Hammers
+    if (imgs.hammer && imgs.hammer.complete) {
+      for (const h of state.hammers) {
+        ctx.save();
+        ctx.translate(h.x, h.y);
+        ctx.rotate(h.timer > 0.1 ? -0.5 : 0.2); // Swing animation
+        ctx.drawImage(imgs.hammer, -10, -40, 50, 50);
+        ctx.restore();
+      }
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'absolute', inset: 0, zIndex: 300,
+        background: '#C8E6C9',
+        opacity: visible ? 1 : 0, transition: 'opacity 0.4s',
+        fontFamily: '"GuanKiapTsingKhai", serif', overflow: 'hidden'
+      }}
+    >
+      <canvas
+        ref={canvasRef} width={360} height={640}
+        style={{ width: '100%', height: '100%', touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+      />
+
+      {/* Header UI */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, zIndex: 10 }}>
+        <div onClick={onBack} style={{ width: 40, height: 40, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', cursor: 'pointer' }}>←</div>
+      </div>
+
+      {/* Top Center Timer */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
+        <div style={{ fontSize: '2.5rem', color: '#D84315', textShadow: '0 2px 4px rgba(255,255,255,0.8)', fontWeight: 'bold' }}>
+          {timeLeft}
+        </div>
+      </div>
+
+      {/* Top Right Score & Lives UI */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 15, zIndex: 10, background: 'url(https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ihqeyvVK_wNnLFsi6ZeuvfcYtDGFgACNCoAAmsm2FeJMbyGDdEl0D0E.png)', backgroundSize: '100% 100%' }}>
+        <div style={{ background: '#F5E6C8', padding: '8px 15px', borderRadius: '4px', border: '2px solid #D7CCC8', display: 'flex', flexDirection: 'column', gap: '4px', boxShadow: '2px 2px 8px rgba(0,0,0,0.2)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <span style={{ color: '#5D4037', fontSize: '0.8rem' }}>第{stage}关目标:</span>
+            <span style={{ color: '#5D4037', fontSize: '1rem', fontWeight: 'bold' }}>{targetScore}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
+            <span style={{ color: '#5D4037', fontSize: '0.9rem' }}>当前积分:</span>
+            <span style={{ color: '#D84315', fontSize: '1.2rem', fontWeight: 'bold' }}>{score}</span>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '2px', justifyContent: 'flex-end', marginTop: 2 }}>
+            {[...Array(3)].map((_, i) => (
+              <span key={i} style={{ fontSize: '1.1rem', opacity: i < lives ? 1 : 0.3 }}>❤️</span>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Result Modal */}
+      {gameState === 'result' && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s' }}>
+          <div style={{ background: 'linear-gradient(135deg, #F5E6C8 0%, #FFFFFF 100%)', padding: '40px 30px', borderRadius: 20, textAlign: 'center', position: 'relative', width: '75%', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '4px solid #8D6E63' }}>
+
+            <h2 style={{ color: score >= targetScore && lives > 0 ? '#D84315' : '#3E2723', fontSize: '1.8rem', margin: '10px 0 20px 0' }}>
+              {score >= targetScore && lives > 0 ? '挑战成功' : '挑战失败'}
+            </h2>
+            <div style={{ fontSize: '1.2rem', color: '#5D4037', marginBottom: '10px' }}>本次保卫得分 (目标:{targetScore})</div>
+            <div style={{ fontSize: '3rem', color: '#D84315', fontWeight: 'bold', marginBottom: '10px', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{score}</div>
+            <div style={{ fontSize: '1rem', color: '#5D4037', marginBottom: '30px' }}>剩余生命: {lives} / 3</div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {score >= targetScore && lives > 0 ? (
+                <button onClick={() => {
+                  setStage(s => s + 1);
+                  setGameState('playing');
+                  setTimeLeft(60);
+                  setScore(0);
+                  setLives(3);
+                  stateRef.current.grid.forEach(c => { c.state = 'idle'; c.yOffset = 0; });
+                }} style={{ padding: '12px 30px', background: '#D84315', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>进入第{stage + 1}关</button>
+              ) : (
+                <button onClick={() => {
+                  setGameState('playing');
+                  setTimeLeft(60);
+                  setScore(0);
+                  setLives(3);
+                  stateRef.current.grid.forEach(c => { c.state = 'idle'; c.yOffset = 0; });
+                }} style={{ padding: '12px 30px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>重新挑战</button>
+              )}
+
+              <button onClick={onBack} style={{ padding: '12px 30px', background: 'transparent', color: '#795548', border: '2px solid #795548', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer' }}>返回修武扬文</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 划船训练 (双人踩点竞速)
+const RowingGamePage = ({ onBack }) => {
+  const { useState, useEffect, useRef } = React;
+  const [visible, setVisible] = useState(false);
+  const [timeLeft, setTimeLeft] = useState(0);
+  const [distance, setDistance] = useState(1000);
+  const [gameState, setGameState] = useState('playing'); // playing, result
+  const [stage, setStage] = useState(1);
+  const [collectedCount, setCollectedCount] = useState(0);
+  const targetCount = stage * 5 + 5;
+  const [char1Img, setChar1Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAb9qe_Yim5Es2lu4rtQ62wvuMqoT2gACXysAAkWI4FeGBUAUZbzrhT0E.png");
+  const [char2Img, setChar2Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAbxqe_XwtiOza_l_9YMwBuwTX0UKgAACXCsAAkWI4FdGEclXW2OtTj0E.png");
+  const canvasRef = useRef(null);
+
+  const ASSETS = {
+    paddle_p2: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAbhqe_WsBpJK3NyAerTfMRVtph5f3wACWCsAAkWI4FfAPT16AAFNVVA9BA.png',
+    paddle_p1: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAbpqe_XYWKIT1DvLW0JMaSk6WeYkzQACWisAAkWI4FekFthAwFZupT0E.png',
+    avatar_p2: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAbxqe_XwtiOza_l_9YMwBuwTX0UKgAACXCsAAkWI4FdGEclXW2OtTj0E.png',
+    avatar_p1: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAb9qe_Yim5Es2lu4rtQ62wvuMqoT2gACXysAAkWI4FeGBUAUZbzrhT0E.png',
+    log: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAcBqe_Y_78bqd4sKmmSgR80n0AABvIIAAmArAAJFiOBXCzGN7RLfCuA9BA.png',
+    leaf: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAcJqe_ZidWDop0oTGZUvOQ0YTGwtqgACYisAAkWI4Fd2XXFLX1Ad8T0E.png',
+    flower: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAchqe_Z3nftTaJP1JvEf5U-ixjii_gACaCsAAkWI4FcGE7_6yHk4zz0E.png',
+    boat: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZActqe_aek6-Cy2FsB6vuXoGnTKA26wACaysAAkWI4Fdyl-0-EHLT2D0E.png',
+    bg: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAqpqfAb3YBIQmCcUT8IDM3aoCE-V3gAChywAAkWI4Fca_no6euWkZj0E.jpg'
+  };
+  const imgsRef = useRef({});
+
+  const stateRef = useRef({
+    boatX: 0, // -100 to 100
+    boatY: 450,
+    boatAngle: 0,
+    speed: 100, // forward speed
+    bgOffsetY: 0,
+    rhythmTimer: 0,
+    rhythmPhase: 0, // 0: "1", 1: "2", 2: "划!"
+    combo: 0,
+    isSprint: false,
+    sprintTimer: 0,
+    p1PaddleTimer: 0,
+    p2PaddleTimer: 0,
+    obstacles: [],
+    particles: [],
+    bubbles: [],
+    lastTime: 0
+  });
+
+  useEffect(() => {
+    if (window.settingsStore) {
+      window.settingsStore.getRowingGameChar1Image().then(img => {
+        if (img) {
+          setChar1Img(img);
+          const image = new Image();
+          image.src = img;
+          imgsRef.current['avatar_p1'] = image;
+        }
+      });
+      window.settingsStore.getRowingGameChar2Image().then(img => {
+        if (img) {
+          setChar2Img(img);
+          const image = new Image();
+          image.src = img;
+          imgsRef.current['avatar_p2'] = image;
+        }
+      });
+    }
+    requestAnimationFrame(() => setVisible(true));
+    Object.entries(ASSETS).forEach(([key, src]) => {
+      const img = new Image();
+      img.src = src;
+      imgsRef.current[key] = img;
+    });
+  }, []);
+
+  const handleUploadChar1 = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          setChar1Img(dataUrl);
+          const image = new Image();
+          image.src = dataUrl;
+          imgsRef.current['avatar_p1'] = image;
+          if (window.settingsStore) {
+            await window.settingsStore.setRowingGameChar1Image(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  const handleUploadChar2 = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          setChar2Img(dataUrl);
+          const image = new Image();
+          image.src = dataUrl;
+          imgsRef.current['avatar_p2'] = image;
+          if (window.settingsStore) {
+            await window.settingsStore.setRowingGameChar2Image(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  useEffect(() => {
+    let reqId;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+
+    let timer = setInterval(() => {
+      if (gameState === 'playing') {
+        setTimeLeft(t => t + 1);
+      }
+    }, 1000);
+
+    stateRef.current.lastTime = performance.now();
+
+    const loop = (time) => {
+      reqId = requestAnimationFrame(loop);
+      if (gameState !== 'playing') {
+        render(ctx);
+        return;
+      }
+      const dt = Math.min((time - stateRef.current.lastTime) / 1000, 0.05);
+      stateRef.current.lastTime = time;
+      update(dt);
+      render(ctx);
+    };
+    reqId = requestAnimationFrame(loop);
+
+    return () => {
+      cancelAnimationFrame(reqId);
+      clearInterval(timer);
+    };
+  }, [gameState]);
+
+  const formatTime = (seconds) => {
+    const m = Math.floor(seconds / 60).toString().padStart(2, '0');
+    const s = (seconds % 60).toString().padStart(2, '0');
+    return `${m}:${s}`;
+  };
+
+  const addBubble = (text, isP1) => {
+    stateRef.current.bubbles.push({
+      text, isP1, life: 2.0
+    });
+  };
+
+  const handleHit = () => {
+    const state = stateRef.current;
+    state.speed = Math.max(50, state.speed - 150);
+    state.combo = 0;
+    state.isSprint = false;
+    state.sprintTimer = 0;
+    addBubble('撞到了。没事吧。', Math.random() > 0.5);
+  };
+
+  const handleLeftPress = () => {
+    const state = stateRef.current;
+    if (state.rhythmPhase === 2) {
+      // Good / Perfect hit
+      state.combo++;
+      state.speed = Math.min(800, state.speed + 120);
+      addBubble('好耶！', true);
+      if (state.combo >= 3) {
+        state.isSprint = true;
+        state.sprintTimer = 3.0;
+        addBubble('冲刺！', true);
+      }
+    } else {
+      // Bad hit
+      state.combo = 0;
+      state.speed = Math.max(50, state.speed - 30);
+      addBubble('别急，有我。', false);
+    }
+    state.p2PaddleTimer = 0.3; // Animate left paddle
+    // Turn left
+    state.boatAngle = Math.max(-Math.PI / 6, state.boatAngle - 0.15);
+  };
+
+  const handleRightPress = () => {
+    const state = stateRef.current;
+    if (state.rhythmPhase === 2) {
+      state.combo++;
+      state.speed = Math.min(800, state.speed + 120);
+      addBubble('配合，很好。', false);
+      if (state.combo >= 3) {
+        state.isSprint = true;
+        state.sprintTimer = 3.0;
+        addBubble('准备飞。', false);
+      }
+    } else {
+      state.combo = 0;
+      state.speed = Math.max(50, state.speed - 30);
+      addBubble('抓稳，没事。', true);
+    }
+    state.p1PaddleTimer = 0.3; // Animate right paddle
+    // Turn right
+    state.boatAngle = Math.min(Math.PI / 6, state.boatAngle + 0.15);
+  };
+
+  const update = (dt) => {
+    const state = stateRef.current;
+
+    // Physics
+    state.bgOffsetY = (state.bgOffsetY + state.speed * dt) % 640;
+    state.boatX += state.boatAngle * state.speed * dt;
+
+    if (state.isSprint) {
+      state.speed = 700;
+      state.sprintTimer -= dt;
+      if (state.sprintTimer <= 0) {
+        state.isSprint = false;
+        state.combo = 0;
+      }
+      // Add sprint particles
+      state.particles.push({
+        x: 180 + state.boatX + (Math.random() - 0.5) * 40,
+        y: state.boatY + 60,
+        vx: (Math.random() - 0.5) * 50,
+        vy: Math.random() * 200 + 100,
+        life: 0.5,
+        type: 'sprint_water'
+      });
+    } else {
+      // Normal deceleration
+      state.speed = Math.max(150, state.speed - 50 * dt);
+    }
+
+    // Rhythm
+    state.rhythmTimer += dt;
+    if (state.rhythmTimer > 0.8) {
+      state.rhythmTimer = 0;
+      state.rhythmPhase = (state.rhythmPhase + 1) % 3;
+      if (state.rhythmPhase === 2) {
+        state.p2PaddleTimer = 0.3;
+      }
+    }
+
+    // Paddles
+    if (state.p1PaddleTimer > 0) state.p1PaddleTimer -= dt;
+    if (state.p2PaddleTimer > 0) state.p2PaddleTimer -= dt;
+
+    // Distance
+    const distTravelled = state.speed * dt / 10;
+    setDistance(d => {
+      const next = d - distTravelled;
+      if (next <= 0) {
+        setGameState('result');
+        return 0;
+      }
+      return next;
+    });
+
+    // Obstacles
+    if (Math.random() < 0.015 + stage * 0.002) {
+      const type = Math.random() < 0.25 ? 'log' : (Math.random() > 0.5 ? 'leaf' : 'flower');
+      const size = type === 'log' ? 90 + Math.random() * 30 : 40 + Math.random() * 20;
+      state.obstacles.push({
+        x: 180 + state.boatX + (Math.random() - 0.5) * 360,
+        y: -50,
+        type: type,
+        size: size,
+        angle: 0,
+        spawnTime: state.lastTime
+      });
+    }
+    for (let i = state.obstacles.length - 1; i >= 0; i--) {
+      const obs = state.obstacles[i];
+      obs.y += state.speed * dt;
+      // Collision and Collection
+      const isCollectible = obs.type !== 'log';
+      const hitBoxY = isCollectible ? 80 : 40;
+      const hitBoxX = isCollectible ? 70 : 40;
+
+      if (obs.y > state.boatY - hitBoxY && obs.y < state.boatY + hitBoxY) {
+        if (Math.abs(obs.x - (180 + state.boatX)) < hitBoxX) {
+          if (obs.type === 'log') {
+            if (!state.isSprint) {
+              handleHit();
+              state.obstacles.splice(i, 1);
+              continue;
+            }
+          } else {
+            // Collect flower or leaf
+            state.speed = Math.min(800, state.speed + 40);
+            setCollectedCount(c => c + 1);
+            addBubble(obs.type === 'flower' ? '好漂亮的花！' : '采到荷叶啦', Math.random() > 0.5);
+            state.obstacles.splice(i, 1);
+            continue;
+          }
+        }
+      }
+      if (obs.y > 680) {
+        state.obstacles.splice(i, 1);
+      }
+    }
+
+    // Bubbles
+    for (let i = state.bubbles.length - 1; i >= 0; i--) {
+      state.bubbles[i].life -= dt;
+      if (state.bubbles[i].life <= 0) state.bubbles.splice(i, 1);
+    }
+
+    // Particles
+    for (let i = state.particles.length - 1; i >= 0; i--) {
+      const p = state.particles[i];
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.life -= dt;
+      if (p.life <= 0) state.particles.splice(i, 1);
+    }
+  };
+
+  const render = (ctx) => {
+    const state = stateRef.current;
+    const imgs = imgsRef.current;
+
+    ctx.clearRect(0, 0, 360, 640);
+
+    // BG scrolling with horizontal parallax
+    if (imgs.bg && imgs.bg.complete) {
+      const bgX = -(state.boatX % 360);
+      for (let i = -1; i <= 2; i++) {
+        ctx.drawImage(imgs.bg, bgX + i * 360, state.bgOffsetY - 640, 360, 640);
+        ctx.drawImage(imgs.bg, bgX + i * 360, state.bgOffsetY, 360, 640);
+      }
+    } else {
+      ctx.fillStyle = '#B2DFDB';
+      ctx.fillRect(0, 0, 360, 640);
+    }
+
+    // Speed lines
+    if (state.speed > 200) {
+      ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+      ctx.beginPath();
+      for (let i = 0; i < 10; i++) {
+        const lx = Math.random() * 360;
+        const ly = Math.random() * 640;
+        ctx.moveTo(lx, ly);
+        ctx.lineTo(lx, ly + state.speed * 0.1);
+      }
+      ctx.stroke();
+    }
+
+    // Obstacles
+    for (const obs of state.obstacles) {
+      ctx.save();
+      ctx.translate(obs.x - state.boatX, obs.y);
+      ctx.rotate(obs.angle);
+      
+      let drawSize = obs.size;
+      if (obs.type !== 'log') {
+        const timeAlive = state.lastTime - (obs.spawnTime || state.lastTime);
+        const scale = 1 + Math.sin(timeAlive / 300) * 0.15;
+        drawSize = obs.size * scale;
+      }
+
+      const img = imgs[obs.type];
+      if (img && img.complete) {
+        ctx.drawImage(img, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
+      } else {
+        ctx.fillStyle = obs.type === 'log' ? '#795548' : '#4CAF50';
+        ctx.fillRect(-drawSize / 2, -drawSize / 2, drawSize, drawSize);
+      }
+      ctx.restore();
+    }
+
+    // Boat
+    ctx.save();
+    const bx = 180 - state.boatAngle * 80;
+    const by = state.boatY;
+    ctx.translate(bx, by);
+    ctx.rotate(state.boatAngle);
+
+    if (state.isSprint) {
+      ctx.shadowColor = '#FFD54F';
+      ctx.shadowBlur = 20;
+    }
+
+    if (imgs.boat && imgs.boat.complete) {
+      const bw = imgs.boat.naturalWidth || 80;
+      const bh = imgs.boat.naturalHeight || 160;
+      const targetHeight = 220;
+      const targetWidth = (bw / bh) * targetHeight;
+      ctx.save();
+      ctx.rotate(0.3);
+      ctx.drawImage(imgs.boat, -targetWidth / 2, -targetHeight / 2, targetWidth, targetHeight);
+      ctx.restore();
+    } else {
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath();
+      ctx.roundRect(-30, -60, 60, 120, 30);
+      ctx.fill();
+    }
+    ctx.shadowBlur = 0;
+
+    // Paddles
+    if (imgs.paddle_p2 && imgs.paddle_p2.complete) {
+      ctx.save();
+      ctx.translate(-35, -20);
+      ctx.rotate(state.p2PaddleTimer > 0 ? -0.5 : 0);
+      ctx.drawImage(imgs.paddle_p2, -30, -10, 60, 20);
+      ctx.restore();
+    }
+    if (imgs.paddle_p1 && imgs.paddle_p1.complete) {
+      ctx.save();
+      ctx.translate(35, 20);
+      ctx.rotate(state.p1PaddleTimer > 0 ? 0.5 : 0);
+      ctx.scale(-1, 1);
+      ctx.drawImage(imgs.paddle_p1, -30, -10, 60, 20);
+      ctx.restore();
+    }
+
+    // Avatars
+    if (imgs.avatar_p2 && imgs.avatar_p2.complete) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, -45, 22, 0, Math.PI * 2);
+      ctx.clip();
+      const img2 = imgs.avatar_p2;
+      if (img2.naturalWidth && img2.naturalHeight) {
+        const aspect = img2.naturalWidth / img2.naturalHeight;
+        let dw = 44, dh = 44;
+        if (aspect > 1) {
+          dw = 44 * aspect;
+        } else {
+          dh = 44 / aspect;
+        }
+        ctx.drawImage(img2, -dw / 2, -45 - dh / 2, dw, dh);
+      } else {
+        ctx.drawImage(img2, -22, -67, 44, 44);
+      }
+      ctx.restore();
+      ctx.strokeStyle = '#8D6E63'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, -45, 22, 0, Math.PI * 2); ctx.stroke();
+    }
+    if (imgs.avatar_p1 && imgs.avatar_p1.complete) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(0, 5, 22, 0, Math.PI * 2);
+      ctx.clip();
+      const img1 = imgs.avatar_p1;
+      if (img1.naturalWidth && img1.naturalHeight) {
+        const aspect = img1.naturalWidth / img1.naturalHeight;
+        let dw = 44, dh = 44;
+        if (aspect > 1) {
+          dw = 44 * aspect;
+        } else {
+          dh = 44 / aspect;
+        }
+        ctx.drawImage(img1, -dw / 2, 5 - dh / 2, dw, dh);
+      } else {
+        ctx.drawImage(img1, -22, -17, 44, 44);
+      }
+      ctx.restore();
+      ctx.strokeStyle = '#8D6E63'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.arc(0, 5, 22, 0, Math.PI * 2); ctx.stroke();
+    }
+    ctx.restore();
+
+    // Particles (Water splashes)
+    for (const p of state.particles) {
+      ctx.fillStyle = 'rgba(255,255,255,' + p.life + ')';
+      ctx.beginPath();
+      ctx.arc(p.x - state.boatX, p.y, 4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // Bubbles
+    ctx.font = '14px Arial';
+    ctx.textAlign = 'center';
+    for (const b of state.bubbles) {
+      const bx = 180 - state.boatAngle * 80;
+      const ax = bx + (b.isP1 ? 50 : -50);
+      const ay = state.boatY + (b.isP1 ? 25 : -25);
+      ctx.globalAlpha = Math.min(1, b.life * 2);
+      ctx.fillStyle = '#FFF';
+      ctx.beginPath();
+      ctx.roundRect(ax - 50, ay - 40, 100, 30, 10);
+      ctx.fill();
+      ctx.fillStyle = '#333';
+      ctx.fillText(b.text, ax, ay - 20);
+      ctx.globalAlpha = 1;
+    }
+
+    // Rhythm Indicator
+    if (!state.isSprint) {
+      ctx.fillStyle = '#FF9800';
+      ctx.font = 'bold 36px Arial';
+      ctx.textAlign = 'center';
+      let text = '';
+      if (state.rhythmPhase === 0) text = '1';
+      else if (state.rhythmPhase === 1) text = '2';
+      else text = '划!';
+      ctx.fillText(text, 180, state.boatY - 100);
+      ctx.strokeStyle = '#FFF';
+      ctx.lineWidth = 2;
+      ctx.strokeText(text, 180, state.boatY - 100);
+    } else {
+      ctx.fillStyle = '#FFEB3B';
+      ctx.font = 'bold 42px Arial';
+      ctx.textAlign = 'center';
+      ctx.fillText('冲刺!', 180, state.boatY - 100);
+      ctx.strokeStyle = '#FF9800';
+      ctx.lineWidth = 2;
+      ctx.strokeText('冲刺!', 180, state.boatY - 100);
+    }
+  };
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 300, background: '#B2DFDB', opacity: visible ? 1 : 0, transition: 'opacity 0.4s', fontFamily: '"GuanKiapTsingKhai", serif', overflow: 'hidden' }}>
+      <canvas ref={canvasRef} width={360} height={640} style={{ width: '100%', height: '100%', touchAction: 'none' }} />
+
+      {/* Top Bar */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, zIndex: 10 }}>
+        <div onClick={onBack} style={{ width: 40, height: 40, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', cursor: 'pointer' }}>←</div>
+      </div>
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)', zIndex: 10, background: 'rgba(255,255,255,0.8)', padding: '8px 16px', borderRadius: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', border: '2px solid #D7CCC8', textAlign: 'center' }}>
+        <div style={{ fontSize: '1.3rem', color: '#5D4037', fontWeight: 'bold' }}>{formatTime(timeLeft)}</div>
+        <div style={{ fontSize: '0.75rem', color: '#795548', marginTop: 2 }}>距离终点还有 {Math.floor(distance)} 米</div>
+        <div style={{ width: '100%', height: 4, background: '#CCC', marginTop: 4, borderRadius: 2 }}>
+          <div style={{ width: `${100 - (distance / (stage * 1000)) * 100}%`, height: '100%', background: '#4CAF50', borderRadius: 2 }}></div>
+        </div>
+        <div style={{ fontSize: '0.85rem', color: '#D84315', marginTop: 4, fontWeight: 'bold' }}>
+          采集目标: {collectedCount} / {targetCount} 🌸
+        </div>
+      </div>
+
+      {/* Top Right Actions */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 15, display: 'flex', flexDirection: 'column', gap: '6px', zIndex: 20 }}>
+        <div onClick={(e) => { e.stopPropagation(); handleUploadChar1(); }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '5px 10px', borderRadius: 16, cursor: 'pointer', fontSize: '0.75rem', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+          更换角色1
+        </div>
+        <div onClick={(e) => { e.stopPropagation(); handleUploadChar2(); }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '5px 10px', borderRadius: 16, cursor: 'pointer', fontSize: '0.75rem', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+          更换角色2
+        </div>
+      </div>
+
+      {/* Controls */}
+      <div style={{ position: 'absolute', bottom: 60, left: 0, right: 0, height: 300, display: 'flex', justifyContent: 'space-between', zIndex: 10, pointerEvents: 'none' }}>
+        <div
+          style={{ width: '40%', height: '100%', background: 'linear-gradient(to right, rgba(255,255,255,0.3), transparent)', borderRadius: '0 50% 50% 0', display: 'flex', alignItems: 'center', paddingLeft: 20, pointerEvents: 'auto', cursor: 'pointer' }}
+          onPointerDown={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, rgba(255,255,255,0.6), transparent)'; handleLeftPress(); }}
+          onPointerUp={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, rgba(255,255,255,0.3), transparent)'; }}
+          onPointerCancel={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, rgba(255,255,255,0.3), transparent)'; }}
+        >
+          <span style={{ fontSize: '2rem', color: '#FFF', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>左</span>
+        </div>
+        <div
+          style={{ width: '40%', height: '100%', background: 'linear-gradient(to left, rgba(255,255,255,0.3), transparent)', borderRadius: '50% 0 0 50%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 20, pointerEvents: 'auto', cursor: 'pointer' }}
+          onPointerDown={(e) => { e.currentTarget.style.background = 'linear-gradient(to left, rgba(255,255,255,0.6), transparent)'; handleRightPress(); }}
+          onPointerUp={(e) => { e.currentTarget.style.background = 'linear-gradient(to left, rgba(255,255,255,0.3), transparent)'; }}
+          onPointerCancel={(e) => { e.currentTarget.style.background = 'linear-gradient(to left, rgba(255,255,255,0.3), transparent)'; }}
+        >
+          <span style={{ fontSize: '2rem', color: '#FFF', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>右</span>
+        </div>
+      </div>
+
+      <div style={{ position: 'absolute', bottom: 20, width: '100%', textAlign: 'center', color: '#5D4037', fontSize: '0.9rem', zIndex: 10 }}>
+        注意密探的划桨方向与节奏，相互合作划船
+      </div>
+
+      {/* Result Modal */}
+      {gameState === 'result' && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s' }}>
+          <div style={{ background: 'linear-gradient(135deg, #E0F7FA 0%, #FFFFFF 100%)', padding: '40px 30px', borderRadius: 20, textAlign: 'center', position: 'relative', width: '75%', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '4px solid #00ACC1' }}>
+            <h2 style={{ color: collectedCount >= targetCount ? '#00838F' : '#D32F2F', fontSize: '1.8rem', margin: '10px 0 20px 0' }}>
+              {collectedCount >= targetCount ? '抵达终点！' : '收集不足...'}
+            </h2>
+            <div style={{ fontSize: '1.2rem', color: '#006064', marginBottom: '10px' }}>第 {stage} 关耗时</div>
+            <div style={{ fontSize: '3rem', color: '#00ACC1', fontWeight: 'bold', marginBottom: '10px', textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>{formatTime(timeLeft)}</div>
+            <div style={{ fontSize: '1rem', color: '#5D4037', marginBottom: '30px' }}>采集数量: {collectedCount} / {targetCount}</div>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              {collectedCount >= targetCount ? (
+                <button onClick={() => {
+                  setStage(s => s + 1);
+                  setGameState('playing');
+                  setTimeLeft(0);
+                  setDistance((stage + 1) * 1000);
+                  setCollectedCount(0);
+                  stateRef.current.boatX = 0;
+                  stateRef.current.obstacles = [];
+                  stateRef.current.bubbles = [];
+                }} style={{ padding: '12px 30px', background: '#00ACC1', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>进入下一关</button>
+              ) : (
+                <button onClick={() => {
+                  setGameState('playing');
+                  setTimeLeft(0);
+                  setDistance(stage * 1000);
+                  setCollectedCount(0);
+                  stateRef.current.boatX = 0;
+                  stateRef.current.obstacles = [];
+                  stateRef.current.bubbles = [];
+                }} style={{ padding: '12px 30px', background: '#D32F2F', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>重新挑战</button>
+              )}
+              <button onClick={onBack} style={{ padding: '12px 30px', background: 'transparent', color: '#00838F', border: '2px solid #00838F', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer' }}>返回修武扬文</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// 音律训练 (七弦琴节奏乐谱小游戏)
+const MusicGamePage = ({ onBack }) => {
+  const { useState, useEffect, useRef } = React;
+  const [visible, setVisible] = useState(false);
+  const [gameState, setGameState] = useState('playing'); // playing, result
+  const [score, setScore] = useState(0);
+  const [combo, setCombo] = useState(0);
+  const [maxCombo, setMaxCombo] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(90);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [charActiveImg, setCharActiveImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZBfpqfCUKrQhgmskuNkQjoqNDoZBp1AACbTAAAkWI4FdlB3kVssU_RT0E.png");
+  const [charIdleImg, setCharIdleImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZBf5qfCUlu_rF2SXMMKEDRhr6Y-AURAACcTAAAkWI4FfMhYqZMQPPSz0E.png");
+
+  const canvasRef = useRef(null);
+  const fileRef = useRef(null);
+  const audioCtxRef = useRef(null);
+  const sourceRef = useRef(null);
+
+  const ASSETS = {
+    charActive: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZBfpqfCUKrQhgmskuNkQjoqNDoZBp1AACbTAAAkWI4FdlB3kVssU_RT0E.png',
+    charIdle: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZBf5qfCUlu_rF2SXMMKEDRhr6Y-AURAACcTAAAkWI4FfMhYqZMQPPSz0E.png',
+    track: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZBlFqfCdwJo1_pwKttP9AVrj-J4N5FwACyzAAAkWI4Fc5gxrmm9L-pz0E.png',
+    bg: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZBV9qfCBJnX2oEVFXleSW3sh8gLU4YQACwC8AAkWI4FdSbNnsiMQJzj0E.jpg',
+    noteTap: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZBghqfCVjYIBBH0nFo7ZD38jhiOgRBQACezAAAkWI4FfQIqnDpdzryD0E.png',
+    noteHold: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZBmJqfCfTgoPBnEp83lXgT4uflTXUbAAC3DAAAkWI4FemLowwdDyLRz0E.png',
+    scoreboard: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZBhJqfCWbz0Z0UNgyOu85dBrdbJ2shQAChTAAAkWI4FeoO3GX5HvNEz0E.png'
+  };
+
+  const imgsRef = useRef({});
+  const stateRef = useRef({
+    notes: [],
+    particles: [],
+    floatingTexts: [],
+    charActiveTimer: 0,
+    lastTime: 0,
+    spawnTimer: 0,
+    score: 0,
+    combo: 0,
+    maxCombo: 0,
+    perfectCount: 0,
+    greatCount: 0,
+    missCount: 0,
+    customMode: false,
+    startTime: 0,
+    audioDuration: 90
+  });
+
+  // Load default assets and stored custom avatars on mount
+  useEffect(() => {
+    // 1. First initialize with default assets
+    Object.entries(ASSETS).forEach(([key, src]) => {
+      const img = new Image();
+      img.src = src;
+      imgsRef.current[key] = img;
+    });
+
+    // 2. Load custom user settings if present in IndexedDB
+    if (window.settingsStore) {
+      window.settingsStore.getMusicGameCharActiveImage().then(img => {
+        if (img) {
+          setCharActiveImg(img);
+          const image = new Image();
+          image.onload = () => { imgsRef.current['charActive'] = image; };
+          image.src = img;
+          imgsRef.current['charActive'] = image;
+        }
+      });
+      window.settingsStore.getMusicGameCharIdleImage().then(img => {
+        if (img) {
+          setCharIdleImg(img);
+          const image = new Image();
+          image.onload = () => { imgsRef.current['charIdle'] = image; };
+          image.src = img;
+          imgsRef.current['charIdle'] = image;
+        }
+      });
+    }
+
+    requestAnimationFrame(() => setVisible(true));
+
+    const timer = setInterval(() => {
+      const state = stateRef.current;
+      if (state.customMode && audioCtxRef.current) {
+        const elapsed = audioCtxRef.current.currentTime - state.startTime;
+        const remaining = Math.max(0, Math.ceil(state.audioDuration - elapsed));
+        setTimeLeft(prev => {
+          if (remaining <= 0) setGameState('result');
+          return remaining;
+        });
+      } else {
+        setTimeLeft(t => {
+          if (t <= 1) {
+            clearInterval(timer);
+            setGameState('result');
+            return 0;
+          }
+          return t - 1;
+        });
+      }
+    }, 1000);
+
+    return () => {
+      clearInterval(timer);
+      if (sourceRef.current) {
+        try { sourceRef.current.stop(); } catch (e) {}
+      }
+    };
+  }, []);
+
+  // Init AudioContext on first user interaction
+  const initAudio = () => {
+    if (!audioCtxRef.current) {
+      audioCtxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    }
+    if (audioCtxRef.current.state === 'suspended') {
+      audioCtxRef.current.resume();
+    }
+  };
+
+  const playTone = (laneIndex) => {
+    initAudio();
+    const ctx = audioCtxRef.current;
+    if (!ctx) return;
+    const freqs = [261.63, 293.66, 329.63, 349.23, 392.00, 440.00, 493.88];
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(freqs[laneIndex] || 440, ctx.currentTime);
+    gain.gain.setValueAtTime(0.5, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.4);
+  };
+
+  const analyzeAudioToChart = (buffer) => {
+    const channelData = buffer.getChannelData(0);
+    const frameSize = Math.floor(buffer.sampleRate * 0.05);
+    let energies = [];
+    for (let i = 0; i < channelData.length; i += frameSize) {
+      let sum = 0;
+      for (let j = 0; j < frameSize && i + j < channelData.length; j++) sum += channelData[i + j] * channelData[i + j];
+      energies.push(Math.sqrt(sum / frameSize));
+    }
+    let notes = [];
+    const avgEnergy = energies.reduce((a, b) => a + b, 0) / energies.length;
+    const threshold = Math.max(0.01, avgEnergy * 1.5);
+    for (let i = 1; i < energies.length - 2; i++) {
+      if (energies[i] > threshold && energies[i] > energies[i - 1] && energies[i] > energies[i + 1]) {
+        const time = i * 0.05;
+        if (notes.length > 0 && time - notes[notes.length - 1].time < 0.25) continue;
+        const er = Math.min(1, energies[i] / (threshold * 3));
+        let lane = 3;
+        if (er > 0.8) lane = Math.random() > 0.5 ? 0 : 6;
+        else if (er > 0.6) lane = Math.random() > 0.5 ? 1 : 5;
+        else if (er > 0.4) lane = Math.random() > 0.5 ? 2 : 4;
+        const isHold = Math.random() > 0.8;
+        notes.push({ id: Math.random(), time, lane, type: isHold ? 'hold' : 'tap', length: isHold ? 180 : 0, hit: false, headHit: false, missed: false, isBeingHeld: false, x: -1000 });
+      }
+    }
+    return notes;
+  };
+
+  const handleFileUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setIsAnalyzing(true);
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      initAudio();
+      const ctx = audioCtxRef.current;
+      try {
+        const buffer = await ctx.decodeAudioData(ev.target.result);
+        const notes = analyzeAudioToChart(buffer);
+
+        if (sourceRef.current) {
+          sourceRef.current.stop();
+          sourceRef.current.disconnect();
+        }
+
+        const state = stateRef.current;
+        state.notes = notes;
+        state.customMode = true;
+        state.audioDuration = buffer.duration;
+        state.score = 0; state.combo = 0; state.maxCombo = 0; state.perfectCount = 0; state.greatCount = 0; state.missCount = 0;
+        state.particles = []; state.floatingTexts = [];
+        setScore(0); setCombo(0); setMaxCombo(0);
+
+        const source = ctx.createBufferSource();
+        source.buffer = buffer;
+        source.connect(ctx.destination);
+        source.start();
+        sourceRef.current = source;
+
+        state.startTime = ctx.currentTime;
+        setTimeLeft(Math.ceil(buffer.duration));
+        setGameState('playing');
+      } catch (err) {
+        alert('音频解析失败！');
+      }
+      setIsAnalyzing(false);
+    };
+    reader.readAsArrayBuffer(file);
+  };
+
+  // 更换角色（同时更换待机与弹奏动作）
+  const handleUploadCharBoth = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          setCharIdleImg(dataUrl);
+          setCharActiveImg(dataUrl);
+          const image = new Image();
+          image.onload = () => {
+            imgsRef.current['charIdle'] = image;
+            imgsRef.current['charActive'] = image;
+          };
+          image.src = dataUrl;
+          imgsRef.current['charIdle'] = image;
+          imgsRef.current['charActive'] = image;
+          stateRef.current.charActiveTimer = 0;
+          if (window.settingsStore) {
+            await window.settingsStore.setMusicGameCharIdleImage(dataUrl);
+            await window.settingsStore.setMusicGameCharActiveImage(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  // 单独更换弹奏动作（更换后自动预览2秒弹奏姿势）
+  const handleUploadCharActive = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          setCharActiveImg(dataUrl);
+          const image = new Image();
+          image.onload = () => {
+            imgsRef.current['charActive'] = image;
+          };
+          image.src = dataUrl;
+          imgsRef.current['charActive'] = image;
+          stateRef.current.charActiveTimer = 2500; // 自动预览2.5秒弹奏姿态
+          if (window.settingsStore) {
+            await window.settingsStore.setMusicGameCharActiveImage(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  // 单独更换待机动作
+  const handleUploadCharIdle = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          setCharIdleImg(dataUrl);
+          const image = new Image();
+          image.onload = () => {
+            imgsRef.current['charIdle'] = image;
+          };
+          image.src = dataUrl;
+          imgsRef.current['charIdle'] = image;
+          stateRef.current.charActiveTimer = 0; // 立即展示待机姿态
+          if (window.settingsStore) {
+            await window.settingsStore.setMusicGameCharIdleImage(dataUrl);
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  useEffect(() => {
+    if (gameState !== 'playing') return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    let reqId;
+
+    const loop = (time) => {
+      reqId = requestAnimationFrame(loop);
+      const state = stateRef.current;
+      if (!state.lastTime) state.lastTime = time;
+      const dt = (time - state.lastTime) / 1000;
+      state.lastTime = time;
+
+      // Clear
+      ctx.clearRect(0, 0, 360, 640);
+
+      const imgs = imgsRef.current;
+
+      // Draw BG
+      if (imgs.bg && imgs.bg.complete) {
+        ctx.drawImage(imgs.bg, 0, 0, 360, 640);
+      } else {
+        ctx.fillStyle = '#1A237E';
+        ctx.fillRect(0, 0, 360, 640);
+      }
+
+      // Draw Character (Active or Idle) with smart centering & aspect ratio
+      const isPlayingPose = state.charActiveTimer > 0;
+      if (state.charActiveTimer > 0) {
+        state.charActiveTimer -= dt * 1000;
+      }
+      const currImg = isPlayingPose ? imgs.charActive : imgs.charIdle;
+      if (currImg && (currImg.complete || currImg.naturalWidth)) {
+        const nw = currImg.naturalWidth || 120;
+        const nh = currImg.naturalHeight || 150;
+        const aspect = nw / nh;
+        const targetH = 160;
+        const targetW = targetH * aspect;
+        ctx.drawImage(currImg, 180 - targetW / 2, 305 - targetH, targetW, targetH);
+      }
+
+      // Draw Track (Guqin Zither)
+      if (imgs.track && imgs.track.complete) {
+        ctx.drawImage(imgs.track, 0, 320, 360, 320);
+      }
+
+      // Constants for lanes
+      const hitZoneX = 325;
+      const noteSpeed = 250; // pixels per second
+      const getLaneY = (idx) => 580 - idx * 37; // Bottom up
+
+      // Spawner in default mode
+      if (!state.customMode) {
+        state.spawnTimer -= dt * 1000;
+        if (state.spawnTimer <= 0) {
+          const lane = Math.floor(Math.random() * 7);
+          const isHold = Math.random() > 0.8;
+          state.notes.push({
+            id: Math.random(),
+            lane,
+            x: -50,
+            type: isHold ? 'hold' : 'tap',
+            length: isHold ? 180 : 0,
+            hit: false,
+            missed: false,
+            isBeingHeld: false
+          });
+          state.spawnTimer = 400 + Math.random() * 600;
+        }
+      } else if (state.customMode && audioCtxRef.current) {
+        // Custom audio mode note position synchronization
+        const curAudioTime = audioCtxRef.current.currentTime - state.startTime;
+        for (let note of state.notes) {
+          const timeDiff = note.time - curAudioTime;
+          note.x = hitZoneX - timeDiff * noteSpeed;
+        }
+      }
+
+      // Update & Draw Notes
+      for (let i = state.notes.length - 1; i >= 0; i--) {
+        const note = state.notes[i];
+        if (!state.customMode) {
+          note.x += noteSpeed * dt;
+        }
+
+        const laneY = getLaneY(note.lane);
+
+        // Draw Note
+        if (note.type === 'tap' && !note.hit) {
+          if (imgs.noteTap && imgs.noteTap.complete) {
+            ctx.drawImage(imgs.noteTap, note.x - 20, laneY - 20, 40, 40);
+          } else {
+            ctx.fillStyle = '#E53935';
+            ctx.beginPath(); ctx.arc(note.x, laneY, 20, 0, Math.PI * 2); ctx.fill();
+          }
+        } else if (note.type === 'hold') {
+          if (!note.hit) {
+            if (imgs.noteHold && imgs.noteHold.complete) {
+              if (note.isBeingHeld) {
+                ctx.shadowColor = '#FFF59D';
+                ctx.shadowBlur = 15;
+              }
+              ctx.drawImage(imgs.noteHold, note.x - 180, laneY - 20, 200, 40);
+              if (note.isBeingHeld) {
+                ctx.shadowBlur = 0;
+              }
+            } else {
+              ctx.fillStyle = 'rgba(229, 57, 53, 0.6)';
+              ctx.fillRect(note.x - note.length, laneY - 10, note.length, 20);
+              ctx.fillStyle = '#E53935';
+              ctx.beginPath(); ctx.arc(note.x, laneY, 20, 0, Math.PI * 2); ctx.fill();
+            }
+          }
+        }
+
+        // Miss detection
+        if (!note.hit && !note.missed) {
+          if (note.type === 'tap') {
+            if (note.x > hitZoneX + 40) {
+              note.missed = true;
+              note.hit = true;
+              state.combo = 0; setCombo(0);
+              state.missCount++;
+              state.floatingTexts.push({ text: '漏击', x: hitZoneX, y: laneY - 30, life: 1, color: '#9E9E9E' });
+            }
+          } else if (note.type === 'hold') {
+            if (!note.headHit && note.x > hitZoneX + 40) {
+              note.missed = true;
+              note.hit = true;
+              state.combo = 0; setCombo(0);
+              state.missCount++;
+              state.floatingTexts.push({ text: '漏击', x: hitZoneX, y: laneY - 30, life: 1, color: '#9E9E9E' });
+            }
+
+            if (note.isBeingHeld) {
+              if (Math.random() > 0.6) {
+                state.particles.push({
+                  x: hitZoneX, y: laneY,
+                  vx: (Math.random() - 0.5) * 100, vy: (Math.random() - 0.5) * 100,
+                  life: 0.5, color: '#FFF59D'
+                });
+              }
+              if (note.x - note.length > hitZoneX - 20) {
+                note.isBeingHeld = false;
+                note.hit = true;
+
+                let pts = 600;
+                const mult = 1 + Math.floor(state.combo / 10) * 0.1;
+                state.score += Math.floor(pts * mult);
+                state.combo += 1;
+                if (state.combo > state.maxCombo) state.maxCombo = state.combo;
+                setScore(state.score);
+                setCombo(state.combo);
+                setMaxCombo(state.maxCombo);
+
+                state.perfectCount++;
+                state.floatingTexts.push({ text: '完美', x: hitZoneX, y: laneY - 30, life: 1, color: '#FFCA28' });
+                playTone(note.lane);
+
+                for (let p = 0; p < 20; p++) {
+                  state.particles.push({ x: hitZoneX, y: laneY, vx: (Math.random() - 0.5) * 300, vy: (Math.random() - 0.5) * 300, life: 1, color: '#FFCA28' });
+                }
+              }
+            }
+          }
+        }
+      }
+
+      // Particles
+      for (let i = state.particles.length - 1; i >= 0; i--) {
+        const p = state.particles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= dt * 2;
+        if (p.life <= 0) {
+          state.particles.splice(i, 1);
+          continue;
+        }
+        ctx.globalAlpha = p.life;
+        ctx.fillStyle = p.color;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.globalAlpha = 1;
+      }
+
+      // Floating Texts
+      for (let i = state.floatingTexts.length - 1; i >= 0; i--) {
+        const ft = state.floatingTexts[i];
+        ft.y -= 20 * dt;
+        ft.life -= dt;
+        if (ft.life <= 0) {
+          state.floatingTexts.splice(i, 1);
+          continue;
+        }
+        ctx.globalAlpha = ft.life;
+        ctx.fillStyle = ft.color;
+        ctx.font = 'bold 24px "GuanKiapTsingKhai", serif';
+        ctx.textAlign = 'center';
+        const scale = 1 + Math.sin(ft.life * Math.PI) * 0.2;
+        ctx.save();
+        ctx.translate(ft.x, ft.y);
+        ctx.scale(scale, scale);
+        ctx.fillText(ft.text, 0, 0);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1;
+        ctx.strokeText(ft.text, 0, 0);
+        ctx.restore();
+        ctx.globalAlpha = 1;
+      }
+    };
+    reqId = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(reqId);
+  }, [gameState]);
+
+  const handlePointerDown = (e) => {
+    initAudio();
+    if (gameState !== 'playing') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
+    let clientY = 0;
+    if (e.touches && e.touches.length > 0) {
+      clientY = e.touches[0].clientY;
+    } else if (e.clientY) {
+      clientY = e.clientY;
+    } else {
+      return;
+    }
+
+    const y = (clientY - rect.top) * (canvas.height / rect.height);
+
+    let hitLane = -1;
+    for (let i = 0; i < 7; i++) {
+      const ly = 580 - i * 37;
+      if (Math.abs(y - ly) < 25) {
+        hitLane = i;
+        break;
+      }
+    }
+
+    if (hitLane === -1) return;
+
+    const hitZoneX = 325;
+    const state = stateRef.current;
+
+    let hitProcessed = false;
+    for (let note of state.notes) {
+      if (note.lane === hitLane && !note.hit && !note.missed) {
+        const dist = Math.abs(note.x - hitZoneX);
+        if (note.type === 'tap') {
+          if (dist < 50) {
+            note.hit = true;
+            hitProcessed = true;
+
+            let judgment = '';
+            let jColor = '';
+            let pts = 0;
+
+            if (dist < 20) {
+              judgment = '完美';
+              jColor = '#FFCA28';
+              pts = 1000;
+              state.perfectCount++;
+            } else {
+              judgment = '优秀';
+              jColor = '#29B6F6';
+              pts = 600;
+              state.greatCount++;
+            }
+
+            const mult = 1 + Math.floor(state.combo / 10) * 0.1;
+            state.score += Math.floor(pts * mult);
+            state.combo += 1;
+            if (state.combo > state.maxCombo) state.maxCombo = state.combo;
+            setScore(state.score);
+            setCombo(state.combo);
+            setMaxCombo(state.maxCombo);
+
+            state.charActiveTimer = 300;
+            playTone(hitLane);
+
+            state.floatingTexts.push({ text: judgment, x: hitZoneX, y: 580 - hitLane * 37 - 30, life: 1, color: jColor });
+            for (let p = 0; p < 15; p++) {
+              state.particles.push({ x: hitZoneX, y: 580 - hitLane * 37, vx: (Math.random() - 0.5) * 200, vy: (Math.random() - 0.5) * 200, life: 1, color: jColor });
+            }
+            break;
+          }
+        } else if (note.type === 'hold') {
+          if (!note.headHit && dist < 50) {
+            note.headHit = true;
+            note.isBeingHeld = true;
+            hitProcessed = true;
+
+            let pts = dist < 20 ? 400 : 200;
+            const mult = 1 + Math.floor(state.combo / 10) * 0.1;
+            state.score += Math.floor(pts * mult);
+            setScore(state.score);
+
+            state.charActiveTimer = 300;
+            playTone(hitLane);
+            break;
+          }
+        }
+      }
+    }
+
+    if (!hitProcessed) {
+      playTone(hitLane);
+      state.charActiveTimer = 200;
+    }
+  };
+
+  const handlePointerUp = (e) => {
+    if (gameState !== 'playing') return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+
+    let clientY = 0;
+    if (e.changedTouches && e.changedTouches.length > 0) {
+      clientY = e.changedTouches[0].clientY;
+    } else if (e.clientY) {
+      clientY = e.clientY;
+    } else {
+      clientY = -1000;
+    }
+
+    const y = (clientY - rect.top) * (canvas.height / rect.height);
+    let hitLane = -1;
+    for (let i = 0; i < 7; i++) {
+      const ly = 580 - i * 37;
+      if (Math.abs(y - ly) < 40) {
+        hitLane = i;
+        break;
+      }
+    }
+
+    const state = stateRef.current;
+    const hitZoneX = 325;
+    for (let note of state.notes) {
+      if (note.type === 'hold' && note.isBeingHeld && (hitLane === -1 || note.lane === hitLane)) {
+        note.isBeingHeld = false;
+        if (note.x - note.length < hitZoneX - 20) {
+          note.hit = true;
+          note.missed = true;
+          state.combo = 0; setCombo(0); state.missCount++;
+          state.floatingTexts.push({ text: '断触', x: hitZoneX, y: 580 - note.lane * 37 - 30, life: 1, color: '#9E9E9E' });
+        }
+      }
+    }
+  };
+
+  const formatTime = (secs) => {
+    const m = Math.floor(secs / 60);
+    const s = secs % 60;
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 300, background: '#000', opacity: visible ? 1 : 0, transition: 'opacity 0.4s', fontFamily: '"GuanKiapTsingKhai", serif', overflow: 'hidden' }}>
+      <canvas
+        ref={canvasRef}
+        width={360} height={640}
+        style={{ width: '100%', height: '100%', touchAction: 'none' }}
+        onPointerDown={handlePointerDown}
+        onPointerUp={handlePointerUp}
+        onPointerCancel={handlePointerUp}
+        onPointerOut={handlePointerUp}
+      />
+
+      {isAnalyzing && (
+        <div style={{ position: 'absolute', inset: 0, zIndex: 400, background: 'rgba(0,0,0,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FFCA28', fontSize: '1.5rem', fontWeight: 'bold' }}>
+          正在解析琴音律动与谱面...
+        </div>
+      )}
+
+      {/* Top Bar */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div onClick={onBack} style={{ width: 34, height: 34, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer' }}>←</div>
+        <div style={{ background: 'rgba(255,255,255,0.75)', padding: '4px 8px', borderRadius: 20, fontSize: '0.8rem', color: '#5D4037', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span>合奏·《新人特训》</span>
+        </div>
+
+        <div onClick={() => fileRef.current && fileRef.current.click()} style={{ background: '#FFCA28', padding: '4px 8px', borderRadius: 20, fontSize: '0.8rem', color: '#5D4037', cursor: 'pointer', fontWeight: 'bold', whiteSpace: 'nowrap' }}>
+          + 导入本地歌曲
+        </div>
+        <input type="file" ref={fileRef} accept="audio/*" style={{ display: 'none' }} onChange={handleFileUpload} />
+
+        <div style={{ background: 'rgba(255,255,255,0.75)', padding: '4px 6px', borderRadius: 20, fontSize: '0.8rem', color: '#5D4037' }}>
+          {formatTime(timeLeft)} 🎵
+        </div>
+      </div>
+
+      {/* Top Right Actions */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 12, display: 'flex', flexDirection: 'column', gap: '4px', zIndex: 20 }}>
+        <div onClick={(e) => { e.stopPropagation(); handleUploadCharBoth(); }} style={{ background: 'rgba(0,0,0,0.65)', color: '#FFD54F', padding: '4px 8px', borderRadius: 14, cursor: 'pointer', fontSize: '0.75rem', border: '1px solid rgba(255,213,79,0.5)', backdropFilter: 'blur(4px)', textAlign: 'center', whiteSpace: 'nowrap', fontWeight: 'bold' }}>
+          更换角色
+        </div>
+        <div style={{ display: 'flex', gap: '4px' }}>
+          <div onClick={(e) => { e.stopPropagation(); handleUploadCharIdle(); }} style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', padding: '3px 6px', borderRadius: 12, cursor: 'pointer', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(4px)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+            待机
+          </div>
+          <div onClick={(e) => { e.stopPropagation(); handleUploadCharActive(); }} style={{ background: 'rgba(0,0,0,0.55)', color: '#fff', padding: '3px 6px', borderRadius: 12, cursor: 'pointer', fontSize: '0.7rem', border: '1px solid rgba(255,255,255,0.25)', backdropFilter: 'blur(4px)', textAlign: 'center', whiteSpace: 'nowrap' }}>
+            弹奏
+          </div>
+        </div>
+      </div>
+
+      {/* Scoreboard Image overlay */}
+      <div style={{ position: 'absolute', top: 'max(65px, env(safe-area-inset-top) + 45px)', right: 10, width: 90, height: 110, zIndex: 10 }}>
+        <img src={ASSETS.scoreboard} style={{ width: '100%', height: '100%', objectFit: 'contain' }} alt="scoreboard" />
+        <div style={{ position: 'absolute', top: 26, width: '100%', textAlign: 'center', color: '#5D4037', fontSize: '1rem', fontWeight: 'bold' }}>
+          {maxCombo}
+        </div>
+        <div style={{ position: 'absolute', top: 68, width: '100%', textAlign: 'center', color: '#5D4037', fontSize: '1rem', fontWeight: 'bold' }}>
+          {score}
+        </div>
+      </div>
+
+      {/* Big Combo text */}
+      {combo > 1 && gameState === 'playing' && (
+        <div style={{ position: 'absolute', top: '40%', left: '50%', transform: 'translate(-50%, -50%)', zIndex: 15, pointerEvents: 'none', animation: 'pulse 0.3s' }}>
+          <div style={{ fontSize: '1.5rem', color: '#FFCA28', textAlign: 'center', textShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>连击</div>
+          <div style={{ fontSize: '3rem', color: '#FFF', fontWeight: 'bold', fontStyle: 'italic', textShadow: '0 2px 4px rgba(0,0,0,0.5)', marginTop: -10 }}>x{combo}</div>
+        </div>
+      )}
+
+      {/* Result Modal */}
+      {gameState === 'result' && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s' }}>
+          <div style={{ background: 'linear-gradient(135deg, #FFF3E0 0%, #FFFFFF 100%)', padding: '40px 30px', borderRadius: 20, textAlign: 'center', position: 'relative', width: '80%', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '4px solid #FFB300' }}>
+            <h2 style={{ color: '#E65100', fontSize: '1.8rem', margin: '10px 0 20px 0' }}>演奏结束</h2>
+
+            <div style={{ fontSize: '1.2rem', color: '#F57C00', marginBottom: '10px' }}>最终积分</div>
+            <div style={{ fontSize: '3rem', color: '#FF8F00', fontWeight: 'bold', marginBottom: '20px', textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>{score}</div>
+
+            <div style={{ fontSize: '1rem', color: '#5D4037', marginBottom: '10px' }}>最高连击: {maxCombo}</div>
+            <div style={{ display: 'flex', justifyContent: 'space-around', color: '#795548', fontSize: '0.9rem', marginBottom: '30px' }}>
+              <span>完美: {stateRef.current.perfectCount}</span>
+              <span>优秀: {stateRef.current.greatCount}</span>
+              <span>漏击: {stateRef.current.missCount}</span>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+              <button onClick={() => {
+                setGameState('playing');
+                setTimeLeft(90);
+                setScore(0);
+                setCombo(0);
+                setMaxCombo(0);
+                stateRef.current = {
+                  notes: [], particles: [], floatingTexts: [], charActiveTimer: 0, lastTime: 0, spawnTimer: 0, score: 0, combo: 0, maxCombo: 0, perfectCount: 0, greatCount: 0, missCount: 0, customMode: false, startTime: 0, audioDuration: 90
+                };
+              }} style={{ padding: '12px 30px', background: '#FF8F00', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>再演一次</button>
+              <button onClick={onBack} style={{ padding: '12px 30px', background: 'transparent', color: '#E65100', border: '2px solid #E65100', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer' }}>返回修武扬文</button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 // 修武扬文 - 主页面组件
 const T13TrainingPage = ({ onBack }) => {
   const { useState } = React;
   const [trainingPageNum, setTrainingPageNum] = useState(0);
   const [showJumpGame, setShowJumpGame] = useState(false);
+  const [showCujuGame, setShowCujuGame] = useState(false);
+  const [showArcheryGame, setShowArcheryGame] = useState(false);
+  const [showAgilityGame, setShowAgilityGame] = useState(false);
+  const [showRowingGame, setShowRowingGame] = useState(false);
+  const [showMusicGame, setShowMusicGame] = useState(false);
   const [tipMessage, setTipMessage] = useState(null);
 
   const showComingSoon = (name) => {
@@ -39086,7 +41826,7 @@ const T13TrainingPage = ({ onBack }) => {
               </div>
 
               <div
-                onClick={() => showComingSoon('蹴鞠训练')}
+                onClick={() => setShowCujuGame(true)}
                 style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
                 onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
                 onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -39100,7 +41840,7 @@ const T13TrainingPage = ({ onBack }) => {
               </div>
 
               <div
-                onClick={() => showComingSoon('射箭训练')}
+                onClick={() => setShowArcheryGame(true)}
                 style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
                 onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
                 onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -39114,7 +41854,7 @@ const T13TrainingPage = ({ onBack }) => {
               </div>
 
               <div
-                onClick={() => showComingSoon('敏捷训练')}
+                onClick={() => setShowAgilityGame(true)}
                 style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
                 onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
                 onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -39128,7 +41868,7 @@ const T13TrainingPage = ({ onBack }) => {
               </div>
 
               <div
-                onClick={() => showComingSoon('划船训练')}
+                onClick={() => setShowRowingGame(true)}
                 style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s' }}
                 onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
                 onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -39145,7 +41885,7 @@ const T13TrainingPage = ({ onBack }) => {
           {trainingPageNum === 1 && (
             <>
               <div
-                onClick={() => showComingSoon('音律训练')}
+                onClick={() => setShowMusicGame(true)}
                 style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s' }}
                 onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
                 onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -39180,6 +41920,31 @@ const T13TrainingPage = ({ onBack }) => {
       {/* 木桩训练小游戏 */}
       {showJumpGame && (
         <JumpGamePage onBack={() => setShowJumpGame(false)} />
+      )}
+
+      {/* 蹴鞠训练小游戏 */}
+      {showCujuGame && (
+        <CujuGamePage onBack={() => setShowCujuGame(false)} />
+      )}
+
+      {/* 射箭训练小游戏 */}
+      {showArcheryGame && (
+        <ArcheryGamePage onBack={() => setShowArcheryGame(false)} />
+      )}
+
+      {/* 敏捷训练小游戏 */}
+      {showAgilityGame && (
+        <AgilityGamePage onBack={() => setShowAgilityGame(false)} />
+      )}
+
+      {/* 划船训练小游戏 */}
+      {showRowingGame && (
+        <RowingGamePage onBack={() => setShowRowingGame(false)} />
+      )}
+
+      {/* 音律训练小游戏 */}
+      {showMusicGame && (
+        <MusicGamePage onBack={() => setShowMusicGame(false)} />
       )}
     </div>
   );
