@@ -539,6 +539,150 @@
           });
         },
 
+        // 获取射箭训练角色3(有毒)图片
+        getArcheryGameChar3Image: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("archerygame_char3_image");
+            request.onsuccess = () => resolve(request.result?.value || "");
+            request.onerror = () => reject("获取射箭训练角色3图片失败");
+          });
+        },
+
+        // 设置射箭训练角色3(有毒)图片
+        setArcheryGameChar3Image: async (imageData) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "archerygame_char3_image", value: imageData });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存射箭训练角色3图片失败");
+          });
+        },
+
+        // 获取射箭训练角色4(爆炸)图片
+        getArcheryGameChar4Image: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("archerygame_char4_image");
+            request.onsuccess = () => resolve(request.result?.value || "");
+            request.onerror = () => reject("获取射箭训练角色4图片失败");
+          });
+        },
+
+        // 设置射箭训练角色4(爆炸)图片
+        setArcheryGameChar4Image: async (imageData) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "archerygame_char4_image", value: imageData });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存射箭训练角色4图片失败");
+          });
+        },
+
+        // 获取敏捷训练角色1(普通)正常态图片
+        getAgilityGameThief1IdleImage: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("agilitygame_thief1_idle_image");
+            request.onsuccess = () => resolve(request.result?.value || "");
+            request.onerror = () => reject("获取敏捷训练角色1正常态图片失败");
+          });
+        },
+
+        // 设置敏捷训练角色1(普通)正常态图片
+        setAgilityGameThief1IdleImage: async (imageData) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "agilitygame_thief1_idle_image", value: imageData });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存敏捷训练角色1正常态图片失败");
+          });
+        },
+
+        // 获取敏捷训练角色1(普通)击中态图片
+        getAgilityGameThief1HitImage: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("agilitygame_thief1_hit_image");
+            request.onsuccess = () => resolve(request.result?.value || "");
+            request.onerror = () => reject("获取敏捷训练角色1击中态图片失败");
+          });
+        },
+
+        // 设置敏捷训练角色1(普通)击中态图片
+        setAgilityGameThief1HitImage: async (imageData) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "agilitygame_thief1_hit_image", value: imageData });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存敏捷训练角色1击中态图片失败");
+          });
+        },
+
+        // 获取敏捷训练角色2(特殊)正常态图片
+        getAgilityGameThief2IdleImage: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("agilitygame_thief2_idle_image");
+            request.onsuccess = () => resolve(request.result?.value || "");
+            request.onerror = () => reject("获取敏捷训练角色2正常态图片失败");
+          });
+        },
+
+        // 设置敏捷训练角色2(特殊)正常态图片
+        setAgilityGameThief2IdleImage: async (imageData) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "agilitygame_thief2_idle_image", value: imageData });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存敏捷训练角色2正常态图片失败");
+          });
+        },
+
+        // 获取敏捷训练角色2(特殊)击中态图片
+        getAgilityGameThief2HitImage: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("agilitygame_thief2_hit_image");
+            request.onsuccess = () => resolve(request.result?.value || "");
+            request.onerror = () => reject("获取敏捷训练角色2击中态图片失败");
+          });
+        },
+
+        // 设置敏捷训练角色2(特殊)击中态图片
+        setAgilityGameThief2HitImage: async (imageData) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "agilitygame_thief2_hit_image", value: imageData });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存敏捷训练角色2击中态图片失败");
+          });
+        },
+
         // 获取划船训练角色1头像
         getRowingGameChar1Image: async () => {
           const db = await openDB();

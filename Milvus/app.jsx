@@ -38988,7 +38988,7 @@ const JumpGamePage = ({ onBack }) => {
               border: '2px solid rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center',
               fontSize: 12, color: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
             }}>
-              {i + 1 < stage ? '✓' : (i + 1 === stage ? <img src="https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ClqevymgmdqN8oAAbGwXpbrH5vAQ2cAArMnAAJrJthXTWQDSRPv8eA9BA.png" style={{ width: 20, height: 20, objectFit: 'cover', borderRadius: '50%' }} /> : '💰')}
+              {i + 1 < stage ? '✓' : (i + 1 === stage ? <img src={charImg} style={{ width: 20, height: 20, objectFit: 'cover', borderRadius: '50%' }} /> : '💰')}
             </div>
           </div>
         ))}
@@ -39497,10 +39497,14 @@ const ArcheryGamePage = ({ onBack }) => {
   const [timeLeft, setTimeLeft] = useState(60);
   const [score, setScore] = useState(0);
   const [stage, setStage] = useState(1);
+  const [lives, setLives] = useState(3);
   const targetScore = stage * 30 + 20;
   const [gameState, setGameState] = useState('playing'); // playing, result
-  const [char1Img, setChar1Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-iVqeyuuPP-viWLmeWFK7gxHr9FkbAACMSoAAmsm2Fe_FOX9k1u1Dz0E.png");
-  const [char2Img, setChar2Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ihqeyvVK_wNnLFsi6ZeuvfcYtDGFgACNCoAAmsm2FeJMbyGDdEl0D0E.png");
+  const [showCharModal, setShowCharModal] = useState(false);
+  const [char1Img, setChar1Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOZFqgEELK_9KjEfY9YRFQpcjY3ImbQAC4h4AArHjCFSz5XgbljLw0T0E.png");
+  const [char2Img, setChar2Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOYRqgEC1Mz_OffMtgithgxQBrCvDXwAC1R4AArHjCFTKnROMk9dJ3j0E.png");
+  const [char3Img, setChar3Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOc1qgEYMdvN4UQMZ0fq8fm4o-qcZUQACLB8AArHjCFQBJZ0wFAt2Sz0E.png");
+  const [char4Img, setChar4Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOe9qgEdiyeBcl7SCD3yQWGweP9GZlAACUx8AArHjCFR2Yi9teAZBIT0E.png");
   const canvasRef = useRef(null);
 
   const stateRef = useRef({
@@ -39511,49 +39515,81 @@ const ArcheryGamePage = ({ onBack }) => {
     lastTime: 0,
     spawnTimer: 0,
     score: 0,
+    lives: 3,
     bowAngle: 0
   });
 
   const ASSETS = {
     bg: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-jRqeyxqS4HdK8t-iId66j-sU9SyEgACQSoAAmsm2FeUj9XVer1neD0E.png',
     bow: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ixqeywHpPJuoDvPoHB6oTpy8ktzgwACOSoAAmsm2FcvPG8BrgRrDT0E.png',
-    arrow: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-rFqezZ6rvDJDNgxujr6RJx-4ltXlwAC3CoAAmsm2FfwyjTogRXkGD0E.png',
-    normal: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-iVqeyuuPP-viWLmeWFK7gxHr9FkbAACMSoAAmsm2Fe_FOX9k1u1Dz0E.png',
-    special: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ihqeyvVK_wNnLFsi6ZeuvfcYtDGFgACNCoAAmsm2FeJMbyGDdEl0D0E.png'
+    arrow: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOX9qgECM8Ho4bb64IGg_loeCXOR5sAACzx4AArHjCFTMeMyn_0-XgT0E.png',
+    normal: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOZFqgEELK_9KjEfY9YRFQpcjY3ImbQAC4h4AArHjCFSz5XgbljLw0T0E.png',
+    special: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOYRqgEC1Mz_OffMtgithgxQBrCvDXwAC1R4AArHjCFTKnROMk9dJ3j0E.png',
+    poison: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOc1qgEYMdvN4UQMZ0fq8fm4o-qcZUQACLB8AArHjCFQBJZ0wFAt2Sz0E.png',
+    bomb: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOe9qgEdiyeBcl7SCD3yQWGweP9GZlAACUx8AArHjCFR2Yi9teAZBIT0E.png'
   };
 
   const imgsRef = useRef({});
 
   useEffect(() => {
-    if (window.settingsStore) {
-      window.settingsStore.getArcheryGameChar1Image().then(img => {
-        if (img) {
-          setChar1Img(img);
-          const image = new Image();
-          image.src = img;
-          imgsRef.current['normal'] = image;
-        }
-      });
-      window.settingsStore.getArcheryGameChar2Image().then(img => {
-        if (img) {
-          setChar2Img(img);
-          const image = new Image();
-          image.src = img;
-          imgsRef.current['special'] = image;
-        }
-      });
-    }
-    requestAnimationFrame(() => setVisible(true));
-
-    // Load assets
+    // 1. Load default assets
     Object.entries(ASSETS).forEach(([key, src]) => {
       const img = new Image();
       img.src = src;
       imgsRef.current[key] = img;
     });
+
+    // 2. Load custom user settings if present
+    if (window.settingsStore) {
+      if (window.settingsStore.getArcheryGameChar1Image) {
+        window.settingsStore.getArcheryGameChar1Image().then(img => {
+          if (img) {
+            setChar1Img(img);
+            const image = new Image();
+            image.onload = () => { imgsRef.current['normal'] = image; };
+            image.src = img;
+            imgsRef.current['normal'] = image;
+          }
+        });
+      }
+      if (window.settingsStore.getArcheryGameChar2Image) {
+        window.settingsStore.getArcheryGameChar2Image().then(img => {
+          if (img) {
+            setChar2Img(img);
+            const image = new Image();
+            image.onload = () => { imgsRef.current['special'] = image; };
+            image.src = img;
+            imgsRef.current['special'] = image;
+          }
+        });
+      }
+      if (window.settingsStore.getArcheryGameChar3Image) {
+        window.settingsStore.getArcheryGameChar3Image().then(img => {
+          if (img) {
+            setChar3Img(img);
+            const image = new Image();
+            image.onload = () => { imgsRef.current['poison'] = image; };
+            image.src = img;
+            imgsRef.current['poison'] = image;
+          }
+        });
+      }
+      if (window.settingsStore.getArcheryGameChar4Image) {
+        window.settingsStore.getArcheryGameChar4Image().then(img => {
+          if (img) {
+            setChar4Img(img);
+            const image = new Image();
+            image.onload = () => { imgsRef.current['bomb'] = image; };
+            image.src = img;
+            imgsRef.current['bomb'] = image;
+          }
+        });
+      }
+    }
+    requestAnimationFrame(() => setVisible(true));
   }, []);
 
-  const handleUploadChar1 = () => {
+  const handleUploadChar = (type) => {
     const input = document.createElement("input");
     input.type = "file";
     input.accept = "image/*";
@@ -39563,12 +39599,30 @@ const ArcheryGamePage = ({ onBack }) => {
         const reader = new FileReader();
         reader.onload = async (e2) => {
           const dataUrl = e2.target.result;
-          setChar1Img(dataUrl);
           const image = new Image();
           image.src = dataUrl;
-          imgsRef.current['normal'] = image;
-          if (window.settingsStore) {
-            await window.settingsStore.setArcheryGameChar1Image(dataUrl);
+          imgsRef.current[type] = image;
+
+          if (type === 'normal') {
+            setChar1Img(dataUrl);
+            if (window.settingsStore?.setArcheryGameChar1Image) {
+              await window.settingsStore.setArcheryGameChar1Image(dataUrl);
+            }
+          } else if (type === 'special') {
+            setChar2Img(dataUrl);
+            if (window.settingsStore?.setArcheryGameChar2Image) {
+              await window.settingsStore.setArcheryGameChar2Image(dataUrl);
+            }
+          } else if (type === 'poison') {
+            setChar3Img(dataUrl);
+            if (window.settingsStore?.setArcheryGameChar3Image) {
+              await window.settingsStore.setArcheryGameChar3Image(dataUrl);
+            }
+          } else if (type === 'bomb') {
+            setChar4Img(dataUrl);
+            if (window.settingsStore?.setArcheryGameChar4Image) {
+              await window.settingsStore.setArcheryGameChar4Image(dataUrl);
+            }
           }
         };
         reader.readAsDataURL(file);
@@ -39577,28 +39631,33 @@ const ArcheryGamePage = ({ onBack }) => {
     input.click();
   };
 
-  const handleUploadChar2 = () => {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = "image/*";
-    input.onchange = (e) => {
-      const file = e.target.files[0];
-      if (file) {
-        const reader = new FileReader();
-        reader.onload = async (e2) => {
-          const dataUrl = e2.target.result;
-          setChar2Img(dataUrl);
-          const image = new Image();
-          image.src = dataUrl;
-          imgsRef.current['special'] = image;
-          if (window.settingsStore) {
-            await window.settingsStore.setArcheryGameChar2Image(dataUrl);
-          }
-        };
-        reader.readAsDataURL(file);
+  const handleResetChar = async (type) => {
+    const defaultSrc = ASSETS[type];
+    const image = new Image();
+    image.src = defaultSrc;
+    imgsRef.current[type] = image;
+
+    if (type === 'normal') {
+      setChar1Img(defaultSrc);
+      if (window.settingsStore?.setArcheryGameChar1Image) {
+        await window.settingsStore.setArcheryGameChar1Image("");
       }
-    };
-    input.click();
+    } else if (type === 'special') {
+      setChar2Img(defaultSrc);
+      if (window.settingsStore?.setArcheryGameChar2Image) {
+        await window.settingsStore.setArcheryGameChar2Image("");
+      }
+    } else if (type === 'poison') {
+      setChar3Img(defaultSrc);
+      if (window.settingsStore?.setArcheryGameChar3Image) {
+        await window.settingsStore.setArcheryGameChar3Image("");
+      }
+    } else if (type === 'bomb') {
+      setChar4Img(defaultSrc);
+      if (window.settingsStore?.setArcheryGameChar4Image) {
+        await window.settingsStore.setArcheryGameChar4Image("");
+      }
+    }
   };
 
   // Game Loop
@@ -39643,10 +39702,19 @@ const ArcheryGamePage = ({ onBack }) => {
   const update = (dt) => {
     const state = stateRef.current;
 
-    // Spawn Ninjas
+    // Spawn Ninjas / Targets
     state.spawnTimer -= dt;
     if (state.spawnTimer <= 0) {
-      const isSpecial = Math.random() < 0.2;
+      const rand = Math.random();
+      let type = 'normal';
+      if (rand < 0.18) {
+        type = 'special';
+      } else if (rand < 0.35) {
+        type = 'poison';
+      } else if (rand < 0.47) {
+        type = 'bomb';
+      }
+
       // spawn top or sides
       let x, y, vx, vy;
       const side = Math.floor(Math.random() * 3);
@@ -39672,14 +39740,14 @@ const ArcheryGamePage = ({ onBack }) => {
 
       state.ninjas.push({
         id: Math.random(),
-        type: isSpecial ? 'special' : 'normal',
+        type,
         x, y,
         vx: vx * speedMult, vy: vy * speedMult,
         width: 80, height: 110
       });
 
-      // Ensure enough ninjas spawn to meet the target score with a 40% margin
-      const requiredSpawns = (stage * 30 + 20) * 1.4;
+      // Ensure enough ninjas spawn to meet the target score with a 60% margin
+      const requiredSpawns = (stage * 30 + 20) * 1.6;
       const avgInterval = 60 / requiredSpawns;
       state.spawnTimer = avgInterval * (0.6 + Math.random() * 0.8);
       if (state.spawnTimer < 0.05) state.spawnTimer = 0.05;
@@ -39712,31 +39780,175 @@ const ArcheryGamePage = ({ onBack }) => {
         const dy = a.y - n.y;
         if (Math.sqrt(dx * dx + dy * dy) < 45) {
           // HIT!
-          const points = n.type === 'special' ? 3 : 1;
-          setScore(s => {
-            const newScore = s + points;
-            state.score = newScore;
-            return newScore;
-          });
+          if (n.type === 'bomb') {
+            // HIT BOMB: Trigger explosive detonation across all targets currently on screen!
+            for (let k = 0; k < 25; k++) {
+              state.particles.push({
+                x: n.x, y: n.y,
+                vx: (Math.random() - 0.5) * 350,
+                vy: (Math.random() - 0.5) * 350,
+                life: 1.0,
+                radius: 14 + Math.random() * 20,
+                color: Math.random() < 0.5 ? '#ff5722' : '#ffeb3b'
+              });
+            }
+            state.popups.push({
+              x: n.x, y: n.y - 25,
+              text: '💥 全屏引爆!',
+              color: '#ff3d00',
+              life: 1.4
+            });
 
-          // Add particles (smoke)
-          for (let k = 0; k < 12; k++) {
-            state.particles.push({
-              x: n.x, y: n.y,
-              vx: (Math.random() - 0.5) * 200,
-              vy: (Math.random() - 0.5) * 200,
-              life: 1.0,
-              radius: 10 + Math.random() * 15
+            let pointsGained = 0;
+            let livesLost = 0;
+
+            for (const target of state.ninjas) {
+              if (target === n) continue;
+
+              if (target.type === 'poison') {
+                livesLost += 1;
+                for (let k = 0; k < 12; k++) {
+                  state.particles.push({
+                    x: target.x, y: target.y,
+                    vx: (Math.random() - 0.5) * 200,
+                    vy: (Math.random() - 0.5) * 200,
+                    life: 1.0,
+                    radius: 10 + Math.random() * 15,
+                    color: '#ab47bc'
+                  });
+                }
+                state.popups.push({
+                  x: target.x, y: target.y - 20,
+                  text: '-1 ❤',
+                  color: '#e53935',
+                  life: 1.2
+                });
+              } else if (target.type === 'special') {
+                pointsGained += 3;
+                for (let k = 0; k < 10; k++) {
+                  state.particles.push({
+                    x: target.x, y: target.y,
+                    vx: (Math.random() - 0.5) * 180,
+                    vy: (Math.random() - 0.5) * 180,
+                    life: 1.0,
+                    radius: 8 + Math.random() * 12,
+                    color: '#a5d6a7'
+                  });
+                }
+                state.popups.push({
+                  x: target.x, y: target.y - 20,
+                  text: '+3',
+                  color: '#4CAF50',
+                  life: 1.0
+                });
+              } else if (target.type === 'normal') {
+                pointsGained += 1;
+                for (let k = 0; k < 10; k++) {
+                  state.particles.push({
+                    x: target.x, y: target.y,
+                    vx: (Math.random() - 0.5) * 180,
+                    vy: (Math.random() - 0.5) * 180,
+                    life: 1.0,
+                    radius: 8 + Math.random() * 12,
+                    color: '#ffcc80'
+                  });
+                }
+                state.popups.push({
+                  x: target.x, y: target.y - 20,
+                  text: '+1',
+                  color: '#FF9800',
+                  life: 1.0
+                });
+              } else if (target.type === 'bomb') {
+                for (let k = 0; k < 15; k++) {
+                  state.particles.push({
+                    x: target.x, y: target.y,
+                    vx: (Math.random() - 0.5) * 250,
+                    vy: (Math.random() - 0.5) * 250,
+                    life: 1.0,
+                    radius: 12 + Math.random() * 15,
+                    color: '#ff5722'
+                  });
+                }
+              }
+            }
+
+            if (livesLost > 0) {
+              const newLives = Math.max(0, state.lives - livesLost);
+              state.lives = newLives;
+              setLives(newLives);
+              if (newLives <= 0) {
+                setGameState('result');
+              }
+            }
+
+            if (pointsGained > 0) {
+              setScore(s => {
+                const newScore = s + pointsGained;
+                state.score = newScore;
+                return newScore;
+              });
+            }
+
+            state.ninjas = [];
+            state.arrows.splice(i, 1);
+            break;
+          } else if (n.type === 'poison') {
+            // Hit poison target: lose 1 life!
+            const newLives = Math.max(0, state.lives - 1);
+            state.lives = newLives;
+            setLives(newLives);
+            if (newLives <= 0) {
+              setGameState('result');
+            }
+
+            // Toxic particle effect (purple/magenta smoke)
+            for (let k = 0; k < 16; k++) {
+              state.particles.push({
+                x: n.x, y: n.y,
+                vx: (Math.random() - 0.5) * 220,
+                vy: (Math.random() - 0.5) * 220,
+                life: 1.0,
+                radius: 12 + Math.random() * 16,
+                color: '#ab47bc'
+              });
+            }
+
+            // Add popup text
+            state.popups.push({
+              x: n.x, y: n.y - 20,
+              text: '-1 ❤',
+              color: '#e53935',
+              life: 1.2
+            });
+          } else {
+            const points = n.type === 'special' ? 3 : 1;
+            setScore(s => {
+              const newScore = s + points;
+              state.score = newScore;
+              return newScore;
+            });
+
+            // Add particles (smoke)
+            for (let k = 0; k < 12; k++) {
+              state.particles.push({
+                x: n.x, y: n.y,
+                vx: (Math.random() - 0.5) * 200,
+                vy: (Math.random() - 0.5) * 200,
+                life: 1.0,
+                radius: 10 + Math.random() * 15,
+                color: n.type === 'special' ? '#a5d6a7' : '#ffcc80'
+              });
+            }
+
+            // Add popup text
+            state.popups.push({
+              x: n.x, y: n.y - 20,
+              text: '+' + points,
+              color: points === 3 ? '#4CAF50' : '#FF9800',
+              life: 1.0
             });
           }
-
-          // Add popup text
-          state.popups.push({
-            x: n.x, y: n.y - 20,
-            text: '+' + points,
-            color: points === 3 ? '#4CAF50' : '#FF9800',
-            life: 1.0
-          });
 
           state.ninjas.splice(j, 1);
           state.arrows.splice(i, 1);
@@ -39778,7 +39990,7 @@ const ArcheryGamePage = ({ onBack }) => {
       ctx.fillRect(0, 0, 360, 640);
     }
 
-    // Ninjas
+    // Ninjas / Targets
     for (const n of state.ninjas) {
       const img = imgs[n.type];
       if (img && img.complete && img.naturalWidth && img.naturalHeight) {
@@ -39794,18 +40006,20 @@ const ArcheryGamePage = ({ onBack }) => {
       } else if (img && img.complete) {
         ctx.drawImage(img, n.x - n.width / 2, n.y - n.height / 2, n.width, n.height);
       } else {
-        ctx.fillStyle = n.type === 'special' ? 'green' : 'black';
+        ctx.fillStyle = n.type === 'special' ? '#4CAF50' : n.type === 'poison' ? '#9C27B0' : n.type === 'bomb' ? '#FF5722' : '#212121';
         ctx.fillRect(n.x - 20, n.y - 20, 40, 40);
       }
     }
 
     // Particles
     for (const p of state.particles) {
-      ctx.fillStyle = `rgba(255, 255, 255, ${p.life})`;
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color || '#fff';
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
       ctx.fill();
     }
+    ctx.globalAlpha = 1.0;
 
     // Bow (bottom center)
     const bowX = 180;
@@ -39916,13 +40130,31 @@ const ArcheryGamePage = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Top Right Actions */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 15, display: 'flex', gap: '8px', zIndex: 20 }}>
-        <div onClick={(e) => { e.stopPropagation(); handleUploadChar1(); }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)' }}>
-          更换角色1
-        </div>
-        <div onClick={(e) => { e.stopPropagation(); handleUploadChar2(); }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)' }}>
-          更换角色2
+      {/* Top Right Action Button */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 15, zIndex: 20 }}>
+        <div
+          onClick={(e) => {
+            e.stopPropagation();
+            setShowCharModal(true);
+          }}
+          style={{
+            background: 'rgba(30, 20, 10, 0.65)',
+            color: '#FFE082',
+            padding: '7px 14px',
+            borderRadius: 20,
+            cursor: 'pointer',
+            fontSize: '0.85rem',
+            border: '1px solid rgba(255, 224, 130, 0.4)',
+            backdropFilter: 'blur(8px)',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            fontWeight: 'bold',
+            userSelect: 'none'
+          }}
+        >
+          <span>🎯</span> 更换角色
         </div>
       </div>
 
@@ -39937,6 +40169,11 @@ const ArcheryGamePage = ({ onBack }) => {
             <span style={{ color: '#5D4037', fontSize: '0.9rem' }}>当前积分:</span>
             <span style={{ color: '#D84315', fontSize: '1.2rem', fontWeight: 'bold' }}>{score}</span>
           </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', marginTop: 2 }}>
+            {[...Array(3)].map((_, i) => (
+              <span key={i} style={{ fontSize: '1.1rem', filter: i < lives ? 'none' : 'grayscale(100%)', opacity: i < lives ? 1 : 0.35, transition: 'all 0.3s' }}>❤️</span>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -39945,19 +40182,22 @@ const ArcheryGamePage = ({ onBack }) => {
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s' }}>
           <div style={{ background: 'linear-gradient(135deg, #F5E6C8 0%, #FFFFFF 100%)', padding: '40px 30px', borderRadius: 20, textAlign: 'center', position: 'relative', width: '75%', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '4px solid #8D6E63' }}>
 
-            <h2 style={{ color: score >= targetScore ? '#D84315' : '#3E2723', fontSize: '1.8rem', margin: '10px 0 20px 0' }}>
-              {score >= targetScore ? '挑战成功' : '挑战失败'}
+            <h2 style={{ color: score >= targetScore && lives > 0 ? '#D84315' : '#3E2723', fontSize: '1.8rem', margin: '10px 0 20px 0' }}>
+              {lives <= 0 ? '生命耗尽' : (score >= targetScore ? '挑战成功' : '挑战失败')}
             </h2>
             <div style={{ fontSize: '1.2rem', color: '#5D4037', marginBottom: '10px' }}>本次击落总分 (目标:{targetScore})</div>
-            <div style={{ fontSize: '3rem', color: '#D84315', fontWeight: 'bold', marginBottom: '30px', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{score}</div>
+            <div style={{ fontSize: '3rem', color: '#D84315', fontWeight: 'bold', marginBottom: '10px', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{score}</div>
+            <div style={{ fontSize: '1rem', color: '#5D4037', marginBottom: '25px' }}>剩余生命: {lives} / 3</div>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-              {score >= targetScore ? (
+              {score >= targetScore && lives > 0 ? (
                 <button onClick={() => {
                   setStage(s => s + 1);
                   setGameState('playing');
                   setTimeLeft(60);
                   setScore(0);
+                  setLives(3);
+                  stateRef.current.lives = 3;
                   stateRef.current.ninjas = [];
                   stateRef.current.arrows = [];
                   stateRef.current.particles = [];
@@ -39968,6 +40208,8 @@ const ArcheryGamePage = ({ onBack }) => {
                   setGameState('playing');
                   setTimeLeft(60);
                   setScore(0);
+                  setLives(3);
+                  stateRef.current.lives = 3;
                   stateRef.current.ninjas = [];
                   stateRef.current.arrows = [];
                   stateRef.current.particles = [];
@@ -39976,6 +40218,178 @@ const ArcheryGamePage = ({ onBack }) => {
               )}
 
               <button onClick={onBack} style={{ padding: '12px 30px', background: 'transparent', color: '#795548', border: '2px solid #795548', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer' }}>返回修武扬文</button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Bottom Sheet Drawer for Role Management */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.55)',
+            zIndex: 350,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+            animation: 'fadeIn 0.25s ease-out'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5E8D2 100%)',
+              borderRadius: '24px 24px 0 0',
+              padding: '18px 16px max(24px, env(safe-area-inset-bottom)) 16px',
+              boxShadow: '0 -8px 24px rgba(0,0,0,0.35)',
+              borderTop: '3px solid #C49C58',
+              maxHeight: '82%',
+              overflowY: 'auto',
+              animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}
+          >
+            {/* Drag Bar & Header */}
+            <div style={{ width: 36, height: 4, background: '#D7CCC8', borderRadius: 2, margin: '0 auto 10px auto' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>🎯</span> 箭靶角色查看与更换
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#8D6E63', marginTop: 2 }}>
+                  点击各角色卡片可自定义更换游戏中的立绘图片
+                </div>
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: '50%',
+                  background: 'rgba(78, 52, 46, 0.1)',
+                  color: '#5D4037',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  fontWeight: 'bold'
+                }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {/* Grid of 4 Roles */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              {/* Role 1: 普通 */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#FFF3E0', color: '#E65100', border: '1px solid #FFE0B2', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+                  普通 (+1分)
+                </div>
+                <div style={{ width: 64, height: 76, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                  <img src={char1Img} alt="普通" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>普通箭靶</div>
+                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
+                  <button
+                    onClick={() => handleUploadChar('normal')}
+                    style={{ flex: 1, padding: '5px 0', background: '#D84315', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    更换立绘
+                  </button>
+                  {char1Img !== ASSETS.normal && (
+                    <button
+                      onClick={() => handleResetChar('normal')}
+                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
+                    >
+                      重置
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Role 2: 特殊 */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#E8F5E9', color: '#2E7D32', border: '1px solid #C8E6C9', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+                  特殊 (+3分)
+                </div>
+                <div style={{ width: 64, height: 76, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                  <img src={char2Img} alt="特殊" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>特殊箭靶</div>
+                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
+                  <button
+                    onClick={() => handleUploadChar('special')}
+                    style={{ flex: 1, padding: '5px 0', background: '#388E3C', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    更换立绘
+                  </button>
+                  {char2Img !== ASSETS.special && (
+                    <button
+                      onClick={() => handleResetChar('special')}
+                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
+                    >
+                      重置
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Role 3: 有毒 */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#F3E5F5', color: '#7B1FA2', border: '1px solid #E1BEE7', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+                  有毒 (-1生命)
+                </div>
+                <div style={{ width: 64, height: 76, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                  <img src={char3Img} alt="有毒" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>有毒箭靶</div>
+                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
+                  <button
+                    onClick={() => handleUploadChar('poison')}
+                    style={{ flex: 1, padding: '5px 0', background: '#7B1FA2', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    更换立绘
+                  </button>
+                  {char3Img !== ASSETS.poison && (
+                    <button
+                      onClick={() => handleResetChar('poison')}
+                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
+                    >
+                      重置
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Role 4: 爆炸 */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#FBE9E7', color: '#D84315', border: '1px solid #FFCCBC', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+                  爆炸 (全屏引爆)
+                </div>
+                <div style={{ width: 64, height: 76, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                  <img src={char4Img} alt="爆炸" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>爆炸箭靶</div>
+                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
+                  <button
+                    onClick={() => handleUploadChar('bomb')}
+                    style={{ flex: 1, padding: '5px 0', background: '#E64A19', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    更换立绘
+                  </button>
+                  {char4Img !== ASSETS.bomb && (
+                    <button
+                      onClick={() => handleResetChar('bomb')}
+                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
+                    >
+                      重置
+                    </button>
+                  )}
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -39994,6 +40408,11 @@ const AgilityGamePage = ({ onBack }) => {
   const [lives, setLives] = useState(3);
   const targetScore = stage * 30 + 10;
   const [gameState, setGameState] = useState('playing'); // playing, result
+  const [showCharModal, setShowCharModal] = useState(false);
+  const [thief1IdleImg, setThief1IdleImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_iBqe9Gsm0GFagZ1TDPzgl4WB1QlagACPicAAkWI4FeNig-3o2880j0E.png");
+  const [thief1HitImg, setThief1HitImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_iNqe9HOTh-UDIfYdb09UZCX6UeX0AACQScAAkWI4FeogY0oJaqQsz0E.png");
+  const [thief2IdleImg, setThief2IdleImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_hBqe9FQpPs92cXchkxwcu-8v7T7bgACKicAAkWI4FcRqK6HUSnb7D0E.png");
+  const [thief2HitImg, setThief2HitImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_hVqe9F3hNzbMe2Ey3oe2pzrjTttowACMCcAAkWI4FdKbZXE2EsvRz0E.png");
   const canvasRef = useRef(null);
 
   const stateRef = useRef({
@@ -40018,13 +40437,136 @@ const AgilityGamePage = ({ onBack }) => {
   const imgsRef = useRef({});
 
   useEffect(() => {
-    requestAnimationFrame(() => setVisible(true));
+    // 1. 加载默认素材
     Object.entries(ASSETS).forEach(([key, src]) => {
       const img = new Image();
       img.src = src;
       imgsRef.current[key] = img;
     });
+
+    // 2. 加载用户持久化自定义立绘
+    if (window.settingsStore) {
+      if (window.settingsStore.getAgilityGameThief1IdleImage) {
+        window.settingsStore.getAgilityGameThief1IdleImage().then(img => {
+          if (img) {
+            setThief1IdleImg(img);
+            const image = new Image();
+            image.onload = () => { imgsRef.current['thief1_idle'] = image; };
+            image.src = img;
+            imgsRef.current['thief1_idle'] = image;
+          }
+        });
+      }
+      if (window.settingsStore.getAgilityGameThief1HitImage) {
+        window.settingsStore.getAgilityGameThief1HitImage().then(img => {
+          if (img) {
+            setThief1HitImg(img);
+            const image = new Image();
+            image.onload = () => { imgsRef.current['thief1_hit'] = image; };
+            image.src = img;
+            imgsRef.current['thief1_hit'] = image;
+          }
+        });
+      }
+      if (window.settingsStore.getAgilityGameThief2IdleImage) {
+        window.settingsStore.getAgilityGameThief2IdleImage().then(img => {
+          if (img) {
+            setThief2IdleImg(img);
+            const image = new Image();
+            image.onload = () => { imgsRef.current['thief2_idle'] = image; };
+            image.src = img;
+            imgsRef.current['thief2_idle'] = image;
+          }
+        });
+      }
+      if (window.settingsStore.getAgilityGameThief2HitImage) {
+        window.settingsStore.getAgilityGameThief2HitImage().then(img => {
+          if (img) {
+            setThief2HitImg(img);
+            const image = new Image();
+            image.onload = () => { imgsRef.current['thief2_hit'] = image; };
+            image.src = img;
+            imgsRef.current['thief2_hit'] = image;
+          }
+        });
+      }
+    }
+
+    requestAnimationFrame(() => setVisible(true));
   }, []);
+
+  const handleUploadChar = (type) => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = async (e2) => {
+          const dataUrl = e2.target.result;
+          const img = new Image();
+          img.onload = () => {
+            imgsRef.current[type] = img;
+          };
+          img.src = dataUrl;
+
+          if (type === 'thief1_idle') {
+            setThief1IdleImg(dataUrl);
+            if (window.settingsStore?.setAgilityGameThief1IdleImage) {
+              await window.settingsStore.setAgilityGameThief1IdleImage(dataUrl);
+            }
+          } else if (type === 'thief1_hit') {
+            setThief1HitImg(dataUrl);
+            if (window.settingsStore?.setAgilityGameThief1HitImage) {
+              await window.settingsStore.setAgilityGameThief1HitImage(dataUrl);
+            }
+          } else if (type === 'thief2_idle') {
+            setThief2IdleImg(dataUrl);
+            if (window.settingsStore?.setAgilityGameThief2IdleImage) {
+              await window.settingsStore.setAgilityGameThief2IdleImage(dataUrl);
+            }
+          } else if (type === 'thief2_hit') {
+            setThief2HitImg(dataUrl);
+            if (window.settingsStore?.setAgilityGameThief2HitImage) {
+              await window.settingsStore.setAgilityGameThief2HitImage(dataUrl);
+            }
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  const handleResetChar = async (type) => {
+    const defaultSrc = ASSETS[type];
+    const img = new Image();
+    img.src = defaultSrc;
+    imgsRef.current[type] = img;
+
+    if (type === 'thief1_idle') {
+      setThief1IdleImg(defaultSrc);
+      if (window.settingsStore?.setAgilityGameThief1IdleImage) {
+        await window.settingsStore.setAgilityGameThief1IdleImage("");
+      }
+    } else if (type === 'thief1_hit') {
+      setThief1HitImg(defaultSrc);
+      if (window.settingsStore?.setAgilityGameThief1HitImage) {
+        await window.settingsStore.setAgilityGameThief1HitImage("");
+      }
+    } else if (type === 'thief2_idle') {
+      setThief2IdleImg(defaultSrc);
+      if (window.settingsStore?.setAgilityGameThief2IdleImage) {
+        await window.settingsStore.setAgilityGameThief2IdleImage("");
+      }
+    } else if (type === 'thief2_hit') {
+      setThief2HitImg(defaultSrc);
+      if (window.settingsStore?.setAgilityGameThief2HitImage) {
+        await window.settingsStore.setAgilityGameThief2HitImage("");
+      }
+    }
+  };
 
   useEffect(() => {
     let reqId;
@@ -40317,8 +40859,29 @@ const AgilityGamePage = ({ onBack }) => {
       />
 
       {/* Header UI */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, zIndex: 10 }}>
-        <div onClick={onBack} style={{ width: 40, height: 40, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', cursor: 'pointer' }}>←</div>
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 12, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
+        <div onClick={onBack} style={{ width: 36, height: 36, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer' }}>←</div>
+        <button
+          onClick={() => setShowCharModal(true)}
+          style={{
+            height: 36,
+            padding: '0 10px',
+            background: 'rgba(255, 255, 255, 0.92)',
+            border: '1.5px solid #C49C58',
+            borderRadius: 18,
+            color: '#5D4037',
+            fontSize: '0.78rem',
+            fontWeight: 'bold',
+            cursor: 'pointer',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+            backdropFilter: 'blur(4px)',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 3
+          }}
+        >
+          <span>🌾</span> 更换角色
+        </button>
       </div>
 
       {/* Top Center Timer */}
@@ -40346,6 +40909,179 @@ const AgilityGamePage = ({ onBack }) => {
           </div>
         </div>
       </div>
+
+      {/* Bottom Sheet Drawer for Role Management */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0, 0, 0, 0.55)',
+            zIndex: 350,
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'flex-end',
+            animation: 'fadeIn 0.25s ease-out'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5E8D2 100%)',
+              borderRadius: '24px 24px 0 0',
+              padding: '18px 16px max(24px, env(safe-area-inset-bottom)) 16px',
+              boxShadow: '0 -8px 24px rgba(0,0,0,0.35)',
+              borderTop: '3px solid #C49C58',
+              maxHeight: '82%',
+              overflowY: 'auto',
+              animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+            }}
+          >
+            {/* Drag Bar & Header */}
+            <div style={{ width: 36, height: 4, background: '#D7CCC8', borderRadius: 2, margin: '0 auto 10px auto' }} />
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span>🌾</span> 农田守护与窃贼立绘更换
+                </div>
+                <div style={{ fontSize: '0.75rem', color: '#8D6E63', marginTop: 2 }}>
+                  点击各卡片可自定义更换角色在正常与击中状态下的立绘
+                </div>
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{
+                  width: 30,
+                  height: 30,
+                  borderRadius: '50%',
+                  background: 'rgba(78, 52, 46, 0.1)',
+                  color: '#5D4037',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontSize: '0.95rem',
+                  fontWeight: 'bold'
+                }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {/* Grid of 4 Roles / States */}
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
+              {/* Role 1: Normal State */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#FFF3E0', color: '#E65100', border: '1px solid #FFE0B2', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+                  角色1 · 正常态 (+1分)
+                </div>
+                <div style={{ width: 64, height: 64, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                  <img src={thief1IdleImg} alt="角色1正常" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>普通盗贼 (冒头)</div>
+                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
+                  <button
+                    onClick={() => handleUploadChar('thief1_idle')}
+                    style={{ flex: 1, padding: '5px 0', background: '#D84315', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    更换立绘
+                  </button>
+                  {thief1IdleImg !== ASSETS.thief1_idle && (
+                    <button
+                      onClick={() => handleResetChar('thief1_idle')}
+                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
+                    >
+                      重置
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Role 1: Hit State */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#FFEBEE', color: '#C62828', border: '1px solid #FFCDD2', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+                  角色1 · 击中态 (眩晕)
+                </div>
+                <div style={{ width: 64, height: 64, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                  <img src={thief1HitImg} alt="角色1击中" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>普通盗贼 (击中)</div>
+                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
+                  <button
+                    onClick={() => handleUploadChar('thief1_hit')}
+                    style={{ flex: 1, padding: '5px 0', background: '#C62828', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    更换立绘
+                  </button>
+                  {thief1HitImg !== ASSETS.thief1_hit && (
+                    <button
+                      onClick={() => handleResetChar('thief1_hit')}
+                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
+                    >
+                      重置
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Role 2: Normal State */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#E8F5E9', color: '#2E7D32', border: '1px solid #C8E6C9', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+                  角色2 · 正常态 (+3分)
+                </div>
+                <div style={{ width: 64, height: 64, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                  <img src={thief2IdleImg} alt="角色2正常" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>精英盗贼 (冒头)</div>
+                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
+                  <button
+                    onClick={() => handleUploadChar('thief2_idle')}
+                    style={{ flex: 1, padding: '5px 0', background: '#388E3C', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    更换立绘
+                  </button>
+                  {thief2IdleImg !== ASSETS.thief2_idle && (
+                    <button
+                      onClick={() => handleResetChar('thief2_idle')}
+                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
+                    >
+                      重置
+                    </button>
+                  )}
+                </div>
+              </div>
+
+              {/* Role 2: Hit State */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#EDE7F6', color: '#512DA8', border: '1px solid #D1C4E9', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+                  角色2 · 击中态 (眩晕)
+                </div>
+                <div style={{ width: 64, height: 64, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                  <img src={thief2HitImg} alt="角色2击中" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+                </div>
+                <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>精英盗贼 (击中)</div>
+                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
+                  <button
+                    onClick={() => handleUploadChar('thief2_hit')}
+                    style={{ flex: 1, padding: '5px 0', background: '#512DA8', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
+                  >
+                    更换立绘
+                  </button>
+                  {thief2HitImg !== ASSETS.thief2_hit && (
+                    <button
+                      onClick={() => handleResetChar('thief2_hit')}
+                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
+                    >
+                      重置
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Result Modal */}
       {gameState === 'result' && (
@@ -40398,20 +41134,20 @@ const RowingGamePage = ({ onBack }) => {
   const [stage, setStage] = useState(1);
   const [collectedCount, setCollectedCount] = useState(0);
   const targetCount = stage * 5 + 5;
-  const [char1Img, setChar1Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAb9qe_Yim5Es2lu4rtQ62wvuMqoT2gACXysAAkWI4FeGBUAUZbzrhT0E.png");
-  const [char2Img, setChar2Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAbxqe_XwtiOza_l_9YMwBuwTX0UKgAACXCsAAkWI4FdGEclXW2OtTj0E.png");
+  const [char1Img, setChar1Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOZFqgEELK_9KjEfY9YRFQpcjY3ImbQAC4h4AArHjCFSz5XgbljLw0T0E.png");
+  const [char2Img, setChar2Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOYRqgEC1Mz_OffMtgithgxQBrCvDXwAC1R4AArHjCFTKnROMk9dJ3j0E.png");
   const canvasRef = useRef(null);
 
   const ASSETS = {
     paddle_p2: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAbhqe_WsBpJK3NyAerTfMRVtph5f3wACWCsAAkWI4FfAPT16AAFNVVA9BA.png',
     paddle_p1: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAbpqe_XYWKIT1DvLW0JMaSk6WeYkzQACWisAAkWI4FekFthAwFZupT0E.png',
-    avatar_p2: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAbxqe_XwtiOza_l_9YMwBuwTX0UKgAACXCsAAkWI4FdGEclXW2OtTj0E.png',
-    avatar_p1: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAb9qe_Yim5Es2lu4rtQ62wvuMqoT2gACXysAAkWI4FeGBUAUZbzrhT0E.png',
+    avatar_p2: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOYRqgEC1Mz_OffMtgithgxQBrCvDXwAC1R4AArHjCFTKnROMk9dJ3j0E.png',
+    avatar_p1: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOZFqgEELK_9KjEfY9YRFQpcjY3ImbQAC4h4AArHjCFSz5XgbljLw0T0E.png',
     log: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAcBqe_Y_78bqd4sKmmSgR80n0AABvIIAAmArAAJFiOBXCzGN7RLfCuA9BA.png',
     leaf: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAcJqe_ZidWDop0oTGZUvOQ0YTGwtqgACYisAAkWI4Fd2XXFLX1Ad8T0E.png',
     flower: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAchqe_Z3nftTaJP1JvEf5U-ixjii_gACaCsAAkWI4FcGE7_6yHk4zz0E.png',
     boat: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZActqe_aek6-Cy2FsB6vuXoGnTKA26wACaysAAkWI4Fdyl-0-EHLT2D0E.png',
-    bg: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZAqpqfAb3YBIQmCcUT8IDM3aoCE-V3gAChywAAkWI4Fca_no6euWkZj0E.jpg'
+    bg: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOmJqgE-t_nvOFfQFixcDaI717HnGOgAC5B8AArHjCFSSJKqgRXBf5z0E.jpg'
   };
   const imgsRef = useRef({});
 
