@@ -30512,6 +30512,7 @@ const T9Page = () => {
 
   // ================== [新增] 共同记账功能状态 ==================
   const [showBillingModal, setShowBillingModal] = useState(false);
+  const [billingViewTab, setBillingViewTab] = useState("user");
   const [userBills, setUserBills] = useState([]);
   const [taBills, setTaBills] = useState([]);
   const [showAddBillModal, setShowAddBillModal] = useState(false);
@@ -30824,6 +30825,7 @@ const T9Page = () => {
   };
 
   const handleGenerateTaBills = async () => {
+    setBillingViewTab("ta");
     if (!taCharacter) return;
     if (isGeneratingTaBills) return;
 
@@ -31673,15 +31675,25 @@ const T9Page = () => {
                     }}
                   >
                     {taCharacter.avatar ? (
-                      <img
-                        src={taCharacter.avatar}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                          borderRadius: "50%",
-                        }}
-                      />
+                      typeof taCharacter.avatar === "string" &&
+                      (taCharacter.avatar.startsWith("data:image") ||
+                        taCharacter.avatar.startsWith("http") ||
+                        taCharacter.avatar.startsWith("/")) ? (
+                        <img
+                          src={taCharacter.avatar}
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover",
+                            borderRadius: "50%",
+                          }}
+                        />
+                      ) : (
+                        <T8AvatarLoader
+                          avatarId={taCharacter.avatar}
+                          fallbackColor={taCharacter?.avatarColor || "#E8C3A8"}
+                        />
+                      )
                     ) : (
                       taCharacter.name?.[0] || "?"
                     )}
@@ -32233,13 +32245,6 @@ const T9Page = () => {
         <>
           <div
             className="t9-companion-mask"
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.5)",
-              zIndex: 1000,
-              backdropFilter: "blur(2px)",
-            }}
             onClick={() => setShowBillingModal(false)}
           ></div>
           <div
@@ -32249,15 +32254,18 @@ const T9Page = () => {
               bottom: 0,
               left: 0,
               right: 0,
+              height: "85vh",
               maxHeight: "85vh",
-              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
               borderTopLeftRadius: "24px",
               borderTopRightRadius: "24px",
-              padding: "24px",
+              padding: "20px 20px 16px",
               zIndex: 1001,
               boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
               animation: "slideUp 0.3s ease-out",
               background: "#F9E8E6",
+              overflow: "hidden",
             }}
           >
             <div
@@ -32265,17 +32273,19 @@ const T9Page = () => {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "20px",
+                marginBottom: "12px",
+                flexShrink: 0,
               }}
             >
               <h2
                 style={{
-                  fontSize: "20px",
+                  fontSize: "18px",
                   fontWeight: "bold",
                   color: "#5a5f4d",
                   display: "flex",
                   alignItems: "center",
                   gap: "6px",
+                  margin: 0,
                 }}
               >
                 <i className="ph-fill ph-coin" style={{ color: "#d6724b" }}></i>
@@ -32289,564 +32299,697 @@ const T9Page = () => {
                   fontSize: "24px",
                   color: "#999",
                   cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 ×
               </button>
             </div>
 
+            {/* 左右切换导航栏 */}
             <div
               style={{
                 display: "flex",
-                gap: "10px",
-                flex: 1,
-                overflowY: "hidden",
-                minHeight: "400px",
-                maxHeight: "400px",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+                marginBottom: "12px",
+                background: "rgba(255, 255, 255, 0.6)",
+                padding: "4px 6px",
+                borderRadius: "18px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                flexShrink: 0,
               }}
             >
-              {/* 左栏：用户记账区域 */}
-              <div
+              <button
+                onClick={() => setBillingViewTab("user")}
                 style={{
-                  flex: 1,
-                  background: "#FFF",
-                  borderRadius: "16px",
-                  padding: "12px",
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background: billingViewTab === "user" ? "#FFF" : "transparent",
+                  color: billingViewTab === "user" ? "#D6724B" : "#8c917b",
+                  boxShadow: billingViewTab === "user" ? "0 2px 6px rgba(0,0,0,0.1)" : "none",
+                  cursor: "pointer",
                   display: "flex",
-                  flexDirection: "column",
-                  boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: "bold",
                 }}
+                title="查看我的账本"
               >
-                <div
+                <i className="ph ph-caret-left" style={{ fontSize: "16px" }}></i>
+              </button>
+
+              <div style={{ display: "flex", gap: "6px", flex: 1 }}>
+                <button
+                  onClick={() => setBillingViewTab("user")}
                   style={{
-                    textAlign: "center",
+                    flex: 1,
+                    padding: "7px 10px",
+                    borderRadius: "14px",
+                    border: "none",
+                    background: billingViewTab === "user" ? "#D6724B" : "transparent",
+                    color: billingViewTab === "user" ? "#FFF" : "#8c917b",
                     fontWeight: "bold",
-                    color: "#5a5f4d",
-                    marginBottom: "12px",
-                    borderBottom: "1px dashed #eee",
-                    paddingBottom: "8px",
-                  }}
-                >
-                  我的账本
-                </div>
-                <div
-                  style={{
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
                     display: "flex",
-                    gap: "8px",
-                    marginBottom: "12px",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "4px",
+                    boxShadow: billingViewTab === "user" ? "0 3px 10px rgba(214,114,75,0.3)" : "none",
                   }}
                 >
-                  <div
-                    style={{
-                      flex: 1,
-                      background: "#FDF0E6",
-                      borderRadius: "8px",
-                      padding: "8px",
-                      textAlign: "center",
-                    }}
-                  >
-                    <div style={{ fontSize: "10px", color: "#8c917b" }}>
-                      支出
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "bold",
-                        color: "#D6724B",
-                      }}
-                    >
-                      {userExpense}
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      flex: 1,
-                      background: "#E8F1ED",
-                      borderRadius: "8px",
-                      padding: "8px",
-                      textAlign: "center",
-                    }}
-                  >
-                    <div style={{ fontSize: "10px", color: "#8c917b" }}>
-                      收入
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "bold",
-                        color: "#5A8F6D",
-                      }}
-                    >
-                      {userIncome}
-                    </div>
-                  </div>
-                </div>
-                <div
-                  className="no-scrollbar"
-                  style={{ flex: 1, overflowY: "auto" }}
+                  <i className="ph-fill ph-user"></i>
+                  我的账本
+                </button>
+                <button
+                  onClick={() => setBillingViewTab("ta")}
+                  style={{
+                    flex: 1,
+                    padding: "7px 10px",
+                    borderRadius: "14px",
+                    border: "none",
+                    background: billingViewTab === "ta" ? "#8FA99D" : "transparent",
+                    color: billingViewTab === "ta" ? "#FFF" : "#8c917b",
+                    fontWeight: "bold",
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "4px",
+                    boxShadow: billingViewTab === "ta" ? "0 3px 10px rgba(143,169,157,0.3)" : "none",
+                  }}
                 >
-                  {userBills.length === 0 ? (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        color: "#ccc",
-                        fontSize: "12px",
-                        marginTop: "20px",
-                      }}
-                    >
-                      暂无记录
-                    </div>
-                  ) : (
-                    userBills.map((b) => (
-                      <div
-                        key={b.id}
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          padding: "8px 0",
-                          borderBottom: "1px solid #f9f9f9",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <span
-                            style={{
-                              color: "#5a5f4d",
-                              fontSize: "13px",
-                              flex: 1,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {b.category}
-                          </span>
-                          <span
-                            style={{
-                              color:
-                                b.type === "expense" ? "#D6724B" : "#5A8F6D",
-                              fontWeight: "bold",
-                              fontSize: "14px",
-                            }}
-                          >
-                            {b.type === "expense" ? "-" : "+"}
-                            {b.amount}
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            color: "#bbb",
-                            marginTop: "2px",
-                          }}
-                        >
-                          {b.date}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
+                  <i className="ph-fill ph-heart"></i>
+                  {taCharacter?.name || "TA"}的账本
+                </button>
               </div>
 
-              {/* 右栏：TA记账区域 */}
-              <div
+              <button
+                onClick={() => setBillingViewTab("ta")}
                 style={{
-                  flex: 1,
-                  background: "#FFF",
-                  borderRadius: "16px",
-                  padding: "12px",
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background: billingViewTab === "ta" ? "#FFF" : "transparent",
+                  color: billingViewTab === "ta" ? "#8FA99D" : "#8c917b",
+                  boxShadow: billingViewTab === "ta" ? "0 2px 6px rgba(0,0,0,0.1)" : "none",
+                  cursor: "pointer",
                   display: "flex",
-                  flexDirection: "column",
-                  boxShadow: "0 4px 10px rgba(0,0,0,0.05)",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: "bold",
                 }}
+                title={`查看${taCharacter?.name || "TA"}的账本`}
               >
-                <div
-                  style={{
-                    textAlign: "center",
-                    fontWeight: "bold",
-                    color: "#5a5f4d",
-                    marginBottom: "12px",
-                    borderBottom: "1px dashed #eee",
-                    paddingBottom: "8px",
-                  }}
-                >
-                  {taCharacter?.name}的账本
-                </div>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "8px",
-                    marginBottom: "12px",
-                  }}
-                >
-                  <div
-                    style={{
-                      flex: 1,
-                      background: "#FDF0E6",
-                      borderRadius: "8px",
-                      padding: "8px",
-                      textAlign: "center",
-                    }}
-                  >
-                    <div style={{ fontSize: "10px", color: "#8c917b" }}>
-                      支出
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "bold",
-                        color: "#D6724B",
-                      }}
-                    >
-                      {taExpense}
-                    </div>
-                  </div>
-                  <div
-                    style={{
-                      flex: 1,
-                      background: "#E8F1ED",
-                      borderRadius: "8px",
-                      padding: "8px",
-                      textAlign: "center",
-                    }}
-                  >
-                    <div style={{ fontSize: "10px", color: "#8c917b" }}>
-                      收入
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "bold",
-                        color: "#5A8F6D",
-                      }}
-                    >
-                      {taIncome}
-                    </div>
-                  </div>
-                </div>
-                <div
-                  className="no-scrollbar"
-                  style={{ flex: 1, overflowY: "auto" }}
-                >
-                  {taBills.length === 0 ? (
-                    <div
-                      style={{
-                        textAlign: "center",
-                        color: "#ccc",
-                        fontSize: "12px",
-                        marginTop: "20px",
-                      }}
-                    >
-                      暂无记录
-                    </div>
-                  ) : (
-                    taBills.map((b) => (
-                      <div
-                        key={b.id}
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          padding: "8px 0",
-                          borderBottom: "1px solid #f9f9f9",
-                        }}
-                      >
-                        <div
-                          style={{
-                            display: "flex",
-                            justifyContent: "space-between",
-                            alignItems: "center",
-                          }}
-                        >
-                          <span
-                            style={{
-                              color: "#5a5f4d",
-                              fontSize: "13px",
-                              flex: 1,
-                              whiteSpace: "nowrap",
-                              overflow: "hidden",
-                              textOverflow: "ellipsis",
-                            }}
-                          >
-                            {b.category}
-                          </span>
-                          <span
-                            style={{
-                              color:
-                                b.type === "expense" ? "#D6724B" : "#5A8F6D",
-                              fontWeight: "bold",
-                              fontSize: "14px",
-                            }}
-                          >
-                            {b.type === "expense" ? "-" : "+"}
-                            {b.amount}
-                          </span>
-                        </div>
-                        <span
-                          style={{
-                            fontSize: "10px",
-                            color: "#bbb",
-                            marginTop: "2px",
-                          }}
-                        >
-                          {b.date}
-                        </span>
-                      </div>
-                    ))
-                  )}
-                </div>
-              </div>
+                <i className="ph ph-caret-right" style={{ fontSize: "16px" }}></i>
+              </button>
             </div>
 
-            <div style={{ display: "flex", gap: "12px", marginTop: "20px" }}>
+            {/* 全包裹白底卡片容器 */}
+            <div
+              style={{
+                flex: 1,
+                minHeight: 0,
+                display: "flex",
+                flexDirection: "column",
+                background: "#FFF",
+                borderRadius: "20px",
+                padding: "16px",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+                border: "1px solid rgba(255,255,255,0.8)",
+                overflow: "hidden",
+              }}
+            >
+              {billingViewTab === "user" ? (
+                /* ================= 用户账本 (我的账本) ================= */
+                <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "10px",
+                      borderBottom: "1px dashed #eee",
+                      paddingBottom: "8px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span style={{ fontWeight: "bold", color: "#5a5f4d", fontSize: "14px" }}>
+                      📖 我的记账本
+                    </span>
+                    <span style={{ fontSize: "12px", color: "#999" }}>
+                      共 {userBills.length} 笔记录
+                    </span>
+                  </div>
+
+                  {/* 收支统计小卡片 */}
+                  <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexShrink: 0 }}>
+                    <div
+                      style={{
+                        flex: 1,
+                        background: "#FDF0E6",
+                        borderRadius: "12px",
+                        padding: "8px 10px",
+                        textAlign: "center",
+                        border: "1px solid rgba(214,114,75,0.15)",
+                      }}
+                    >
+                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>
+                        总支出
+                      </div>
+                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#D6724B" }}>
+                        ¥{userExpense}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        flex: 1,
+                        background: "#E8F1ED",
+                        borderRadius: "12px",
+                        padding: "8px 10px",
+                        textAlign: "center",
+                        border: "1px solid rgba(90,143,109,0.15)",
+                      }}
+                    >
+                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>
+                        总收入
+                      </div>
+                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#5A8F6D" }}>
+                        ¥{userIncome}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 账单列表容器 - 纯内部滚动，彻底防止溢出 */}
+                  <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "4px" }}>
+                    {userBills.length === 0 ? (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          color: "#bbb",
+                          fontSize: "13px",
+                          padding: "40px 0",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <i className="ph ph-receipt" style={{ fontSize: "36px", color: "#ddd" }}></i>
+                        暂无账单记录，点击下方记一笔吧
+                      </div>
+                    ) : (
+                      userBills.map((b) => (
+                        <div
+                          key={b.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "10px 4px",
+                            borderBottom: "1px solid #f6f6f6",
+                          }}
+                        >
+                          <div>
+                            <div style={{ color: "#5a5f4d", fontSize: "14px", fontWeight: "500" }}>
+                              {b.category}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#aaa", marginTop: "2px" }}>
+                              {b.date}
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              color: b.type === "expense" ? "#D6724B" : "#5A8F6D",
+                              fontWeight: "bold",
+                              fontSize: "15px",
+                            }}
+                          >
+                            {b.type === "expense" ? "-" : "+"}¥{b.amount}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* ================= TA的账本 ================= */
+                <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+                  <div
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      marginBottom: "10px",
+                      borderBottom: "1px dashed #eee",
+                      paddingBottom: "8px",
+                      flexShrink: 0,
+                    }}
+                  >
+                    <span style={{ fontWeight: "bold", color: "#5a5f4d", fontSize: "14px" }}>
+                      📖 {taCharacter?.name || "TA"} 的账本
+                    </span>
+                    <span style={{ fontSize: "12px", color: "#999" }}>
+                      共 {taBills.length} 笔记录
+                    </span>
+                  </div>
+
+                  {/* 收支统计小卡片 */}
+                  <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexShrink: 0 }}>
+                    <div
+                      style={{
+                        flex: 1,
+                        background: "#FDF0E6",
+                        borderRadius: "12px",
+                        padding: "8px 10px",
+                        textAlign: "center",
+                        border: "1px solid rgba(214,114,75,0.15)",
+                      }}
+                    >
+                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>
+                        TA的支出
+                      </div>
+                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#D6724B" }}>
+                        ¥{taExpense}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        flex: 1,
+                        background: "#E8F1ED",
+                        borderRadius: "12px",
+                        padding: "8px 10px",
+                        textAlign: "center",
+                        border: "1px solid rgba(90,143,109,0.15)",
+                      }}
+                    >
+                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>
+                        TA的收入
+                      </div>
+                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#5A8F6D" }}>
+                        ¥{taIncome}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 账单列表容器 - 纯内部滚动 */}
+                  <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "4px" }}>
+                    {taBills.length === 0 ? (
+                      <div
+                        style={{
+                          textAlign: "center",
+                          color: "#bbb",
+                          fontSize: "13px",
+                          padding: "40px 0",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: "8px",
+                        }}
+                      >
+                        <i className="ph ph-receipt" style={{ fontSize: "36px", color: "#ddd" }}></i>
+                        {isGeneratingTaBills
+                          ? "TA正在认真整理账本中..."
+                          : `点击下方按钮生成 ${taCharacter?.name || "TA"} 的专属账单`}
+                      </div>
+                    ) : (
+                      taBills.map((b) => (
+                        <div
+                          key={b.id}
+                          style={{
+                            display: "flex",
+                            justifyContent: "space-between",
+                            alignItems: "center",
+                            padding: "10px 4px",
+                            borderBottom: "1px solid #f6f6f6",
+                          }}
+                        >
+                          <div>
+                            <div style={{ color: "#5a5f4d", fontSize: "14px", fontWeight: "500" }}>
+                              {b.category}
+                            </div>
+                            <div style={{ fontSize: "11px", color: "#aaa", marginTop: "2px" }}>
+                              {b.date}
+                            </div>
+                          </div>
+                          <span
+                            style={{
+                              color: b.type === "expense" ? "#D6724B" : "#5A8F6D",
+                              fontWeight: "bold",
+                              fontSize: "15px",
+                            }}
+                          >
+                            {b.type === "expense" ? "-" : "+"}¥{b.amount}
+                          </span>
+                        </div>
+                      ))
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 底部固定操作按钮 - 稳固停靠在卡片下方，从不穿插遮挡 */}
+            <div style={{ display: "flex", gap: "12px", marginTop: "14px", flexShrink: 0 }}>
               <button
-                onClick={() => setShowAddBillModal(true)}
+                onClick={() => {
+                  setBillingViewTab("user");
+                  setShowAddBillModal(true);
+                }}
                 style={{
                   flex: 1,
-                  padding: "14px",
+                  padding: "13px",
                   borderRadius: "16px",
-                  background:
-                    "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
+                  background: "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
                   color: "white",
                   fontSize: "15px",
                   fontWeight: "bold",
                   border: "none",
                   boxShadow: "0 4px 12px rgba(214,114,75,0.3)",
                   cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
                 }}
                 className="active-press"
               >
-                开始记账
+                <i className="ph-fill ph-plus-circle" style={{ fontSize: "18px" }}></i>
+                记一笔
               </button>
               <button
                 onClick={handleGenerateTaBills}
                 disabled={isGeneratingTaBills}
                 style={{
                   flex: 1,
-                  padding: "14px",
+                  padding: "13px",
                   borderRadius: "16px",
-                  background: isGeneratingTaBills ? "#ccc" : "#A8C8BA",
+                  background: isGeneratingTaBills
+                    ? "#ccc"
+                    : billingViewTab === "user"
+                    ? "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)"
+                    : "#8FA99D",
                   color: "white",
                   fontSize: "15px",
                   fontWeight: "bold",
                   border: "none",
                   boxShadow: isGeneratingTaBills
                     ? "none"
-                    : "0 4px 12px rgba(168, 200, 186, 0.4)",
+                    : "0 4px 12px rgba(143,169,157,0.3)",
                   cursor: isGeneratingTaBills ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
                 }}
                 className="active-press"
               >
-                {isGeneratingTaBills ? "翻看中..." : "看看TA的"}
+                <i
+                  className={
+                    isGeneratingTaBills
+                      ? "ph ph-spinner animate-spin"
+                      : "ph-fill ph-sparkle"
+                  }
+                  style={{ fontSize: "18px" }}
+                ></i>
+                {isGeneratingTaBills ? "生成中..." : "刷新TA的账本"}
               </button>
             </div>
           </div>
-
-          {/* 开始记账的小弹窗 */}
-          {showAddBillModal && (
-            <div
-              style={{
-                position: "fixed",
-                inset: 0,
-                background: "rgba(0,0,0,0.6)",
-                zIndex: 1100,
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              <div
-                style={{
-                  background: "#FFF",
-                  width: "80%",
-                  maxWidth: "320px",
-                  borderRadius: "20px",
-                  padding: "24px",
-                  animation: "popIn 0.3s ease-out",
-                }}
-              >
-                <h3
-                  style={{
-                    margin: "0 0 20px 0",
-                    color: "#5a5f4d",
-                    textAlign: "center",
-                  }}
-                >
-                  记录一笔
-                </h3>
-                <div
-                  style={{
-                    display: "flex",
-                    gap: "10px",
-                    marginBottom: "16px",
-                  }}
-                >
-                  <button
-                    onClick={() => setNewBill({ ...newBill, type: "expense" })}
-                    style={{
-                      flex: 1,
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border:
-                        newBill.type === "expense"
-                          ? "2px solid #D6724B"
-                          : "1px solid #eee",
-                      background:
-                        newBill.type === "expense" ? "#FDF0E6" : "#fff",
-                      color: newBill.type === "expense" ? "#D6724B" : "#999",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    支出
-                  </button>
-                  <button
-                    onClick={() => setNewBill({ ...newBill, type: "income" })}
-                    style={{
-                      flex: 1,
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border:
-                        newBill.type === "income"
-                          ? "2px solid #5A8F6D"
-                          : "1px solid #eee",
-                      background:
-                        newBill.type === "income" ? "#E8F1ED" : "#fff",
-                      color: newBill.type === "income" ? "#5A8F6D" : "#999",
-                      fontWeight: "bold",
-                    }}
-                  >
-                    收入
-                  </button>
-                </div>
-                <div style={{ marginBottom: "16px" }}>
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      color: "#8c917b",
-                      marginBottom: "4px",
-                      display: "block",
-                    }}
-                  >
-                    账目明细 (如：买菜、发俸禄)
-                  </label>
-                  <input
-                    type="text"
-                    value={newBill.category}
-                    onChange={(e) =>
-                      setNewBill({ ...newBill, category: e.target.value })
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border: "1px solid #ddd",
-                      outline: "none",
-                      fontSize: "14px",
-                    }}
-                    placeholder="必填"
-                  />
-                </div>
-                <div style={{ marginBottom: "16px" }}>
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      color: "#8c917b",
-                      marginBottom: "4px",
-                      display: "block",
-                    }}
-                  >
-                    金额 (数字)
-                  </label>
-                  <input
-                    type="number"
-                    value={newBill.amount}
-                    onChange={(e) =>
-                      setNewBill({ ...newBill, amount: e.target.value })
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border: "1px solid #ddd",
-                      outline: "none",
-                      fontSize: "14px",
-                    }}
-                    placeholder="必填"
-                  />
-                </div>
-                <div style={{ marginBottom: "20px" }}>
-                  <label
-                    style={{
-                      fontSize: "12px",
-                      color: "#8c917b",
-                      marginBottom: "4px",
-                      display: "block",
-                    }}
-                  >
-                    日期
-                  </label>
-                  <input
-                    type="date"
-                    value={newBill.date}
-                    onChange={(e) =>
-                      setNewBill({ ...newBill, date: e.target.value })
-                    }
-                    style={{
-                      width: "100%",
-                      padding: "10px",
-                      borderRadius: "8px",
-                      border: "1px solid #ddd",
-                      outline: "none",
-                      color: "#5a5f4d",
-                      fontSize: "14px",
-                      fontFamily: "inherit",
-                    }}
-                  />
-                </div>
-                <div style={{ display: "flex", gap: "10px" }}>
-                  <button
-                    onClick={() => setShowAddBillModal(false)}
-                    style={{
-                      flex: 1,
-                      padding: "12px",
-                      background: "#f5f5f5",
-                      color: "#666",
-                      border: "none",
-                      borderRadius: "10px",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                    }}
-                  >
-                    取消
-                  </button>
-                  <button
-                    onClick={handleSaveBill}
-                    style={{
-                      flex: 1,
-                      padding: "12px",
-                      background: "#A8C8BA",
-                      color: "#fff",
-                      border: "none",
-                      borderRadius: "10px",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                    }}
-                  >
-                    保存
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
         </>
       )}
-      {/* ================== [结束] 共同记账弹窗 ================== */}
 
-      {/* ================== [新增] 我问你猜互动弹窗 ================== */}
+      
+      {/* 记一笔表单弹窗 */}
+      {showAddBillModal && (
+        <>
+          <div
+            className="t9-companion-mask"
+            style={{ zIndex: 1002 }}
+            onClick={() => setShowAddBillModal(false)}
+          ></div>
+          <div
+            className="t9-companion-modal no-scrollbar"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "80vh",
+              overflowY: "auto",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              padding: "20px 24px 28px",
+              zIndex: 1003,
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.2)",
+              animation: "slideUp 0.3s ease-out",
+              background: "#FDFCF8",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: "18px",
+                  fontWeight: "bold",
+                  color: "#5a5f4d",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  margin: 0,
+                }}
+              >
+                <i className="ph-fill ph-plus-circle" style={{ color: "#d6724b" }}></i>
+                记一笔
+              </h3>
+              <button
+                onClick={() => setShowAddBillModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  color: "#999",
+                  cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* 收支类型切换 */}
+            <div
+              style={{
+                display: "flex",
+                background: "#f0ede6",
+                borderRadius: "14px",
+                padding: "4px",
+                marginBottom: "16px",
+              }}
+            >
+              <button
+                onClick={() => setNewBill({ ...newBill, type: "expense" })}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: newBill.type === "expense" ? "#D6724B" : "transparent",
+                  color: newBill.type === "expense" ? "#fff" : "#777",
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >
+                支出
+              </button>
+              <button
+                onClick={() => setNewBill({ ...newBill, type: "income" })}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: newBill.type === "income" ? "#5A8F6D" : "transparent",
+                  color: newBill.type === "income" ? "#fff" : "#777",
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >
+                收入
+              </button>
+            </div>
+
+            {/* 常用分类快捷标签 */}
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ fontSize: "12px", color: "#8c917b", marginBottom: "8px" }}>
+                常用分类
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {(newBill.type === "expense"
+                  ? ["餐饮", "日用", "服饰", "文房", "礼物", "出行", "其他"]
+                  : ["俸禄", "赏赐", "兼职", "投资", "红包", "其他"]
+                ).map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setNewBill({ ...newBill, category: cat })}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "12px",
+                      border: "1px solid",
+                      borderColor: newBill.category === cat ? "#D6724B" : "#e6e2da",
+                      background: newBill.category === cat ? "#FDF0E6" : "#fff",
+                      color: newBill.category === cat ? "#D6724B" : "#666",
+                      fontSize: "13px",
+                      fontWeight: newBill.category === cat ? "bold" : "normal",
+                      cursor: "pointer",
+                      transition: "all 0.15s",
+                    }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 自定义类别输入 */}
+            <div style={{ marginBottom: "14px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>
+                分类名称
+              </label>
+              <input
+                type="text"
+                value={newBill.category}
+                onChange={(e) => setNewBill({ ...newBill, category: e.target.value })}
+                placeholder="例如：买蒙顶茶、绣衣楼俸禄"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: "12px",
+                  border: "1px solid #e0dbd1",
+                  background: "#fff",
+                  fontSize: "14px",
+                  color: "#333",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 金额输入 */}
+            <div style={{ marginBottom: "14px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>
+                金额 (¥)
+              </label>
+              <input
+                type="number"
+                step="0.01"
+                value={newBill.amount}
+                onChange={(e) => setNewBill({ ...newBill, amount: e.target.value })}
+                placeholder="0.00"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: "12px",
+                  border: "1px solid #e0dbd1",
+                  background: "#fff",
+                  fontSize: "16px",
+                  fontWeight: "bold",
+                  color: newBill.type === "expense" ? "#D6724B" : "#5A8F6D",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 日期选择 */}
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>
+                日期
+              </label>
+              <input
+                type="date"
+                value={newBill.date}
+                onChange={(e) => setNewBill({ ...newBill, date: e.target.value })}
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: "12px",
+                  border: "1px solid #e0dbd1",
+                  background: "#fff",
+                  fontSize: "14px",
+                  color: "#333",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 保存操作按钮 */}
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => setShowAddBillModal(false)}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: "14px",
+                  background: "#f0ede6",
+                  color: "#777",
+                  border: "none",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSaveBill}
+                style={{
+                  flex: 2,
+                  padding: "12px",
+                  borderRadius: "14px",
+                  background: "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(214,114,75,0.3)",
+                }}
+                className="active-press"
+              >
+                保存记账
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 我问你猜弹窗 */}
       {showGuessGame && (
         <>
           <div
