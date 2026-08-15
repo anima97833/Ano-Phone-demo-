@@ -719,6 +719,36 @@
           });
         },
 
+        // 获取全部聊天历史
+        getAll: async () => {
+          const db = await openDB();
+          return new Promise((resolve) => {
+            const transaction = db.transaction(
+              STORES.CHAT_HISTORY,
+              "readonly",
+            );
+            const store = transaction.objectStore(STORES.CHAT_HISTORY);
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result || []);
+            request.onerror = () => resolve([]);
+          });
+        },
+
+        // 获取聊天历史总数
+        count: async () => {
+          const db = await openDB();
+          return new Promise((resolve) => {
+            const transaction = db.transaction(
+              STORES.CHAT_HISTORY,
+              "readonly",
+            );
+            const store = transaction.objectStore(STORES.CHAT_HISTORY);
+            const request = store.count();
+            request.onsuccess = () => resolve(request.result || 0);
+            request.onerror = () => resolve(0);
+          });
+        },
+
         // 删除聊天历史
         deleteMessages: async (characterId) => {
           const db = await openDB();

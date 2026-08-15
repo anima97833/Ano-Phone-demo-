@@ -67876,26 +67876,29 @@ const BackupRestorePage = ({ onClose }) => {
         let chars = 0, msgs = 0, avs = 0, wbs = 0, bps = 0;
         if (window.openDB) {
           const db = await window.openDB();
-          if (db.objectStoreNames.contains("chat_characters")) {
-            const list = (await window.chatCharacterStore?.getAll()) || [];
-            chars = list.length;
-          }
-          if (db.objectStoreNames.contains("chat_history")) {
-            const list = (await window.chatHistoryStore?.getAll()) || [];
-            msgs = list.length;
-          }
-          if (db.objectStoreNames.contains("avatars")) {
-            const list = (await window.avatarStore?.getAll()) || [];
-            avs = list.length;
-          }
-          if (db.objectStoreNames.contains("world_book")) {
-            const list = (await window.worldBookStore?.getAll()) || [];
-            wbs = list.length;
-          }
-          if (db.objectStoreNames.contains("backpack")) {
-            const list = (await window.backpackStore?.getAll()) || [];
-            bps = list.length;
-          }
+          const getStoreCount = (storeName) => {
+            return new Promise((resolve) => {
+              if (!db.objectStoreNames.contains(storeName)) {
+                resolve(0);
+                return;
+              }
+              try {
+                const tx = db.transaction(storeName, "readonly");
+                const store = tx.objectStore(storeName);
+                const req = store.count();
+                req.onsuccess = () => resolve(req.result || 0);
+                req.onerror = () => resolve(0);
+              } catch (e) {
+                resolve(0);
+              }
+            });
+          };
+
+          chars = await getStoreCount("chat_characters");
+          msgs = await getStoreCount("chat_history");
+          avs = await getStoreCount("avatars");
+          wbs = await getStoreCount("world_book");
+          bps = await getStoreCount("backpack");
         }
         setStats({
           charactersCount: chars,
