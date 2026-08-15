@@ -1336,6 +1336,149 @@
         }
       }
 
+      // 全量导出备份数据 (IndexedDB + localStorage)
+      async function exportAllDatabaseData() {
+        try {
+          const db = await openDB();
+          const storeNames = Array.from(db.objectStoreNames);
+          const indexedDBData = {};
+
+          // 1. 导出 IndexedDB 所有 Store 数据
+          for (const storeName of storeNames) {
+            try {
+              const records = await new Promise((resolve) => {
+                const tx = db.transaction(storeName, "readonly");
+                const store = tx.objectStore(storeName);
+                const req = store.getAll();
+                req.onsuccess = () => resolve(req.result || []);
+                req.onerror = () => resolve([]);
+              });
+              indexedDBData[storeName] = records;
+            } catch (err) {
+              console.warn(`导出 store [${storeName}] 异常:`, err);
+              indexedDBData[storeName] = [];
+            }
+          }
+
+          // 2. 导出 localStorage 全量键值
+          const localStorageData = {};
+          for (let i = 0; i < localStorage.length; i++) {
+            const key = localStorage.key(i);
+            if (key) {
+              localStorageData[key] = localStorage.getItem(key);
+            }
+          }
+
+          // 3. 打包元数据
+          const backupPayload = {
+            meta: {
+              appName: "Milvus-Phone",
+              version: "1.0",
+              dbVersion: DB_VERSION,
+              exportTime: new Date().toISOString(),
+              timestamp: Date.now(),
+              summary: {
+                charactersCount: (indexedDBData[STORES.CHAT_CHARACTERS] || []).length,
+                chatHistoryCount: (indexedDBData[STORES.CHAT_HISTORY] || []).length,
+                avatarsCount: (indexedDBData[STORES.AVATARS] || []).length,
+                worldBookCount: (indexedDBData[STORES.WORLD_BOOK] || []).length,
+                backpackCount: (indexedDBData[STORES.BACKPACK] || []).length,
+                localStorageKeysCount: Object.keys(localStorageData).length,
+              },
+            },
+            localStorage: localStorageData,
+            indexedDB: indexedDBData,
+          };
+
+          return backupPayload;
+        } catch (error) {
+          console.error("全量导出失败:", error);
+          throw error;
+        }
+      }
+
+      // 全量导入还原备份数据
+      async function importAllDatabaseData(backupPayload, mode = "overwrite") {
+        try {
+          if (!backupPayload || typeof backupPayload !== "object") {
+            throw new Error("无效的备份文件格式！");
+          }
+
+          const hasIndexedDB =
+            backupPayload.indexedDB && typeof backupPayload.indexedDB === "object";
+          const hasLocalStorage =
+            backupPayload.localStorage &&
+            typeof backupPayload.localStorage === "object";
+
+          if (!hasIndexedDB && !hasLocalStorage) {
+            throw new Error("备份文件中未包含有效的数据内容！");
+          }
+
+          // 1. 还原 localStorage
+          if (hasLocalStorage) {
+            if (mode === "overwrite") {
+              localStorage.clear();
+            }
+            for (const [key, value] of Object.entries(backupPayload.localStorage)) {
+              if (value !== null && value !== undefined) {
+                localStorage.setItem(key, value);
+              }
+            }
+          }
+
+          // 2. 还原 IndexedDB
+          if (hasIndexedDB) {
+            const db = await openDB();
+            for (const [storeName, records] of Object.entries(
+              backupPayload.indexedDB,
+            )) {
+              if (
+                !db.objectStoreNames.contains(storeName) ||
+                !Array.isArray(records)
+              ) {
+                continue;
+              }
+
+              await new Promise((resolve) => {
+                const tx = db.transaction(storeName, "readwrite");
+                const store = tx.objectStore(storeName);
+
+                if (mode === "overwrite") {
+                  store.clear();
+                }
+
+                for (const item of records) {
+                  try {
+                    store.put(item);
+                  } catch (e) {
+                    console.warn(`写入 store [${storeName}] 记录失败:`, e, item);
+                  }
+                }
+
+                tx.oncomplete = () => resolve();
+                tx.onerror = (e) => {
+                  console.error(`Store [${storeName}] 写入事务失败:`, e);
+                  resolve();
+                };
+              });
+            }
+          }
+
+          return {
+            success: true,
+            restoredStores: hasIndexedDB
+              ? Object.keys(backupPayload.indexedDB).length
+              : 0,
+            restoredLocalStorageKeys: hasLocalStorage
+              ? Object.keys(backupPayload.localStorage).length
+              : 0,
+          };
+        } catch (error) {
+          console.error("全量导入恢复失败:", error);
+          throw error;
+        }
+      }
+
       // 暴露全局变量，确保在React组件中可用
       window.settingsStore = settingsStore;
       window.migrateUserData = migrateUserData;
@@ -1350,4 +1493,6 @@
       window.avatarStore = avatarStore;
       window.migrateBookData = migrateBookData;
       window.migrateLargeData = migrateLargeData;
+      window.exportAllDatabaseData = exportAllDatabaseData;
+      window.importAllDatabaseData = importAllDatabaseData;
     
