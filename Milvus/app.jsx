@@ -81282,7 +81282,256 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
   );
 };
 
+// ==================== 全局注册码系统组件 ====================
+const RegistrationModal = ({ onVerified }) => {
+  const [inputCode, setInputCode] = React.useState("");
+  const [errorMsg, setErrorMsg] = React.useState("");
+  const [isShaking, setIsShaking] = React.useState(false);
+
+  const CORRECT_REG_CODE = "xyjmbkwc0829";
+
+  const handleVerify = () => {
+    const clean = (inputCode || "").trim();
+    if (!clean) {
+      setErrorMsg("请输入注册码");
+      triggerShake();
+      return;
+    }
+
+    if (clean === CORRECT_REG_CODE) {
+      localStorage.setItem("morandi_reg_code_verified", "true");
+      try {
+        if (window.settingsStore?.setRegistrationVerified) {
+          window.settingsStore.setRegistrationVerified(true);
+        }
+      } catch (e) {
+        console.warn("保存注册状态至 IndexedDB 失败", e);
+      }
+      onVerified();
+    } else {
+      setErrorMsg("注册码错误，请重新输入");
+      triggerShake();
+    }
+  };
+
+  const triggerShake = () => {
+    setIsShaking(true);
+    setTimeout(() => setIsShaking(false), 500);
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100vw",
+        height: "100vh",
+        background: "rgba(28, 32, 28, 0.75)",
+        backdropFilter: "blur(18px)",
+        WebkitBackdropFilter: "blur(18px)",
+        zIndex: 9999999,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "20px",
+        boxSizing: "border-box",
+      }}
+    >
+      <div
+        className={isShaking ? "reg-modal-shake" : ""}
+        style={{
+          width: "100%",
+          maxWidth: "360px",
+          background: "rgba(253, 252, 248, 0.97)",
+          borderRadius: "28px",
+          padding: "34px 24px 28px 24px",
+          boxShadow: "0 24px 60px rgba(0, 0, 0, 0.28), 0 0 0 1px rgba(255, 255, 255, 0.85)",
+          textAlign: "center",
+          animation: "regModalPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+          position: "relative",
+          overflow: "hidden",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* 顶部柔和雅致装饰光环 */}
+        <div
+          style={{
+            position: "absolute",
+            top: "-40px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            width: "200px",
+            height: "100px",
+            background: "radial-gradient(circle, rgba(168, 200, 186, 0.5) 0%, rgba(253, 252, 248, 0) 70%)",
+            pointerEvents: "none",
+          }}
+        />
+
+        {/* 殿下冠冕印记 */}
+        <div
+          style={{
+            width: "66px",
+            height: "66px",
+            borderRadius: "22px",
+            background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+            color: "#fff",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            fontSize: "30px",
+            margin: "0 auto 18px auto",
+            boxShadow: "0 8px 22px rgba(168, 200, 186, 0.45)",
+          }}
+        >
+          <i className="ph-fill ph-crown"></i>
+        </div>
+
+        {/* 标题 */}
+        <h2
+          style={{
+            fontSize: "21px",
+            fontWeight: "700",
+            color: "#4A4F44",
+            margin: "0 0 8px 0",
+            letterSpacing: "0.5px",
+          }}
+        >
+          亲爱的殿下，欢迎您。
+        </h2>
+
+        {/* 副标题 */}
+        <p
+          style={{
+            fontSize: "14px",
+            color: "#8C9183",
+            margin: "0 0 24px 0",
+            lineHeight: "1.4",
+          }}
+        >
+          请输入注册码
+        </p>
+
+        {/* 输入框区域 */}
+        <div style={{ marginBottom: "18px", position: "relative" }}>
+          <input
+            type="text"
+            value={inputCode}
+            onChange={(e) => {
+              setInputCode(e.target.value);
+              if (errorMsg) setErrorMsg("");
+            }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleVerify();
+            }}
+            placeholder="请输入注册码"
+            autoFocus
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "13px 16px",
+              borderRadius: "16px",
+              border: errorMsg ? "1.5px solid #E8B4B8" : "1.5px solid #D8D4C7",
+              background: "#FFF",
+              fontSize: "15px",
+              color: "#4A4F44",
+              textAlign: "center",
+              letterSpacing: "1px",
+              outline: "none",
+              transition: "all 0.2s ease",
+              boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.03)",
+            }}
+          />
+          {errorMsg && (
+            <div
+              style={{
+                color: "#D9777F",
+                fontSize: "12px",
+                marginTop: "8px",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+              }}
+            >
+              <i className="ph-bold ph-warning-circle"></i>
+              <span>{errorMsg}</span>
+            </div>
+          )}
+        </div>
+
+        {/* 开启按钮 */}
+        <button
+          onClick={handleVerify}
+          style={{
+            width: "100%",
+            padding: "13px 0",
+            borderRadius: "16px",
+            border: "none",
+            background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+            color: "#FFF",
+            fontSize: "15px",
+            fontWeight: "600",
+            letterSpacing: "1px",
+            cursor: "pointer",
+            boxShadow: "0 6px 18px rgba(168, 200, 186, 0.4)",
+            transition: "all 0.2s ease",
+          }}
+          onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.98)")}
+          onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+        >
+          开启体验
+        </button>
+
+        {/* 底部提示 */}
+        <div
+          style={{
+            fontSize: "11px",
+            color: "#B4B8AD",
+            marginTop: "16px",
+          }}
+        >
+          验证成功后将永久免密开启
+        </div>
+      </div>
+
+      <style>{`
+        @keyframes regModalPop {
+          0% { opacity: 0; transform: scale(0.9) translateY(20px); }
+          100% { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        @keyframes regModalShake {
+          0%, 100% { transform: translateX(0); }
+          20%, 60% { transform: translateX(-8px); }
+          40%, 80% { transform: translateX(8px); }
+        }
+        .reg-modal-shake {
+          animation: regModalShake 0.4s ease-in-out !important;
+        }
+      `}</style>
+    </div>
+  );
+};
+
 const MasterApp = () => {
+  // 注册码系统验证状态
+  const [isRegistered, setIsRegistered] = useState(() => {
+    return localStorage.getItem("morandi_reg_code_verified") === "true";
+  });
+
+  // 异步检查 IndexedDB 备份的注册状态
+  useEffect(() => {
+    if (!isRegistered && window.settingsStore?.getRegistrationVerified) {
+      window.settingsStore.getRegistrationVerified().then((verified) => {
+        if (verified) {
+          setIsRegistered(true);
+          localStorage.setItem("morandi_reg_code_verified", "true");
+        }
+      });
+    }
+  }, [isRegistered]);
+
   // ==================== 修复：悬浮球逻辑移入 React ====================
   // 悬浮球状态
   const [ballState, setBallState] = useState({
@@ -83187,6 +83436,10 @@ const MasterApp = () => {
       onTouchEnd={handleTouchEnd}
       onWheel={handleWheel}
     >
+      {/* 全局注册码系统弹窗 (未验证时拦截) */}
+      {!isRegistered && (
+        <RegistrationModal onVerified={() => setIsRegistered(true)} />
+      )}
       <div
         className="master-scroller"
         style={{ transform: `translateY(-${pageIndex * 100}%)` }}

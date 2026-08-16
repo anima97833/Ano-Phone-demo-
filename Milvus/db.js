@@ -802,6 +802,30 @@
             request.onerror = () => reject("保存绣衣楼公告失败");
           });
         },
+
+        // 获取注册码验证状态
+        getRegistrationVerified: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("reg_code_verified");
+            request.onsuccess = () => resolve(request.result?.value === true);
+            request.onerror = () => reject("获取注册状态失败");
+          });
+        },
+
+        // 设置注册码验证状态
+        setRegistrationVerified: async (isVerified) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "reg_code_verified", value: !!isVerified });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存注册状态失败");
+          });
+        },
       };
 
       // 迁移用户数据从 localStorage 到 IndexedDB（新增）
