@@ -55952,7 +55952,7 @@ const T13WaterMirrorPage = ({ onBack }) => {
 };
 
 
-// ==================== 太白杀阵 (沉浸式剧本杀) 组件 ====================
+// ==================== 太白杀阵 (沉浸式剧本杀) 组件 V2 (强交互对话与辩驳联动) ====================
 const TaibaiMysteryPage = ({ onBack }) => {
   // 阶段状态: "lobby" (选人与准备) | "generating" (AI生成中) | "reading" (阅读剧本) | "playing" (辩驳推演) | "voting" (投票揭凶) | "review" (结案复盘)
   const [stage, setStage] = React.useState("lobby");
@@ -55974,6 +55974,12 @@ const TaibaiMysteryPage = ({ onBack }) => {
   const [votes, setVotes] = React.useState({});
 
   const chatEndRef = React.useRef(null);
+  const chatLogRef = React.useRef(chatLog);
+
+  // 实时同步 ref 以防闭包读取旧状态
+  React.useEffect(() => {
+    chatLogRef.current = chatLog;
+  }, [chatLog]);
 
   const showToast = (txt) => {
     setToastText(txt);
@@ -56040,7 +56046,6 @@ const TaibaiMysteryPage = ({ onBack }) => {
         });
 
         setCharacterPool(mapped);
-        // 默认勾选前 3-4 名角色
         if (mapped.length >= 3) {
           setSelectedCharIds(mapped.slice(0, 3).map((m) => m.id));
         }
@@ -56142,19 +56147,16 @@ ${playerList.map((p, idx) => `${idx + 1}. 【${p.name}】(${p.isUser ? "玩家�
         (reply) => {
           const parsed = safeParseLLMJson(reply);
           if (parsed && parsed.title && parsed.characterSheets) {
-            // 确保角色表中包含所有角色
             setMysteryData(parsed);
             setStage("reading");
-            // 初始化公堂开场白
-            setChatLog([
-              {
-                id: Date.now(),
-                sender: "公堂主持",
-                isSystem: true,
-                text: `【剧本杀 · ${parsed.title}】正式开局！\n案发地点：${parsed.background}\n受害死者：${parsed.victim}\n各位入局者皆已领到专属剧本，请仔细研读并准备自述时间线。`,
-                time: "此刻",
-              },
-            ]);
+            const initialSystemMsg = {
+              id: Date.now(),
+              sender: "公堂主持",
+              isSystem: true,
+              text: `【剧本杀 · ${parsed.title}】正式开局！\n案发地点：${parsed.background}\n受害死者：${parsed.victim}\n各位入局者皆已领到专属剧本，请仔细研读并准备自述时间线与展开对质。`,
+              time: "此刻",
+            };
+            setChatLog([initialSystemMsg]);
             showToast("剧本杀演武场已构筑完毕！");
           } else {
             fallbackDefaultMystery();
@@ -56213,39 +56215,52 @@ ${playerList.map((p, idx) => `${idx + 1}. 【${p.name}】(${p.isUser ? "玩家�
 
     setMysteryData(defaultMystery);
     setStage("reading");
-    setChatLog([
-      {
-        id: Date.now(),
-        sender: "公堂主持",
-        isSystem: true,
-        text: `【剧本杀 · ${defaultMystery.title}】正式开局！\n案发地点：${defaultMystery.background}\n受害死者：${defaultMystery.victim}\n各位入局者皆已领到专属剧本，请仔细研读并准备自述时间线。`,
-        time: "此刻",
-      },
-    ]);
+    const initialSystemMsg = {
+      id: Date.now(),
+      sender: "公堂主持",
+      isSystem: true,
+      text: `【剧本杀 · ${defaultMystery.title}】正式开局！\n案发地点：${defaultMystery.background}\n受害死者：${defaultMystery.victim}\n各位入局者皆已领到专属剧本，请仔细研读并准备自述时间线与展开对质。`,
+      time: "此刻",
+    };
+    setChatLog([initialSystemMsg]);
     showToast("剧本演武场已构筑！");
   };
 
   // 进入发言对质阶段
   const handleStartPlaying = () => {
     setStage("playing");
-    // 触发第一位 AI 角色进行自我介绍与不在场证明
     setTimeout(() => {
       triggerNextAiSpeaker();
     }, 600);
   };
 
-  // 触发某位 AI 角色发言
-  const triggerNextAiSpeaker = (targetCharName = null) => {
+  // 触发 AI 角色紧密接话与辩驳发言
+  const triggerNextAiSpeaker = (targetCharName = null, explicitHistory = null) => {
     if (!mysteryData || isAiSpeaking) return;
 
     const selectedChars = characterPool.filter((c) => selectedCharIds.includes(c.id));
+    const currentLog = explicitHistory || chatLogRef.current || [];
+
+    // 寻找上一条发言
+    const nonSystemLogs = currentLog.filter((m) => !m.isSystem);
+    const lastMsg = nonSystemLogs.length > 0 ? nonSystemLogs[nonSystemLogs.length - 1] : null;
+
     let speaker = null;
 
     if (targetCharName) {
       speaker = selectedChars.find((c) => c.name === targetCharName);
-    } else {
-      // 随机选一位发言较少的 AI 角色
-      speaker = selectedChars[Math.floor(Math.random() * selectedChars.length)];
+    } else if (lastMsg && lastMsg.text) {
+      // 智能检测上一条发言是否提及了某位角色的名字 (如 "@傅融" 或 "阿蝉你说")
+      const mentioned = selectedChars.find((c) => lastMsg.text.includes(c.name));
+      if (mentioned && (!lastMsg || lastMsg.sender !== mentioned.name)) {
+        speaker = mentioned;
+      }
+    }
+
+    if (!speaker) {
+      // 避免同一个 AI 角色连续自说自话，优先选择非上一位发言者的角色
+      const available = selectedChars.filter((c) => !lastMsg || c.name !== lastMsg.sender);
+      speaker = available.length > 0 ? available[Math.floor(Math.random() * available.length)] : selectedChars[0];
     }
 
     if (!speaker) return;
@@ -56253,38 +56268,46 @@ ${playerList.map((p, idx) => `${idx + 1}. 【${p.name}】(${p.isUser ? "玩家�
     setIsAiSpeaking(true);
 
     const charSheet = mysteryData.characterSheets[speaker.name] || {};
-    const recentChat = chatLog.slice(-12).map((m) => `${m.sender}: ${m.text}`).join("\n");
+    
+    // 构建最近 10 条真实上下文，保证 AI 100% 看到全场所有人的发言
+    const recentChatText = currentLog
+      .slice(-12)
+      .map((m) => `【${m.sender}】: ${m.text}`)
+      .join("\n");
 
     const prompt = `
-【剧本杀案件背景】
-案件名称：${mysteryData.title}
-案发现场与受害死者：${mysteryData.victim}
-公用现场线索：${JSON.stringify(mysteryData.clues)}
+【剧本杀案情背景】
+案件：${mysteryData.title}
+死者与死状：${mysteryData.victim}
+公验证据：${JSON.stringify(mysteryData.clues)}
 
-【你的专属人设与说话风格】
+【你所扮演的角色】
 姓名：${speaker.name}
-原人设与口吻习惯：${speaker.profile}
+性格口吻：${speaker.profile}
 
-【你在本次剧本杀中的专属剧本卡（极度机密！）】
-身份头衔：${charSheet.roleTitle || "密探同僚"}
-你的公开时间线/不在场证明：${charSheet.alibi || "无"}
-你不可告人的隐秘秘密：${charSheet.secret || "无"}
-你是否是真凶：${charSheet.isKiller ? "【你是真凶！必须全力撒谎、误导他人、转移视线、找替罪羊！】" : "【你不是真凶！但必须隐藏你的不可告人秘密，并从发言中盘出破绽找出真凶！】"}
-你的获胜目标：${charSheet.goal || "隐藏秘密，找出凶手"}
+【你的机密剧本卡】
+头衔：${charSheet.roleTitle || "密探"}
+你的不在场证明：${charSheet.alibi || "无"}
+你不可告人的秘密：${charSheet.secret || "无"}
+你是否是真凶：${charSheet.isKiller ? "【你是真凶！必须全力说谎、狡辩、伪造细节、转移视线、将嫌疑引向别人！】" : "【你不是真凶！但必须隐瞒你的私密秘密，并从大家的话中找破绽盘凶手！】"}
+获胜目标：${charSheet.goal || "找出真凶/掩盖罪行"}
 
-【当前公堂已有发言记录】
-${recentChat || "（公堂刚开始，请进行第一轮不在场证明与时间线自述）"}
+【公堂最新发言记录 (按时间顺序，最新在最下方)】
+${recentChatText || "（公堂刚开始）"}
 
-【发言任务与铁律】
-1. 以【${speaker.name}】的独特语气口吻，进行一次 40-80 字左右的剧本杀发言！
-2. 遵循剧本杀规则：你可以说谎骗人、可以反驳质问其他人、也可以虚构自己的细节！
-3. 纯角色口述，严禁包含任何括号动作旁白，严禁暴露你是 AI，直接输出发言内容。
+${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说】：“${lastMsg.text}”` : ""}
+
+【极度重要的对话要求（严禁各聊各的！）】
+1. 必须【直接承接并回应上一位发言者【${lastMsg ? lastMsg.sender : "大家"}】的话题或质问】！
+2. 像真正的剧本杀玩家一样接茬对质：可以质疑对方的不在场证明、辩解反驳对方的怀疑、指出对方话里的漏洞，或者提起某条证据对质！
+3. 严格符合【${speaker.name}】的人物性格口吻，说话自然鲜活（40-80字左右）。
+4. 纯台词口述，严禁包含任何括号动作旁白（如（冷笑）、（抱拳）等），直接输出台词！
 `;
 
     if (window.sendToLLM) {
       window.sendToLLM(
         [
-          { role: "system", content: "你是一个精通剧本杀谎言欺瞒与逻辑推理的高手玩家。严格遵循角色剧本发言。" },
+          { role: "system", content: "你正在参加一场紧张刺激的古风密室剧本杀。你必须紧扣场上上一位玩家的发言进行直接回应、反驳、辩解或质询，严禁脱离上下文自说自话。" },
           { role: "user", content: prompt },
         ],
         null,
@@ -56312,7 +56335,7 @@ ${recentChat || "（公堂刚开始，请进行第一轮不在场证明与时间
               id: Date.now(),
               sender: speaker.name,
               avatar: speaker.avatar,
-              text: "我戌时确实在自己房中，至于窗台的痕迹，谁知道是不是有人刻意栽赃？",
+              text: `方才${lastMsg ? lastMsg.sender : "各位"}所言未免有些武断。窗台的痕迹分明是有人刻意伪造，休要把脏水泼到我身上！`,
               time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
             },
           ]);
@@ -56326,14 +56349,14 @@ ${recentChat || "（公堂刚开始，请进行第一轮不在场证明与时间
           id: Date.now(),
           sender: speaker.name,
           avatar: speaker.avatar,
-          text: "我当时正独自在书房核账，根本不曾去过藏珍阁。倒是某些人神色慌张，颇为可疑！",
+          text: `方才${lastMsg ? lastMsg.sender : "各位"}说的时间线我可不敢苟同，申时那会儿我分明看到有人行色匆匆往藏珍阁去了！`,
           time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
         },
       ]);
     }
   };
 
-  // 用户发送发言
+  // 用户发送发言 (携带最新完整 log 触发 AI 接茬)
   const handleUserSend = () => {
     const trimmed = inputText.trim();
     if (!trimmed || isAiSpeaking) return;
@@ -56347,13 +56370,14 @@ ${recentChat || "（公堂刚开始，请进行第一轮不在场证明与时间
       time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
     };
 
-    setChatLog((prev) => [...prev, newMsg]);
+    const updatedLog = [...chatLogRef.current, newMsg];
+    setChatLog(updatedLog);
     setInputText("");
 
-    // 用户发言后，自动触发一位 AI 角色进行回应与辩驳
+    // 立即携带包含用户最新发言的 updatedLog 触发 AI 紧密接茬与反驳
     setTimeout(() => {
-      triggerNextAiSpeaker();
-    }, 800);
+      triggerNextAiSpeaker(null, updatedLog);
+    }, 600);
   };
 
   // 触发投票阶段
@@ -56374,7 +56398,6 @@ ${recentChat || "（公堂刚开始，请进行第一轮不在场证明与时间
     const simVotes = { [userPersona.name]: selectedSuspect };
 
     selectedChars.forEach((c) => {
-      // AI 随机或按剧本投嫌疑人
       const candidates = allParticipants.filter((p) => p !== c.name);
       simVotes[c.name] = candidates[Math.floor(Math.random() * candidates.length)];
     });
@@ -56922,7 +56945,7 @@ ${recentChat || "（公堂刚开始，请进行第一轮不在场证明与时间
             {isAiSpeaking && (
               <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#8E99A2", fontSize: "12px", padding: "4px 0" }}>
                 <i className="ph ph-spinner animate-spin"></i>
-                <span>密探正在推演言辞辩解中...</span>
+                <span>密探正在结合上文推演辩解中...</span>
               </div>
             )}
 
@@ -56943,7 +56966,7 @@ ${recentChat || "（公堂刚开始，请进行第一轮不在场证明与时间
               alignItems: "center",
             }}
           >
-            <span style={{ fontSize: "11px", color: "#8E99A2", flexShrink: 0 }}>请 TA 发言:</span>
+            <span style={{ fontSize: "11px", color: "#8E99A2", flexShrink: 0 }}>请 TA 接茬:</span>
             {characterPool
               .filter((c) => selectedCharIds.includes(c.id))
               .map((c) => (
@@ -57003,7 +57026,7 @@ ${recentChat || "（公堂刚开始，请进行第一轮不在场证明与时间
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleUserSend()}
-              placeholder="陈述时间线、质问某人或辩解..."
+              placeholder="对质时间线、质问某人或辩解..."
               disabled={isAiSpeaking}
               style={{
                 flex: 1,
