@@ -83148,6 +83148,975 @@ const BookstoreCustomLibrary = ({
 };
 
 
+
+
+// ==================== 微信读书风格 · 角色个人主页组件 (WeChatReadingProfileModal) ====================
+const WeChatReadingProfileModal = ({
+  isOpen,
+  onClose,
+  character,
+  onAddToBookshelf,
+}) => {
+  const [profileData, setProfileData] = useState(null);
+  const [isLoading, setIsLoading] = useState(false);
+  const [activeTab, setActiveTab] = useState("shelf"); // 'shelf' | 'finished'
+  const [isFollowed, setIsFollowed] = useState(true);
+  const [likesCount, setLikesCount] = useState(0);
+  const [hasLiked, setHasLiked] = useState(false);
+
+  // 加载并按需生成角色的微信读书专属主页数据
+  useEffect(() => {
+    if (!isOpen || !character) return;
+
+    const cacheKey = `wechat_reading_profile_${character.id || character.name}`;
+    const cached = localStorage.getItem(cacheKey);
+
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        setProfileData(parsed);
+        setLikesCount(parsed.receivedLikes || 0);
+        return;
+      } catch (e) {}
+    }
+
+    generateProfileData();
+  }, [isOpen, character]);
+
+  const generateProfileData = async () => {
+    if (!character || isLoading) return;
+    setIsLoading(true);
+
+    try {
+      // 1. 读取世界书上下文
+      let worldContext = "东汉末年，文人志士于闲暇时博览群书。";
+      try {
+        if (window.getWorldBookContext) {
+          const fullContext = await window.getWorldBookContext();
+          if (fullContext && fullContext.trim()) worldContext = fullContext.slice(0, 400);
+        }
+      } catch (e) {}
+
+      // 2. 读取用户身份
+      let userContext = "楼主/主公";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId && savedPersonas.length > 0) {
+          const activeUser = savedPersonas.find((p) => String(p.id) === String(activeId));
+          if (activeUser) {
+            userContext = `${activeUser.name || "楼主"}(${activeUser.occupation || activeUser.role || "绣衣楼主"})`;
+          }
+        }
+      } catch (e) {}
+
+      // 3. 读取该角色与用户的近期聊天历史（核心上下文）
+      let recentChatSnippet = "暂无近期深度对话";
+      try {
+        const charId = character.id || character.name;
+        const chatKeys = [
+          `t8_chat_history_${charId}`,
+          `chat_history_${charId}`,
+          `t8_messages_${charId}`,
+          `t8_chat_history_${character.name}`,
+        ];
+        for (const k of chatKeys) {
+          const savedChat = localStorage.getItem(k);
+          if (savedChat) {
+            const parsedChat = JSON.parse(savedChat);
+            if (Array.isArray(parsedChat) && parsedChat.length > 0) {
+              const recentMsgs = parsedChat.slice(-8);
+              recentChatSnippet = recentMsgs
+                .map((m) => `${m.sender || (m.isUser ? "楼主" : character.name)}: ${m.text || m.content || ""}`)
+                .join("\n");
+              break;
+            }
+          }
+        }
+      } catch (e) {}
+
+      const charName = character.name || "传讯好友";
+      const charGender = character.gender || (charName === "傅融" || charName === "刘辩" || charName === "袁基" || charName === "左慈" || charName === "孙策" ? "男" : "女");
+      const charPersonality = character.profile?.personality || character.personality || "特色鲜明";
+      const charStyle = character.profile?.style || character.style || "专属口吻";
+      const charBio = character.profile?.bio || character.background || "";
+
+      const sysPrompt = `你正在扮演微信读书与古风世界的跨界数据系统。请为角色【${charName}】生成一份极度贴合其性格、背景以及与楼主近期聊天话题的【微信读书个人主页数据】。
+严格只返回纯 JSON 对象格式，直接以 { 开头，以 } 结尾，不要输出任何 Markdown 代码块标记。`;
+
+      const userPrompt = `
+【世界背景】
+${worldContext}
+
+【用户身份】
+${userContext}
+
+【角色基本档案】
+角色姓名：${charName}
+性别：${charGender}
+人设性格：${charPersonality}
+语言口吻：${charStyle}
+背景生平：${charBio}
+
+【角色近期与楼主的聊天历史】
+${recentChatSnippet}
+
+【任务要求】
+请根据上述人设与聊天记忆，生成该角色在“微信读书”上的主页档案：
+1. signature: 一句极富个性的个签/签名（可暗戳戳联动与楼主的对话或口癖/人设）。
+2. totalReadTime: 累计总阅读时长（如 "67时29分"、"124时15分"）。
+3. receivedLikes: 收到的赞数量（数字，如 42）。
+4. followersCount: 关注Ta的人数（数字，如 5）。
+5. shelfDynamics: 一句最近书架动态摘要（如 "8个月前 开始阅读《西游记》" 或 "3天前 正在读《算经》"）。
+6. readingBooks: 3-4本正在书架上的书目，每本包含：
+   - title: 书名（如《九章算术》《洛阳伽蓝记》《人间词话》《西游记》等，契合角色性格）
+   - author: 著作者
+   - progress: 阅读进度（如 "已读 68%" 或 "读至 第12章"）
+   - coverColor: 优雅莫兰迪/国风封面配色（HEX，如 "#3B6978", "#8C7A6B", "#4E7358", "#8E5B5B"）
+   - note: 该角色在书页上留下的批注/短评一句话。
+7. finishedBooks: 2-3本已读完的书目，每本包含：
+   - title: 书名
+   - finishDate: 读完时间（如 "1周前 读完"）
+   - rating: 星级推荐（如 "★★★★★"）
+   - review: 该角色用其独特第一人称口吻写的精彩短评（20-40字，极具角色个性与吐槽/深情）。
+
+【输出 JSON 结构示例】
+{
+  "name": "${charName}",
+  "gender": "${charGender}",
+  "signature": "个签内容...",
+  "totalReadTime": "67时29分",
+  "receivedLikes": 18,
+  "followersCount": 4,
+  "shelfDynamics": "3天前 开始阅读《九章算术细草》",
+  "readingBooks": [
+    {
+      "title": "九章算术",
+      "author": "刘徽 注",
+      "progress": "已读 82%",
+      "coverColor": "#3B6978",
+      "note": "算至第五卷，绣衣楼本月开支尚有盈余。"
+    }
+  ],
+  "finishedBooks": [
+    {
+      "title": "周易注",
+      "finishDate": "半月前 读完",
+      "rating": "★★★★★",
+      "review": "卦象虽定，然人定胜天。这书买来花了六百钱，甚值。"
+    }
+  ]
+}
+`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              let clean = reply.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+              const firstBrace = clean.indexOf("{");
+              const lastBrace = clean.lastIndexOf("}");
+              if (firstBrace !== -1 && lastBrace !== -1) {
+                clean = clean.slice(firstBrace, lastBrace + 1);
+              }
+              const data = robustParseLLMJSON(reply);
+              setProfileData(data);
+              setLikesCount(data.receivedLikes || 0);
+              const cacheKey = `wechat_reading_profile_${character.id || character.name}`;
+              localStorage.setItem(cacheKey, JSON.stringify(data));
+            } catch (err) {
+              console.error("解析角色读书主页数据失败，使用默认拟真模板:", err, reply);
+              useFallbackProfileData();
+            } finally {
+              setIsLoading(false);
+            }
+          },
+          (err) => {
+            console.error("生成角色读书主页失败:", err);
+            useFallbackProfileData();
+            setIsLoading(false);
+          }
+        );
+      } else {
+        useFallbackProfileData();
+        setIsLoading(false);
+      }
+    } catch (e) {
+      console.error(e);
+      useFallbackProfileData();
+      setIsLoading(false);
+    }
+  };
+
+  const useFallbackProfileData = () => {
+    const charName = character?.name || "傅融";
+    const defaultData = {
+      name: charName,
+      gender: charName === "傅融" || charName === "刘辩" || charName === "袁基" || charName === "左慈" || charName === "孙策" ? "男" : "女",
+      signature: charName === "傅融" ? "买书可以，但得先算算绣衣楼这个月的开支。" : "世事如弈，白首方悔读书迟。",
+      totalReadTime: "67时29分",
+      receivedLikes: 28,
+      followersCount: 3,
+      shelfDynamics: `3天前 开始阅读《西游记（人民文学版）》`,
+      readingBooks: [
+        {
+          title: "西游记",
+          author: "吴承恩",
+          progress: "已读 45%",
+          coverColor: "#2A4B7C",
+          note: "神仙亦有俸禄之扰，甚是有趣。",
+        },
+        {
+          title: "原生家庭",
+          author: "苏珊·福沃德",
+          progress: "已读 72%",
+          coverColor: "#7AA58B",
+          note: "旧事难忘，但不必画地为牢。",
+        },
+        {
+          title: "当下的力量",
+          author: "埃克哈特·托利",
+          progress: "已读 30%",
+          coverColor: "#8D4F5A",
+          note: "专注手头账目，心境自安。",
+        },
+      ],
+      finishedBooks: [
+        {
+          title: "商君书",
+          finishDate: "1个月前 读完",
+          rating: "★★★★★",
+          review: "法度严谨，治郡理政必读之典。",
+        },
+        {
+          title: "周易正义",
+          finishDate: "3个月前 读完",
+          rating: "★★★★☆",
+          review: "天行健，君子以自强不息。",
+        },
+      ],
+    };
+    setProfileData(defaultData);
+    setLikesCount(defaultData.receivedLikes);
+  };
+
+  if (!isOpen || !character) return null;
+
+  const charName = profileData?.name || character.name || "好友";
+  const charGender = profileData?.gender || "女";
+  const charAvatar = character.avatar || character.profile?.avatar;
+  const avatarBg = character.avatarColor || "#695c51";
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in font-sans"
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 1550,
+      }}
+    >
+      <div className="relative w-full max-w-md h-[92vh] max-h-[850px] bg-[#F7F8FA] dark:bg-[#18181A] text-[#1A1A1A] dark:text-[#E8E8E8] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-white/40 dark:border-stone-800">
+        {/* 顶部悬浮返回与操作栏 */}
+        <div className="flex items-center justify-between px-5 pt-5 pb-2 z-10">
+          <button
+            onClick={onClose}
+            className="w-10 h-10 rounded-full bg-white/80 dark:bg-stone-800/80 backdrop-blur shadow-sm flex items-center justify-center text-stone-700 dark:text-stone-300 active:scale-90 transition-transform"
+          >
+            <span className="material-symbols-outlined text-2xl">arrow_back</span>
+          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => {
+                if (window.confirm("是否重新生成该角色的微信读书个性主页？")) {
+                  localStorage.removeItem(`wechat_reading_profile_${character.id || character.name}`);
+                  generateProfileData();
+                }
+              }}
+              disabled={isLoading}
+              className="w-10 h-10 rounded-full bg-white/80 dark:bg-stone-800/80 backdrop-blur shadow-sm flex items-center justify-center text-stone-700 dark:text-stone-300 active:scale-90 transition-transform disabled:opacity-50"
+              title="重新读取对话与生成"
+            >
+              <span className={`material-symbols-outlined text-xl ${isLoading ? "animate-spin" : ""}`}>
+                refresh
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* 主页内容滚动区域 */}
+        <div className="flex-1 overflow-y-auto px-6 pb-8 no-scrollbar">
+          {isLoading && !profileData ? (
+            <div className="flex flex-col items-center justify-center h-96 gap-4">
+              <div className="w-12 h-12 border-3 border-[#1B72E8] border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-sm font-medium text-stone-500 font-serif">
+                正在翻阅【{charName}】的读书足迹与往来书信...
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center pt-2">
+              {/* 1. 大圆形头像 */}
+              <div className="relative group">
+                <div className="w-24 h-24 rounded-full overflow-hidden shadow-lg border-4 border-white dark:border-stone-800 flex items-center justify-center bg-[#E5E7EB] dark:bg-stone-800">
+                  {charAvatar ? (
+                    <img src={charAvatar} alt={charName} className="w-full h-full object-cover" />
+                  ) : (
+                    <div
+                      className="w-full h-full flex items-center justify-center text-3xl font-bold text-white font-serif"
+                      style={{ backgroundColor: avatarBg }}
+                    >
+                      {(charName || "友").slice(0, 1)}
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* 2. 昵称 */}
+              <h2 className="text-2xl font-bold mt-3 text-stone-900 dark:text-white tracking-tight">
+                {charName}
+              </h2>
+
+              {/* 3. 标签行：性别 + 微信朋友/身份 */}
+              <div className="flex items-center gap-2 mt-2">
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#F0F2F5] dark:bg-stone-800 text-stone-500 dark:text-stone-400">
+                  {charGender}
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#F0F2F5] dark:bg-stone-800 text-stone-500 dark:text-stone-400">
+                  传讯好友
+                </span>
+                {character.profile?.role && (
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-[#1B72E8]/10 text-[#1B72E8] dark:bg-[#1B72E8]/20">
+                    {character.profile.role}
+                  </span>
+                )}
+              </div>
+
+              {/* 4. 个签 (个性签名) */}
+              {profileData?.signature && (
+                <p className="text-xs text-stone-500 dark:text-stone-400 mt-3 text-center px-4 leading-relaxed italic font-serif">
+                  “{profileData.signature}”
+                </p>
+              )}
+
+              {/* 5. 核心数据三列展示：阅读时长 | 收到的赞 | 关注ta的人 */}
+              <div className="grid grid-cols-3 w-full mt-6 py-2 text-center divide-x divide-stone-200 dark:divide-stone-800">
+                <div className="flex flex-col items-center">
+                  <span className="text-lg font-bold text-stone-900 dark:text-white font-mono">
+                    {profileData?.totalReadTime || "0时0分"}
+                  </span>
+                  <span className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">阅读时长</span>
+                </div>
+                <div
+                  className="flex flex-col items-center cursor-pointer active:scale-95 transition-transform"
+                  onClick={() => {
+                    if (!hasLiked) {
+                      setLikesCount((prev) => prev + 1);
+                      setHasLiked(true);
+                    }
+                  }}
+                >
+                  <span className="text-lg font-bold text-stone-900 dark:text-white font-mono flex items-center gap-1">
+                    {likesCount}个
+                    {hasLiked && <span className="text-red-500 text-xs animate-bounce">❤️</span>}
+                  </span>
+                  <span className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">收到的赞</span>
+                </div>
+                <div className="flex flex-col items-center">
+                  <span className="text-lg font-bold text-stone-900 dark:text-white font-mono">
+                    {profileData?.followersCount || 1}人
+                  </span>
+                  <span className="text-[11px] text-stone-400 dark:text-stone-500 mt-0.5">关注ta的人</span>
+                </div>
+              </div>
+
+              {/* 6. 互相关注 / 关注按钮 (微信读书拟物灰白胶囊按钮) */}
+              <div className="w-full mt-6">
+                <button
+                  onClick={() => setIsFollowed(!isFollowed)}
+                  className={`w-full py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98] ${
+                    isFollowed
+                      ? "bg-[#EAECEF] dark:bg-stone-800 text-stone-700 dark:text-stone-300"
+                      : "bg-[#1B72E8] text-white hover:bg-[#1558B0]"
+                  }`}
+                >
+                  <span className="text-base">{isFollowed ? "⇄" : "+"}</span>
+                  <span>{isFollowed ? "互相关注" : "关注 Ta"}</span>
+                </button>
+              </div>
+
+              {/* 7. 下方核心卡片：书架 与 读完 */}
+              <div className="w-full mt-6 bg-white dark:bg-[#202023] rounded-3xl p-5 shadow-[0_4px_25px_rgba(0,0,0,0.04)] border border-stone-100 dark:border-stone-800/80">
+                {/* 卡片选项卡 Header */}
+                <div className="flex items-center justify-between border-b border-stone-100 dark:border-stone-800 pb-3">
+                  <div className="flex items-center gap-6">
+                    <button
+                      onClick={() => setActiveTab("shelf")}
+                      className={`relative text-base font-bold transition-colors ${
+                        activeTab === "shelf"
+                          ? "text-[#1B72E8] dark:text-[#4B96FF]"
+                          : "text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                      }`}
+                    >
+                      书架
+                      {activeTab === "shelf" && (
+                        <div className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 w-4 h-1 bg-[#1B72E8] rounded-full"></div>
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("finished")}
+                      className={`relative text-base font-bold transition-colors flex items-center gap-1 ${
+                        activeTab === "finished"
+                          ? "text-[#1B72E8] dark:text-[#4B96FF]"
+                          : "text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
+                      }`}
+                    >
+                      <span>读完</span>
+                      <span className="text-xs opacity-70">
+                        · {profileData?.finishedBooks?.length || 2}
+                      </span>
+                      {activeTab === "finished" && (
+                        <div className="absolute -bottom-3.5 left-1/2 -translate-x-1/2 w-4 h-1 bg-[#1B72E8] rounded-full"></div>
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Tab 1: 书架动态与横向书籍封面 */}
+                {activeTab === "shelf" ? (
+                  <div className="mt-4">
+                    {/* 最近阅读动态提示 */}
+                    <div className="flex items-center justify-between text-xs text-stone-500 dark:text-stone-400 mb-4 px-1">
+                      <span className="truncate max-w-[85%] font-serif">
+                        {profileData?.shelfDynamics || "近期正在研读经典..."}
+                      </span>
+                      <span className="text-stone-300 dark:text-stone-600 text-sm">♡</span>
+                    </div>
+
+                    {/* 横向排列书籍 (3本展示) */}
+                    <div className="grid grid-cols-3 gap-3">
+                      {(profileData?.readingBooks || []).slice(0, 3).map((book, idx) => (
+                        <div
+                          key={idx}
+                          className="flex flex-col items-center group cursor-pointer"
+                          onClick={() => {
+                            if (book.note) {
+                              alert(`📖【${book.title}】\n${charName}的随书批注：\n“${book.note}”\n（阅读进度：${book.progress || "在读"}）`);
+                            }
+                          }}
+                        >
+                          {/* 封面 */}
+                          <div
+                            className="w-full aspect-[3/4] rounded-xl shadow-md p-2 flex flex-col justify-between text-white relative overflow-hidden group-hover:scale-105 transition-transform"
+                            style={{
+                              backgroundColor: book.coverColor || ["#2A4B7C", "#7AA58B", "#8D4F5A"][idx % 3],
+                            }}
+                          >
+                            <div className="text-[10px] opacity-70 font-mono tracking-widest uppercase">
+                              READER
+                            </div>
+                            <div className="text-xs font-bold font-serif leading-tight line-clamp-3 text-center my-auto">
+                              {book.title}
+                            </div>
+                            <div className="text-[9px] opacity-80 truncate text-right font-light">
+                              {book.author || "名家"}
+                            </div>
+                          </div>
+
+                          {/* 标题 */}
+                          <span className="text-xs font-bold text-stone-800 dark:text-stone-200 mt-2 truncate w-full text-center">
+                            {book.title}
+                          </span>
+                          {/* 进度 */}
+                          <span className="text-[10px] text-stone-400 text-center">
+                            {book.progress || "在读"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+
+                    {/* 查看书架大按钮 */}
+                    <button
+                      onClick={() => {
+                        const bookListStr = (profileData?.readingBooks || [])
+                          .map((b) => `· 《${b.title}》 (${b.progress || "在读"})\n  批注：“${b.note || "暂无"}”`)
+                          .join("\n\n");
+                        alert(`📚【${charName}的书架】\n\n${bookListStr}`);
+                      }}
+                      className="w-full mt-5 py-2.5 rounded-2xl bg-[#F4F5F7] dark:bg-stone-800/60 hover:bg-[#EAECEF] dark:hover:bg-stone-800 text-stone-700 dark:text-stone-300 text-xs font-bold transition-all active:scale-95 text-center"
+                    >
+                      查看完整书架 ({profileData?.readingBooks?.length || 3}本)
+                    </button>
+                  </div>
+                ) : (
+                  /* Tab 2: 已读完书目列表与独家书评 */
+                  <div className="mt-4 space-y-3">
+                    {(profileData?.finishedBooks || []).map((b, idx) => (
+                      <div
+                        key={idx}
+                        className="p-3.5 rounded-2xl bg-[#FAFBFD] dark:bg-stone-900/60 border border-stone-100 dark:border-stone-800"
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold text-stone-800 dark:text-stone-100">
+                            《{b.title}》
+                          </span>
+                          <span className="text-[11px] text-amber-500 font-mono">{b.rating || "★★★★★"}</span>
+                        </div>
+                        <p className="text-[11px] text-stone-600 dark:text-stone-300 mt-1.5 leading-relaxed font-serif">
+                          “{b.review || "此书甚佳，回味悠长。"}”
+                        </p>
+                        <div className="text-[10px] text-stone-400 text-right mt-1">
+                          {b.finishDate || "近期读完"}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== 微信读书风格 · 好友读书排行榜 (WeChatReadingLeaderboardModal) ====================
+const WeChatReadingLeaderboardModal = ({
+  isOpen,
+  onClose,
+  onOpenProfile,
+}) => {
+  const [rankingList, setRankingList] = useState([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [userRankInfo, setUserRankInfo] = useState(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const cached = localStorage.getItem("reader_wechat_ranking_cache");
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setRankingList(parsed);
+          calculateUserRank(parsed);
+          return;
+        }
+      } catch (e) {}
+    }
+
+    generateLeaderboard();
+  }, [isOpen]);
+
+  const calculateUserRank = (list) => {
+    const userIndex = list.findIndex((item) => item.isUser);
+    if (userIndex !== -1) {
+      setUserRankInfo({
+        rank: userIndex + 1,
+        readHours: list[userIndex].readTimeStr,
+        name: list[userIndex].name,
+      });
+    } else {
+      setUserRankInfo({
+        rank: 2,
+        readHours: "18小时30分",
+        name: "楼主",
+      });
+    }
+  };
+
+  const generateLeaderboard = async () => {
+    if (isLoading) return;
+    setIsLoading(true);
+
+    try {
+      // 1. 读取传讯角色库
+      let contactChars = [];
+      if (window.chatCharacterStore) {
+        const allChars = await window.chatCharacterStore.getAll();
+        if (allChars && Array.isArray(allChars)) {
+          contactChars = allChars
+            .filter((c) => c && (c.name || c.nickname))
+            .map((c) => ({
+              id: c.id || c.name,
+              name: String(c.name || c.nickname).trim(),
+              personality: String(c.profile?.personality || c.personality || "个性鲜明"),
+              gender: c.gender || (c.name === "傅融" || c.name === "刘辩" || c.name === "袁基" || c.name === "左慈" || c.name === "孙策" ? "男" : "女"),
+              avatar: c.avatar || c.profile?.avatar,
+              avatarColor: c.avatarColor || "#695c51",
+            }));
+        }
+      }
+
+      // 如果传讯角色为空，注入默认密探
+      if (contactChars.length === 0) {
+        contactChars = [
+          { id: "furong", name: "傅融", personality: "精打细算，口是心非", gender: "男", avatarColor: "#4A6B62" },
+          { id: "liubian", name: "刘辩", personality: "天真热烈，依赖楼主", gender: "男", avatarColor: "#B86B43" },
+          { id: "yuanji", name: "袁基", personality: "温润如玉，算无遗策", gender: "男", avatarColor: "#3D5A80" },
+          { id: "zuoci", name: "左慈", personality: "清冷出尘，仙风道骨", gender: "男", avatarColor: "#7B5B75" },
+          { id: "sunce", name: "孙策", personality: "张扬阳光，意气风发", gender: "男", avatarColor: "#D6724B" },
+        ];
+      }
+
+      // 2. 读取用户身份
+      let userName = "楼主(你)";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId && savedPersonas.length > 0) {
+          const active = savedPersonas.find((p) => String(p.id) === String(activeId));
+          if (active && active.name) userName = `${active.name}(你)`;
+        }
+      } catch (e) {}
+
+      const charsNames = contactChars.map((c) => c.name).join("、");
+
+      const sysPrompt = `你是一个深谙微信读书好友排行榜与古风日常的AI助手。请为用户【${userName}】与传讯好友们生成一份极具真实感与生活趣味的【微信读书本周读书排行榜】。
+严格返回纯 JSON 数组，直接以 [ 开头，以 ] 结尾，不要输出任何 Markdown 代码块标记。`;
+
+      const userPrompt = `
+【参与排名的角色列表】
+用户：${userName}
+传讯好友：${charsNames}
+
+【任务要求】
+请模拟微信读书的好友本周读书排行榜，为每位角色（以及用户）分配本周阅读时长并排序：
+1. 包含用户自身和所有传讯角色，总人数 5-8 人。
+2. readHours: 本周阅读时长小时数（浮点数，如 32.5、24.2、18.5、12.0 等，降序排列）。
+3. readTimeStr: 格式化展示（如 "32小时30分"、"24小时10分"）。
+4. currentBookQuote: 一句幽默或符合人设的近期在读动态（如 傅融：“正在精读《算经十书》第8卷”、刘辩：“正在读《洛阳奇谭》，楼主快来一起看”）。
+5. likes: 收到的爱心赞数（数字，如 45、32）。
+
+【输出 JSON 数组格式示例】
+[
+  {
+    "name": "傅融",
+    "isUser": false,
+    "readHours": 32.5,
+    "readTimeStr": "32小时30分",
+    "currentBookQuote": "正在精算《绣衣楼本月赋税记》",
+    "likes": 42
+  },
+  {
+    "name": "${userName}",
+    "isUser": true,
+    "readHours": 25.0,
+    "readTimeStr": "25小时00分",
+    "currentBookQuote": "本周已阅读 4 本心仪佳作",
+    "likes": 68
+  }
+]
+`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              let clean = reply.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+              const firstBracket = clean.indexOf("[");
+              const lastBracket = clean.lastIndexOf("]");
+              if (firstBracket !== -1 && lastBracket !== -1) {
+                clean = clean.slice(firstBracket, lastBracket + 1);
+              }
+              const listData = robustParseLLMJSON(reply);
+              if (Array.isArray(listData) && listData.length > 0) {
+                // 合并角色档案详细信息
+                const merged = listData.map((item, idx) => {
+                  const matchChar = contactChars.find((c) => c.name === item.name || item.name.includes(c.name));
+                  return {
+                    ...item,
+                    id: matchChar?.id || (item.isUser ? "user" : `char_${idx}`),
+                    characterObj: matchChar || (item.isUser ? { name: userName, isUser: true } : { name: item.name }),
+                    avatar: matchChar?.avatar,
+                    avatarColor: matchChar?.avatarColor || ["#3B6978", "#8C7A6B", "#4E7358", "#8E5B5B", "#D6724B"][idx % 5],
+                    rank: idx + 1,
+                  };
+                });
+                setRankingList(merged);
+                calculateUserRank(merged);
+                localStorage.setItem("reader_wechat_ranking_cache", JSON.stringify(merged));
+              } else {
+                useFallbackLeaderboard(contactChars, userName);
+              }
+            } catch (err) {
+              console.error("解析好友读书榜失败:", err, reply);
+              useFallbackLeaderboard(contactChars, userName);
+            } finally {
+              setIsLoading(false);
+            }
+          },
+          (err) => {
+            console.error("请求好友读书榜失败:", err);
+            useFallbackLeaderboard(contactChars, userName);
+            setIsLoading(false);
+          }
+        );
+      } else {
+        useFallbackLeaderboard(contactChars, userName);
+        setIsLoading(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsLoading(false);
+    }
+  };
+
+  const useFallbackLeaderboard = (contactChars, userName) => {
+    const defaultList = [
+      {
+        id: "furong",
+        name: "傅融",
+        isUser: false,
+        readHours: 35.5,
+        readTimeStr: "35小时30分",
+        currentBookQuote: "正在精读《九章算术细草》",
+        likes: 56,
+        rank: 1,
+        avatarColor: "#4A6B62",
+        characterObj: { name: "傅融", id: "furong" },
+      },
+      {
+        id: "user",
+        name: userName || "楼主(你)",
+        isUser: true,
+        readHours: 28.0,
+        readTimeStr: "28小时00分",
+        currentBookQuote: "本周勤勉阅读，名列前茅",
+        likes: 88,
+        rank: 2,
+        avatarColor: "#D6724B",
+        characterObj: { name: userName, isUser: true },
+      },
+      {
+        id: "yuanji",
+        name: "袁基",
+        isUser: false,
+        readHours: 24.2,
+        readTimeStr: "24小时10分",
+        currentBookQuote: "正在翻阅《茶经与洛水志》",
+        likes: 49,
+        rank: 3,
+        avatarColor: "#3D5A80",
+        characterObj: { name: "袁基", id: "yuanji" },
+      },
+      {
+        id: "zuoci",
+        name: "左慈",
+        isUser: false,
+        readHours: 19.5,
+        readTimeStr: "19小时30分",
+        currentBookQuote: "正在体悟《南华真经》",
+        likes: 31,
+        rank: 4,
+        avatarColor: "#7B5B75",
+        characterObj: { name: "左慈", id: "zuoci" },
+      },
+      {
+        id: "liubian",
+        name: "刘辩",
+        isUser: false,
+        readHours: 14.8,
+        readTimeStr: "14小时50分",
+        currentBookQuote: "正在偷看《西厢奇遇记》",
+        likes: 62,
+        rank: 5,
+        avatarColor: "#B86B43",
+        characterObj: { name: "刘辩", id: "liubian" },
+      },
+    ];
+    setRankingList(defaultList);
+    calculateUserRank(defaultList);
+  };
+
+  const handleLike = (e, index) => {
+    e.stopPropagation();
+    const updated = [...rankingList];
+    updated[index].likes = (updated[index].likes || 0) + 1;
+    updated[index].hasLiked = true;
+    setRankingList(updated);
+    localStorage.setItem("reader_wechat_ranking_cache", JSON.stringify(updated));
+  };
+
+  if (!isOpen) return null;
+
+  return (
+    <div
+      className="fixed inset-0 flex items-center justify-center bg-black/70 backdrop-blur-md animate-fade-in font-sans"
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 1450,
+      }}
+    >
+      <div className="relative w-full max-w-md h-[92vh] max-h-[850px] bg-[#F7F8FA] dark:bg-[#18181A] text-[#1A1A1A] dark:text-[#E8E8E8] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-white/40 dark:border-stone-800">
+        {/* 顶部标题栏 */}
+        <div className="flex items-center justify-between px-6 pt-5 pb-3 border-b border-stone-200/60 dark:border-stone-800/80 bg-white/60 dark:bg-stone-900/60 backdrop-blur">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={onClose}
+              className="w-9 h-9 rounded-full bg-white dark:bg-stone-800 shadow-sm flex items-center justify-center text-stone-700 dark:text-stone-300 active:scale-90 transition-transform"
+            >
+              <span className="material-symbols-outlined text-xl">arrow_back</span>
+            </button>
+            <div>
+              <h1 className="text-lg font-bold text-stone-900 dark:text-white flex items-center gap-1.5">
+                <span>📚 读书排行榜</span>
+              </h1>
+              <p className="text-[10px] text-stone-400">与传讯好友的本周共读竞技</p>
+            </div>
+          </div>
+          <button
+            onClick={() => {
+              localStorage.removeItem("reader_wechat_ranking_cache");
+              generateLeaderboard();
+            }}
+            disabled={isLoading}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-full text-xs font-medium bg-[#1B72E8]/10 text-[#1B72E8] hover:bg-[#1B72E8]/20 active:scale-95 transition-all disabled:opacity-50"
+          >
+            <span className={`material-symbols-outlined text-sm ${isLoading ? "animate-spin" : ""}`}>
+              sync
+            </span>
+            <span>{isLoading ? "统计中" : "刷新"}</span>
+          </button>
+        </div>
+
+        {/* 楼主本周成绩战报 Banner */}
+        {userRankInfo && (
+          <div className="mx-5 mt-4 p-4 rounded-2xl bg-gradient-to-r from-[#1B72E8] to-[#4B96FF] text-white shadow-md flex items-center justify-between">
+            <div className="space-y-0.5">
+              <div className="text-xs opacity-90">你在传讯好友中排名</div>
+              <div className="text-2xl font-black flex items-center gap-2">
+                <span>第 {userRankInfo.rank} 名</span>
+                {userRankInfo.rank === 1 ? "👑" : userRankInfo.rank === 2 ? "🥈" : "🥉"}
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-xs opacity-90">本周共读时长</div>
+              <div className="text-lg font-bold font-mono">{userRankInfo.readHours}</div>
+            </div>
+          </div>
+        )}
+
+        {/* 排行榜列表 */}
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3 no-scrollbar">
+          {isLoading && rankingList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center h-64 gap-3">
+              <div className="w-10 h-10 border-3 border-[#1B72E8] border-t-transparent rounded-full animate-spin"></div>
+              <p className="text-xs text-stone-500 font-serif">正在统计诸位密探与好友的本周读书卷轴...</p>
+            </div>
+          ) : (
+            rankingList.map((item, index) => {
+              const isTop1 = index === 0;
+              const isTop2 = index === 1;
+              const isTop3 = index === 2;
+
+              return (
+                <div
+                  key={item.id || index}
+                  onClick={() => {
+                    if (onOpenProfile) {
+                      onOpenProfile(item.characterObj || { name: item.name });
+                    }
+                  }}
+                  className={`p-3.5 rounded-2xl border transition-all flex items-center gap-3.5 cursor-pointer active:scale-[0.98] ${
+                    item.isUser
+                      ? "bg-[#1B72E8]/5 dark:bg-[#1B72E8]/10 border-[#1B72E8]/30 shadow-sm"
+                      : "bg-white dark:bg-[#202023] border-stone-100 dark:border-stone-800/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:border-[#1B72E8]/40"
+                  }`}
+                >
+                  {/* 排名奖牌 / 数字 */}
+                  <div className="w-6 flex items-center justify-center text-center">
+                    {isTop1 ? (
+                      <span className="text-xl">🥇</span>
+                    ) : isTop2 ? (
+                      <span className="text-xl">🥈</span>
+                    ) : isTop3 ? (
+                      <span className="text-xl">🥉</span>
+                    ) : (
+                      <span className="text-sm font-bold text-stone-400 font-mono">
+                        {index + 1}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* 圆形头像 */}
+                  <div className="relative">
+                    <div
+                      className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-base shadow-inner"
+                      style={{ backgroundColor: item.avatarColor || "#695c51" }}
+                    >
+                      {item.avatar ? (
+                        <img src={item.avatar} alt={item.name} className="w-full h-full object-cover" />
+                      ) : (
+                        (item.name || "友").slice(0, 1)
+                      )}
+                    </div>
+                  </div>
+
+                  {/* 名字与读书签名 */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-sm font-bold text-stone-900 dark:text-white truncate">
+                        {item.name}
+                      </span>
+                      {item.isUser && (
+                        <span className="px-1.5 py-0.2 rounded text-[10px] font-bold bg-[#1B72E8] text-white">
+                          我
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-[11px] text-stone-400 dark:text-stone-500 truncate mt-0.5 font-serif">
+                      {item.currentBookQuote || "正在静心阅读经典"}
+                    </p>
+                  </div>
+
+                  {/* 本周时长 */}
+                  <div className="text-right flex-shrink-0">
+                    <div className="text-sm font-bold text-stone-900 dark:text-white font-mono">
+                      {item.readTimeStr || `${item.readHours || 0}小时`}
+                    </div>
+                    {/* 点赞按钮 */}
+                    <button
+                      onClick={(e) => handleLike(e, index)}
+                      className={`flex items-center gap-1 text-[11px] mt-1 ml-auto transition-transform active:scale-125 ${
+                        item.hasLiked ? "text-red-500 font-bold" : "text-stone-400 hover:text-red-400"
+                      }`}
+                    >
+                      <span>{item.hasLiked ? "❤️" : "🤍"}</span>
+                      <span>{item.likes || 0}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        {/* 底部提示 */}
+        <div className="p-3 text-center border-t border-stone-200/50 dark:border-stone-800 bg-white/40 dark:bg-stone-900/40 text-[11px] text-stone-400">
+          💡 点击任意好友卡片，可直接打开其专属【微信读书个人主页】
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 // ==================== [新增] 长期记忆设置组件 ====================
 // ==================== [新增/修改] 长期记忆设置组件 ====================
 const LongTermMemoryPage = () => {
@@ -91664,6 +92633,9 @@ const MasterApp = () => {
   const [isReadingDetailOpen, setIsReadingDetailOpen] = useState(false);
   // [新增] 心仪艺术家排行榜页面状态
   const [isArtistRankOpen, setIsArtistRankOpen] = useState(false);
+  // [新增] 微信读书风格好友排行榜与角色主页状态
+  const [isReadingLeaderboardOpen, setIsReadingLeaderboardOpen] = useState(false);
+  const [selectedLeaderboardChar, setSelectedLeaderboardChar] = useState(null);
   // [新增] 约稿弹窗与约稿藏书阁状态
   const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
   const [activeCommissionArtist, setActiveCommissionArtist] = useState(null);
@@ -94313,7 +95285,8 @@ const MasterApp = () => {
                     </p>
                   </div>
                   <div
-                    className="p-6 rounded-3xl flex flex-col justify-between"
+                    onClick={() => setIsReadingLeaderboardOpen(true)}
+                    className="p-6 rounded-3xl flex flex-col justify-between cursor-pointer active:scale-95 transition-all shadow-sm hover:shadow-md"
                     style={{
                       backgroundColor: "var(--tertiary-container)",
                     }}
@@ -94325,7 +95298,7 @@ const MasterApp = () => {
                       local_library
                     </span>
                     <p
-                      className="text-xs font-label uppercase tracking-wider mt-4"
+                      className="text-xs font-label uppercase tracking-wider mt-4 font-bold"
                       style={{ color: "var(--on-tertiary-container)" }}
                     >
                       读书排行榜
@@ -94800,6 +95773,27 @@ const MasterApp = () => {
             setCurrentReaderTab("bookstore");
             setBookstoreSubTab("custom_library");
           }}
+        />
+      )}
+
+      {/* [新增] 微信读书风格 · 好友读书排行榜 */}
+      {isReadingLeaderboardOpen && (
+        <WeChatReadingLeaderboardModal
+          isOpen={isReadingLeaderboardOpen}
+          onClose={() => setIsReadingLeaderboardOpen(false)}
+          onOpenProfile={(char) => {
+            setSelectedLeaderboardChar(char);
+          }}
+        />
+      )}
+
+      {/* [新增] 微信读书风格 · 角色个人主页 */}
+      {selectedLeaderboardChar && (
+        <WeChatReadingProfileModal
+          isOpen={!!selectedLeaderboardChar}
+          onClose={() => setSelectedLeaderboardChar(null)}
+          character={selectedLeaderboardChar}
+          onAddToBookshelf={handleAddToBookshelf}
         />
       )}
 
