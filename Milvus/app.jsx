@@ -39957,6 +39957,13 @@ const T13_OTHERS = [
     imgColor: "#ced8c3",
     icon: "ph-books",
   },
+  {
+    id: 5,
+    title: "方天水镜",
+    category: "古物通灵",
+    imgColor: "#89A8B2",
+    icon: "ph-sparkle",
+  },
 ];
 
 const T13_TABS = [
@@ -49402,6 +49409,1009 @@ const T13FlashcardPage = ({
   );
 };
 
+
+// ==================== T13 方天水镜·人物专属视界组件 (传讯、动向、娱乐、购物) ====================
+const T13CharacterMirrorView = ({ character, characterBio, avatar, onBack }) => {
+  const [activeTab, setActiveTab] = React.useState("msg"); // msg | dynamics | play | shop
+  const [showChat, setShowChat] = React.useState(false);
+  const [favor, setFavor] = React.useState(120);
+  const [toastText, setToastText] = React.useState("");
+  const [dynamicsList, setDynamicsList] = React.useState([]);
+  const [isSensing, setIsSensing] = React.useState(false);
+  const [gameResult, setGameResult] = React.useState(null);
+
+  // 初始化好感度与动向列表
+  React.useEffect(() => {
+    try {
+      const savedFavor = localStorage.getItem("mirror_favor_" + character);
+      if (savedFavor) setFavor(parseInt(savedFavor, 10));
+
+      const savedDynamics = localStorage.getItem("mirror_dynamics_" + character);
+      if (savedDynamics) {
+        setDynamicsList(JSON.parse(savedDynamics));
+      } else {
+        const defaultDynamics = [
+          { time: "卯时三刻 (06:45)", tag: "出勤点卯", content: "已在绣衣楼前院报到，佩戴好密探腰牌与短刃。" },
+          { time: "巳时一刻 (09:15)", tag: "情报核验", content: "正在隐蔽公廨中审阅广陵城西送来的最新密报。" },
+          { time: "未时二刻 (13:30)", tag: "巡查街巷", content: "化名穿行于南市茶楼酒肆之间，暗中排查形迹可疑之人。" },
+          { time: "酉时正点 (18:00)", tag: "归楼述职", content: "整理好今日所有谍报档案，向广陵王殿下呈递密折。" },
+        ];
+        setDynamicsList(defaultDynamics);
+        localStorage.setItem("mirror_dynamics_" + character, JSON.stringify(defaultDynamics));
+      }
+    } catch (e) {}
+  }, [character]);
+
+  // 提示框
+  const showToast = (txt) => {
+    setToastText(txt);
+    setTimeout(() => setToastText(""), 2500);
+  };
+
+  // 增加好感度
+  const addFavor = (amount, msg) => {
+    setFavor((prev) => {
+      const next = prev + amount;
+      try {
+        localStorage.setItem("mirror_favor_" + character, String(next));
+      } catch (e) {}
+      return next;
+    });
+    if (msg) showToast(msg);
+  };
+
+  // 专属礼物列表
+  const GIFTS = [
+    { id: 1, name: "脆皮肉夹馍", price: 30, favor: 10, icon: "ph-cookie", desc: "外酥里嫩，香气四溢，密探最爱充饥美味。" },
+    { id: 2, name: "精制紫檀算盘", price: 120, favor: 35, icon: "ph-calculator", desc: "珠圆玉润，打起算盘来分毫不差。" },
+    { id: 3, name: "古法松烟墨锭", price: 80, favor: 25, icon: "ph-pen-nib", desc: "落纸如漆，经久不褪，执笔密信必备。" },
+    { id: 4, name: "陈年杜康美酒", price: 150, favor: 45, icon: "ph-brandy", desc: "醇香清冽，把酒言欢，对饮消愁。" },
+    { id: 5, name: "秘制金创伤药", price: 200, favor: 60, icon: "ph-first-aid", desc: "楼内绝密配方，外出遇险疗伤圣品。" },
+    { id: 6, name: "苏绣金丝云帕", price: 300, favor: 100, icon: "ph-sparkle", desc: "巧夺天工，柔软细腻，寄托深情厚谊。" },
+  ];
+
+  // 赠送礼物
+  const handleSendGift = (gift) => {
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord("expense", gift.price, `方天水镜-赏赐${character}【${gift.name}】`);
+    }
+    addFavor(gift.favor, `赠送【${gift.name}】成功！好感度 +${gift.favor} ✨`);
+  };
+
+  // AI 灵犀探查最新动向
+  const handleSenseDynamics = async () => {
+    if (isSensing) return;
+    setIsSensing(true);
+    showToast("神识入微，正在感应其最新行踪...");
+
+    try {
+      const worldContext = window.getWorldBookContext ? window.getWorldBookContext() : "";
+      let userContext = "";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (savedPersonas.length > 0 && activeId) {
+          const activeUser = savedPersonas.find((p) => p.id == activeId);
+          if (activeUser) userContext = `广陵王/玩家称谓: ${activeUser.name}`;
+        }
+      } catch (e) {}
+
+      const prompt = `
+【世界背景】
+${worldContext}
+
+【密探设定】
+姓名：${character}
+人物介绍：${characterBio || "绣衣楼忠诚密探"}
+${userContext}
+
+【任务】
+请以该角色第一人称视角，写一条 60-120 字的“即时谍报/行踪日记”。
+必须严格输出纯 JSON 格式：
+{
+  "time": "今日（如戌时一刻/亥时初等）",
+  "tag": "四字状态标签（如暗察隐市/飞鸽传书/回护楼阁等）",
+  "content": "具体的行踪与心声内容"
+}
+`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是该古风角色的密探日志记录官，请严格返回纯 JSON 格式。" },
+            { role: "user", content: prompt }
+          ],
+          null,
+          (reply) => {
+            try {
+              const clean = reply.replace(/\`\`\`json|\`\`\`/g, "").trim();
+              const parsed = JSON.parse(clean);
+              const newItem = {
+                time: parsed.time || "今日即时",
+                tag: parsed.tag || "神识感应",
+                content: parsed.content || reply
+              };
+              const updated = [newItem, ...dynamicsList];
+              setDynamicsList(updated);
+              localStorage.setItem("mirror_dynamics_" + character, JSON.stringify(updated));
+              addFavor(15, "探查完成！已捕获最新动向手记 ✨");
+            } catch (err) {
+              const fallback = {
+                time: "今日方才",
+                tag: "密探归报",
+                content: reply.replace(/[{}"\\]/g, "").trim()
+              };
+              const updated = [fallback, ...dynamicsList];
+              setDynamicsList(updated);
+              localStorage.setItem("mirror_dynamics_" + character, JSON.stringify(updated));
+              addFavor(10, "动向已记录！");
+            }
+            setIsSensing(false);
+          },
+          (err) => {
+            console.error(err);
+            setIsSensing(false);
+            showToast("灵犀感应微弱，请稍后再试。");
+          }
+        );
+      } else {
+        setTimeout(() => {
+          const fallback = {
+            time: "今日方才",
+            tag: "巡视静候",
+            content: "于庭院阶前轻拭佩剑，静待殿下指令召发。"
+          };
+          const updated = [fallback, ...dynamicsList];
+          setDynamicsList(updated);
+          localStorage.setItem("mirror_dynamics_" + character, JSON.stringify(updated));
+          addFavor(10, "感应完成！");
+          setIsSensing(false);
+        }, 800);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsSensing(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "#F5F3EF",
+        zIndex: 260,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      {/* 顶部导航 */}
+      <div
+        style={{
+          height: "56px",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #E5DFD5",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 14px",
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.04)",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div
+            onClick={onBack}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#5A5F4D",
+            }}
+          >
+            <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <div
+              style={{
+                width: "38px",
+                height: "38px",
+                borderRadius: "50%",
+                overflow: "hidden",
+                border: "2px solid #89A8B2",
+                background: "#E8C3A8",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontWeight: "bold",
+              }}
+            >
+              {avatar ? <img src={avatar} alt={character} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : character.charAt(0)}
+            </div>
+            <div>
+              <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4033" }}>{character} · 专属视界</div>
+              <div style={{ fontSize: "11px", color: "#8E9482" }}>灵犀默契值: {favor}</div>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ fontSize: "12px", background: "rgba(137, 168, 178, 0.15)", color: "#4B7582", padding: "4px 10px", borderRadius: "12px", fontWeight: "600" }}>
+          水镜映照
+        </div>
+      </div>
+
+      {/* 四大功能导航 Tab */}
+      <div
+        style={{
+          display: "flex",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #EBE6DC",
+          padding: "0 10px",
+        }}
+      >
+        {[
+          { key: "msg", name: "传讯", icon: "ph-chats-teardrop" },
+          { key: "dynamics", name: "动向", icon: "ph-compass" },
+          { key: "play", name: "娱乐", icon: "ph-game-controller" },
+          { key: "shop", name: "购物", icon: "ph-shopping-bag" },
+        ].map((tab) => {
+          const isAct = activeTab === tab.key;
+          return (
+            <div
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              style={{
+                flex: 1,
+                padding: "11px 0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                fontSize: "14px",
+                fontWeight: isAct ? "700" : "500",
+                color: isAct ? "#447585" : "#7C8272",
+                borderBottom: isAct ? "3px solid #447585" : "3px solid transparent",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <i className={`ph ${tab.icon}`} style={{ fontSize: "17px" }}></i>
+              <span>{tab.name}</span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* 视界内容区 */}
+      <div
+        className="no-scrollbar"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "16px",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* 1. 传讯模块 */}
+        {activeTab === "msg" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            <div
+              style={{
+                background: "#FFFFFF",
+                borderRadius: "20px",
+                padding: "18px 16px",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
+                display: "flex",
+                alignItems: "center",
+                gap: "14px",
+              }}
+            >
+              <div
+                style={{
+                  width: "56px",
+                  height: "56px",
+                  borderRadius: "18px",
+                  background: "linear-gradient(135deg, #89A8B2 0%, #58808D 100%)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#fff",
+                  fontSize: "28px",
+                  boxShadow: "0 4px 12px rgba(88, 128, 141, 0.3)",
+                }}
+              >
+                <i className="ph ph-telegram-logo"></i>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: "16px", fontWeight: "700", color: "#3B4033", marginBottom: "3px" }}>
+                  密探专属加密专线
+                </div>
+                <div style={{ fontSize: "12.5px", color: "#7B8072" }}>
+                  Telegram 风格 1v1 即时传讯，随时调遣对话
+                </div>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowChat(true)}
+              style={{
+                width: "100%",
+                padding: "14px 0",
+                borderRadius: "16px",
+                border: "none",
+                background: "linear-gradient(135deg, #89A8B2 0%, #547E8B 100%)",
+                color: "#FFFFFF",
+                fontSize: "15.5px",
+                fontWeight: "700",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+                cursor: "pointer",
+                boxShadow: "0 6px 18px rgba(84, 126, 139, 0.35)",
+              }}
+            >
+              <i className="ph-fill ph-paper-plane-right" style={{ fontSize: "18px" }}></i>
+              <span>开启与 {character} 的 1v1 密谈</span>
+            </button>
+
+            {/* 人物介绍卡片 */}
+            <div
+              style={{
+                background: "#FFFFFF",
+                borderRadius: "18px",
+                padding: "16px",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+              }}
+            >
+              <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#547E8B", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                <i className="ph-bold ph-identification-card"></i>
+                <span>密探档案介绍</span>
+              </div>
+              <div style={{ fontSize: "13.5px", color: "#4A4F42", lineHeight: "1.65", whiteSpace: "pre-line" }}>
+                {characterBio || "暂无详细人物介绍，可前往楼内通讯录补充。"}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 2. 动向模块 */}
+        {activeTab === "dynamics" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div
+              style={{
+                background: "linear-gradient(135deg, #E6EFF2 0%, #DFEBEE 100%)",
+                borderRadius: "18px",
+                padding: "14px 16px",
+                border: "1px solid #C9DFE5",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "12px", color: "#66848E" }}>当前当值状态</div>
+                <div style={{ fontSize: "15px", fontWeight: "700", color: "#325761" }}>潜伏执勤 · 广陵当值中</div>
+              </div>
+              <button
+                onClick={handleSenseDynamics}
+                disabled={isSensing}
+                style={{
+                  background: isSensing ? "#889A9E" : "#4D7C8A",
+                  color: "#fff",
+                  padding: "6px 12px",
+                  borderRadius: "10px",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  border: "none",
+                  cursor: isSensing ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px"
+                }}
+              >
+                {isSensing ? (
+                  <>
+                    <i className="ph ph-spinner animate-spin"></i>
+                    <span>感应中</span>
+                  </>
+                ) : (
+                  <>
+                    <i className="ph ph-sparkle"></i>
+                    <span>探查动向</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#5A6052", margin: "6px 0 2px 4px" }}>
+              今日十二时辰动向日志
+            </div>
+
+            {dynamicsList.map((item, i) => (
+              <div
+                key={i}
+                style={{
+                  background: "#FFFFFF",
+                  borderRadius: "16px",
+                  padding: "12px 14px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                  borderLeft: "4px solid #89A8B2",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                  <span style={{ fontSize: "12px", fontWeight: "700", color: "#4C7784" }}>{item.time}</span>
+                  <span style={{ fontSize: "11px", background: "#F0EFEB", color: "#7B8072", padding: "2px 8px", borderRadius: "8px" }}>{item.tag}</span>
+                </div>
+                <div style={{ fontSize: "13px", color: "#4A4F44", lineHeight: "1.55" }}>
+                  {item.content}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 3. 娱乐模块 */}
+        {activeTab === "play" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {[
+              { title: "煮茶对弈", desc: "与密探品茗共弈，静心思策，增进彼此默契度。", icon: "ph-cup", reward: "默契 +15", action: () => addFavor(15, `与${character}煮茶对弈，妙手连发！默契 +15 ✨`) },
+              { title: "投壶博彩", desc: "在绣衣楼小院进行古风投壶比试，赢取赏银彩头。", icon: "ph-target", reward: "好感 +20", action: () => addFavor(20, `投壶十中八九，${character}击节赞叹！好感 +20 🎯`) },
+              { title: "灵犀相通", desc: "三问三答，探寻密探心中所想，测定心意共鸣。", icon: "ph-heart", reward: "好感 +25", action: () => addFavor(25, `心意相通，彼此默契更进一步！好感 +25 ♥`) },
+            ].map((game, i) => (
+              <div
+                key={i}
+                style={{
+                  background: "#FFFFFF",
+                  borderRadius: "18px",
+                  padding: "16px",
+                  boxShadow: "0 3px 12px rgba(0,0,0,0.04)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                  <div
+                    style={{
+                      width: "48px",
+                      height: "48px",
+                      borderRadius: "14px",
+                      background: "rgba(137, 168, 178, 0.18)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#467482",
+                      fontSize: "24px",
+                    }}
+                  >
+                    <i className={`ph ${game.icon}`}></i>
+                  </div>
+                  <div>
+                    <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4033" }}>{game.title}</div>
+                    <div style={{ fontSize: "12px", color: "#84897B", marginTop: "2px" }}>{game.desc}</div>
+                  </div>
+                </div>
+                <button
+                  onClick={game.action}
+                  style={{
+                    padding: "8px 14px",
+                    borderRadius: "12px",
+                    border: "none",
+                    background: "linear-gradient(135deg, #89A8B2 0%, #638A96 100%)",
+                    color: "#FFF",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    marginLeft: "8px",
+                  }}
+                >
+                  开启
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 4. 购物模块 */}
+        {activeTab === "shop" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#547E8B", margin: "2px 0 4px 4px" }}>
+              专属珍宝与赏赐礼铺
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+              {GIFTS.map((g) => (
+                <div
+                  key={g.id}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: "16px",
+                    padding: "12px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-between",
+                  }}
+                >
+                  <div>
+                    <div
+                      style={{
+                        width: "38px",
+                        height: "38px",
+                        borderRadius: "10px",
+                        background: "rgba(137, 168, 178, 0.15)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#467482",
+                        fontSize: "20px",
+                        marginBottom: "6px",
+                      }}
+                    >
+                      <i className={`ph ${g.icon}`}></i>
+                    </div>
+                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4033" }}>{g.name}</div>
+                    <div style={{ fontSize: "11px", color: "#8E9385", margin: "3px 0 8px 0", lineHeight: "1.4" }}>{g.desc}</div>
+                  </div>
+
+                  <button
+                    onClick={() => handleSendGift(g)}
+                    style={{
+                      width: "100%",
+                      padding: "7px 0",
+                      borderRadius: "10px",
+                      border: "none",
+                      background: "linear-gradient(135deg, #89A8B2 0%, #5E8896 100%)",
+                      color: "#FFF",
+                      fontSize: "12.5px",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "4px",
+                    }}
+                  >
+                    <i className="ph ph-gift"></i>
+                    <span>赏赐 ({g.price} 铢)</span>
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 提示 Toast */}
+      {toastText && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "80px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(35, 45, 48, 0.88)",
+            color: "#FFF",
+            padding: "10px 18px",
+            borderRadius: "20px",
+            fontSize: "13.5px",
+            fontWeight: "500",
+            backdropFilter: "blur(6px)",
+            zIndex: 999,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
+            animation: "fadeIn 0.2s ease-out",
+          }}
+        >
+          {toastText}
+        </div>
+      )}
+
+      {/* 嵌套唤起 Telegram 1v1 密谈 */}
+      {showChat && (
+        <T11TelegramChatPage
+          character={character}
+          characterBio={characterBio}
+          avatar={avatar}
+          onBack={() => setShowChat(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+// ==================== T13 方天水镜主页面组件 (雾气散开动效 + 镜中选人) ====================
+const T13WaterMirrorPage = ({ onBack }) => {
+  const [characterBios, setCharacterBios] = React.useState({});
+  const [avatars, setAvatars] = React.useState({});
+  const [selectedChar, setSelectedChar] = React.useState(null);
+  const [viewingChar, setViewingChar] = React.useState(null);
+  const [showSelector, setShowSelector] = React.useState(false);
+  const [fogDispersed, setFogDispersed] = React.useState(false);
+
+  // 初始化数据
+  React.useEffect(() => {
+    // 1. 头像
+    try {
+      const savedAvatars = localStorage.getItem("绣衣楼头像");
+      if (savedAvatars) setAvatars(JSON.parse(savedAvatars));
+    } catch (e) {}
+
+    // 2. 人物介绍
+    const loadBios = async () => {
+      try {
+        if (window.settingsStore?.getCharacterNotes) {
+          const loadedBios = await window.settingsStore.getCharacterNotes();
+          if (loadedBios && typeof loadedBios === "object") {
+            setCharacterBios(loadedBios);
+          }
+        }
+      } catch (e) {
+        console.warn("读取水镜联系人失败:", e);
+      }
+    };
+    loadBios();
+
+    // 3. 雾气散开动效延迟
+    const fogTimer = setTimeout(() => {
+      setFogDispersed(true);
+    }, 1800);
+
+    return () => clearTimeout(fogTimer);
+  }, []);
+
+  // 筛选在传讯中已配置的角色
+  const activeContacts = Object.keys(characterBios).filter(
+    (k) => characterBios[k] && characterBios[k].trim().length > 0
+  );
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "radial-gradient(circle at 50% 35%, #18232C 0%, #0A1015 100%)",
+        zIndex: 240,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        color: "#FFFFFF",
+      }}
+    >
+      {/* 顶部导航 */}
+      <div
+        style={{
+          height: "56px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 14px",
+          zIndex: 20,
+        }}
+      >
+        <div
+          onClick={onBack}
+          style={{
+            width: "38px",
+            height: "38px",
+            borderRadius: "50%",
+            background: "rgba(255, 255, 255, 0.12)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            backdropFilter: "blur(4px)",
+          }}
+        >
+          <i className="ph ph-caret-left" style={{ fontSize: "22px", color: "#FFF" }}></i>
+        </div>
+
+        <div style={{ fontSize: "17px", fontWeight: "700", letterSpacing: "2px", color: "#D7E6ED" }}>
+          方天水镜
+        </div>
+
+        <div style={{ width: "38px" }}></div>
+      </div>
+
+      {/* 雾气弥漫消散覆盖层 */}
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          pointerEvents: "none",
+          zIndex: 15,
+          opacity: fogDispersed ? 0 : 1,
+          transition: "opacity 1.6s cubic-bezier(0.25, 1, 0.5, 1)",
+          background: "radial-gradient(circle at center, rgba(230, 240, 245, 0.75) 0%, rgba(200, 220, 230, 0.95) 100%)",
+          backdropFilter: "blur(20px)",
+        }}
+      />
+
+      {/* 主体水镜鉴照区域 */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          boxSizing: "border-box",
+          zIndex: 10,
+          animation: "fadeIn 1.2s ease-out",
+        }}
+      >
+        {/* 诗意副标 */}
+        <div style={{ fontSize: "13px", color: "#9BB7C4", letterSpacing: "2px", marginBottom: "26px", opacity: 0.85 }}>
+          「 方 天 映 万 象 · 水 镜 照 故 人 」
+        </div>
+
+        {/* 东方青铜水镜主体 */}
+        <div
+          onClick={() => setShowSelector(true)}
+          style={{
+            width: "230px",
+            height: "230px",
+            borderRadius: "50%",
+            background: "radial-gradient(circle at center, #1B3542 0%, #0E1F29 70%, #061117 100%)",
+            border: "8px solid #8FAAB8",
+            boxShadow: "0 0 40px rgba(143, 170, 184, 0.4), inset 0 0 30px rgba(100, 150, 170, 0.5)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            position: "relative",
+            cursor: "pointer",
+            transition: "all 0.3s ease",
+            animation: "mirrorPulse 3s infinite ease-in-out",
+          }}
+        >
+          {/* 水镜波纹与金纹装饰 */}
+          <div
+            style={{
+              position: "absolute",
+              width: "100%",
+              height: "100%",
+              borderRadius: "50%",
+              border: "1px dashed rgba(255, 255, 255, 0.3)",
+              pointerEvents: "none",
+            }}
+          />
+
+          {selectedChar ? (
+            /* 镜中显化人物倒影 */
+            <div style={{ display: "flex", flexDirection: "column", alignItems: "center", animation: "fadeIn 0.5s ease-out" }}>
+              <div
+                style={{
+                  width: "90px",
+                  height: "90px",
+                  borderRadius: "50%",
+                  overflow: "hidden",
+                  border: "2px solid #D1E5EE",
+                  boxShadow: "0 0 20px rgba(209, 229, 238, 0.6)",
+                  marginBottom: "10px",
+                }}
+              >
+                {avatars[selectedChar] ? (
+                  <img src={avatars[selectedChar]} alt={selectedChar} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                ) : (
+                  <div style={{ width: "100%", height: "100%", background: "#E8C3A8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px", color: "#fff", fontWeight: "bold" }}>
+                    {selectedChar.charAt(0)}
+                  </div>
+                )}
+              </div>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#EAF4F8", letterSpacing: "1px" }}>
+                {selectedChar}
+              </div>
+              <div style={{ fontSize: "11px", color: "#8CB2C2", marginTop: "3px" }}>
+                轻触可更换镜中人物
+              </div>
+            </div>
+          ) : (
+            /* 初始镜中灵气 */
+            <div style={{ textAlign: "center", padding: "0 20px" }}>
+              <i className="ph-fill ph-sparkle" style={{ fontSize: "36px", color: "#A2C6D6", marginBottom: "8px", display: "block" }}></i>
+              <div style={{ fontSize: "15px", fontWeight: "600", color: "#E0EFF5", letterSpacing: "1px" }}>
+                点击水镜
+              </div>
+              <div style={{ fontSize: "12px", color: "#7B9EAE", marginTop: "4px" }}>
+                鉴照传讯中的密探故人
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 选中人物后的【查看】进入视界按钮 */}
+        {selectedChar && (
+          <button
+            onClick={() => setViewingChar(selectedChar)}
+            style={{
+              marginTop: "32px",
+              padding: "13px 36px",
+              borderRadius: "24px",
+              border: "1px solid rgba(255, 255, 255, 0.4)",
+              background: "linear-gradient(135deg, #7A9CA9 0%, #4D7382 100%)",
+              color: "#FFFFFF",
+              fontSize: "15px",
+              fontWeight: "700",
+              letterSpacing: "1.5px",
+              boxShadow: "0 8px 24px rgba(77, 115, 130, 0.45)",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              animation: "fadeIn 0.3s ease-out",
+            }}
+          >
+            <i className="ph-bold ph-eye" style={{ fontSize: "18px" }}></i>
+            <span>拨云观微 · 查看视界</span>
+          </button>
+        )}
+      </div>
+
+      {/* 选择镜中联系人抽屉 */}
+      {showSelector && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(6px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+          }}
+          onClick={() => setShowSelector(false)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "480px",
+              maxHeight: "65vh",
+              background: "#FDFCFA",
+              borderRadius: "28px 28px 0 0",
+              padding: "22px 20px 34px 20px",
+              boxSizing: "border-box",
+              color: "#383E31",
+              display: "flex",
+              flexDirection: "column",
+              animation: "slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
+              <div style={{ fontSize: "17px", fontWeight: "700", color: "#3B4235" }}>
+                选择水镜通灵人物
+              </div>
+              <div
+                onClick={() => setShowSelector(false)}
+                style={{ width: "30px", height: "30px", borderRadius: "50%", background: "#EAE7DF", display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer" }}
+              >
+                <i className="ph ph-x" style={{ fontSize: "16px", color: "#777C6F" }}></i>
+              </div>
+            </div>
+
+            <div
+              className="no-scrollbar"
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+              }}
+            >
+              {activeContacts.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 20px", color: "#92978A" }}>
+                  <i className="ph ph-mask-sad" style={{ fontSize: "36px", marginBottom: "8px", display: "block" }}></i>
+                  <p style={{ fontSize: "13.5px", margin: 0 }}>
+                    镜中空空，灵犀未定。
+                    <br />
+                    请先在【绣衣楼 → 通讯录】中为密探撰写<b>人物介绍</b>。
+                  </p>
+                </div>
+              ) : (
+                activeContacts.map((char) => {
+                  const isSel = selectedChar === char;
+                  return (
+                    <div
+                      key={char}
+                      onClick={() => {
+                        setSelectedChar(char);
+                        setShowSelector(false);
+                      }}
+                      style={{
+                        padding: "12px 14px",
+                        borderRadius: "16px",
+                        background: isSel ? "rgba(137, 168, 178, 0.15)" : "#F5F3ED",
+                        border: isSel ? "1.5px solid #89A8B2" : "1.5px solid transparent",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "44px",
+                          height: "44px",
+                          borderRadius: "50%",
+                          overflow: "hidden",
+                          background: "#E8C3A8",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#fff",
+                          fontWeight: "bold",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {avatars[char] ? (
+                          <img src={avatars[char]} alt={char} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        ) : (
+                          char.charAt(0)
+                        )}
+                      </div>
+
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4235" }}>{char}</div>
+                        <div style={{ fontSize: "12px", color: "#7B8072", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                          {characterBios[char]}
+                        </div>
+                      </div>
+
+                      {isSel && <i className="ph-bold ph-check" style={{ fontSize: "18px", color: "#4E7E8E" }}></i>}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 查看视界子页面 */}
+      {viewingChar && (
+        <T13CharacterMirrorView
+          character={viewingChar}
+          characterBio={characterBios[viewingChar]}
+          avatar={avatars[viewingChar]}
+          onBack={() => setViewingChar(null)}
+        />
+      )}
+
+      {/* 水镜专属动画样式 */}
+      <style>{`
+        @keyframes mirrorPulse {
+          0%, 100% { transform: scale(1); box-shadow: 0 0 35px rgba(143, 170, 184, 0.35); }
+          50% { transform: scale(1.02); box-shadow: 0 0 50px rgba(143, 170, 184, 0.55); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+
 // ==================== T13 学习系统页面组件 (整合版) ====================
 const T13LearningPage = ({ onBack }) => {
   const { useState, useEffect } = React;
@@ -53966,6 +54976,7 @@ const T13Page = ({
   const [showSandTable, setShowSandTable] = useState(false);
   const [showRelative, setShowRelative] = useState(false);
   const [showFarm, setShowFarm] = useState(false);
+  const [showWaterMirror, setShowWaterMirror] = useState(false);
 
   const getContentByTab = () => {
     switch (activeTab) {
@@ -54010,6 +55021,9 @@ const T13Page = ({
       {showFarm && (
         <OddFarmPage onBack={() => { setShowFarm(false); if (setIsFarmOpen) setIsFarmOpen(false); }} />
       )}
+      {showWaterMirror && (
+        <T13WaterMirrorPage onBack={() => setShowWaterMirror(false)} />
+      )}
       <div className="scroll-container hide-scrollbar">
         <T13Header />
 
@@ -54050,6 +55064,8 @@ const T13Page = ({
                     if (setIsFarmOpen) setIsFarmOpen(true);
                   } else if (item.title === "学习系统" || item.title.includes("学习")) {
                     setShowLearning(true);
+                  } else if (item.title === "方天水镜" || item.title.includes("水镜")) {
+                    setShowWaterMirror(true);
                   }
                 }}
               >
