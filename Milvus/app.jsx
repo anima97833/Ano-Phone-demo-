@@ -49411,168 +49411,603 @@ const T13FlashcardPage = ({
 
 
 // ==================== T13 方天水镜·人物专属视界组件 (传讯、动向、娱乐、购物) ====================
-const T13CharacterMirrorView = ({ character, characterBio, avatar, onBack }) => {
+const T13CharacterMirrorView = ({ character, characterProfile, avatar, onBack }) => {
   const [activeTab, setActiveTab] = React.useState("msg"); // msg | dynamics | play | shop
-  const [showChat, setShowChat] = React.useState(false);
-  const [favor, setFavor] = React.useState(120);
   const [toastText, setToastText] = React.useState("");
-  const [dynamicsList, setDynamicsList] = React.useState([]);
-  const [isSensing, setIsSensing] = React.useState(false);
-  const [gameResult, setGameResult] = React.useState(null);
 
-  // 初始化好感度与动向列表
-  React.useEffect(() => {
-    try {
-      const savedFavor = localStorage.getItem("mirror_favor_" + character);
-      if (savedFavor) setFavor(parseInt(savedFavor, 10));
+  // 1. 传讯模块状态 (与他人的秘信记录 >= 5条，点击展开对话详情)
+  const [secretMessages, setSecretMessages] = React.useState([]);
+  const [selectedSecret, setSelectedSecret] = React.useState(null);
+  const [isLoadingSecrets, setIsLoadingSecrets] = React.useState(false);
 
-      const savedDynamics = localStorage.getItem("mirror_dynamics_" + character);
-      if (savedDynamics) {
-        setDynamicsList(JSON.parse(savedDynamics));
-      } else {
-        const defaultDynamics = [
-          { time: "卯时三刻 (06:45)", tag: "出勤点卯", content: "已在绣衣楼前院报到，佩戴好密探腰牌与短刃。" },
-          { time: "巳时一刻 (09:15)", tag: "情报核验", content: "正在隐蔽公廨中审阅广陵城西送来的最新密报。" },
-          { time: "未时二刻 (13:30)", tag: "巡查街巷", content: "化名穿行于南市茶楼酒肆之间，暗中排查形迹可疑之人。" },
-          { time: "酉时正点 (18:00)", tag: "归楼述职", content: "整理好今日所有谍报档案，向广陵王殿下呈递密折。" },
-        ];
-        setDynamicsList(defaultDynamics);
-        localStorage.setItem("mirror_dynamics_" + character, JSON.stringify(defaultDynamics));
-      }
-    } catch (e) {}
-  }, [character]);
+  // 2. 动向模块状态 (近期备忘录 + 出门动向)
+  const [memos, setMemos] = React.useState([]);
+  const [trips, setTrips] = React.useState([]);
+  const [dynamicsSubTab, setDynamicsSubTab] = React.useState("memo"); // memo | trip
+  const [isLoadingDynamics, setIsLoadingDynamics] = React.useState(false);
 
-  // 提示框
+  // 3. 娱乐模块状态 (琴棋书画 + 君子六艺)
+  const [fourArts, setFourArts] = React.useState([]);
+  const [sixSkills, setSixSkills] = React.useState([]);
+  const [playSubTab, setPlaySubTab] = React.useState("fourArts"); // fourArts | sixSkills
+  const [isLoadingPlay, setIsLoadingPlay] = React.useState(false);
+
+  // 4. 购物模块状态 (太疾驰订单：买什么、买多少、给谁)
+  const [orders, setOrders] = React.useState([]);
+  const [selectedOrder, setSelectedOrder] = React.useState(null);
+  const [isLoadingOrders, setIsLoadingOrders] = React.useState(false);
+
+  // 提示弹窗
   const showToast = (txt) => {
     setToastText(txt);
     setTimeout(() => setToastText(""), 2500);
   };
 
-  // 增加好感度
-  const addFavor = (amount, msg) => {
-    setFavor((prev) => {
-      const next = prev + amount;
-      try {
-        localStorage.setItem("mirror_favor_" + character, String(next));
-      } catch (e) {}
-      return next;
-    });
-    if (msg) showToast(msg);
+  // 提取角色人设描述
+  const getCharProfileText = () => {
+    if (!characterProfile) return "绣衣楼密探，忠勇机敏。";
+    if (typeof characterProfile === "string") return characterProfile;
+    let txt = "";
+    if (characterProfile.personality) txt += `【性格】${characterProfile.personality} `;
+    if (characterProfile.style) txt += `【说话风格】${characterProfile.style} `;
+    if (characterProfile.background) txt += `【背景】${characterProfile.background} `;
+    if (characterProfile.bio) txt += `【生平】${characterProfile.bio} `;
+    return txt || JSON.stringify(characterProfile);
   };
 
-  // 专属礼物列表
-  const GIFTS = [
-    { id: 1, name: "脆皮肉夹馍", price: 30, favor: 10, icon: "ph-cookie", desc: "外酥里嫩，香气四溢，密探最爱充饥美味。" },
-    { id: 2, name: "精制紫檀算盘", price: 120, favor: 35, icon: "ph-calculator", desc: "珠圆玉润，打起算盘来分毫不差。" },
-    { id: 3, name: "古法松烟墨锭", price: 80, favor: 25, icon: "ph-pen-nib", desc: "落纸如漆，经久不褪，执笔密信必备。" },
-    { id: 4, name: "陈年杜康美酒", price: 150, favor: 45, icon: "ph-brandy", desc: "醇香清冽，把酒言欢，对饮消愁。" },
-    { id: 5, name: "秘制金创伤药", price: 200, favor: 60, icon: "ph-first-aid", desc: "楼内绝密配方，外出遇险疗伤圣品。" },
-    { id: 6, name: "苏绣金丝云帕", price: 300, favor: 100, icon: "ph-sparkle", desc: "巧夺天工，柔软细腻，寄托深情厚谊。" },
-  ];
+  // 获取世界书与用户面具
+  const getContexts = async () => {
+    const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
+    let userContext = "";
+    try {
+      const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+      const activeId = localStorage.getItem("active_persona_id");
+      if (savedPersonas.length > 0 && activeId) {
+        const activeUser = savedPersonas.find((p) => p.id == activeId);
+        if (activeUser) {
+          userContext = `【广陵王(用户)设定】姓名:${activeUser.name}，性格:${activeUser.personality || "未设定"}`;
+        }
+      }
+    } catch (e) {}
+    return { worldContext, userContext };
+  };
 
-  // 赠送礼物
-  const handleSendGift = (gift) => {
-    if (window.addTransactionRecord) {
-      window.addTransactionRecord("expense", gift.price, `方天水镜-赏赐${character}【${gift.name}】`);
+  // ================= 1. 加载 / 生成【传讯】(>= 5条与他人的暗中通信) =================
+  const loadOrGenerateSecrets = async (forceRefresh = false) => {
+    const cacheKey = `fangtian_secrets_${character}`;
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length >= 5) {
+            setSecretMessages(parsed);
+            return;
+          }
+        } catch (e) {}
+      }
     }
-    addFavor(gift.favor, `赠送【${gift.name}】成功！好感度 +${gift.favor} ✨`);
-  };
 
-  // AI 灵犀探查最新动向
-  const handleSenseDynamics = async () => {
-    if (isSensing) return;
-    setIsSensing(true);
-    showToast("神识入微，正在感应其最新行踪...");
+    setIsLoadingSecrets(true);
+    showToast("方天通灵，正在探查其与外界的密信往来...");
 
     try {
-      const worldContext = window.getWorldBookContext ? window.getWorldBookContext() : "";
-      let userContext = "";
-      try {
-        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
-        const activeId = localStorage.getItem("active_persona_id");
-        if (savedPersonas.length > 0 && activeId) {
-          const activeUser = savedPersonas.find((p) => p.id == activeId);
-          if (activeUser) userContext = `广陵王/玩家称谓: ${activeUser.name}`;
-        }
-      } catch (e) {}
+      const { worldContext, userContext } = await getContexts();
+      const charInfo = getCharProfileText();
 
       const prompt = `
-【世界背景】
+【世界观设定】
 ${worldContext}
 
-【密探设定】
-姓名：${character}
-人物介绍：${characterBio || "绣衣楼忠诚密探"}
 ${userContext}
 
-【任务】
-请以该角色第一人称视角，写一条 60-120 字的“即时谍报/行踪日记”。
-必须严格输出纯 JSON 格式：
+【密探角色设定】
+角色姓名：${character}
+角色人设与风格：${charInfo}
+
+【任务要求】
+请结合世界书与该角色的人设背景，探查并生成该角色近期与【其他人（如：楼内同僚、外勤线人、隐市掌柜、朝廷官员、故交亲友等，不能是广陵王本人）】的【至少 5 条】暗中传讯往来记录。
+内容必须充满古风谍报感，符合角色的行事作风。
+
+必须严格返回纯 JSON 数组格式（不要包含 \`\`\`json 标记），格式如下：
+[
+  {
+    "id": 1,
+    "correspondent": "通信对象姓名或代号（如：宛城线人·阿全 / 隐市典当掌柜 / 绣衣副使）",
+    "role": "对方身份（如：暗桩线人 / 江湖商贾 / 朝中耳目）",
+    "time": "传讯时辰（如：今日未时三刻）",
+    "summary": "传讯主旨与摘要（如：关于宛城粮秣调运与巡防密报的紧急交接）",
+    "secretLevel": "密级（如：绝密 / 机要 / 密函 / 寻常）",
+    "messages": [
+      { "sender": "对方姓名", "time": "13:20", "text": "对话内容1" },
+      { "sender": "${character}", "time": "13:22", "text": "对话内容2" },
+      { "sender": "对方姓名", "time": "13:25", "text": "对话内容3" }
+    ]
+  }
+]
+`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是一个深谙东汉暗流与绣衣楼谍报运作的古风史官。请严格输出纯 JSON 数组。" },
+            { role: "user", content: prompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              const clean = reply.replace(/```json|```/g, "").trim();
+              const parsed = JSON.parse(clean);
+              if (Array.isArray(parsed) && parsed.length >= 1) {
+                setSecretMessages(parsed);
+                localStorage.setItem(cacheKey, JSON.stringify(parsed));
+                showToast("已捕获最新秘信卷宗！");
+              }
+            } catch (err) {
+              console.error("解析传讯失败:", err);
+            }
+            setIsLoadingSecrets(false);
+          },
+          () => setIsLoadingSecrets(false)
+        );
+      } else {
+        // Fallback default 5 messages
+        const defaultSecrets = [
+          {
+            id: 1,
+            correspondent: "宛城暗桩·阿全",
+            role: "潜伏线人",
+            time: "今日未时三刻",
+            summary: "宛城太守府私铸铜钱之账册残卷已得手，候命接应。",
+            secretLevel: "绝密",
+            messages: [
+              { sender: "宛城暗桩·阿全", time: "13:20", text: "主簿大人，账册残卷已从后厨地窖取出，藏于茶砖之内。" },
+              { sender: character, time: "13:23", text: "切勿走宛洛官道，绕行伏牛山水道，酉时在城南驿馆密接。" },
+              { sender: "宛城暗桩·阿全", time: "13:25", text: "遵命！属下定誓死护送。" }
+            ]
+          },
+          {
+            id: 2,
+            correspondent: "广陵隐市·老钱掌柜",
+            role: "黑市眼线",
+            time: "昨日申时一刻",
+            summary: "关于北地流民购入大批精铁军械之异动核查。",
+            secretLevel: "机要",
+            messages: [
+              { sender: "老钱掌柜", time: "15:10", text: "大人，昨日有人出十箱马蹄金，在黑市扫尽了精铁短弩。" },
+              { sender: character, time: "15:15", text: "可曾查清买家腰牌印信？" },
+              { sender: "老钱掌柜", time: "15:18", text: "袖口隐有双头鸷鸟纹，看似西凉军中暗卫。" }
+            ]
+          },
+          {
+            id: 3,
+            correspondent: "绣衣楼·雀部暗卫",
+            role: "同僚下属",
+            time: "前日亥时二刻",
+            summary: "广陵王府邸周边防务夜巡换岗密报与伏哨排查。",
+            secretLevel: "密函",
+            messages: [
+              { sender: "雀部暗卫", time: "21:30", text: "大人，后园水榭外围已增设三道暗铃与浸毒铁蒺藜。" },
+              { sender: character, time: "21:35", text: "殿下近来常夜读卷宗，东侧更夫巡夜需放轻脚步，莫扰了殿下安歇。" },
+              { sender: "雀部暗卫", time: "21:36", text: "属下明白，已令暗哨换软底鹿皮靴。" }
+            ]
+          },
+          {
+            id: 4,
+            correspondent: "洛阳太学·故交同窗",
+            role: "旧日知交",
+            time: "三日前午时",
+            summary: "关于洛阳朝堂策论风向与朝廷官吏考绩评语密探。",
+            secretLevel: "寻常",
+            messages: [
+              { sender: "洛阳同窗", time: "12:00", text: "近来洛阳风声鹤唳，宦官与外戚争权愈烈，兄在广陵可还安好？" },
+              { sender: character, time: "12:05", text: "广陵风平浪静，唯账务繁冗。贤弟在京师宜深自韬晦，少涉清议。" },
+              { sender: "洛阳同窗", time: "12:10", text: "谨受教，京中若有邸报变动，定即刻抄送与兄。" }
+            ]
+          },
+          {
+            id: 5,
+            correspondent: "江东药铺·回春堂主",
+            role: "秘密药师",
+            time: "四日前辰时",
+            summary: "定制安神宁心雪梨膏与驱毒金创散之配伍清单。",
+            secretLevel: "密函",
+            messages: [
+              { sender: "回春堂主", time: "08:20", text: "大人所托之百年老山参及川贝雪梨膏已配好，去除了苦涩之气，甘甜适口。" },
+              { sender: character, time: "08:25", text: "封泥务必严密，明日派可靠之人送至绣衣楼侧门。" },
+              { sender: "回春堂主", time: "08:30", text: "大人放心，已按殿下最喜之甜度特别调配。" }
+            ]
+          }
+        ];
+        setSecretMessages(defaultSecrets);
+        localStorage.setItem(cacheKey, JSON.stringify(defaultSecrets));
+        setIsLoadingSecrets(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsLoadingSecrets(false);
+    }
+  };
+
+  // ================= 2. 加载 / 生成【动向】(备忘录 + 出门足迹) =================
+  const loadOrGenerateDynamics = async (forceRefresh = false) => {
+    const cacheKey = `fangtian_dynamics_${character}`;
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed.memos && parsed.trips) {
+            setMemos(parsed.memos);
+            setTrips(parsed.trips);
+            return;
+          }
+        } catch (e) {}
+      }
+    }
+
+    setIsLoadingDynamics(true);
+    showToast("神识观微，正在探查其近期备忘手记与出门足迹...");
+
+    try {
+      const { worldContext, userContext } = await getContexts();
+      const charInfo = getCharProfileText();
+
+      const prompt = `
+【世界观设定】
+${worldContext}
+
+${userContext}
+
+【密探角色设定】
+角色姓名：${character}
+角色人设与风格：${charInfo}
+
+【任务要求】
+请以该角色的视角与习惯，生成其近期的【随身备忘录 (memos)】（4-6条）与【出门动向轨迹 (trips)】（4-6条）。
+内容要极其生活化、细节化，体现角色性格（如若是傅融则精打细算、关注账目与殿下；若是刘辩则向往民间肆意与殿下相伴等）。
+
+必须严格返回纯 JSON 对象格式（不要包含 \`\`\`json 标记）：
 {
-  "time": "今日（如戌时一刻/亥时初等）",
-  "tag": "四字状态标签（如暗察隐市/飞鸽传书/回护楼阁等）",
-  "content": "具体的行踪与心声内容"
+  "memos": [
+    {
+      "id": 1,
+      "tag": "急务 / 账目 / 私隐 / 挂念",
+      "time": "今日辰时",
+      "title": "备忘标题",
+      "content": "备忘录详细内容"
+    }
+  ],
+  "trips": [
+    {
+      "id": 1,
+      "time": "今日巳时 (09:30)",
+      "destination": "目的地地点（如：广陵东市药铺 / 城外松涛林）",
+      "purpose": "出行缘由（如：选购安神香料 / 巡查潜伏暗哨）",
+      "detail": "出行见闻与细节心得"
+    }
+  ]
 }
 `;
 
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是该古风角色的密探日志记录官，请严格返回纯 JSON 格式。" },
-            { role: "user", content: prompt }
+            { role: "system", content: "你是该古风角色的心腹书吏，负责整理其个人备忘与行踪手记。严格输出纯 JSON 对象。" },
+            { role: "user", content: prompt },
           ],
           null,
           (reply) => {
             try {
-              const clean = reply.replace(/\`\`\`json|\`\`\`/g, "").trim();
+              const clean = reply.replace(/```json|```/g, "").trim();
               const parsed = JSON.parse(clean);
-              const newItem = {
-                time: parsed.time || "今日即时",
-                tag: parsed.tag || "神识感应",
-                content: parsed.content || reply
-              };
-              const updated = [newItem, ...dynamicsList];
-              setDynamicsList(updated);
-              localStorage.setItem("mirror_dynamics_" + character, JSON.stringify(updated));
-              addFavor(15, "探查完成！已捕获最新动向手记 ✨");
+              if (parsed.memos && parsed.trips) {
+                setMemos(parsed.memos);
+                setTrips(parsed.trips);
+                localStorage.setItem(cacheKey, JSON.stringify(parsed));
+                showToast("已捕获最新备忘与出行轨迹！");
+              }
             } catch (err) {
-              const fallback = {
-                time: "今日方才",
-                tag: "密探归报",
-                content: reply.replace(/[{}"\\]/g, "").trim()
-              };
-              const updated = [fallback, ...dynamicsList];
-              setDynamicsList(updated);
-              localStorage.setItem("mirror_dynamics_" + character, JSON.stringify(updated));
-              addFavor(10, "动向已记录！");
+              console.error("解析动向失败:", err);
             }
-            setIsSensing(false);
+            setIsLoadingDynamics(false);
           },
-          (err) => {
-            console.error(err);
-            setIsSensing(false);
-            showToast("灵犀感应微弱，请稍后再试。");
-          }
+          () => setIsLoadingDynamics(false)
         );
       } else {
-        setTimeout(() => {
-          const fallback = {
-            time: "今日方才",
-            tag: "巡视静候",
-            content: "于庭院阶前轻拭佩剑，静待殿下指令召发。"
-          };
-          const updated = [fallback, ...dynamicsList];
-          setDynamicsList(updated);
-          localStorage.setItem("mirror_dynamics_" + character, JSON.stringify(updated));
-          addFavor(10, "感应完成！");
-          setIsSensing(false);
-        }, 800);
+        const defaultDyn = {
+          memos: [
+            { id: 1, tag: "急务", time: "今日辰时", title: "清核隐市三月份铁矿进出账目", content: "账面尚差银铢八十二两，需亲自前往城西货栈复查提货单据，严防贪墨。" },
+            { id: 2, tag: "挂念", time: "昨日戌时", title: "购置南山银针茶饼及蜜饯", content: "广陵王殿下近日批阅谍报甚晚，需着人备好温热甜润之饮品置于案头。" },
+            { id: 3, tag: "防备", time: "前日未时", title: "更替后苑暗桩轮值口令", content: "近日有可疑飞鸽盘旋于广陵城北，需将接头暗号改为'春山夜雨'。" },
+            { id: 4, tag: "修缮", time: "四日前", title: "擦拭龙泉短刃与暗弩机括", content: "弩机簧片微有锈涩，已用菜籽油精心擦拭保养，填装透甲毒针十二支。" }
+          ],
+          trips: [
+            { id: 1, time: "今日巳时 (09:45)", destination: "广陵南市·茗香阁", purpose: "秘密接头", detail: "乔装为茶商与宛城信使碰头，取得西凉驻军调防密图，未见尾随之人。" },
+            { id: 2, time: "昨日未时 (14:20)", destination: "广陵府衙户曹", purpose: "核查赋税", detail: "查验今年广陵郡春蚕丝绢税赋名册，发现两处漏报庄园，已暗中记录。" },
+            { id: 3, time: "前日申时 (16:00)", destination: "城北郊外落霞亭", purpose: "放鹰传书", detail: "向江东密探放飞灵鸢二只，传达最新戒备指令，归途顺道采撷野菊数朵。" },
+            { id: 4, time: "四日前酉时 (18:30)", destination: "绣衣楼隐秘地窖", purpose: "清点军械", detail: "核实新到短刀八十柄、轻甲三十具，成色上乘，已入库封存。" }
+          ]
+        };
+        setMemos(defaultDyn.memos);
+        setTrips(defaultDyn.trips);
+        localStorage.setItem(cacheKey, JSON.stringify(defaultDyn));
+        setIsLoadingDynamics(false);
       }
     } catch (e) {
       console.error(e);
-      setIsSensing(false);
+      setIsLoadingDynamics(false);
     }
   };
+
+  // ================= 3. 加载 / 生成【娱乐】(琴棋书画 + 君子六艺) =================
+  const loadOrGeneratePlay = async (forceRefresh = false) => {
+    const cacheKey = `fangtian_play_${character}`;
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed.fourArts && parsed.sixSkills) {
+            setFourArts(parsed.fourArts);
+            setSixSkills(parsed.sixSkills);
+            return;
+          }
+        } catch (e) {}
+      }
+    }
+
+    setIsLoadingPlay(true);
+    showToast("方天通灵，正在探查其琴棋书画与六艺修习情况...");
+
+    try {
+      const { worldContext, userContext } = await getContexts();
+      const charInfo = getCharProfileText();
+
+      const prompt = `
+【世界观设定】
+${worldContext}
+
+${userContext}
+
+【密探角色设定】
+角色姓名：${character}
+角色人设与风格：${charInfo}
+
+【任务要求】
+请细致生成该角色近期的【琴棋书画 (fourArts)】与【君子六艺 (sixSkills)】游玩修习记录。
+要求描绘极具古典意蕴与文人雅士风采，极其贴合其人设特质。
+
+必须严格返回纯 JSON 对象格式（不要包含 \`\`\`json 标记）：
+{
+  "fourArts": [
+    {
+      "id": 1,
+      "category": "琴 / 棋 / 书 / 画",
+      "title": "作品/曲目/棋局名（如：绿绮引《高山流水》 / 与某人对弈《烂柯残局》 / 临《石门颂》汉隶 / 泼墨《墨竹栖鸢图》）",
+      "time": "修习时日（如：昨日雨夜 / 暮春初九）",
+      "detail": "抚琴/弈棋/挥毫/泼墨之细节与内心意境感悟"
+    }
+  ],
+  "sixSkills": [
+    {
+      "id": 1,
+      "skill": "礼 / 乐 / 射 / 御 / 书 / 数",
+      "title": "修习项目（如：射·百步穿杨校场演练 / 数·九章算术推演粮秣 / 御·策烈马奔驰于平川）",
+      "time": "演练时日",
+      "detail": "具体的游玩演习过程与收获"
+    }
+  ]
+}
+`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是一个精通古代风雅六艺与琴棋书画的品鉴大师。请严格输出纯 JSON 对象。" },
+            { role: "user", content: prompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              const clean = reply.replace(/```json|```/g, "").trim();
+              const parsed = JSON.parse(clean);
+              if (parsed.fourArts && parsed.sixSkills) {
+                setFourArts(parsed.fourArts);
+                setSixSkills(parsed.sixSkills);
+                localStorage.setItem(cacheKey, JSON.stringify(parsed));
+                showToast("已捕获最新风雅雅玩卷宗！");
+              }
+            } catch (err) {
+              console.error("解析娱乐失败:", err);
+            }
+            setIsLoadingPlay(false);
+          },
+          () => setIsLoadingPlay(false)
+        );
+      } else {
+        const defaultPlay = {
+          fourArts: [
+            { id: 1, category: "琴", title: "抚七弦琴《平沙落雁》", time: "昨夜子时", detail: "案头燃沉香一炷，指拂冰弦，音律清越沉静。思及乱世风云，琴音忽转苍茫跌宕。" },
+            { id: 2, category: "棋", title: "复盘《星罗围杀局》", time: "前日未时", detail: "独坐轩窗之下，左右手对弈三十六手。黑子步步为营，白子奇谋反制，精研绝地反扑之策。" },
+            { id: 3, category: "书", title: "临摹汉隶《张迁碑》", time: "大前日晨曦", detail: "执紫毫笔，蘸松烟墨，临碑帖三纸。笔力雄健方整，字如其人，沉敛稳重而见筋骨。" },
+            { id: 4, category: "画", title: "水墨小品《江雪停舟图》", time: "五日前午后", detail: "以淡墨勾勒远山寒江，独留一叶孤舟与落雪相映。题跋八字：'心如止水，鉴照大千'。" }
+          ],
+          sixSkills: [
+            { id: 1, skill: "射", title: "校场引七石硬弓·贯虱穿杨", time: "今日卯时", detail: "于楼后演武场连发九箭，箭箭深没靶心红心，臂力沉凝，目力如隼。" },
+            { id: 2, skill: "数", title: "九章筹算·天下粮道运费推演", time: "昨日巳时", detail: "运筹算筹如飞，仅半盏茶功夫便算出转运宛洛三万斛粮草之最短损耗路径。" },
+            { id: 3, skill: "御", title: "驭追风黑鬃马·疾驰绕桩", time: "前日申时", detail: "不着鞍辔，仅凭双膝控马，腾跃穿梭于林木险隘之间，如风驰电掣。" },
+            { id: 4, skill: "礼", title: "参研先秦《周礼·秋官司寇》", time: "四日前夜", detail: "细读古之典刑与军律规制，正衣冠端坐，修身持正，明赏罚以定军心。" }
+          ]
+        };
+        setFourArts(defaultPlay.fourArts);
+        setSixSkills(defaultPlay.sixSkills);
+        localStorage.setItem(cacheKey, JSON.stringify(defaultPlay));
+        setIsLoadingPlay(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsLoadingPlay(false);
+    }
+  };
+
+  // ================= 4. 加载 / 生成【购物】(太疾驰订单记录) =================
+  const loadOrGenerateOrders = async (forceRefresh = false) => {
+    const cacheKey = `fangtian_orders_${character}`;
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length >= 4) {
+            setOrders(parsed);
+            return;
+          }
+        } catch (e) {}
+      }
+    }
+
+    setIsLoadingOrders(true);
+    showToast("方天通灵，正在调取其在太疾驰商城的消费订单账册...");
+
+    try {
+      const { worldContext, userContext } = await getContexts();
+      const charInfo = getCharProfileText();
+
+      const prompt = `
+【世界观设定】
+${worldContext}
+
+${userContext}
+
+【密探角色设定】
+角色姓名：${character}
+角色人设与风格：${charInfo}
+
+【任务要求】
+请结合太疾驰购物平台（包含：餐饮美食、生活百货、古董文玩、兵刃暗器、药材灵香、戏折票务等分类），生成该角色近期的【5-7条太疾驰购物订单】。
+必须清晰注明：
+1. 买了什么 (itemName)
+2. 所属分类 (category)
+3. 购买数量 (quantity)
+4. 花费金额 (cost)
+5. 到底买给谁 (recipient，如：赠广陵王殿下 / 犒赏楼内部属 / 自用 / 寄送远方故友等)
+6. 购买缘由与内心备注 (reason)
+
+必须严格返回纯 JSON 数组格式（不要包含 \`\`\`json 标记）：
+[
+  {
+    "id": 1,
+    "itemName": "商品名称",
+    "category": "太疾驰分类（如：珍馐餐饮 / 文房雅玩 / 暗阁器械 / 灵药补剂 / 锦衣配饰）",
+    "quantity": "数量（如：2匣 / 1柄 / 3坛）",
+    "cost": "花费金额（如：120 银铢）",
+    "recipient": "给谁（如：赠广陵王殿下 / 自用备战）",
+    "status": "已派达 / 运输中 / 隐秘代签",
+    "time": "下单时辰（如：今日午时）",
+    "reason": "购买动机与心意备注"
+  }
+]
+`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是太疾驰商城的首席总账房。请严格输出纯 JSON 数组。" },
+            { role: "user", content: prompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              const clean = reply.replace(/```json|```/g, "").trim();
+              const parsed = JSON.parse(clean);
+              if (Array.isArray(parsed) && parsed.length >= 1) {
+                setOrders(parsed);
+                localStorage.setItem(cacheKey, JSON.stringify(parsed));
+                showToast("已调取太疾驰全部消费账册！");
+              }
+            } catch (err) {
+              console.error("解析购物订单失败:", err);
+            }
+            setIsLoadingOrders(false);
+          },
+          () => setIsLoadingOrders(false)
+        );
+      } else {
+        const defaultOrders = [
+          {
+            id: 1,
+            itemName: "蒙顶甘露极品云雾茶 (精装)",
+            category: "珍馐餐饮",
+            quantity: "2 罐",
+            cost: "160 银铢",
+            recipient: "赠广陵王殿下",
+            status: "已派达·亲手奉上",
+            time: "今日辰时",
+            reason: "殿下近来常夜读卷宗至天明，特选高山初采嫩芽，甘冽清甜，最宜提神静气。"
+          },
+          {
+            id: 2,
+            itemName: "精炼淬毒透甲三棱破甲锥",
+            category: "暗阁器械",
+            quantity: "12 支",
+            cost: "240 银铢",
+            recipient: "自用备战",
+            status: "已派达·暗匣封存",
+            time: "昨日申时",
+            reason: "替换佩弩中磨损之箭镞，此锥破重铠如裂帛，护卫殿下巡行之必备杀器。"
+          },
+          {
+            id: 3,
+            itemName: "广陵斋·桂花松子香酥糖",
+            category: "珍馐餐饮",
+            quantity: "3 匣",
+            cost: "45 银铢",
+            recipient: "赠广陵王殿下",
+            status: "已派达·置于书案",
+            time: "前日未时",
+            reason: "尝闻殿下偶喜甜食，此糖入口酥松甜而不腻，劳神之余可佐茶充饥。"
+          },
+          {
+            id: 4,
+            itemName: "徽州松烟墨锭及澄心堂熟宣",
+            category: "文房雅玩",
+            quantity: "5 刀宣纸 + 2 锭墨",
+            cost: "110 银铢",
+            recipient: "自用核账",
+            status: "已派达·公廨领用",
+            time: "大前日午时",
+            reason: "楼内密账与谍报誊抄频繁，劣墨易晕染残缺，特购此上好松烟墨以保文字经年不褪。"
+          },
+          {
+            id: 5,
+            itemName: "云南白药金创回生散 (特级)",
+            category: "灵药补剂",
+            quantity: "4 瓶",
+            cost: "180 银铢",
+            recipient: "犒赏楼内雀部密探",
+            status: "已派达·分发随身",
+            time: "五日前酉时",
+            reason: "密探外勤涉险极多，备足顶尖金创药可保危难之际止血续命。"
+          }
+        ];
+        setOrders(defaultOrders);
+        localStorage.setItem(cacheKey, JSON.stringify(defaultOrders));
+        setIsLoadingOrders(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsLoadingOrders(false);
+    }
+  };
+
+  // 初始加载当前 Tab 数据
+  React.useEffect(() => {
+    if (activeTab === "msg") loadOrGenerateSecrets();
+    else if (activeTab === "dynamics") loadOrGenerateDynamics();
+    else if (activeTab === "play") loadOrGeneratePlay();
+    else if (activeTab === "shop") loadOrGenerateOrders();
+  }, [activeTab, character]);
 
   return (
     <div
@@ -49639,15 +50074,39 @@ ${userContext}
               {avatar ? <img src={avatar} alt={character} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : character.charAt(0)}
             </div>
             <div>
-              <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4033" }}>{character} · 专属视界</div>
-              <div style={{ fontSize: "11px", color: "#8E9482" }}>灵犀默契值: {favor}</div>
+              <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4033" }}>{character} · 方天视界</div>
+              <div style={{ fontSize: "11px", color: "#8E9482" }}>神识通灵 · 虚实尽览</div>
             </div>
           </div>
         </div>
 
-        <div style={{ fontSize: "12px", background: "rgba(137, 168, 178, 0.15)", color: "#4B7582", padding: "4px 10px", borderRadius: "12px", fontWeight: "600" }}>
-          水镜映照
-        </div>
+        {/* 刷新当前模块 AI 探查按钮 */}
+        <button
+          onClick={() => {
+            if (activeTab === "msg") loadOrGenerateSecrets(true);
+            else if (activeTab === "dynamics") loadOrGenerateDynamics(true);
+            else if (activeTab === "play") loadOrGeneratePlay(true);
+            else if (activeTab === "shop") loadOrGenerateOrders(true);
+          }}
+          disabled={isLoadingSecrets || isLoadingDynamics || isLoadingPlay || isLoadingOrders}
+          style={{
+            fontSize: "12px",
+            background: "linear-gradient(135deg, #89A8B2 0%, #5E8896 100%)",
+            color: "#FFFFFF",
+            padding: "5px 12px",
+            borderRadius: "14px",
+            border: "none",
+            fontWeight: "600",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            boxShadow: "0 2px 8px rgba(94, 136, 150, 0.3)"
+          }}
+        >
+          <i className="ph ph-sparkle"></i>
+          <span>探查最新</span>
+        </button>
       </div>
 
       {/* 四大功能导航 Tab */}
@@ -49657,6 +50116,7 @@ ${userContext}
           background: "#FFFFFF",
           borderBottom: "1px solid #EBE6DC",
           padding: "0 10px",
+          flexShrink: 0,
         }}
       >
         {[
@@ -49698,101 +50158,18 @@ ${userContext}
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "16px",
+          padding: "14px",
           boxSizing: "border-box",
         }}
       >
-        {/* 1. 传讯模块 */}
+        {/* ================= 1. 传讯模块：探查与他人的暗中通信 (>= 5条) ================= */}
         {activeTab === "msg" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
-            <div
-              style={{
-                background: "#FFFFFF",
-                borderRadius: "20px",
-                padding: "18px 16px",
-                boxShadow: "0 4px 16px rgba(0,0,0,0.05)",
-                display: "flex",
-                alignItems: "center",
-                gap: "14px",
-              }}
-            >
-              <div
-                style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "18px",
-                  background: "linear-gradient(135deg, #89A8B2 0%, #58808D 100%)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#fff",
-                  fontSize: "28px",
-                  boxShadow: "0 4px 12px rgba(88, 128, 141, 0.3)",
-                }}
-              >
-                <i className="ph ph-telegram-logo"></i>
-              </div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: "16px", fontWeight: "700", color: "#3B4033", marginBottom: "3px" }}>
-                  密探专属加密专线
-                </div>
-                <div style={{ fontSize: "12.5px", color: "#7B8072" }}>
-                  Telegram 风格 1v1 即时传讯，随时调遣对话
-                </div>
-              </div>
-            </div>
-
-            <button
-              onClick={() => setShowChat(true)}
-              style={{
-                width: "100%",
-                padding: "14px 0",
-                borderRadius: "16px",
-                border: "none",
-                background: "linear-gradient(135deg, #89A8B2 0%, #547E8B 100%)",
-                color: "#FFFFFF",
-                fontSize: "15.5px",
-                fontWeight: "700",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "8px",
-                cursor: "pointer",
-                boxShadow: "0 6px 18px rgba(84, 126, 139, 0.35)",
-              }}
-            >
-              <i className="ph-fill ph-paper-plane-right" style={{ fontSize: "18px" }}></i>
-              <span>开启与 {character} 的 1v1 密谈</span>
-            </button>
-
-            {/* 人物介绍卡片 */}
-            <div
-              style={{
-                background: "#FFFFFF",
-                borderRadius: "18px",
-                padding: "16px",
-                boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
-              }}
-            >
-              <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#547E8B", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
-                <i className="ph-bold ph-identification-card"></i>
-                <span>密探档案介绍</span>
-              </div>
-              <div style={{ fontSize: "13.5px", color: "#4A4F42", lineHeight: "1.65", whiteSpace: "pre-line" }}>
-                {characterBio || "暂无详细人物介绍，可前往楼内通讯录补充。"}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* 2. 动向模块 */}
-        {activeTab === "dynamics" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div
               style={{
                 background: "linear-gradient(135deg, #E6EFF2 0%, #DFEBEE 100%)",
-                borderRadius: "18px",
-                padding: "14px 16px",
+                borderRadius: "16px",
+                padding: "12px 14px",
                 border: "1px solid #C9DFE5",
                 display: "flex",
                 alignItems: "center",
@@ -49800,198 +50177,612 @@ ${userContext}
               }}
             >
               <div>
-                <div style={{ fontSize: "12px", color: "#66848E" }}>当前当值状态</div>
-                <div style={{ fontSize: "15px", fontWeight: "700", color: "#325761" }}>潜伏执勤 · 广陵当值中</div>
-              </div>
-              <button
-                onClick={handleSenseDynamics}
-                disabled={isSensing}
-                style={{
-                  background: isSensing ? "#889A9E" : "#4D7C8A",
-                  color: "#fff",
-                  padding: "6px 12px",
-                  borderRadius: "10px",
-                  fontSize: "12px",
-                  fontWeight: "600",
-                  border: "none",
-                  cursor: isSensing ? "not-allowed" : "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "4px"
-                }}
-              >
-                {isSensing ? (
-                  <>
-                    <i className="ph ph-spinner animate-spin"></i>
-                    <span>感应中</span>
-                  </>
-                ) : (
-                  <>
-                    <i className="ph ph-sparkle"></i>
-                    <span>探查动向</span>
-                  </>
-                )}
-              </button>
-            </div>
-
-            <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#5A6052", margin: "6px 0 2px 4px" }}>
-              今日十二时辰动向日志
-            </div>
-
-            {dynamicsList.map((item, i) => (
-              <div
-                key={i}
-                style={{
-                  background: "#FFFFFF",
-                  borderRadius: "16px",
-                  padding: "12px 14px",
-                  boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
-                  borderLeft: "4px solid #89A8B2",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                  <span style={{ fontSize: "12px", fontWeight: "700", color: "#4C7784" }}>{item.time}</span>
-                  <span style={{ fontSize: "11px", background: "#F0EFEB", color: "#7B8072", padding: "2px 8px", borderRadius: "8px" }}>{item.tag}</span>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: "#325761" }}>
+                  <i className="ph ph-shield-warning mr-1"></i> 暗中信笺卷宗
                 </div>
-                <div style={{ fontSize: "13px", color: "#4A4F44", lineHeight: "1.55" }}>
-                  {item.content}
+                <div style={{ fontSize: "11.5px", color: "#66848E", marginTop: "2px" }}>
+                  共截获 {secretMessages.length} 封往来密信 · 点击可拆封详阅
                 </div>
               </div>
-            ))}
-          </div>
-        )}
-
-        {/* 3. 娱乐模块 */}
-        {activeTab === "play" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            {[
-              { title: "煮茶对弈", desc: "与密探品茗共弈，静心思策，增进彼此默契度。", icon: "ph-cup", reward: "默契 +15", action: () => addFavor(15, `与${character}煮茶对弈，妙手连发！默契 +15 ✨`) },
-              { title: "投壶博彩", desc: "在绣衣楼小院进行古风投壶比试，赢取赏银彩头。", icon: "ph-target", reward: "好感 +20", action: () => addFavor(20, `投壶十中八九，${character}击节赞叹！好感 +20 🎯`) },
-              { title: "灵犀相通", desc: "三问三答，探寻密探心中所想，测定心意共鸣。", icon: "ph-heart", reward: "好感 +25", action: () => addFavor(25, `心意相通，彼此默契更进一步！好感 +25 ♥`) },
-            ].map((game, i) => (
-              <div
-                key={i}
-                style={{
-                  background: "#FFFFFF",
-                  borderRadius: "18px",
-                  padding: "16px",
-                  boxShadow: "0 3px 12px rgba(0,0,0,0.04)",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <div
-                    style={{
-                      width: "48px",
-                      height: "48px",
-                      borderRadius: "14px",
-                      background: "rgba(137, 168, 178, 0.18)",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      color: "#467482",
-                      fontSize: "24px",
-                    }}
-                  >
-                    <i className={`ph ${game.icon}`}></i>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4033" }}>{game.title}</div>
-                    <div style={{ fontSize: "12px", color: "#84897B", marginTop: "2px" }}>{game.desc}</div>
-                  </div>
-                </div>
-                <button
-                  onClick={game.action}
-                  style={{
-                    padding: "8px 14px",
-                    borderRadius: "12px",
-                    border: "none",
-                    background: "linear-gradient(135deg, #89A8B2 0%, #638A96 100%)",
-                    color: "#FFF",
-                    fontSize: "13px",
-                    fontWeight: "600",
-                    cursor: "pointer",
-                    flexShrink: 0,
-                    marginLeft: "8px",
-                  }}
-                >
-                  开启
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* 4. 购物模块 */}
-        {activeTab === "shop" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-            <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#547E8B", margin: "2px 0 4px 4px" }}>
-              专属珍宝与赏赐礼铺
+              <span style={{ fontSize: "11px", background: "#4D7C8A", color: "#fff", padding: "3px 8px", borderRadius: "8px", fontWeight: "600" }}>
+                AI 神识截获
+              </span>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
-              {GIFTS.map((g) => (
+
+            {isLoadingSecrets ? (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#7B8072" }}>
+                <i className="ph ph-spinner animate-spin text-3xl mb-2" style={{ color: "#4D7C8A" }}></i>
+                <div style={{ fontSize: "13px" }}>神识正在截获密信，请稍候...</div>
+              </div>
+            ) : (
+              secretMessages.map((item) => (
                 <div
-                  key={g.id}
+                  key={item.id}
+                  onClick={() => setSelectedSecret(item)}
                   style={{
                     background: "#FFFFFF",
                     borderRadius: "16px",
-                    padding: "12px",
+                    padding: "14px",
                     boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                    borderLeft: "4px solid #C5A059",
+                    cursor: "pointer",
+                    transition: "transform 0.15s, box-shadow 0.15s",
                     display: "flex",
                     flexDirection: "column",
-                    justifyContent: "space-between",
+                    gap: "6px",
                   }}
                 >
-                  <div>
-                    <div
-                      style={{
-                        width: "38px",
-                        height: "38px",
-                        borderRadius: "10px",
-                        background: "rgba(137, 168, 178, 0.15)",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        color: "#467482",
-                        fontSize: "20px",
-                        marginBottom: "6px",
-                      }}
-                    >
-                      <i className={`ph ${g.icon}`}></i>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>
+                        {item.correspondent}
+                      </span>
+                      <span style={{ fontSize: "10.5px", background: "#F0EFEB", color: "#7B8072", padding: "2px 6px", borderRadius: "6px" }}>
+                        {item.role}
+                      </span>
                     </div>
-                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4033" }}>{g.name}</div>
-                    <div style={{ fontSize: "11px", color: "#8E9385", margin: "3px 0 8px 0", lineHeight: "1.4" }}>{g.desc}</div>
+                    <span style={{
+                      fontSize: "10.5px",
+                      fontWeight: "700",
+                      padding: "2px 6px",
+                      borderRadius: "6px",
+                      background: item.secretLevel === "绝密" ? "#FCE4EC" : "#E8F5E9",
+                      color: item.secretLevel === "绝密" ? "#C2185B" : "#2E7D32"
+                    }}>
+                      {item.secretLevel}
+                    </span>
                   </div>
 
-                  <button
-                    onClick={() => handleSendGift(g)}
-                    style={{
-                      width: "100%",
-                      padding: "7px 0",
-                      borderRadius: "10px",
-                      border: "none",
-                      background: "linear-gradient(135deg, #89A8B2 0%, #5E8896 100%)",
-                      color: "#FFF",
-                      fontSize: "12.5px",
-                      fontWeight: "600",
-                      cursor: "pointer",
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: "4px",
-                    }}
-                  >
-                    <i className="ph ph-gift"></i>
-                    <span>赏赐 ({g.price} 铢)</span>
-                  </button>
+                  <div style={{ fontSize: "12.5px", color: "#5A6052", lineHeight: "1.5" }}>
+                    {item.summary}
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px", fontSize: "11px", color: "#8E9485" }}>
+                    <span><i className="ph ph-clock mr-1"></i>{item.time}</span>
+                    <span style={{ color: "#4E7E8E", fontWeight: "600", display: "flex", alignItems: "center", gap: "2px" }}>
+                      <span>拆信详阅</span>
+                      <i className="ph ph-caret-right"></i>
+                    </span>
+                  </div>
                 </div>
-              ))}
+              ))
+            )}
+          </div>
+        )}
+
+        {/* ================= 2. 动向模块：备忘录 + 出门足迹 ================= */}
+        {activeTab === "dynamics" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {/* 子分类切换 */}
+            <div style={{ display: "flex", gap: "8px", background: "#EAE7DF", padding: "4px", borderRadius: "12px" }}>
+              <button
+                onClick={() => setDynamicsSubTab("memo")}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: dynamicsSubTab === "memo" ? "700" : "500",
+                  background: dynamicsSubTab === "memo" ? "#FFFFFF" : "transparent",
+                  color: dynamicsSubTab === "memo" ? "#3B4235" : "#7B8072",
+                  cursor: "pointer",
+                  boxShadow: dynamicsSubTab === "memo" ? "0 2px 6px rgba(0,0,0,0.06)" : "none"
+                }}
+              >
+                <i className="ph ph-note-pencil mr-1"></i> 随身备忘录 ({memos.length})
+              </button>
+              <button
+                onClick={() => setDynamicsSubTab("trip")}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: dynamicsSubTab === "trip" ? "700" : "500",
+                  background: dynamicsSubTab === "trip" ? "#FFFFFF" : "transparent",
+                  color: dynamicsSubTab === "trip" ? "#3B4235" : "#7B8072",
+                  cursor: "pointer",
+                  boxShadow: dynamicsSubTab === "trip" ? "0 2px 6px rgba(0,0,0,0.06)" : "none"
+                }}
+              >
+                <i className="ph ph-footprints mr-1"></i> 出门行踪轨迹 ({trips.length})
+              </button>
             </div>
+
+            {isLoadingDynamics ? (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#7B8072" }}>
+                <i className="ph ph-spinner animate-spin text-3xl mb-2" style={{ color: "#4D7C8A" }}></i>
+                <div style={{ fontSize: "13px" }}>正在感应动向手记...</div>
+              </div>
+            ) : dynamicsSubTab === "memo" ? (
+              // 备忘录列表
+              memos.map((m) => (
+                <div
+                  key={m.id}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: "16px",
+                    padding: "14px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                    borderLeft: "4px solid #89A8B2",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <span style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>{m.title}</span>
+                    <span style={{ fontSize: "10.5px", background: "rgba(137,168,178,0.2)", color: "#457585", padding: "2px 8px", borderRadius: "8px", fontWeight: "600" }}>
+                      {m.tag}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#4A4F44", lineHeight: "1.6" }}>
+                    {m.content}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#8E9485", marginTop: "6px" }}>
+                    <i className="ph ph-calendar mr-1"></i>{m.time}
+                  </div>
+                </div>
+              ))
+            ) : (
+              // 出门足迹列表
+              trips.map((t) => (
+                <div
+                  key={t.id}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: "16px",
+                    padding: "14px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                    borderLeft: "4px solid #D6724B",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <i className="ph ph-map-pin-fill" style={{ color: "#D6724B" }}></i>
+                      <span>{t.destination}</span>
+                    </div>
+                    <span style={{ fontSize: "11px", color: "#8E9485" }}>{t.time}</span>
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#D6724B", fontWeight: "600", marginBottom: "4px" }}>
+                    【缘由】{t.purpose}
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#4A4F44", lineHeight: "1.55" }}>
+                    {t.detail}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* ================= 3. 娱乐模块：琴棋书画 + 君子六艺 ================= */}
+        {activeTab === "play" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {/* 子分类切换 */}
+            <div style={{ display: "flex", gap: "8px", background: "#EAE7DF", padding: "4px", borderRadius: "12px" }}>
+              <button
+                onClick={() => setPlaySubTab("fourArts")}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: playSubTab === "fourArts" ? "700" : "500",
+                  background: playSubTab === "fourArts" ? "#FFFFFF" : "transparent",
+                  color: playSubTab === "fourArts" ? "#3B4235" : "#7B8072",
+                  cursor: "pointer",
+                  boxShadow: playSubTab === "fourArts" ? "0 2px 6px rgba(0,0,0,0.06)" : "none"
+                }}
+              >
+                <i className="ph ph-paint-brush-broad mr-1"></i> 琴棋书画 ({fourArts.length})
+              </button>
+              <button
+                onClick={() => setPlaySubTab("sixSkills")}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontSize: "13px",
+                  fontWeight: playSubTab === "sixSkills" ? "700" : "500",
+                  background: playSubTab === "sixSkills" ? "#FFFFFF" : "transparent",
+                  color: playSubTab === "sixSkills" ? "#3B4235" : "#7B8072",
+                  cursor: "pointer",
+                  boxShadow: playSubTab === "sixSkills" ? "0 2px 6px rgba(0,0,0,0.06)" : "none"
+                }}
+              >
+                <i className="ph ph-sword mr-1"></i> 君子六艺 ({sixSkills.length})
+              </button>
+            </div>
+
+            {isLoadingPlay ? (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#7B8072" }}>
+                <i className="ph ph-spinner animate-spin text-3xl mb-2" style={{ color: "#4D7C8A" }}></i>
+                <div style={{ fontSize: "13px" }}>正在品鉴雅玩修行卷宗...</div>
+              </div>
+            ) : playSubTab === "fourArts" ? (
+              // 琴棋书画
+              fourArts.map((art) => (
+                <div
+                  key={art.id}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: "16px",
+                    padding: "14px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                    borderLeft: "4px solid #5A8F76",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "6px",
+                        background: "#5A8F76",
+                        color: "#fff",
+                        fontSize: "13px",
+                        fontWeight: "700",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}>
+                        {art.category}
+                      </span>
+                      <span style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235" }}>{art.title}</span>
+                    </div>
+                    <span style={{ fontSize: "11px", color: "#8E9485" }}>{art.time}</span>
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#4A4F44", lineHeight: "1.6", fontStyle: "italic", padding: "2px 0" }}>
+                    "{art.detail}"
+                  </div>
+                </div>
+              ))
+            ) : (
+              // 君子六艺
+              sixSkills.map((skill) => (
+                <div
+                  key={skill.id}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: "16px",
+                    padding: "14px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                    borderLeft: "4px solid #7E6551",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "6px",
+                        background: "#7E6551",
+                        color: "#fff",
+                        fontSize: "13px",
+                        fontWeight: "700",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }}>
+                        {skill.skill}
+                      </span>
+                      <span style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235" }}>{skill.title}</span>
+                    </div>
+                    <span style={{ fontSize: "11px", color: "#8E9485" }}>{skill.time}</span>
+                  </div>
+                  <div style={{ fontSize: "13px", color: "#4A4F44", lineHeight: "1.6" }}>
+                    {skill.detail}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* ================= 4. 购物模块：太疾驰订单记录 (买什么、买多少、给谁) ================= */}
+        {activeTab === "shop" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div
+              style={{
+                background: "linear-gradient(135deg, #FFF6EE 0%, #FEEDDC 100%)",
+                borderRadius: "16px",
+                padding: "12px 14px",
+                border: "1px solid #F5D3B3",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: "#8C4A1E" }}>
+                  <i className="ph ph-shopping-bag-open mr-1"></i> 太疾驰商城 · 消费总账
+                </div>
+                <div style={{ fontSize: "11.5px", color: "#A86D46", marginTop: "2px" }}>
+                  共调取 {orders.length} 笔订单 · 包含分类、数量与收件人
+                </div>
+              </div>
+              <span style={{ fontSize: "11px", background: "#D6724B", color: "#fff", padding: "3px 8px", borderRadius: "8px", fontWeight: "600" }}>
+                太疾驰派送
+              </span>
+            </div>
+
+            {isLoadingOrders ? (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#7B8072" }}>
+                <i className="ph ph-spinner animate-spin text-3xl mb-2" style={{ color: "#D6724B" }}></i>
+                <div style={{ fontSize: "13px" }}>正在调取太疾驰消费记录...</div>
+              </div>
+            ) : (
+              orders.map((ord) => (
+                <div
+                  key={ord.id}
+                  onClick={() => setSelectedOrder(ord)}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: "16px",
+                    padding: "14px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                    borderLeft: "4px solid #D6724B",
+                    cursor: "pointer",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235" }}>
+                        {ord.itemName}
+                      </span>
+                    </div>
+                    <span style={{ fontSize: "13px", fontWeight: "700", color: "#D6724B" }}>
+                      {ord.cost}
+                    </span>
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                    <span style={{ fontSize: "11px", background: "#F5F3ED", color: "#7B8072", padding: "2px 8px", borderRadius: "6px" }}>
+                      分类：{ord.category}
+                    </span>
+                    <span style={{ fontSize: "11px", background: "#F5F3ED", color: "#7B8072", padding: "2px 8px", borderRadius: "6px" }}>
+                      数量：{ord.quantity}
+                    </span>
+                    <span style={{
+                      fontSize: "11px",
+                      background: ord.recipient.includes("殿下") || ord.recipient.includes("广陵王") ? "#FBE9E7" : "#E8EAF6",
+                      color: ord.recipient.includes("殿下") || ord.recipient.includes("广陵王") ? "#D84315" : "#3949AB",
+                      fontWeight: "700",
+                      padding: "2px 8px",
+                      borderRadius: "6px"
+                    }}>
+                      给谁：{ord.recipient}
+                    </span>
+                  </div>
+
+                  <div style={{ fontSize: "12px", color: "#6A7062", lineHeight: "1.5", fontStyle: "italic", marginTop: "2px" }}>
+                    “{ord.reason}”
+                  </div>
+
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px", fontSize: "11px", color: "#8E9485" }}>
+                    <span><i className="ph ph-clock mr-1"></i>{ord.time} · {ord.status}</span>
+                    <span style={{ color: "#D6724B", fontWeight: "600" }}>查看签条 &gt;</span>
+                  </div>
+                </div>
+              ))
+            )}
           </div>
         )}
       </div>
+
+      {/* 传讯详情弹窗 Modal */}
+      {selectedSecret && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(6px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setSelectedSecret(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "420px",
+              maxHeight: "80vh",
+              background: "#FDFCFA",
+              borderRadius: "24px",
+              padding: "20px",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+              animation: "scaleUp 0.2s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: "1px solid #EBE6DC", paddingBottom: "12px", marginBottom: "12px" }}>
+              <div>
+                <div style={{ fontSize: "16px", fontWeight: "700", color: "#3B4235" }}>
+                  {selectedSecret.correspondent} 之暗信
+                </div>
+                <div style={{ fontSize: "11.5px", color: "#8E9485", marginTop: "2px" }}>
+                  密级：{selectedSecret.secretLevel} · {selectedSecret.time}
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedSecret(null)}
+                style={{ background: "none", border: "none", fontSize: "20px", color: "#8E9485", cursor: "pointer" }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ fontSize: "12px", color: "#7B8072", background: "#F5F3ED", padding: "8px 12px", borderRadius: "10px", marginBottom: "14px" }}>
+              <b>【信笺密由】</b> {selectedSecret.summary}
+            </div>
+
+            {/* 对话气泡 */}
+            <div
+              className="no-scrollbar"
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+                padding: "4px 0",
+              }}
+            >
+              {selectedSecret.messages && selectedSecret.messages.map((m, idx) => {
+                const isChar = m.sender === character;
+                return (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: isChar ? "flex-end" : "flex-start",
+                    }}
+                  >
+                    <div style={{ fontSize: "10.5px", color: "#8E9485", marginBottom: "2px" }}>
+                      {m.sender} · {m.time}
+                    </div>
+                    <div
+                      style={{
+                        maxWidth: "80%",
+                        padding: "10px 14px",
+                        borderRadius: isChar ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                        background: isChar ? "linear-gradient(135deg, #89A8B2 0%, #688A96 100%)" : "#FFFFFF",
+                        color: isChar ? "#FFFFFF" : "#3B4235",
+                        fontSize: "13px",
+                        lineHeight: "1.5",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                        border: isChar ? "none" : "1px solid #EBE6DC",
+                      }}
+                    >
+                      {m.text}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setSelectedSecret(null)}
+              style={{
+                marginTop: "14px",
+                padding: "10px 0",
+                borderRadius: "12px",
+                border: "none",
+                background: "#89A8B2",
+                color: "#FFFFFF",
+                fontWeight: "700",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              卷起封存
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 太疾驰订单签条弹窗 Modal */}
+      {selectedOrder && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(6px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setSelectedOrder(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "380px",
+              background: "#FDFCFA",
+              borderRadius: "24px",
+              padding: "22px",
+              boxSizing: "border-box",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+              animation: "scaleUp 0.2s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#8C4A1E" }}>
+                太疾驰 · 派送签条
+              </div>
+              <button
+                onClick={() => setSelectedOrder(null)}
+                style={{ background: "none", border: "none", fontSize: "20px", color: "#8E9485", cursor: "pointer" }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ background: "#FFF6EE", border: "1px dashed #F5D3B3", borderRadius: "16px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#3B4235" }}>
+                {selectedOrder.itemName}
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#7B8072" }}>
+                <span>分类：{selectedOrder.category}</span>
+                <span>数量：{selectedOrder.quantity}</span>
+              </div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#7B8072" }}>
+                <span>花费：<b style={{ color: "#D6724B" }}>{selectedOrder.cost}</b></span>
+                <span>派送：{selectedOrder.status}</span>
+              </div>
+              <div style={{ borderTop: "1px solid #F5E6D8", paddingTop: "8px", fontSize: "13px", color: "#D84315", fontWeight: "700" }}>
+                【受赠对象】{selectedOrder.recipient}
+              </div>
+              <div style={{ fontSize: "12px", color: "#6A7062", lineHeight: "1.6", background: "#FFFFFF", padding: "8px 10px", borderRadius: "8px" }}>
+                <b>买家心声备注：</b><br />
+                "{selectedOrder.reason}"
+              </div>
+            </div>
+
+            <button
+              onClick={() => setSelectedOrder(null)}
+              style={{
+                width: "100%",
+                padding: "10px 0",
+                borderRadius: "12px",
+                border: "none",
+                background: "#D6724B",
+                color: "#FFFFFF",
+                fontWeight: "700",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              收纳签条
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 提示 Toast */}
       {toastText && (
@@ -50008,7 +50799,7 @@ ${userContext}
             fontSize: "13.5px",
             fontWeight: "500",
             backdropFilter: "blur(6px)",
-            zIndex: 999,
+            zIndex: 9999,
             boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
             animation: "fadeIn 0.2s ease-out",
           }}
@@ -50016,64 +50807,78 @@ ${userContext}
           {toastText}
         </div>
       )}
-
-      {/* 嵌套唤起 Telegram 1v1 密谈 */}
-      {showChat && (
-        <T11TelegramChatPage
-          character={character}
-          characterBio={characterBio}
-          avatar={avatar}
-          onBack={() => setShowChat(false)}
-        />
-      )}
     </div>
   );
 };
 
-// ==================== T13 方天水镜主页面组件 (雾气散开动效 + 镜中选人) ====================
+
+// ==================== T13 方天水镜主页面组件 (雾气散开动效 + 传讯角色选人) ====================
 const T13WaterMirrorPage = ({ onBack }) => {
-  const [characterBios, setCharacterBios] = React.useState({});
-  const [avatars, setAvatars] = React.useState({});
-  const [selectedChar, setSelectedChar] = React.useState(null);
-  const [viewingChar, setViewingChar] = React.useState(null);
+  const [characterList, setCharacterList] = React.useState([]);
+  const [selectedCharObj, setSelectedCharObj] = React.useState(null);
+  const [viewingCharObj, setViewingCharObj] = React.useState(null);
   const [showSelector, setShowSelector] = React.useState(false);
   const [fogDispersed, setFogDispersed] = React.useState(false);
 
-  // 初始化数据
+  // 初始化加载传讯页面配置的密探角色列表
   React.useEffect(() => {
-    // 1. 头像
-    try {
-      const savedAvatars = localStorage.getItem("绣衣楼头像");
-      if (savedAvatars) setAvatars(JSON.parse(savedAvatars));
-    } catch (e) {}
-
-    // 2. 人物介绍
-    const loadBios = async () => {
+    const loadCharactersFromMessaging = async () => {
       try {
-        if (window.settingsStore?.getCharacterNotes) {
-          const loadedBios = await window.settingsStore.getCharacterNotes();
-          if (loadedBios && typeof loadedBios === "object") {
-            setCharacterBios(loadedBios);
+        let allChars = [];
+        if (window.chatCharacterStore) {
+          allChars = await window.chatCharacterStore.getAll();
+        } else {
+          allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+
+        // 过滤掉群组和装饰项，提取所有有效的传讯密探
+        const validChars = allChars.filter(
+          (c) => !String(c.id).startsWith("group") && c.type !== "decor" && c.name
+        );
+
+        let avatarMap = {};
+        try {
+          avatarMap = JSON.parse(localStorage.getItem("绣衣楼头像") || "{}");
+        } catch (e) {}
+
+        let biosMap = {};
+        try {
+          if (window.settingsStore?.getCharacterNotes) {
+            biosMap = await window.settingsStore.getCharacterNotes() || {};
           }
+        } catch (e) {}
+
+        const mapped = validChars.map((c) => {
+          const charName = c.name;
+          const charAvatar = c.avatar || avatarMap[charName] || "";
+          const charProfile = c.profile || c.personality || biosMap[charName] || c.description || "";
+          return {
+            id: c.id,
+            name: charName,
+            avatar: charAvatar,
+            profile: charProfile,
+            raw: c,
+          };
+        });
+
+        setCharacterList(mapped);
+        if (mapped.length > 0) {
+          setSelectedCharObj(mapped[0]);
         }
       } catch (e) {
-        console.warn("读取水镜联系人失败:", e);
+        console.error("加载传讯密探角色失败:", e);
       }
     };
-    loadBios();
 
-    // 3. 雾气散开动效延迟
+    loadCharactersFromMessaging();
+
+    // 雾气散开动效延迟
     const fogTimer = setTimeout(() => {
       setFogDispersed(true);
-    }, 1800);
+    }, 1600);
 
     return () => clearTimeout(fogTimer);
   }, []);
-
-  // 筛选在传讯中已配置的角色
-  const activeContacts = Object.keys(characterBios).filter(
-    (k) => characterBios[k] && characterBios[k].trim().length > 0
-  );
 
   return (
     <div
@@ -50159,7 +50964,7 @@ const T13WaterMirrorPage = ({ onBack }) => {
       >
         {/* 诗意副标 */}
         <div style={{ fontSize: "13px", color: "#9BB7C4", letterSpacing: "2px", marginBottom: "26px", opacity: 0.85 }}>
-          「 方 天 映 万 象 · 水 镜 照 故 人 」
+          「 方 天 映 万 象 · 水 镜 照 密 探 」
         </div>
 
         {/* 东方青铜水镜主体 */}
@@ -50182,7 +50987,7 @@ const T13WaterMirrorPage = ({ onBack }) => {
             animation: "mirrorPulse 3s infinite ease-in-out",
           }}
         >
-          {/* 水镜波纹与金纹装饰 */}
+          {/* 水镜波纹装饰 */}
           <div
             style={{
               position: "absolute",
@@ -50194,7 +50999,7 @@ const T13WaterMirrorPage = ({ onBack }) => {
             }}
           />
 
-          {selectedChar ? (
+          {selectedCharObj ? (
             /* 镜中显化人物倒影 */
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", animation: "fadeIn 0.5s ease-out" }}>
               <div
@@ -50208,16 +51013,16 @@ const T13WaterMirrorPage = ({ onBack }) => {
                   marginBottom: "10px",
                 }}
               >
-                {avatars[selectedChar] ? (
-                  <img src={avatars[selectedChar]} alt={selectedChar} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                {selectedCharObj.avatar ? (
+                  <img src={selectedCharObj.avatar} alt={selectedCharObj.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                 ) : (
                   <div style={{ width: "100%", height: "100%", background: "#E8C3A8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px", color: "#fff", fontWeight: "bold" }}>
-                    {selectedChar.charAt(0)}
+                    {selectedCharObj.name.charAt(0)}
                   </div>
                 )}
               </div>
               <div style={{ fontSize: "16px", fontWeight: "700", color: "#EAF4F8", letterSpacing: "1px" }}>
-                {selectedChar}
+                {selectedCharObj.name}
               </div>
               <div style={{ fontSize: "11px", color: "#8CB2C2", marginTop: "3px" }}>
                 轻触可更换镜中人物
@@ -50231,16 +51036,16 @@ const T13WaterMirrorPage = ({ onBack }) => {
                 点击水镜
               </div>
               <div style={{ fontSize: "12px", color: "#7B9EAE", marginTop: "4px" }}>
-                鉴照传讯中的密探故人
+                择选传讯中的密探角色
               </div>
             </div>
           )}
         </div>
 
         {/* 选中人物后的【查看】进入视界按钮 */}
-        {selectedChar && (
+        {selectedCharObj && (
           <button
-            onClick={() => setViewingChar(selectedChar)}
+            onClick={() => setViewingCharObj(selectedCharObj)}
             style={{
               marginTop: "32px",
               padding: "13px 36px",
@@ -50265,7 +51070,7 @@ const T13WaterMirrorPage = ({ onBack }) => {
         )}
       </div>
 
-      {/* 选择镜中联系人抽屉 */}
+      {/* 选择传讯联系人抽屉 */}
       {showSelector && (
         <div
           style={{
@@ -50300,8 +51105,13 @@ const T13WaterMirrorPage = ({ onBack }) => {
             onClick={(e) => e.stopPropagation()}
           >
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "14px" }}>
-              <div style={{ fontSize: "17px", fontWeight: "700", color: "#3B4235" }}>
-                选择水镜通灵人物
+              <div>
+                <div style={{ fontSize: "17px", fontWeight: "700", color: "#3B4235" }}>
+                  选择传讯密探角色
+                </div>
+                <div style={{ fontSize: "11px", color: "#8E9485", marginTop: "2px" }}>
+                  已拉取传讯页面配置的全部角色
+                </div>
               </div>
               <div
                 onClick={() => setShowSelector(false)}
@@ -50321,23 +51131,24 @@ const T13WaterMirrorPage = ({ onBack }) => {
                 gap: "10px",
               }}
             >
-              {activeContacts.length === 0 ? (
+              {characterList.length === 0 ? (
                 <div style={{ textAlign: "center", padding: "40px 20px", color: "#92978A" }}>
                   <i className="ph ph-mask-sad" style={{ fontSize: "36px", marginBottom: "8px", display: "block" }}></i>
                   <p style={{ fontSize: "13.5px", margin: 0 }}>
-                    镜中空空，灵犀未定。
+                    传讯中暂未配置角色。
                     <br />
-                    请先在【绣衣楼 → 通讯录】中为密探撰写<b>人物介绍</b>。
+                    请先前往【传讯】页面添加密探角色。
                   </p>
                 </div>
               ) : (
-                activeContacts.map((char) => {
-                  const isSel = selectedChar === char;
+                characterList.map((charObj) => {
+                  const isSel = selectedCharObj?.id === charObj.id;
+                  const profileStr = typeof charObj.profile === "string" ? charObj.profile : JSON.stringify(charObj.profile);
                   return (
                     <div
-                      key={char}
+                      key={charObj.id}
                       onClick={() => {
-                        setSelectedChar(char);
+                        setSelectedCharObj(charObj);
                         setShowSelector(false);
                       }}
                       style={{
@@ -50366,17 +51177,17 @@ const T13WaterMirrorPage = ({ onBack }) => {
                           flexShrink: 0,
                         }}
                       >
-                        {avatars[char] ? (
-                          <img src={avatars[char]} alt={char} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                        {charObj.avatar ? (
+                          <img src={charObj.avatar} alt={charObj.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
                         ) : (
-                          char.charAt(0)
+                          charObj.name.charAt(0)
                         )}
                       </div>
 
                       <div style={{ flex: 1, minWidth: 0 }}>
-                        <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4235" }}>{char}</div>
+                        <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4235" }}>{charObj.name}</div>
                         <div style={{ fontSize: "12px", color: "#7B8072", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                          {characterBios[char]}
+                          {profileStr || "传讯密探角色"}
                         </div>
                       </div>
 
@@ -50391,4695 +51202,19 @@ const T13WaterMirrorPage = ({ onBack }) => {
       )}
 
       {/* 查看视界子页面 */}
-      {viewingChar && (
+      {viewingCharObj && (
         <T13CharacterMirrorView
-          character={viewingChar}
-          characterBio={characterBios[viewingChar]}
-          avatar={avatars[viewingChar]}
-          onBack={() => setViewingChar(null)}
+          character={viewingCharObj.name}
+          characterProfile={viewingCharObj.profile}
+          avatar={viewingCharObj.avatar}
+          onBack={() => setViewingCharObj(null)}
         />
       )}
-
-      {/* 水镜专属动画样式 */}
-      <style>{`
-        @keyframes mirrorPulse {
-          0%, 100% { transform: scale(1); box-shadow: 0 0 35px rgba(143, 170, 184, 0.35); }
-          50% { transform: scale(1.02); box-shadow: 0 0 50px rgba(143, 170, 184, 0.55); }
-        }
-      `}</style>
     </div>
   );
 };
 
 
-// ==================== T13 学习系统页面组件 (整合版) ====================
-const T13LearningPage = ({ onBack }) => {
-  const { useState, useEffect } = React;
-
-  // --- 新增状态 ---
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-
-  // ======== [核心修改] 课程列表与当前课程状态 ========
-  const [courses, setCourses] = useState([]);
-  const [activeCourseId, setActiveCourseId] = useState(null);
-
-  // 用于新建课程表单的状态
-  const [newCourseContent, setNewCourseContent] = useState("");
-  const [newCourseLevel, setNewCourseLevel] = useState("一般");
-
-  // 从 courses 派生当前课程的数据
-  const activeCourse = courses.find((c) => c.id === activeCourseId) || null;
-  const courseContent = activeCourse?.content || "";
-  const courseLevel = activeCourse?.level || "一般";
-  const selectedTeachers = activeCourse?.teachers || [];
-  const levels = activeCourse?.levels || [];
-  const unlockedLevel = activeCourse?.unlockedLevel || 1;
-  const learnedConcepts = activeCourse?.learnedConcepts || [];
-
-  // 辅助函数：更新当前课程的特定字段
-  const updateActiveCourse = (updates) => {
-    if (!activeCourseId) return;
-    setCourses((prev) =>
-      prev.map((c) => (c.id === activeCourseId ? { ...c, ...updates } : c)),
-    );
-  };
-
-  // 课程与老师弹窗状态
-  const [showCourseModal, setShowCourseModal] = useState(false);
-  const [showTeacherModal, setShowTeacherModal] = useState(false);
-  const [teachers, setTeachers] = useState([]); // 保存所有生成的老师库
-  const [isGeneratingTeachers, setIsGeneratingTeachers] = useState(false);
-
-  // 页面与流程状态
-  const [showFlashcard, setShowFlashcard] = useState(false);
-  const [showLeaderboard, setShowLeaderboard] = useState(false);
-  const [currentTab, setCurrentTab] = useState("home");
-  const [isGeneratingCourse, setIsGeneratingCourse] = useState(false);
-  const [currentPlayLevel, setCurrentPlayLevel] = useState(null);
-
-  // AI排行榜相关状态
-  const [leaderboardData, setLeaderboardData] = useState([]);
-  const [selectedRankUser, setSelectedRankUser] = useState(null);
-  const [isGeneratingRank, setIsGeneratingRank] = useState(false);
-  const [showRankDetailModal, setShowRankDetailModal] = useState(false);
-
-  // 每日打卡与闪卡复习状态
-  const [punchInRecords, setPunchInRecords] = useState([]);
-  const [selectedReviewLevel, setSelectedReviewLevel] = useState(null);
-  const [reviewIndex, setReviewIndex] = useState(0);
-  const [isReviewFlipped, setIsReviewFlipped] = useState(false);
-
-  // 加载打卡记录
-  useEffect(() => {
-    const records = JSON.parse(
-      localStorage.getItem("learning_punch_records") || "[]",
-    );
-    setPunchInRecords(records);
-  }, []);
-
-  // 处理打卡点击
-  const handlePunchIn = (dateStr) => {
-    const todayStr = new Date().toLocaleDateString();
-    if (dateStr === todayStr && !punchInRecords.includes(dateStr)) {
-      const newRecords = [...punchInRecords, dateStr];
-      setPunchInRecords(newRecords);
-      localStorage.setItem(
-        "learning_punch_records",
-        JSON.stringify(newRecords),
-      );
-      alert("今日打卡成功！知识+1 🌟");
-    } else if (dateStr !== todayStr) {
-      alert("只能在当天的方块进行打卡哦！");
-    } else {
-      alert("今天已经打过卡啦，明天继续加油！");
-    }
-  };
-
-  // 获取本月天数数据用于渲染打卡带
-  const getMonthDays = () => {
-    const today = new Date();
-    const daysInMonth = new Date(
-      today.getFullYear(),
-      today.getMonth() + 1,
-      0,
-    ).getDate();
-    return Array.from({ length: daysInMonth }, (_, i) => {
-      const date = new Date(today.getFullYear(), today.getMonth(), i + 1);
-      return {
-        dateNum: i + 1,
-        dateStr: date.toLocaleDateString(),
-        isToday: date.toLocaleDateString() === today.toLocaleDateString(),
-        isPast:
-          date <
-          new Date(today.getFullYear(), today.getMonth(), today.getDate()),
-      };
-    });
-  };
-
-  // 获取当前需要复习的已收藏闪卡 (只获取当前课程下的卡片)
-  const getFavoriteFlashcards = () => {
-    const savedFavorites = new Set(
-      JSON.parse(localStorage.getItem("flashcardFavorites") || "[]"),
-    );
-    let favCards = [];
-    levels.forEach((lvl) => {
-      if (!selectedReviewLevel || lvl.title === selectedReviewLevel) {
-        lvl.flashcards.forEach((card, idx) => {
-          const cardId = `${lvl.title}-${idx}`;
-          if (savedFavorites.has(cardId)) {
-            favCards.push({ ...card, cardId, levelTitle: lvl.title });
-          }
-        });
-      }
-    });
-    return favCards;
-  };
-
-  const favCardsToReview = getFavoriteFlashcards();
-
-  // 记住了 -> 取消收藏
-  const handleRememberCard = (cardId) => {
-    const savedFavorites = new Set(
-      JSON.parse(localStorage.getItem("flashcardFavorites") || "[]"),
-    );
-    savedFavorites.delete(cardId);
-    localStorage.setItem(
-      "flashcardFavorites",
-      JSON.stringify([...savedFavorites]),
-    );
-    setIsReviewFlipped(false);
-    if (reviewIndex >= favCardsToReview.length - 1) {
-      setReviewIndex(Math.max(0, favCardsToReview.length - 2));
-    }
-  };
-
-  // 需复习 -> 翻回正面，并切换到下一张（循环）
-  const handleReviewAgain = () => {
-    setIsReviewFlipped(false);
-    setTimeout(() => {
-      if (reviewIndex < favCardsToReview.length - 1) {
-        setReviewIndex(reviewIndex + 1);
-      } else {
-        setReviewIndex(0); // 循环到底回到第一张
-      }
-    }, 150);
-  };
-
-  // 莫兰迪色系颜色列表
-  const morandiColors = [
-    { bg: "#E8B4B8", border: "#DFA9A9", text: "#D6724B" },
-    { bg: "#EADDCA", border: "#DAA06D", text: "#B8860B" },
-    { bg: "#E8F1ED", border: "#A8C8BA", text: "#5A8F6D" },
-    { bg: "#E6E2EA", border: "#C5BBD8", text: "#7A6F8E" },
-    { bg: "#D2E6EC", border: "#98C0D1", text: "#5A8599" },
-    { bg: "#F2E6E6", border: "#DFA9A9", text: "#D6724B" },
-    { bg: "#F0F4F8", border: "#B8C6DB", text: "#5D7185" },
-    { bg: "#E6F0F8", border: "#A8C8E0", text: "#5A85A9" },
-  ];
-
-  // 获取关卡对应的颜色
-  const getLevelColor = (index) => {
-    return morandiColors[index % morandiColors.length];
-  };
-
-  // --- IndexedDB 持久化存储 ---
-  const dbName = "learningSystemDB";
-  const dbVersion = 1;
-
-  const openDB = () => {
-    return new Promise((resolve, reject) => {
-      const request = indexedDB.open(dbName, dbVersion);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result);
-      request.onupgradeneeded = (event) => {
-        const db = event.target.result;
-        if (!db.objectStoreNames.contains("learningData")) {
-          db.createObjectStore("learningData", { keyPath: "id" });
-        }
-      };
-    });
-  };
-
-  const saveData = async (data) => {
-    try {
-      const db = await openDB();
-      const transaction = db.transaction(["learningData"], "readwrite");
-      const store = transaction.objectStore("learningData");
-      store.put({ id: 1, ...data });
-      return new Promise((resolve, reject) => {
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-      });
-    } catch (error) {
-      console.error("保存数据失败:", error);
-    }
-  };
-
-  const loadData = async () => {
-    try {
-      const db = await openDB();
-      const transaction = db.transaction(["learningData"], "readonly");
-      const store = transaction.objectStore("learningData");
-      const request = store.get(1);
-      return new Promise((resolve) => {
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => resolve(null);
-      });
-    } catch (error) {
-      console.error("读取数据失败:", error);
-      return null;
-    }
-  };
-
-  // 在组件挂载时从 IndexedDB 加载数据
-  React.useEffect(() => {
-    const fetchData = async () => {
-      const savedData = await loadData();
-      if (savedData) {
-        // 兼容老版本数据，把它包装成第一个遗留的课程
-        if (
-          savedData.courseContent &&
-          (!savedData.courses || savedData.courses.length === 0)
-        ) {
-          const legacyCourse = {
-            id: "legacy_course_1",
-            content: savedData.courseContent,
-            level: savedData.courseLevel || "一般",
-            teachers: savedData.selectedTeachers || [],
-            levels: savedData.levels || [],
-            unlockedLevel: savedData.unlockedLevel || 1,
-            learnedConcepts: savedData.learnedConcepts || [],
-          };
-          setCourses([legacyCourse]);
-          setActiveCourseId("legacy_course_1");
-        } else if (savedData.courses && savedData.courses.length > 0) {
-          setCourses(savedData.courses);
-          setActiveCourseId(
-            savedData.activeCourseId || savedData.courses[0].id,
-          );
-        }
-        setLeaderboardData(savedData.leaderboardData || []);
-        setTeachers(savedData.teachers || []);
-      }
-    };
-    fetchData();
-  }, []);
-
-  // 在状态变化时将数据保存到 IndexedDB
-  React.useEffect(() => {
-    saveData({
-      courses,
-      activeCourseId,
-      leaderboardData,
-      teachers,
-    });
-  }, [courses, activeCourseId, leaderboardData, teachers]);
-
-  // 调用 AI 生成老师
-  const handleGenerateTeachers = async () => {
-    if (!courseContent.trim()) {
-      alert("请先在“选择课程”中填写您要学习的内容！");
-      setShowTeacherModal(false);
-      setShowCourseModal(true);
-      return;
-    }
-    setIsGeneratingTeachers(true);
-    setTeachers([]);
-
-    try {
-      // 1. 获取世界书
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 2. 获取用户传讯列表中的有效角色
-      let allChars = [];
-      if (window.chatCharacterStore) {
-        allChars = await window.chatCharacterStore.getAll();
-      } else {
-        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
-      }
-      const validChars = allChars.filter(
-        (c) => c && !String(c.id).startsWith("group") && c.type !== "decor",
-      );
-
-      // 随机抽取最多3个已有角色，避免Token超长
-      const shuffledChars = [...validChars]
-        .sort(() => 0.5 - Math.random())
-        .slice(0, 3);
-      const charsInfo = shuffledChars
-        .map(
-          (c) =>
-            `【已有角色名】: ${c.name} 【性格】: ${c.profile?.personality || "无"} 【背景】: ${c.profile?.background || "无"} 【头像】: ${c.avatar || c.avatarColor}`,
-        )
-        .join("\n");
-
-      // 3. 构建 Prompt
-      const sysPrompt =
-        "你是一个拥有丰富学识、语言幽默风趣的东汉末年导师排班系统。";
-      const userPrompt = `
-                    【世界设定】
-                    ${worldContext}
-
-                    【用户当前要学习的内容】
-                    学习知识：${courseContent}
-                    期望难度：${courseLevel}
-
-                    【当前可调用的已有熟人角色】
-                    ${charsInfo}
-
-                    【任务说明】
-                    1. 请从上方【已有角色】中挑选合适的人转化为这门课程的老师。
-                    2. 额外原创生成2-3名完全不相关的神奇NPC老师，他们也是教这门课的奇葩高人，名字要有古代感或魔幻感。
-                    3. 为每位老师（包括已有角色和NPC）写一句【极度抽象、幽默、充满网感或反差感】的个人简介。
-                    4. 简要概括他们的“擅长领域”（需与用户要学的知识强相关）。
-                    5. 如果是已有角色，请原样返回他们的头像字段；如果是原创NPC，请在头像字段生成一个随机的英文字母单词作为Seed，比如"MasterZi"。
-
-                    【严格返回纯JSON数组，不要Markdown包装，格式如下】：
-                    [
-                      {
-                        "id": "唯一数字或字符串ID",
-                        "name": "老师姓名",
-                        "specialty": "擅长（如：用骂人法教你背单词）",
-                        "avatar": "原有头像或纯英文字符串",
-                        "intro": "一行幽默抽象的简介"
-                      }
-                    ]
-                  `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data)) {
-                // 处理头像逻辑，如果是长串Base64或十六进制颜色，直接用；若是纯词则转Dicebear
-                const formattedTeachers = data.map((t) => {
-                  let avatarSrc = t.avatar;
-                  if (!avatarSrc) {
-                    avatarSrc = `https://api.dicebear.com/7.x/micah/svg?seed=${t.name}`;
-                  } else if (
-                    !avatarSrc.startsWith("data:") &&
-                    !avatarSrc.startsWith("http") &&
-                    !avatarSrc.startsWith("#")
-                  ) {
-                    avatarSrc = `https://api.dicebear.com/7.x/micah/svg?seed=${avatarSrc}`;
-                  }
-                  return { ...t, avatar: avatarSrc };
-                });
-                setTeachers(formattedTeachers);
-              }
-            } catch (e) {
-              console.error("生成老师解析失败:", e, reply);
-              alert("名师们正在争论谁来教你，请重试！");
-            } finally {
-              setIsGeneratingTeachers(false);
-            }
-          },
-          (err) => {
-            console.error("生成老师失败:", err);
-            setIsGeneratingTeachers(false);
-            alert("求学之路受阻，请检查API配置！");
-          },
-        );
-      } else {
-        alert("未配置API，请前往设置配置！");
-        setIsGeneratingTeachers(false);
-      }
-    } catch (error) {
-      console.error(error);
-      setIsGeneratingTeachers(false);
-    }
-  };
-
-  // --- 新增：调用 AI 生成专属关卡与闪卡 ---
-  const handleGenerateContent = async (targetLevel) => {
-    if (!courseContent.trim() || selectedTeachers.length === 0) {
-      alert("请先设定学习知识并点拔至少一位授课恩师！");
-      setIsSidebarOpen(true);
-      return;
-    }
-    if (isGeneratingCourse) return;
-    setIsGeneratingCourse(true);
-
-    try {
-      // 1. 获取世界书设定
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 2. 获取用户选中老师的详细设定 (需要从全局数据库里捞出详细性格)
-      let allChars = [];
-      if (window.chatCharacterStore) {
-        allChars = await window.chatCharacterStore.getAll();
-      } else {
-        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
-      }
-
-      // 组装选中老师的详细 Prompt
-      const teacherDetails = selectedTeachers
-        .map((tId) => {
-          // 先看看是不是基础角色
-          const baseChar = allChars.find((c) => c.id === tId);
-          // 再看看是不是刚才生成的NPC（保存在 teachers state 里）
-          const stateTeacher = teachers.find((t) => t.id === tId);
-
-          let name = stateTeacher?.name || baseChar?.name || "神秘名师";
-          let personality =
-            baseChar?.profile?.personality ||
-            stateTeacher?.intro ||
-            "高深莫测，喜欢教书";
-          let style =
-            baseChar?.profile?.style ||
-            stateTeacher?.specialty ||
-            "言辞犀利，直击痛点";
-
-          return `【导师：${name}】 性格特点：${personality}；授课语言风格：${style}`;
-        })
-        .join("\n");
-
-      const teacherNames = selectedTeachers.map((tId) => {
-        return (
-          teachers.find((t) => t.id === tId)?.name ||
-          allChars.find((c) => c.id === tId)?.name ||
-          "神秘名师"
-        );
-      });
-
-      // 3. 构建防重复的 Prompt
-      const learnedStr =
-        learnedConcepts.length > 0
-          ? `以下是你之前已经教过的概念，【绝对不可重复】：${learnedConcepts.join("、")}`
-          : "这是第一关，暂无重复限制。";
-
-      // 4. 构建大模型 Prompt
-      const sysPrompt =
-        "你是一个顶级的东汉教育家与智能课件生成系统。你擅长将任何知识点拆解为生动的闪卡，并由特定性格的导师进行讲解。";
-      const userPrompt = `
-                    【世界设定】
-                    ${worldContext}
-
-                    【学习目标】
-                    用户要学习的内容：${courseContent}
-                    学习难度：${courseLevel}
-                    当前关卡：第 ${targetLevel} 关
-                    ${learnedStr}
-
-                    【授课导师团】
-                    ${teacherDetails}
-
-                    【任务说明】
-                    请为第 ${targetLevel} 关生成一套闪卡课件。
-                    1. 关卡需要一个贴合主题的标题 (title) 和一句话简介 (summary)。
-                    2. 必须生成 15 到 20 个闪卡卡片 (flashcards)。
-                    3. 闪卡分为两种类型：
-                       a. 普通类型 (type: "concept")：正面 (concept) 是要学习的具体知识点、词汇或概念。
-                       b. 填空类型 (type: "fill")：正面是一个包含空白的句子 (sentence)，需要填写正确的答案 (answer)。
-                    4. 请混合生成两种类型的闪卡，大约各占一半。
-                    5. 闪卡背面必须包含：
-                       - definition: 严谨的解释
-                       - example: 一个生动的例句或应用场景
-                       - teacherName: 从【授课导师团】中随机指派一位老师的名字来讲解这张卡。
-                       - teacherNote: 这位老师的具体讲解。**必须严格符合该老师的性格和语言风格！**可以是吐槽、记忆秘诀、训斥或鼓励，方式每张卡片都要尽量不同。
-                    6. 严格返回纯 JSON 对象格式，不要包含 Markdown 标记（如 \`\`\`json ）。
-
-                    【严格的 JSON 返回格式】：
-                    {
-                      "level": ${targetLevel},
-                      "title": "本关精炼标题",
-                      "summary": "本关精炼简介",
-                      "flashcards": [
-                        {
-                          "type": "concept",
-                          "concept": "概念名称",
-                          "pronunciation": "拼音或读音(可选)",
-                          "definition": "概念解释",
-                          "example": "例句应用",
-                          "teacherName": "导师名字",
-                          "teacherNote": "导师独家讲解原话"
-                        },
-                        {
-                          "type": "fill",
-                          "sentence": "包含空白的句子，例如：_____ 是一种重要的学习方法。",
-                          "answer": "重复练习",
-                          "definition": "对学习内容进行多次重复以加深记忆的方法",
-                          "example": "通过重复练习，我们可以更好地掌握知识点。",
-                          "teacherName": "导师名字",
-                          "teacherNote": "导师独家讲解原话"
-                        }
-                      ]
-                    }
-                  `;
-
-      // 5. 请求 LLM
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-
-              if (data && data.flashcards && data.flashcards.length > 0) {
-                // 成功解析，存入当前课程的对应状态
-                const newConcepts = data.flashcards.map((f) => f.concept);
-                updateActiveCourse({
-                  levels: [...levels, data],
-                  learnedConcepts: [...learnedConcepts, ...newConcepts],
-                });
-
-                alert(`第 ${targetLevel} 关《${data.title}》已生成完毕！`);
-              } else {
-                throw new Error("数据结构不符");
-              }
-            } catch (e) {
-              console.error("生成关卡解析失败:", e, reply);
-              alert("导师们编写教材时发生了分歧，请重新生成！");
-            } finally {
-              setIsGeneratingCourse(false);
-              setIsSidebarOpen(false);
-            }
-          },
-          (err) => {
-            console.error("生成关卡失败:", err);
-            setIsGeneratingCourse(false);
-            alert("请求失败，请检查API配置！");
-          },
-        );
-      } else {
-        alert("未配置API，请前往设置配置！");
-        setIsGeneratingCourse(false);
-      }
-    } catch (error) {
-      console.error(error);
-      setIsGeneratingCourse(false);
-    }
-  };
-
-  // --- [新增] 调用 AI 生成排行榜、勋章、学习数据 ---
-  const generateLeaderboardData = async () => {
-    if (isGeneratingRank) return;
-    setIsGeneratingRank(true);
-
-    try {
-      // 1. 获取世界书设定
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 2. 获取当前用户设定
-      let userContext = "普通用户";
-      let userName = "我";
-      try {
-        const savedPersonas = JSON.parse(
-          localStorage.getItem("user_personas") || "[]",
-        );
-        const activeId = localStorage.getItem("active_persona_id");
-        if (activeId) {
-          const activeUser = savedPersonas.find((p) => p.id == activeId);
-          if (activeUser) {
-            userName = activeUser.name;
-            userContext = `姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "无"}`;
-          }
-        }
-      } catch (e) {}
-
-      // 3. 获取传讯列表中的角色
-      let allChars = [];
-      if (window.chatCharacterStore) {
-        allChars = await window.chatCharacterStore.getAll();
-      } else {
-        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
-      }
-      const validChars = allChars.filter(
-        (c) => !String(c.id).startsWith("group") && c.type !== "decor",
-      );
-      const charsInfo = validChars
-        .map(
-          (c) => `【角色】${c.name} (性格:${c.profile?.personality || "未知"})`,
-        )
-        .join("; ");
-
-      // 4. 构建 Prompt
-      const sysPrompt = "你是一个东汉末年书院的教书先生兼幽默榜单生成器。";
-      const userPrompt = `
-                    【世界设定】
-                    ${worldContext}
-
-                    【当前用户（玩家）设定】
-                    ${userContext}
-
-                    【已有传讯角色池】
-                    ${charsInfo}
-
-                    【任务】
-                    请生成一个包含 6 个人的学习排行榜 JSON 数组。
-
-                    【硬性人员构成要求】
-                    1. 必须有 1 个是当前用户（"${userName}"），请将该项的 isUser 设为 true。
-                    2. 必须有 2 到 3 个来自【已有传讯角色池】中的人物。
-                    3. 剩余的名额从【世界设定】中提取人物，或者生成符合东汉背景的特色 NPC。
-
-                    【字段生成要求】
-                    - realName: 角色的真实姓名。
-                    - nickname: 根据其性格特点起的具有"现代网感"或"无厘头"的网名（如："江东纵火犯"、"扶我起来还能学"）。
-                    - score: 学习积分（范围1000-8000，按从高到低排序，最高的是第一名）。
-                    - avatarSeed: 用于生成头像的纯英文字母种子词（如 "caocao", "sunquan" 等）。
-                    - quote: 一句符合该人物性格的排行感言（短句，能体现对学习或排名的态度）。
-                    - medals: 包含 4-6 个勋章对象的数组。每个勋章包含：
-                      - name: 勋章名（如"时间主理人"、"知识背刺者"、"卷王之王"，要符合人设）。
-                      - desc: 勋章说明（如"同一张闪卡看了10次也记不住"、"连续学习30天"）。
-                      - tier: 等级（如"一阶成就"、"绝世成就"）。
-                      - icon: （从 "workspace_premium", "military_tech", "lock_open", "check_circle", "local_fire_department", "bolt" 中选一个）。
-                    - recentCourses: 数组，包含 3-5 个该角色最近学习的奇葩或正经的课程名（如《东汉母猪产后护理》、《论持久战》）。
-                    - chartData: 数组，包含 7 个整数（范围0-120），代表过去 7 天每天的学习时长（分钟）。
-
-                    【输出格式严格要求】
-                    必须严格返回纯 JSON 数组，按 score 从大到小降序排列！不要包裹在 \`\`\`json 之中，直接以 [ 开头，] 结尾。
-                  `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data) && data.length === 6) {
-                setLeaderboardData(data);
-                setSelectedRankUser(data[0]); // 默认选中第一名
-              } else {
-                throw new Error("返回数据非6条");
-              }
-            } catch (e) {
-              console.error("生成排行榜失败:", e, reply);
-              alert("书院先生排榜时睡着了，请再试一次！");
-            } finally {
-              setIsGeneratingRank(false);
-            }
-          },
-          (err) => {
-            console.error(err);
-            alert("榜单获取失败，请检查网络或 API 设置。");
-            setIsGeneratingRank(false);
-          },
-        );
-      } else {
-        alert("未配置API，请前往设置配置！");
-        setIsGeneratingRank(false);
-      }
-    } catch (error) {
-      console.error(error);
-      setIsGeneratingRank(false);
-    }
-  };
-
-  // 如果 leaderboardData 为空，初始化时尝试生成一次
-  useEffect(() => {
-    if (showLeaderboard && leaderboardData.length === 0 && !isGeneratingRank) {
-      generateLeaderboardData();
-    }
-  }, [showLeaderboard]);
-  // =========================================================
-
-  return (
-    <div className="learning-overlay open notebook-bg font-body text-on-surface">
-      {/* --- 新增：侧边栏开关 --- */}
-      <div
-        className="fixed right-0 top-[20%] z-[60] bg-[#EADDCA] p-3 rounded-l-2xl shadow-[0_4px_15px_rgba(0,0,0,0.1)] cursor-pointer border-2 border-r-0 border-[#DAA06D] transition-transform hover:-translate-x-1"
-        onClick={() => setIsSidebarOpen(true)}
-      >
-        <span className="material-symbols-outlined text-[#5A5F4D]">
-          menu_open
-        </span>
-      </div>
-
-      {/* --- 莫兰迪色侧边栏 --- */}
-      <div
-        className={`fixed top-0 right-0 h-full w-64 bg-[#FDFCF8] shadow-[-10px_0_30px_rgba(0,0,0,0.1)] z-[70] transition-transform duration-300 ${
-          isSidebarOpen ? "translate-x-0" : "translate-x-full"
-        } border-l border-[#EAE6D6] flex flex-col`}
-      >
-        <div className="p-5 flex justify-between items-center border-b border-[#EAE6D6] bg-white">
-          <span className="font-bold text-[#5A5F4D] text-lg tracking-widest">
-            学习中心
-          </span>
-          <span
-            className="material-symbols-outlined cursor-pointer text-[#8C917B] active:scale-90"
-            onClick={() => setIsSidebarOpen(false)}
-          >
-            close
-          </span>
-        </div>
-
-        <div className="p-6 flex flex-col gap-5 flex-1">
-          <button
-            className="py-4 px-4 bg-[#E8F1ED] border-2 border-[#A8C8BA] rounded-2xl text-[#5A8F6D] font-bold shadow-sm active:scale-95 transition-transform flex items-center justify-center gap-2"
-            onClick={() => {
-              setShowCourseModal(true);
-              setIsSidebarOpen(false);
-            }}
-          >
-            <span className="material-symbols-outlined">auto_stories</span>
-            切换/新建课程
-          </button>
-          <button
-            className="py-4 px-4 bg-[#F2E6E6] border-2 border-[#DFA9A9] rounded-2xl text-[#D6724B] font-bold shadow-sm active:scale-95 transition-transform flex items-center justify-center gap-2"
-            onClick={() => {
-              if (!activeCourseId) {
-                alert("请先选择或新建一个课程！");
-                return;
-              }
-              setShowTeacherModal(true);
-              setIsSidebarOpen(false);
-              if (teachers.length === 0 && courseContent)
-                handleGenerateTeachers();
-            }}
-          >
-            <span className="material-symbols-outlined">school</span>
-            指派辅导老师
-          </button>
-          <button
-            className="py-4 px-4 bg-[#E6E2EA] border-2 border-[#C5BBD8] rounded-2xl text-[#7A6F8E] font-bold shadow-sm active:scale-95 transition-transform flex items-center justify-center gap-2 mt-auto"
-            onClick={() => {
-              if (!courseContent || selectedTeachers.length === 0) {
-                alert("请先选定课程与老师！");
-                return;
-              }
-              // 触发生成当前应解锁的关卡
-              handleGenerateContent(unlockedLevel);
-            }}
-          >
-            <span className="material-symbols-outlined">bolt</span>
-            {isGeneratingCourse ? "导师编书中..." : "生成下一关"}
-          </button>
-        </div>
-      </div>
-
-      {/* --- 选择/新建课程弹窗 --- */}
-      {showCourseModal && (
-        <div className="fixed inset-0 bg-black/50 z-[100] flex items-center justify-center p-4 animate-fadeIn">
-          <div className="bg-[#FDFCF8] rounded-3xl w-full max-w-sm p-6 shadow-2xl flex flex-col border-2 border-[#A8C8BA] max-h-[85vh] overflow-y-auto no-scrollbar">
-            <h3 className="text-[#5A5F4D] text-xl font-bold mb-5 flex items-center gap-2">
-              <span className="material-symbols-outlined text-[#A8C8BA]">
-                draw
-              </span>
-              课程规划局
-            </h3>
-
-            {/* 历史课程列表 */}
-            {courses.length > 0 && (
-              <div className="mb-6 border-b border-[#EAEAEA] pb-4">
-                <label className="block text-sm font-bold text-[#8C917B] mb-3">
-                  我的课程本：
-                </label>
-                <div className="flex flex-col gap-2 max-h-40 overflow-y-auto no-scrollbar">
-                  {courses.map((c) => (
-                    <div
-                      key={c.id}
-                      onClick={() => {
-                        setActiveCourseId(c.id);
-                        setShowCourseModal(false);
-                      }}
-                      className={`p-3 rounded-xl cursor-pointer border-2 transition-colors ${activeCourseId === c.id ? "bg-[#E8F1ED] border-[#A8C8BA] text-[#5A8F6D]" : "bg-white border-[#EAEAEA] text-[#5A5F4D] hover:bg-gray-50"}`}
-                    >
-                      <div className="font-bold text-sm truncate">
-                        {c.content}
-                      </div>
-                      <div className="flex justify-between items-center mt-1">
-                        <span className="text-xs opacity-70">
-                          难度: {c.level}
-                        </span>
-                        <span className="text-xs bg-[#A8C8BA] text-white px-2 py-0.5 rounded-full">
-                          已解 {c.levels.length} 关
-                        </span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* 新建课程 */}
-            <div className="mb-5">
-              <label className="block text-sm font-bold text-[#8C917B] mb-2">
-                开启新课程 (想学点什么？)
-              </label>
-              <textarea
-                value={newCourseContent}
-                onChange={(e) => setNewCourseContent(e.target.value)}
-                placeholder="例如：如何种植水稻、东汉古文鉴赏、高阶算术..."
-                className="w-full p-4 border-2 border-[#EAEAEA] rounded-2xl bg-white text-[#5A5F4D] outline-none resize-none h-24 focus:border-[#A8C8BA] transition-colors"
-              />
-            </div>
-            <div className="mb-8">
-              <label className="block text-sm font-bold text-[#8C917B] mb-2">
-                学习难度要求：
-              </label>
-              <div className="flex gap-3">
-                {["简单", "一般", "困难"].map((lvl) => (
-                  <button
-                    key={lvl}
-                    onClick={() => setNewCourseLevel(lvl)}
-                    className={`flex-1 py-2.5 rounded-xl font-bold text-sm transition-all shadow-sm ${newCourseLevel === lvl ? "bg-[#A8C8BA] text-white border-2 border-[#8FA99D]" : "bg-white text-[#5A8F6D] border-2 border-[#EAE6D6] hover:bg-[#F2F7F4]"}`}
-                  >
-                    {lvl}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div className="flex gap-4">
-              <button
-                onClick={() => setShowCourseModal(false)}
-                className="flex-1 py-3.5 rounded-xl border-2 border-[#D4AB90] text-[#D4AB90] font-bold active:scale-95 transition-transform bg-white"
-              >
-                关闭
-              </button>
-              <button
-                onClick={() => {
-                  if (!newCourseContent.trim()) {
-                    alert("请填写你想学习的知识！");
-                    return;
-                  }
-                  const newCourse = {
-                    id: `course_${Date.now()}`,
-                    content: newCourseContent.trim(),
-                    level: newCourseLevel,
-                    teachers: [],
-                    levels: [],
-                    unlockedLevel: 1,
-                    learnedConcepts: [],
-                  };
-                  setCourses([...courses, newCourse]);
-                  setActiveCourseId(newCourse.id);
-                  setNewCourseContent("");
-                  setNewCourseLevel("一般");
-                  setShowCourseModal(false);
-                }}
-                className="flex-1 py-3.5 rounded-xl bg-[#E8C3A8] text-white font-bold shadow-md active:scale-95 transition-transform border-2 border-[#D4AB90]"
-              >
-                创建新课
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* --- 选择老师弹窗 --- */}
-      {showTeacherModal && (
-        <div className="fixed inset-x-0 bottom-0 bg-[#FDFCF8] rounded-t-[32px] shadow-2xl z-[100] animate-slide-up h-[85vh] flex flex-col border-t-2 border-[#DFA9A9]">
-          <div className="p-6 flex justify-between items-center bg-white rounded-t-[32px] shadow-sm z-10 border-b border-[#F2EFDE]">
-            <h3 className="text-xl font-bold text-[#5A5F4D] flex items-center gap-2">
-              <span className="material-symbols-outlined text-[#DFA9A9]">
-                school
-              </span>
-              点拔授课恩师
-            </h3>
-            <div className="flex gap-3">
-              <button
-                onClick={handleGenerateTeachers}
-                disabled={isGeneratingTeachers}
-                className="px-4 py-2 bg-[#DFA9A9] text-white rounded-full text-xs font-bold active:scale-95 disabled:opacity-50 shadow-sm flex items-center gap-1"
-              >
-                <span className="material-symbols-outlined text-[14px]">
-                  refresh
-                </span>
-                {isGeneratingTeachers ? "请神中..." : "换一批"}
-              </button>
-              <button
-                onClick={() => setShowTeacherModal(false)}
-                className="w-8 h-8 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#8C8C8C] active:scale-90 transition-transform"
-              >
-                <span className="material-symbols-outlined text-sm">close</span>
-              </button>
-            </div>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-5 bg-[#F9F7F5] no-scrollbar">
-            {isGeneratingTeachers ? (
-              <div className="flex flex-col items-center justify-center h-full text-[#8C917B] gap-4">
-                <iconify-icon
-                  icon="line-md:loading-twotone-loop"
-                  style={{ fontSize: "40px", color: "#DFA9A9" }}
-                ></iconify-icon>
-                <span className="text-sm font-bold tracking-widest bg-white px-4 py-2 rounded-full shadow-sm border border-[#EAE6D6]">
-                  飞鹰正为您四海寻访名师...
-                </span>
-              </div>
-            ) : teachers.length > 0 ? (
-              <div className="flex flex-col gap-4 pb-10">
-                {teachers.map((teacher) => (
-                  <div
-                    key={teacher.id}
-                    className={`bg-white rounded-3xl p-5 shadow-sm border-2 flex flex-col relative cursor-pointer active:scale-[0.98] transition-all ${selectedTeachers.includes(teacher.id) ? "border-[#DFA9A9] bg-[#FFF5F5] shadow-md" : "border-[#EAE6D6] hover:border-[#DFA9A9]/50"}`}
-                    onClick={() => {
-                      const currentTeachers = activeCourse?.teachers || [];
-                      if (currentTeachers.includes(teacher.id)) {
-                        updateActiveCourse({
-                          teachers: currentTeachers.filter(
-                            (id) => id !== teacher.id,
-                          ),
-                        });
-                      } else {
-                        updateActiveCourse({
-                          teachers: [...currentTeachers, teacher.id],
-                        });
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-4 mb-3">
-                      <div className="w-14 h-14 rounded-full overflow-hidden border-2 border-white shadow-md shrink-0 bg-[#F2F7F4] flex items-center justify-center">
-                        {teacher.avatar && teacher.avatar.startsWith("#") ? (
-                          <div
-                            style={{
-                              width: "100%",
-                              height: "100%",
-                              backgroundColor: teacher.avatar,
-                            }}
-                          ></div>
-                        ) : teacher.avatar &&
-                          teacher.avatar.startsWith("data:image") ? (
-                          <img
-                            src={teacher.avatar}
-                            alt="avatar"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : teacher.avatar ? (
-                          <img
-                            src={teacher.avatar}
-                            alt="avatar"
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <span className="text-[#5A8F6D] font-bold text-lg">
-                            {teacher.name[0]}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="flex-1">
-                        <div className="flex justify-between items-center">
-                          <span className="font-extrabold text-[#5A5F4D] text-lg tracking-wide">
-                            {teacher.name}
-                          </span>
-                          {selectedTeachers.includes(teacher.id) && (
-                            <span className="material-symbols-outlined text-[#DFA9A9] animate-popIn">
-                              check_circle
-                            </span>
-                          )}
-                        </div>
-                        <div className="text-xs text-[#D6724B] font-bold bg-[#FDF0E6] px-2.5 py-1 rounded-lg inline-block mt-1.5 border border-[#FADBD8]">
-                          擅长：{teacher.specialty}
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#FDFCF8] p-3.5 rounded-2xl border-l-4 border-[#DFA9A9]">
-                      <p className="text-sm text-[#8C917B] italic leading-relaxed">
-                        "{teacher.intro}"
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center text-[#8C917B] mt-28">
-                <span className="material-symbols-outlined text-6xl mb-4 opacity-30">
-                  person_search
-                </span>
-                <p className="font-bold text-lg text-[#5A5F4D]">
-                  请先点开右上角换一批，生成老师！
-                </p>
-              </div>
-            )}
-          </div>
-
-          <div className="p-5 bg-white border-t border-[#F2EFDE]">
-            <button
-              onClick={() => setShowTeacherModal(false)}
-              className="w-full py-4 bg-gradient-to-r from-[#DFA9A9] to-[#d49696] text-white font-bold rounded-2xl active:scale-95 transition-transform shadow-lg text-lg tracking-widest"
-            >
-              确定拜师 ({selectedTeachers.length})
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* --- 新增：闪卡页面 --- */}
-      {showFlashcard &&
-        currentPlayLevel !== null &&
-        levels[currentPlayLevel] && (
-          <T13FlashcardPage
-            flashcards={levels[currentPlayLevel].flashcards}
-            levelTitle={levels[currentPlayLevel].title}
-            levelIndex={currentPlayLevel}
-            onBack={() => setShowFlashcard(false)}
-            onComplete={() => {
-              setShowFlashcard(false);
-              // 如果打通的是当前最高关卡，则解锁当前课程的下一关
-              if (currentPlayLevel + 1 === unlockedLevel) {
-                updateActiveCourse({ unlockedLevel: unlockedLevel + 1 });
-              }
-            }}
-          />
-        )}
-
-      {/* --- 新增：排行榜页面 --- */}
-      {showLeaderboard && (
-        <div className="learning-overlay animate-slideUp">
-          {/* Main Canvas */}
-          <main className="min-h-screen pb-12 pt-8 px-4 w-full max-w-md mx-auto space-y-8 overflow-x-hidden">
-            {/* Header Section */}
-            <header className="flex flex-col items-center space-y-2 text-center">
-              <button
-                className="absolute top-4 left-4 bg-white p-2 rounded-full shadow-md"
-                onClick={() => setShowLeaderboard(false)}
-              >
-                <span className="material-symbols-outlined">arrow_back</span>
-              </button>
-              <div
-                className={`inline-flex items-center justify-center bg-[#A8DADC] text-[#2B4F60] px-6 py-2 rounded-full text-xs font-bold tracking-widest uppercase cursor-pointer active:scale-95 transition-transform ${isGeneratingRank ? "opacity-70" : ""}`}
-                onClick={generateLeaderboardData}
-              >
-                {isGeneratingRank ? (
-                  <iconify-icon
-                    icon="line-md:loading-twotone-loop"
-                    style={{ fontSize: "16px", marginRight: "8px" }}
-                  ></iconify-icon>
-                ) : (
-                  <span className="material-symbols-outlined text-sm mr-2">
-                    stars
-                  </span>
-                )}
-                {isGeneratingRank ? "先生排榜中..." : "刷新排名"}
-              </div>
-              <h1 className="text-4xl font-extrabold text-on-surface tracking-tighter">
-                荣誉排行
-              </h1>
-              <p className="text-on-surface-variant text-sm font-medium">
-                若升高，必自下。若陟遐，必自迩。
-              </p>
-            </header>
-            {/* League Summary Section */}
-            <section className="space-y-4">
-              <div className="flex justify-between items-center px-2">
-                <h2 className="text-xl font-bold">所获勋章</h2>
-              </div>
-              <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x -mx-4 px-4">
-                {selectedRankUser ? (
-                  selectedRankUser.medals.map((medal, idx) => {
-                    // 随机分配底色风格
-                    const cardStyles = [
-                      "bg-primary-container text-on-primary-container shadow-[0_20px_40px_-12px_rgba(168,200,186,0.4)]",
-                      "bg-surface-container-high text-on-surface",
-                      "bg-surface-container-low text-on-surface",
-                    ];
-                    const iconColors = [
-                      "text-primary",
-                      "text-zinc-500",
-                      "text-orange-700/60",
-                    ];
-                    const tagStyles = [
-                      "bg-on-primary-container text-primary-container",
-                      "bg-secondary text-white",
-                      "bg-outline-variant text-on-surface-variant",
-                    ];
-
-                    const styleIdx = idx % 3;
-
-                    return (
-                      <button
-                        key={idx}
-                        className={`snap-center shrink-0 w-[260px] p-4 rounded-xl transition-all active:scale-95 group relative overflow-hidden ${cardStyles[styleIdx]}`}
-                      >
-                        <div className="absolute -right-4 -top-4 opacity-10 group-hover:scale-125 transition-transform">
-                          <span
-                            className="material-symbols-outlined text-[6rem]"
-                            style={{ fontVariationSettings: '"FILL" 1' }}
-                          >
-                            {medal.icon || "workspace_premium"}
-                          </span>
-                        </div>
-                        <div className="relative z-10 flex flex-col items-start text-left">
-                          <div className="bg-white/40 p-2 rounded-lg mb-4">
-                            <span
-                              className={`material-symbols-outlined text-3xl ${iconColors[styleIdx]}`}
-                              style={{
-                                fontVariationSettings: '"FILL" 1',
-                              }}
-                            >
-                              {medal.icon || "military_tech"}
-                            </span>
-                          </div>
-                          <h3 className="text-2xl font-black italic tracking-tighter">
-                            {medal.name}
-                          </h3>
-                          <p className="opacity-70 text-xs font-bold mt-1">
-                            {medal.desc}
-                          </p>
-                          <div
-                            className={`mt-4 flex items-center gap-2 px-4 py-2 rounded-full text-[10px] font-black uppercase ${tagStyles[styleIdx]}`}
-                          >
-                            <span className="material-symbols-outlined text-xs">
-                              info
-                            </span>
-                            {medal.tier}
-                          </div>
-                        </div>
-                      </button>
-                    );
-                  })
-                ) : (
-                  <div className="text-center w-full py-10 text-gray-400 text-sm">
-                    等待排榜...
-                  </div>
-                )}
-              </div>
-            </section>
-            {/* Leaderboard Top 3 Section (Asymmetric) */}
-            <section className="space-y-6">
-              <h2 className="text-xl font-bold px-2">三甲席位</h2>
-              {leaderboardData.length >= 3 ? (
-                <div className="grid grid-cols-3 gap-3 items-end pt-8 sm:grid-cols-3 md:grid-cols-3">
-                  {/* Rank 2 (index 1) */}
-                  <label
-                    className="label flex flex-col items-center space-y-3 group cursor-pointer"
-                    onClick={() => {
-                      setSelectedRankUser(leaderboardData[1]);
-                      setShowRankDetailModal(true);
-                    }}
-                  >
-                    <div className="relative active:scale-95 transition-transform">
-                      {leaderboardData[1].isUser && (
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-[10px] bg-[#D6724B] text-white px-2 py-0.5 rounded-full z-20">
-                          是我
-                        </div>
-                      )}
-                      <div className="absolute -top-4 -right-1 bg-surface-container-highest w-8 h-8 rounded-full flex items-center justify-center font-black border-4 border-surface z-10">
-                        2
-                      </div>
-                      <img
-                        className={`w-16 h-16 rounded-full border-4 border-white shadow-lg object-cover ${leaderboardData[1].isUser ? "ring-2 ring-[#D6724B]" : ""}`}
-                        src={`https://api.dicebear.com/7.x/micah/svg?seed=${leaderboardData[1].avatarSeed}`}
-                      />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-bold text-sm truncate w-24">
-                        {leaderboardData[1].nickname}
-                      </p>
-                      <p className="text-xs text-secondary font-black">
-                        {leaderboardData[1].score} 积分
-                      </p>
-                    </div>
-                    <div className="w-full h-24 bg-surface-container-high rounded-t-xl button"></div>
-                  </label>
-
-                  {/* Rank 1 (index 0) */}
-                  <label
-                    className="label flex flex-col items-center space-y-3 -mt-12 group cursor-pointer"
-                    onClick={() => {
-                      setSelectedRankUser(leaderboardData[0]);
-                      setShowRankDetailModal(true);
-                    }}
-                  >
-                    <div className="relative active:scale-95 transition-transform">
-                      {leaderboardData[0].isUser && (
-                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 text-[10px] bg-[#D6724B] text-white px-2 py-0.5 rounded-full z-20">
-                          是我
-                        </div>
-                      )}
-                      <div className="absolute -top-6 left-1/2 -translate-x-1/2 text-yellow-400 z-10">
-                        <span
-                          className="material-symbols-outlined text-4xl"
-                          style={{ fontVariationSettings: '"FILL" 1' }}
-                        >
-                          workspace_premium
-                        </span>
-                      </div>
-                      <img
-                        className={`w-28 h-28 rounded-full border-4 border-primary-container shadow-2xl object-cover ring-4 ring-primary-container/20 ${leaderboardData[0].isUser ? "border-[#D6724B]" : ""}`}
-                        src={`https://api.dicebear.com/7.x/micah/svg?seed=${leaderboardData[0].avatarSeed}`}
-                      />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-black text-lg">
-                        {leaderboardData[0].nickname}
-                      </p>
-                      <p className="text-sm text-primary font-black">
-                        {leaderboardData[0].score} 积分
-                      </p>
-                    </div>
-                    <div className="w-full h-40 bg-primary-container rounded-t-xl shadow-[0_-10px_30px_rgba(168,200,186,0.3)] button"></div>
-                  </label>
-
-                  {/* Rank 3 (index 2) */}
-                  <label
-                    className="label flex flex-col items-center space-y-3 group cursor-pointer"
-                    onClick={() => {
-                      setSelectedRankUser(leaderboardData[2]);
-                      setShowRankDetailModal(true);
-                    }}
-                  >
-                    <div className="relative active:scale-95 transition-transform">
-                      {leaderboardData[2].isUser && (
-                        <div className="absolute -top-8 left-1/2 -translate-x-1/2 text-[10px] bg-[#D6724B] text-white px-2 py-0.5 rounded-full z-20">
-                          是我
-                        </div>
-                      )}
-                      <div className="absolute -top-4 -left-1 bg-secondary-container w-8 h-8 rounded-full flex items-center justify-center font-black border-4 border-surface text-on-secondary-container z-10">
-                        3
-                      </div>
-                      <img
-                        className={`w-20 h-20 rounded-full border-4 border-white shadow-lg object-cover ${leaderboardData[2].isUser ? "ring-2 ring-[#D6724B]" : ""}`}
-                        src={`https://api.dicebear.com/7.x/micah/svg?seed=${leaderboardData[2].avatarSeed}`}
-                      />
-                    </div>
-                    <div className="text-center">
-                      <p className="font-bold text-sm truncate w-24">
-                        {leaderboardData[2].nickname}
-                      </p>
-                      <p className="text-xs text-secondary font-black">
-                        {leaderboardData[2].score} 积分
-                      </p>
-                    </div>
-                    <div className="w-full h-16 bg-secondary-container rounded-t-xl button"></div>
-                  </label>
-                </div>
-              ) : (
-                <div className="text-center py-10 text-gray-400">
-                  正在发榜...
-                </div>
-              )}
-            </section>
-
-            {/* Rest of Leaderboard (Ranks 4-6) */}
-            <section className="space-y-4 pt-4">
-              {leaderboardData.slice(3).map((user, index) => {
-                const rank = index + 4;
-                // 莫兰迪底色循环
-                const bgClasses = [
-                  "bg-surface-container-low",
-                  "bg-[#F9F7F5]",
-                  "bg-[#FDFCF8]",
-                ];
-                return (
-                  <button
-                    key={rank}
-                    onClick={() => {
-                      setSelectedRankUser(user);
-                      setShowRankDetailModal(true);
-                    }}
-                    className={`w-full ${bgClasses[index % 3]} p-5 rounded-xl flex items-center justify-between transition-all active:scale-[0.98] group ${user.isUser ? "border-2 border-[#D6724B]" : "border border-transparent"}`}
-                  >
-                    <div className="flex items-center gap-4">
-                      <span className="text-on-surface-variant font-black text-lg w-6">
-                        {rank}
-                      </span>
-                      <div className="relative">
-                        {user.isUser && (
-                          <div className="absolute -top-2 -right-2 text-[8px] bg-[#D6724B] text-white px-1.5 rounded-full z-10">
-                            我
-                          </div>
-                        )}
-                        <img
-                          className="w-14 h-14 rounded-full border-2 border-white object-cover group-active:scale-110 transition-transform"
-                          src={`https://api.dicebear.com/7.x/micah/svg?seed=${user.avatarSeed}`}
-                        />
-                      </div>
-                      <div className="text-left">
-                        <p className="font-bold">{user.nickname}</p>
-                        <p className="text-xs text-on-surface-variant">
-                          {user.realName}
-                        </p>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end">
-                      <span className="font-black text-on-surface tracking-tighter">
-                        {user.score}
-                      </span>
-                      <span className="text-[10px] font-bold text-tertiary">
-                        积分
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </section>
-          </main>
-        </div>
-      )}
-
-      {/* 以下保留原学习系统头部与滚动内容 */}
-      <header className="bg-[#fffcf7]/90 dark:bg-stone-900/90 backdrop-blur-md sticky top-0 w-full z-50 flex justify-between items-center px-6 py-4 border-b border-outline-variant/10">
-        <div
-          className="flex items-center gap-3 cursor-pointer active:scale-95 transition-transform"
-          onClick={onBack}
-        >
-          <span className="material-symbols-outlined text-[#59685a] dark:text-[#a3b1a4]">
-            arrow_back_ios
-          </span>
-          <span className="text-lg font-bold text-[#59685a] dark:text-[#a3b1a4] tracking-tight">
-            返回集市
-          </span>
-        </div>
-        <div className="font-['Plus_Jakarta_Sans'] font-medium tracking-tight text-[#59685a] dark:text-[#a3b1a4]">
-          5 🔥 500 💎 5 ❤️
-        </div>
-      </header>
-
-      {/* 主页内容 */}
-      {currentTab === "home" && (
-        <main className="pt-8 pb-32 px-6 max-w-md mx-auto relative overflow-x-hidden flex-1 transition-all duration-500 ease-in-out">
-          <section className="mb-16">
-            <div className="bg-primary-container/80 backdrop-blur-sm rounded-xl p-6 relative overflow-hidden border border-primary/10">
-              <div className="relative z-10">
-                <span className="text-xs font-bold uppercase tracking-widest text-on-primary-container opacity-70 mb-2 block">
-                  当前研修
-                </span>
-                <h1 className="text-2xl font-extrabold text-on-primary-container mb-2 tracking-tight line-clamp-2">
-                  {courseContent ? courseContent : "请点击侧边栏 -> 选择课程"}
-                </h1>
-                <p className="text-on-primary-container opacity-80 leading-relaxed text-sm font-bold">
-                  {courseContent
-                    ? `难度：${courseLevel} | 进度：第 ${unlockedLevel} 关`
-                    : "开启您的智慧之旅"}
-                </p>
-              </div>
-              <div className="absolute -right-4 -bottom-4 opacity-10">
-                <span className="material-symbols-outlined text-9xl">
-                  school
-                </span>
-              </div>
-            </div>
-          </section>
-
-          <div className="relative flex flex-col gap-16 py-8 min-h-[1000px]">
-            {/* 连线 SVG */}
-            <svg
-              className="absolute top-0 left-0 w-full h-full pointer-events-none z-0"
-              preserveAspectRatio="none"
-              viewBox="0 0 400 1000"
-            >
-              <path
-                className="path-curve"
-                d="M200,80 C280,180 350,280 300,380 S50,480 100,580 S350,680 300,780 S100,880 200,980"
-                fill="none"
-                opacity="0.4"
-                stroke="#babaaf"
-                strokeDasharray="8 8"
-                strokeWidth="3"
-              ></path>
-            </svg>
-
-            {/* 动态渲染已生成的关卡 */}
-            {levels.map((lvlData, index) => (
-              <div
-                key={index}
-                className={`relative z-10 w-56 animate-float ${index % 2 === 0 ? "self-start" : "self-end mt-8"}`}
-                style={{ animationDelay: `${index * 0.5}s` }}
-              >
-                <div
-                  className="three-d-card p-5 rounded-2xl border group cursor-pointer transition-colors"
-                  style={{
-                    backgroundColor: getLevelColor(index).bg,
-                    borderColor: getLevelColor(index).border,
-                  }}
-                  onClick={() => {
-                    setCurrentPlayLevel(index);
-                    setShowFlashcard(true);
-                  }}
-                >
-                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
-                    <span
-                      className="material-symbols-outlined text-primary text-3xl pin-shadow"
-                      style={{ fontVariationSettings: "'FILL' 1" }}
-                    >
-                      push_pin
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-2 relative z-10">
-                    <span
-                      className="text-sm font-bold opacity-60"
-                      style={{ color: getLevelColor(index).text }}
-                    >
-                      {String(lvlData.level).padStart(2, "0")}
-                    </span>
-                    <h3
-                      className="font-extrabold text-lg leading-tight"
-                      style={{ color: getLevelColor(index).text }}
-                    >
-                      {lvlData.title}
-                    </h3>
-                    <p
-                      className="text-xs leading-relaxed"
-                      style={{ color: getLevelColor(index).text + "CC" }}
-                    >
-                      {lvlData.summary}
-                    </p>
-                    <div className="mt-2 flex justify-end">
-                      <div
-                        className="w-10 h-10 flex items-center justify-center"
-                        style={{
-                          backgroundColor: getLevelColor(index).bg,
-                          border: `2px dashed ${getLevelColor(index).border}`,
-                          borderRadius: "15px",
-                          boxShadow: `0 4px 0 0 ${getLevelColor(index).border}`,
-                        }}
-                      >
-                        <span
-                          className="material-symbols-outlined text-base"
-                          style={{ color: getLevelColor(index).text }}
-                        >
-                          play_arrow
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            ))}
-
-            {/* 待生成的锁定关卡（当前解锁的关卡槽位） */}
-            <div
-              className={`relative z-10 w-56 animate-float mt-8 ${levels.length % 2 === 0 ? "self-start" : "self-end"}`}
-              style={{ animationDelay: "0.5s" }}
-            >
-              <div
-                className="three-d-card bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/20 group cursor-pointer hover:border-secondary/50 transition-colors"
-                onClick={() => {
-                  if (!courseContent || selectedTeachers.length === 0) {
-                    alert("请先点击右上角菜单，选择课程与老师！");
-                    setIsSidebarOpen(true);
-                  } else {
-                    handleGenerateContent(unlockedLevel);
-                  }
-                }}
-              >
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-20">
-                  <span
-                    className="material-symbols-outlined text-secondary text-3xl pin-shadow"
-                    style={{ fontVariationSettings: "'FILL' 1" }}
-                  >
-                    push_pin
-                  </span>
-                </div>
-                <div className="flex flex-col gap-2 relative z-10">
-                  <span className="text-sm font-bold text-secondary opacity-60">
-                    {String(unlockedLevel).padStart(2, "0")}
-                  </span>
-                  <h3 className="font-extrabold text-lg text-on-surface leading-tight text-gray-400">
-                    {isGeneratingCourse
-                      ? "大模型奋笔疾书中..."
-                      : "点击生成新关卡"}
-                  </h3>
-                  <p className="text-xs text-on-surface-variant leading-relaxed">
-                    完成前置挑战，探索更多知识。
-                  </p>
-                  <div className="mt-2 flex justify-end">
-                    <div className="w-10 h-10 morandi-button flex items-center justify-center text-on-secondary-fixed-variant">
-                      <span className="material-symbols-outlined text-base">
-                        {isGeneratingCourse ? "hourglass_empty" : "lock"}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </main>
-      )}
-
-      {/* 课程页面 */}
-      {currentTab === "courses" && (
-        <main className="max-w-md w-full mx-auto min-h-screen flex flex-col gap-6 pb-32 transition-all duration-500 ease-in-out bg-[#FDFCF8] overflow-x-hidden">
-          {/* 1. 每日打卡模块 */}
-          <section className="bg-white rounded-b-3xl px-6 pt-8 pb-6 shadow-[0_8px_24px_rgba(140,145,123,0.05)] border-b border-[#F2EFDE]">
-            <div className="flex justify-between items-end mb-5">
-              <div>
-                <h2 className="text-xl font-headline font-extrabold text-[#5A5F4D] flex items-center gap-2">
-                  <span className="material-symbols-outlined text-[#E8B4B8]">
-                    verified
-                  </span>
-                  每日打卡
-                </h2>
-                <p className="text-[#8C917B] font-body text-xs mt-1">
-                  积少成多，聚沙成塔
-                </p>
-              </div>
-              <span className="text-xs font-bold text-[#D6724B] bg-[#FFF5F3] border border-[#FADBD8] px-3 py-1.5 rounded-full shadow-sm">
-                已坚持 {punchInRecords.length} 天
-              </span>
-            </div>
-            {/* 横向滚动打卡带 */}
-            <div className="-mx-4 px-4 overflow-x-hidden">
-              <div
-                className="flex gap-3 overflow-x-auto no-scrollbar pb-3 snap-x"
-                ref={(el) => {
-                  if (el && !el.dataset.scrolled) {
-                    const todayEl = el.querySelector(".is-today");
-                    if (todayEl) {
-                      el.scrollTo({
-                        left:
-                          todayEl.offsetLeft -
-                          el.clientWidth / 2 +
-                          todayEl.clientWidth / 2,
-                        behavior: "smooth",
-                      });
-                      el.dataset.scrolled = "true";
-                    }
-                  }
-                }}
-              >
-                {getMonthDays().map((day, idx) => {
-                  const isPunched = punchInRecords.includes(day.dateStr);
-                  const isToday = day.isToday;
-
-                  let bgColor = "#F9F7F5";
-                  let textColor = "#B0A496";
-                  let borderColor = "transparent";
-
-                  if (isPunched) {
-                    bgColor = "#E8B4B8"; // 莫兰迪浅粉
-                    textColor = "#FFF";
-                    borderColor = "#DFA9A9";
-                  } else if (isToday) {
-                    bgColor = "#D2E6EC"; // 莫兰迪浅蓝
-                    textColor = "#5A8599";
-                    borderColor = "#98C0D1";
-                  } else if (day.isPast) {
-                    bgColor = "#EAEAEA"; // 过去未打卡
-                    textColor = "#999";
-                  }
-
-                  return (
-                    <div
-                      key={idx}
-                      className={`snap-center flex-shrink-0 w-14 h-16 rounded-2xl flex flex-col items-center justify-center cursor-pointer transition-all active:scale-95 ${isToday ? "is-today shadow-md" : "shadow-sm"}`}
-                      style={{
-                        backgroundColor: bgColor,
-                        color: textColor,
-                        border: `1.5px solid ${borderColor}`,
-                      }}
-                      onClick={() => handlePunchIn(day.dateStr)}
-                    >
-                      <span className="text-[10px] font-bold mb-1">
-                        {isPunched ? (
-                          <i className="ph-bold ph-check text-sm"></i>
-                        ) : (
-                          "DAY"
-                        )}
-                      </span>
-                      <span className="text-lg font-black font-headline">
-                        {day.dateNum}
-                      </span>
-                    </div>
-                  );
-                })}{" "}
-              </div>
-            </div>
-          </section>
-
-          <div className="px-6 flex flex-col gap-8">
-            {/* 2. 已学课程模块 (动态读取 levels) */}
-            <section>
-              <div className="flex justify-between items-center mb-5">
-                <div>
-                  <h2 className="text-2xl font-headline font-extrabold text-[#5A5F4D]">
-                    已学课程
-                  </h2>
-                  <p className="text-[#8C917B] font-body text-xs mt-1">
-                    点击书本筛选对应的复习卡片
-                  </p>
-                </div>
-                {selectedReviewLevel && (
-                  <button
-                    onClick={() => {
-                      setSelectedReviewLevel(null);
-                      setReviewIndex(0);
-                    }}
-                    className="text-[#5A8599] font-bold text-[11px] flex items-center gap-1 bg-[#D2E6EC]/60 border border-[#98C0D1]/50 px-3 py-1.5 rounded-full active:scale-95 transition-all"
-                  >
-                    查看全部 <i className="ph-bold ph-x"></i>
-                  </button>
-                )}
-              </div>
-
-              {levels.length === 0 ? (
-                <div className="text-center py-10 bg-white rounded-3xl border border-dashed border-[#DFA9A9]/50 shadow-sm">
-                  <i className="ph-fill ph-books text-5xl text-[#E8B4B8] opacity-60 mb-3"></i>
-                  <p className="text-sm text-[#5A5F4D] font-bold">
-                    书库空空如也
-                  </p>
-                  <p className="text-xs text-[#8C917B] mt-1">
-                    请先前往主页生成课程关卡
-                  </p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-4">
-                  {levels.map((lvl, idx) => {
-                    const colorObj = getLevelColor(idx);
-                    const isSelected = selectedReviewLevel === lvl.title;
-
-                    return (
-                      <div
-                        key={idx}
-                        onClick={() => {
-                          setSelectedReviewLevel(lvl.title);
-                          setReviewIndex(0);
-                          setIsReviewFlipped(false);
-                        }}
-                        className={`rounded-3xl p-5 flex flex-col justify-between transition-all duration-300 active:scale-95 cursor-pointer relative overflow-hidden`}
-                        style={{
-                          backgroundColor: isSelected
-                            ? colorObj.gradientFrom
-                            : colorObj.bg,
-                          border: `2px solid ${isSelected ? colorObj.border : "transparent"}`,
-                          transform: isSelected ? "translateY(-4px)" : "none",
-                          boxShadow: isSelected
-                            ? `0 10px 25px ${colorObj.border}40`
-                            : "0 4px 12px rgba(0,0,0,0.05)",
-                        }}
-                      >
-                        <div className="absolute -right-4 -bottom-4 opacity-15">
-                          <i
-                            className="ph-fill ph-book-open-text text-[5rem]"
-                            style={{ color: colorObj.text }}
-                          ></i>
-                        </div>
-                        <div className="relative z-10 mb-6">
-                          <span
-                            className="text-[10px] font-bold bg-white/70 px-2 py-0.5 rounded-md mb-2 inline-block shadow-sm"
-                            style={{ color: colorObj.text }}
-                          >
-                            第 {lvl.level} 关
-                          </span>
-                          <h4
-                            className="font-headline font-extrabold text-[15px] leading-tight"
-                            style={{ color: colorObj.text }}
-                          >
-                            {lvl.title}
-                          </h4>
-                        </div>
-                        {/* 切换回主页继续学习 */}
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setCurrentTab("home");
-                          }}
-                          className="relative z-10 w-full py-2.5 bg-white/90 rounded-xl text-xs font-bold shadow-sm hover:bg-white flex justify-center items-center gap-1 transition-all"
-                          style={{ color: colorObj.text }}
-                        >
-                          回到主页 <i className="ph-bold ph-arrow-right"></i>
-                        </button>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </section>
-
-            {/* 3. 闪卡复习模块 (基于选择过滤) */}
-            <section className="mb-6">
-              <div className="flex justify-between items-end mb-5">
-                <div>
-                  <h2 className="text-2xl font-headline font-extrabold text-[#5A5F4D] flex items-center gap-2">
-                    <span
-                      className="material-symbols-outlined text-[#EADDCA]"
-                      style={{ fontVariationSettings: "'FILL' 1" }}
-                    >
-                      style
-                    </span>
-                    闪卡复习
-                  </h2>
-                  <p className="text-[#8C917B] font-body text-xs mt-1">
-                    {selectedReviewLevel
-                      ? `精准复习: ${selectedReviewLevel}`
-                      : "温故而知新，聚沙成塔"}
-                  </p>
-                </div>
-                <span className="text-[11px] font-bold text-[#5A8F6D] bg-[#E8F1ED] border border-[#A8C8BA] px-3 py-1.5 rounded-full shadow-sm">
-                  待复习: {favCardsToReview.length} 张
-                </span>
-              </div>
-
-              {favCardsToReview.length === 0 ? (
-                <div className="bg-white border-2 border-dashed border-[#EAE6D6] rounded-3xl p-12 flex flex-col items-center justify-center gap-3 shadow-sm">
-                  <div className="w-16 h-16 rounded-full bg-[#FDFCF8] flex items-center justify-center shadow-inner border border-[#EAE6D6]">
-                    <span
-                      className="material-symbols-outlined text-[#EADDCA] text-3xl"
-                      style={{ fontVariationSettings: "'FILL' 1" }}
-                    >
-                      bookmark_heart
-                    </span>
-                  </div>
-                  <p className="text-sm font-bold text-[#8C917B] text-center">
-                    {selectedReviewLevel
-                      ? "该课程暂无收藏的闪卡"
-                      : "你的复习库空空如也"}
-                  </p>
-                  <p className="text-[11px] text-[#A0A0A0] text-center leading-relaxed">
-                    在学习过程中点击红心
-                    <br />
-                    即可将重点卡片加入复习堆
-                  </p>
-                </div>
-              ) : (
-                <div className="relative w-full aspect-[3/4] perspective-1000 max-w-[320px] mx-auto">
-                  {(() => {
-                    // 安全索引约束
-                    const safeIndex =
-                      reviewIndex >= favCardsToReview.length ? 0 : reviewIndex;
-                    const currentReviewCard = favCardsToReview[safeIndex];
-
-                    return (
-                      <div
-                        className={`relative w-full h-full preserve-3d cursor-pointer ${isReviewFlipped ? "flip-active" : ""}`}
-                        onClick={() => setIsReviewFlipped(!isReviewFlipped)}
-                      >
-                        {/* 正面 */}
-                        <div className="absolute inset-0 backface-hidden bg-[#FDFCF8] rounded-3xl shadow-[0_12px_30px_rgba(0,0,0,0.06)] flex flex-col items-center justify-center p-8 border-2 border-[#EAE6D6]">
-                          <div className="absolute top-6 left-6 right-6 flex justify-between items-center">
-                            <span className="text-[10px] font-bold tracking-widest text-[#B8860B] uppercase bg-[#EADDCA]/50 px-2.5 py-1 rounded-md border border-[#DAA06D]/30">
-                              {currentReviewCard.levelTitle}
-                            </span>
-                            <span className="text-xs font-black text-[#8C917B] bg-white px-2 py-1 rounded-full shadow-sm">
-                              {safeIndex + 1} / {favCardsToReview.length}
-                            </span>
-                          </div>
-
-                          <div className="text-center w-full">
-                            {currentReviewCard.type === "fill" ? (
-                              <div className="space-y-8">
-                                <p className="text-xl font-bold text-[#5A5F4D] leading-relaxed">
-                                  {currentReviewCard.sentence}
-                                </p>
-                                <div className="w-40 h-12 mx-auto bg-[#F9F7F5] border-2 border-dashed border-[#DAA06D] rounded-2xl flex items-center justify-center shadow-inner">
-                                  <span className="text-[#DAA06D] font-bold text-sm">
-                                    点我揭晓答案
-                                  </span>
-                                </div>
-                              </div>
-                            ) : (
-                              <div>
-                                <h3 className="text-4xl font-black text-[#5A5F4D] tracking-tight mb-4">
-                                  {currentReviewCard.concept}
-                                </h3>
-                                {currentReviewCard.pronunciation && (
-                                  <p className="text-[#8C917B] text-sm font-medium tracking-widest bg-[#F5F5F5] inline-block px-3 py-1 rounded-lg">
-                                    {currentReviewCard.pronunciation}
-                                  </p>
-                                )}
-                              </div>
-                            )}
-                          </div>
-                          <div className="absolute bottom-6 text-[#A8C8BA] flex items-center gap-1.5 bg-[#E8F1ED] border border-[#A8C8BA]/30 px-5 py-2.5 rounded-full shadow-sm animate-pulse">
-                            <i className="ph-bold ph-arrows-clockwise text-base"></i>
-                            <span className="text-[11px] font-bold tracking-wider">
-                              翻转查看解析
-                            </span>
-                          </div>
-                        </div>
-
-                        {/* 反面 */}
-                        <div className="absolute inset-0 backface-hidden rotate-y-180 bg-[#FFFDF9] rounded-3xl shadow-[0_12px_30px_rgba(0,0,0,0.1)] p-6 flex flex-col border-2 border-[#A8C8BA] overflow-hidden">
-                          <div className="flex-1 overflow-y-auto no-scrollbar pb-16">
-                            <div className="flex justify-between items-center mb-5 border-b border-[#EAE6D6] pb-3">
-                              <span className="text-[10px] font-bold tracking-widest text-[#5A8F6D] bg-[#E8F1ED] px-2.5 py-1.5 rounded-lg uppercase flex items-center gap-1">
-                                <i className="ph-fill ph-magic-wand"></i>
-                                {currentReviewCard.type === "fill"
-                                  ? "答案解析"
-                                  : "释义讲解"}
-                              </span>
-                            </div>
-
-                            <div className="space-y-5">
-                              {currentReviewCard.type === "fill" && (
-                                <div className="bg-[#E8F1ED]/60 px-5 py-4 rounded-2xl border border-[#A8C8BA]/40 shadow-sm text-center">
-                                  <p className="text-2xl font-black text-[#5A8F6D] tracking-wide">
-                                    {currentReviewCard.answer}
-                                  </p>
-                                </div>
-                              )}
-
-                              <div>
-                                <p className="text-[15px] font-bold text-[#5A5F4D] leading-relaxed">
-                                  {currentReviewCard.definition}
-                                </p>
-                              </div>
-
-                              <div className="bg-[#F9F7F5] p-4 rounded-2xl border-l-4 border-[#DFA9A9] shadow-inner">
-                                <p className="text-[13px] italic font-medium leading-relaxed text-[#8C917B]">
-                                  "{currentReviewCard.example}"
-                                </p>
-                              </div>
-
-                              {currentReviewCard.teacherName && (
-                                <div className="bg-white p-4 rounded-2xl border border-[#EAEAEA] shadow-sm relative overflow-hidden">
-                                  <div className="absolute top-0 right-0 w-16 h-16 bg-[#FDF0E6] rounded-bl-full opacity-50 z-0"></div>
-                                  <div className="flex items-center gap-2 mb-2 relative z-10">
-                                    <div className="w-6 h-6 rounded-full bg-[#DFA9A9] text-white flex items-center justify-center text-xs font-bold shadow-inner">
-                                      {currentReviewCard.teacherName[0]}
-                                    </div>
-                                    <span className="text-xs font-black text-[#D6724B]">
-                                      {currentReviewCard.teacherName} 讲道：
-                                    </span>
-                                  </div>
-                                  <p className="text-[13px] text-[#5A5F4D] leading-relaxed relative z-10 font-medium">
-                                    {currentReviewCard.teacherNote}
-                                  </p>
-                                </div>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* 底部操作栏 - 记住 / 复习 */}
-                          <div
-                            className="absolute bottom-0 left-0 w-full p-5 bg-gradient-to-t from-white via-white to-transparent flex gap-3 z-20"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <button
-                              onClick={() =>
-                                handleRememberCard(currentReviewCard.cardId)
-                              }
-                              className="flex-1 py-4 bg-[#E8F1ED] text-[#5A8F6D] border-2 border-[#A8C8BA] rounded-2xl font-extrabold text-sm shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1.5"
-                            >
-                              <i className="ph-bold ph-check text-lg"></i>{" "}
-                              已记住
-                            </button>
-                            <button
-                              onClick={() => handleReviewAgain()}
-                              className="flex-1 py-4 bg-[#F2E6E6] text-[#D6724B] border-2 border-[#DFA9A9] rounded-2xl font-extrabold text-sm shadow-sm active:scale-95 transition-transform flex justify-center items-center gap-1.5"
-                            >
-                              <i className="ph-bold ph-clock-counter-clockwise text-lg"></i>{" "}
-                              需复习
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-                </div>
-              )}
-            </section>
-          </div>
-        </main>
-      )}
-
-      {/* --- [新增] 底部人物详情卡片弹窗 --- */}
-      {showRankDetailModal && selectedRankUser && (
-        <div
-          className="fixed inset-0 bg-black/50 z-[900] flex items-end justify-center animate-fadeIn"
-          onClick={() => setShowRankDetailModal(false)}
-        >
-          <div
-            className="bg-[#FDFCF8] rounded-t-3xl w-full max-w-2xl p-6 shadow-[0_-10px_40px_rgba(0,0,0,0.2)] animate-slide-up flex flex-col max-h-[85vh] overflow-y-auto no-scrollbar"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div className="flex justify-between items-start mb-6">
-              <div className="flex items-center gap-4">
-                <img
-                  className="w-16 h-16 rounded-full border-4 border-[#A8C8BA] shadow-md bg-white"
-                  src={`https://api.dicebear.com/7.x/micah/svg?seed=${selectedRankUser.avatarSeed}`}
-                />
-                <div>
-                  <h3 className="text-xl font-extrabold text-[#5A5F4D]">
-                    {selectedRankUser.nickname}
-                  </h3>
-                  <p className="text-sm text-[#8C917B] font-medium">
-                    {selectedRankUser.realName}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowRankDetailModal(false)}
-                className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 active:scale-95"
-              >
-                <span className="material-symbols-outlined text-sm">close</span>
-              </button>
-            </div>
-
-            {/* 排行感言 */}
-            <div className="bg-white p-4 rounded-2xl border-l-4 border-[#D6724B] shadow-sm mb-6 relative">
-              <span
-                className="material-symbols-outlined absolute -top-3 -left-2 text-3xl text-gray-200/50"
-                style={{ fontVariationSettings: '"FILL" 1' }}
-              >
-                format_quote
-              </span>
-              <p className="text-[#5A5F4D] italic text-sm leading-relaxed font-serif relative z-10 pl-2">
-                "{selectedRankUser.quote}"
-              </p>
-            </div>
-
-            {/* 时长分布折线图 (纯SVG手绘风格) */}
-            <div className="mb-6">
-              <h4 className="text-sm font-bold text-[#8C917B] mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-base text-[#A8C8BA]">
-                  monitoring
-                </span>
-                近7日修习时长 (分钟)
-              </h4>
-              <div className="bg-[#F9F7F5] rounded-2xl p-4 border border-[#EAEAEA]">
-                <svg
-                  viewBox="0 0 300 120"
-                  className="w-full h-32 overflow-visible"
-                >
-                  {/* 绘制背景辅助线 */}
-                  {[0, 25, 50, 75, 100].map((y) => (
-                    <line
-                      key={y}
-                      x1="0"
-                      y1={y}
-                      x2="300"
-                      y2={y}
-                      stroke="#E0E0E0"
-                      strokeWidth="0.5"
-                      strokeDasharray="2,2"
-                    />
-                  ))}
-                  {/* 绘制折线 */}
-                  {(() => {
-                    const data = selectedRankUser.chartData || [
-                      0, 0, 0, 0, 0, 0, 0,
-                    ];
-                    const max = Math.max(...data, 10); // 避免除以0
-                    const points = data
-                      .map((val, i) => {
-                        const x = (i / 6) * 280 + 10;
-                        const y = 100 - (val / max) * 90;
-                        return `${x},${y}`;
-                      })
-                      .join(" ");
-
-                    return (
-                      <>
-                        <polyline
-                          points={points}
-                          fill="none"
-                          stroke="#D6724B"
-                          strokeWidth="3"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        />
-                        {data.map((val, i) => (
-                          <g key={i}>
-                            <circle
-                              cx={(i / 6) * 280 + 10}
-                              cy={100 - (val / max) * 90}
-                              r="4"
-                              fill="#FDFCF8"
-                              stroke="#D6724B"
-                              strokeWidth="2"
-                            />
-                            {/* 数据标签 */}
-                            <text
-                              x={(i / 6) * 280 + 10}
-                              y={100 - (val / max) * 90 - 10}
-                              textAnchor="middle"
-                              fill="#8C917B"
-                              fontSize="10px"
-                              fontWeight="bold"
-                            >
-                              {val}
-                            </text>
-                            {/* 底部天数 */}
-                            <text
-                              x={(i / 6) * 280 + 10}
-                              y="115"
-                              textAnchor="middle"
-                              fill="#A0A0A0"
-                              fontSize="9px"
-                            >
-                              {i === 6 ? "今" : `-${6 - i}`}
-                            </text>
-                          </g>
-                        ))}
-                      </>
-                    );
-                  })()}
-                </svg>
-              </div>
-            </div>
-
-            {/* 近期阅览课程 */}
-            <div>
-              <h4 className="text-sm font-bold text-[#8C917B] mb-3 flex items-center gap-2">
-                <span className="material-symbols-outlined text-base text-[#D4AB90]">
-                  menu_book
-                </span>
-                近期钻研案卷
-              </h4>
-              <div className="flex flex-wrap gap-2">
-                {(selectedRankUser.recentCourses || []).map((course, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-white border border-[#EAEAEA] px-3 py-1.5 rounded-lg text-xs font-bold text-[#5A5F4D] shadow-sm"
-                  >
-                    《{course}》
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <nav className="fixed bottom-0 left-0 w-full flex justify-around items-center pt-3 pb-6 px-4 bg-[#fffcf7]/90 dark:bg-stone-900/90 backdrop-blur-xl z-50 rounded-t-2xl border-t border-outline-variant/15 shadow-[0_-10px_30px_rgba(55,56,49,0.05)]">
-        <div
-          className={`flex flex-col items-center justify-center px-6 py-1 transition-colors cursor-pointer ${currentTab === "home" ? "morandi-button-primary text-primary-dim" : "text-[#64655c] dark:text-[#9ca3af] hover:text-[#59685a]"}`}
-          onClick={() => {
-            setCurrentTab("home");
-            setShowLeaderboard(false);
-          }}
-        >
-          <span
-            className={`material-symbols-outlined ${currentTab === "home" ? "text-primary-dim" : "text-[#64655c] dark:text-[#9ca3af]"}`}
-            style={{ fontVariationSettings: "'FILL' 1" }}
-          >
-            home
-          </span>
-          <span
-            className={`font-['Plus_Jakarta_Sans'] text-[10px] font-semibold uppercase tracking-wider ${currentTab === "home" ? "text-primary-dim" : "text-[#64655c] dark:text-[#9ca3af]"}`}
-          >
-            主页
-          </span>
-        </div>
-        <div
-          className={`flex flex-col items-center justify-center px-4 py-1 transition-colors cursor-pointer ${currentTab === "courses" ? "morandi-button-primary text-primary-dim" : "text-[#64655c] dark:text-[#9ca3af] hover:text-[#59685a]"}`}
-          onClick={() => {
-            setCurrentTab("courses");
-            setShowLeaderboard(false);
-          }}
-        >
-          <span
-            className={`material-symbols-outlined ${currentTab === "courses" ? "text-primary-dim" : "text-[#64655c] dark:text-[#9ca3af]"}`}
-          >
-            import_contacts
-          </span>
-          <span
-            className={`font-['Plus_Jakarta_Sans'] text-[10px] font-semibold uppercase tracking-wider ${currentTab === "courses" ? "text-primary-dim" : "text-[#64655c] dark:text-[#9ca3af]"}`}
-          >
-            课程
-          </span>
-        </div>
-        <div
-          className={`flex flex-col items-center justify-center px-4 py-1 transition-colors cursor-pointer ${currentTab === "leaderboard" ? "morandi-button-primary text-primary-dim" : "text-[#64655c] dark:text-[#9ca3af] hover:text-[#59685a]"}`}
-          onClick={() => {
-            setCurrentTab("leaderboard");
-            setShowLeaderboard(true);
-          }}
-        >
-          <span className="material-symbols-outlined">leaderboard</span>
-          <span className="font-['Plus_Jakarta_Sans'] text-[10px] font-semibold uppercase tracking-wider">
-            排行
-          </span>
-        </div>
-      </nav>
-    </div>
-  );
-};
-
-// T13 休闲一刻主页面组件
-const StarChartPage = ({ onBack }) => {
-  // 生成随机星座的函数
-  const generateRandomConstellation = (
-    starCount = Math.floor(Math.random() * 7) + 6,
-  ) => {
-    const nodes = [];
-    const links = [];
-
-    for (let i = 0; i < starCount; i++) {
-      const x = Math.random() * 200 + 100; // 100-300（缩小水平范围）
-      const y = Math.random() * 305 + 125; // 180-430（缩小垂直范围，避开统计文本区域）
-      const size = Math.random() * 3 + 2; // 2-5（缩小星星大小）
-      nodes.push([x, y, size]);
-    }
-
-    const sortedNodes = [...nodes].map((node, index) => ({
-      index,
-      node,
-    }));
-    if (Math.random() > 0.5) {
-      sortedNodes.sort((a, b) => a.node[0] - b.node[0]);
-    } else {
-      sortedNodes.sort((a, b) => a.node[1] - b.node[1]);
-    }
-
-    for (let i = 0; i < sortedNodes.length - 1; i++) {
-      links.push([sortedNodes[i].index, sortedNodes[i + 1].index]);
-    }
-
-    for (let i = 0; i < nodes.length; i++) {
-      if (Math.random() > 0.7) {
-        const distances = [];
-        for (let j = 0; j < nodes.length; j++) {
-          if (i !== j) {
-            const dx = nodes[i][0] - nodes[j][0];
-            const dy = nodes[i][1] - nodes[j][1];
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const linkExists = links.some(
-              (link) =>
-                (link[0] === i && link[1] === j) ||
-                (link[0] === j && link[1] === i),
-            );
-            if (!linkExists) {
-              distances.push({ index: j, distance });
-            }
-          }
-        }
-        if (distances.length > 0) {
-          distances.sort((a, b) => a.distance - b.distance);
-          links.push([i, distances[0].index]);
-        }
-      }
-    }
-
-    return { nodes, links, starCount };
-  };
-
-  const [constellation, setConstellation] = React.useState(
-    generateRandomConstellation(),
-  );
-  const [inputText, setInputText] = React.useState("");
-  const [displayText, setDisplayText] = React.useState("");
-  const [showText, setShowText] = React.useState(false);
-
-  // 新增：AI及逝者相关状态
-  const [isGenerating, setIsGenerating] = React.useState(false);
-  const [statistics, setStatistics] = React.useState("");
-  const [deceasedList, setDeceasedList] = React.useState([]);
-  const [selectedDeceased, setSelectedDeceased] = React.useState(null);
-
-  // ===== 新增：他人寄语相关状态 =====
-  const [showTributesModal, setShowTributesModal] = React.useState(false);
-  const [isGeneratingTributes, setIsGeneratingTributes] = React.useState(false);
-  const [tributesList, setTributesList] = React.useState([]);
-
-  // ===== 新增：处理生成他人寄语 =====
-  const handleGenerateTributes = async () => {
-    if (!selectedDeceased || isGeneratingTributes) return;
-
-    setIsGeneratingTributes(true);
-    setShowTributesModal(true); // 打开弹窗显示加载中
-    setTributesList([]); // 清空旧数据
-
-    try {
-      // 1. 获取世界书设定
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 2. 获取传讯角色 (排除群聊和装饰)
-      let allChars = [];
-      if (window.chatCharacterStore) {
-        allChars = await window.chatCharacterStore.getAll();
-      } else {
-        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
-      }
-      const validChars = allChars.filter(
-        (c) => !String(c.id).startsWith("group") && c.type !== "decor",
-      );
-
-      // 随机抽取 2 到 3 个现有的传讯角色
-      const shuffled = [...validChars].sort(() => 0.5 - Math.random());
-      const selectedChars = shuffled.slice(
-        0,
-        Math.max(2, Math.min(3, validChars.length)),
-      );
-
-      const charsInfo = selectedChars
-        .map(
-          (c) =>
-            `【已有角色】姓名: ${c.name} | 身份/背景: ${c.profile?.background || "未知"} | 性格: ${c.profile?.personality || "无"} | 语言风格: ${c.profile?.style || "无"}`,
-        )
-        .join("\n");
-
-      // 3. 构建 Prompt
-      const sysPrompt =
-        "你是一个深谙东汉末年历史与人情冷暖的文案生成器，擅长模拟不同身份人物的口吻表达对逝者的缅怀或态度。";
-      const userPrompt = `
-                            【世界设定】
-                            ${worldContext}
-
-                            【逝者信息】
-                            姓名：${selectedDeceased.name}
-                            年龄：${selectedDeceased.age}
-                            身份/家族：${selectedDeceased.family} - ${selectedDeceased.profession}
-                            死因：${selectedDeceased.death_cause}
-                            生前最爱：${selectedDeceased.favorite}
-                            生前愿景：${selectedDeceased.wish}
-
-                            【必须包含的特定已知角色】
-                            ${charsInfo}
-                            (注意：必须使用上述列出的已有角色生成缅怀，并且寄语的语气必须严格符合他们的性格和语言风格)
-
-                            【任务】
-                            请生成 10 到 15 条针对该逝者的缅怀/寄语。
-                            要求：
-                            1. 评价的人中必须包含上面提供的【已有角色】（如果有的话）。
-                            2. 其余评价人可以是随机生成的NPC（如当地人、客居者、家人、陌生人、甚至是坏人、仇人等）。
-                            3. 每条寄语的语言风格必须符合评价人的身份和立场（如仇人可能冷嘲热讽，亲人悲痛欲绝，路人只作叹息）。
-                            4. 严格返回纯 JSON 数组格式，不要包含任何 Markdown 标记（如 \`\`\`json ），直接以 [ 开头，] 结尾。
-
-                            返回格式示例：
-                            [
-                              {
-                                "name": "评价人名字",
-                                "identity": "评价人身份（如：幽州商贩、死者长兄、或者是已有角色）",
-                                "item": "带给逝者的东西（如：一壶浊酒、一束野花、一把残剑、甚至是一口唾沫）",
-                                "message": "想告诉逝者的话"
-                              }
-                            ]
-                        `;
-
-      // 4. 调用大模型
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data) && data.length > 0) {
-                setTributesList(data);
-              } else {
-                throw new Error("返回格式非数组");
-              }
-            } catch (e) {
-              console.error("解析寄语失败:", e, reply);
-              alert("获取寄语失败，请重试。");
-              setShowTributesModal(false);
-            } finally {
-              setIsGeneratingTributes(false);
-            }
-          },
-          (err) => {
-            console.error(err);
-            alert("网络波动，获取寄语失败。请检查API设置。");
-            setIsGeneratingTributes(false);
-            setShowTributesModal(false);
-          },
-        );
-      } else {
-        alert("未找到 API 接口，请先在设置中配置 API！");
-        setIsGeneratingTributes(false);
-        setShowTributesModal(false);
-      }
-    } catch (e) {
-      console.error(e);
-      setIsGeneratingTributes(false);
-      setShowTributesModal(false);
-    }
-  };
-
-  // 处理发送按钮点击 (接入大模型推演)
-  const handleSend = async () => {
-    if (!inputText.trim() || isGenerating) return;
-
-    setIsGenerating(true);
-    try {
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 预先生成下一张星图，以确定需生成的逝者数量
-      const newConstellation = generateRandomConstellation();
-      const count = newConstellation.starCount;
-
-      const sysPrompt =
-        "你是一个沉浸式的东汉末年历史推演AI计算器，深谙世事沧桑与平民百态。";
-      const userPrompt = `
-                            【世界设定】
-                            ${worldContext}
-
-                            【发生的事件记录】
-                            ${inputText}
-
-                            【任务要求】
-                            基于上述事件和世界观，推演这场事件造成的伤亡情况，并具体生成 ${count} 名在此事件中丧生的人物信息以点亮星象。
-                            人物身份要多样（包括老者、孩童、士兵、士族、平民等），人物的性格、生前愿望和临终念头要严格符合其年龄、身份与当前的时代背景。
-
-                            【输出格式严格要求】
-                            必须直接输出纯JSON格式数据，绝对不要包含Markdown代码块（如 \`\`\`json ）。格式如下：
-                            {
-                              "statistics": "这段文字描述此次事件造成的总伤亡人数及职业/身份分布（如：此次事件造成共计xxx人伤亡，其中平民xx人，士兵xx人等。言简意赅）",
-                              "deceased": [
-                                {
-                                  "name": "姓名",
-                                  "family": "家族或出身（如：河内平民、颍川陈氏）",
-                                  "profession": "职业/身份",
-                                  "age": "年龄（包含单位，如'7岁'、'54岁'）",
-                                  "death_cause": "死法（在三五句话以内，需要描述清楚）",
-                                  "favorite": "生前喜欢的事物",
-                                  "wish": "生前最大的愿望",
-                                  "last_thought": "死之前的最后一个念头（以第一人称主观视角表达）"
-                                }
-                              ]
-                            }
-                            注：deceased 数组的长度必须严格等于 ${count}。
-                        `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-
-              setConstellation(newConstellation);
-              setStatistics(data.statistics || "");
-
-              const dList = data.deceased || [];
-              // 兜底补齐，以防大模型生成数量不够导致报错
-              while (dList.length < count) {
-                dList.push({
-                  name: "无名氏",
-                  family: "未知",
-                  profession: "平民",
-                  age: "未知",
-                  death_cause:
-                    "今天是农历初三。父母放他出去玩。他找到了小伙伴，一起提着蹴鞠。但遇到了府兵，被殴打致死。",
-                  favorite: "活着",
-                  wish: "天下太平",
-                  last_thought: "好冷...",
-                });
-              }
-              setDeceasedList(dList);
-
-              setDisplayText(inputText.trim());
-              setShowText(true);
-              setInputText("");
-            } catch (e) {
-              console.error("星轨数据解析失败:", e, reply);
-              alert("星轨推演失败，请重试。");
-            } finally {
-              setIsGenerating(false);
-            }
-          },
-          (err) => {
-            console.error(err);
-            alert("星轨推演请求失败，请检查API设置。");
-            setIsGenerating(false);
-          },
-        );
-      } else {
-        alert("未找到 API 接口，请前往设置配置！");
-        setIsGenerating(false);
-      }
-    } catch (e) {
-      console.error(e);
-      setIsGenerating(false);
-    }
-  };
-
-  return (
-    <div
-      className="starchart-overlay open fade-in"
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 900,
-        background: "radial-gradient(circle at center, #1a1b3a 0%, #0a0b16 100%)",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        width: "100%",
-        height: "100%",
-      }}
-    >
-      <div className="flex justify-between p-6 items-center z-10">
-        <div className="flex items-center gap-4 flex-1">
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder="记录灾厄、战乱或变故..."
-            className="border-b-2 border-dashed border-white/30 flex-1 bg-transparent text-white placeholder-white/50 py-2 focus:outline-none"
-            disabled={isGenerating}
-          />
-          <button
-            onClick={handleSend}
-            disabled={isGenerating}
-            className="constellation-btn flex items-center justify-center"
-          >
-            <i className="ph ph-paper-plane text-white text-sm"></i>
-          </button>
-        </div>
-        <i
-          className="ph ph-x text-white text-2xl ml-6 cursor-pointer"
-          onClick={onBack}
-        ></i>
-      </div>
-
-      {/* 顶部统计数据展示区 */}
-      {statistics && !isGenerating && (
-        <div className="px-6 pb-2 text-white/80 text-sm text-center leading-relaxed z-10 font-serif">
-          {statistics}
-        </div>
-      )}
-
-      <div className="flex-1 relative w-full h-full min-h-[300px]">
-        <svg viewBox="0 0 400 600" className="w-full h-full" style={{ width: "100%", height: "100%" }}>
-          <defs>
-            <filter id="starGlowFilter" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur stdDeviation="3" result="blur" />
-              <feComposite in="SourceGraphic" in2="blur" operator="over" />
-            </filter>
-          </defs>
-          {/* 连线层 */}
-          {constellation.links.map((link, i) => {
-            const n1 = constellation.nodes[link[0]];
-            const n2 = constellation.nodes[link[1]];
-            if (!n1 || !n2) return null;
-            return (
-              <g key={`link-${i}`}>
-                <line
-                  className="star-glow"
-                  x1={n1[0]}
-                  y1={n1[1]}
-                  x2={n2[0]}
-                  y2={n2[1]}
-                  stroke="rgba(255, 255, 255, 0.4)"
-                  strokeWidth="4"
-                  strokeLinecap="round"
-                  filter="url(#starGlowFilter)"
-                />
-                <line
-                  className="star-line"
-                  x1={n1[0]}
-                  y1={n1[1]}
-                  x2={n2[0]}
-                  y2={n2[1]}
-                  stroke="rgba(255, 255, 255, 0.85)"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                />
-              </g>
-            );
-          })}
-          {/* 节点层 (可点击查看逝者信息) */}
-          {constellation.nodes.map((node, i) => (
-            <circle
-              key={i}
-              className="star-node pulse-anim"
-              cx={node[0]}
-              cy={node[1]}
-              r={Math.max(node[2] || 3, 3.5)}
-              fill="#ffffff"
-              style={{
-                filter: "drop-shadow(0 0 6px rgba(255, 255, 255, 0.95))",
-                animationDelay: `${i * 0.5}s`,
-                cursor: deceasedList.length > 0 ? "pointer" : "default",
-              }}
-              onClick={() => {
-                if (deceasedList[i]) {
-                  setSelectedDeceased(deceasedList[i]);
-                }
-              }}
-            />
-          ))}
-        </svg>
-
-        {/* 加载状态遮罩 */}
-        {isGenerating && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#0a0b16]/70 z-20">
-            <div className="text-white flex flex-col items-center gap-3">
-              <iconify-icon
-                icon="line-md:loading-twotone-loop"
-                style={{ fontSize: "36px" }}
-              ></iconify-icon>
-              <span className="text-sm tracking-widest font-serif">
-                星象交替，命轨推演中...
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* 用户输入文字底部显示区域 */}
-        {showText && !isGenerating && (
-          <div className="absolute bottom-20 left-0 right-0 text-center pointer-events-none">
-            <div
-              className={`text-white font-serif text-lg transition-all duration-1000 ease-in-out ${
-                showText ? "opacity-100 blur-0" : "opacity-0 blur-md"
-              }`}
-            >
-              {displayText}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="p-10 text-center text-white/30 text-xs tracking-widest font-serif italic">
-        - 嘒彼小星 ，三五在东 -
-      </div>
-
-      {/* 逝者信息弹出卡片 */}
-      {selectedDeceased && (
-        <div className="fixed inset-x-0 bottom-0 bg-[#F9F7F5] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-50 animate-slide-up max-h-[85vh] flex flex-col">
-          <div className="p-5 flex justify-between items-center border-b border-gray-200">
-            <h3 className="text-xl font-bold text-[#1a1b3a] tracking-widest font-serif">
-              命轨记录
-            </h3>
-            <button
-              onClick={() => setSelectedDeceased(null)}
-              className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 active:scale-95"
-            >
-              <i className="ph-bold ph-x"></i>
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 text-[#4A4F55] no-scrollbar">
-            <div className="flex items-end gap-3 mb-2">
-              <h2 className="text-3xl font-bold text-[#1a1b3a] font-serif">
-                {selectedDeceased.name}
-              </h2>
-              <span className="text-sm bg-gray-200 px-3 py-1 rounded-full text-gray-600 font-medium">
-                {selectedDeceased.age}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                <div className="text-xs text-gray-400 mb-1">家族 / 出身</div>
-                <div className="font-medium text-[#1a1b3a]">
-                  {selectedDeceased.family}
-                </div>
-              </div>
-              <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                <div className="text-xs text-gray-400 mb-1">职业 / 身份</div>
-                <div className="font-medium text-[#1a1b3a]">
-                  {selectedDeceased.profession}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-red-50 p-4 rounded-xl border-l-4 border-red-300">
-              <div className="text-xs text-red-400 mb-1 font-bold">
-                殒命之因
-              </div>
-              <div className="text-sm font-medium text-red-800 leading-relaxed">
-                {selectedDeceased.death_cause}
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-              <div className="text-xs text-gray-400 mb-1">生前偏爱</div>
-              <div className="font-medium text-[#4A4F55] leading-relaxed">
-                {selectedDeceased.favorite}
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-              <div className="text-xs text-gray-400 mb-1">最大愿景</div>
-              <div className="font-medium text-[#4A4F55] leading-relaxed">
-                {selectedDeceased.wish}
-              </div>
-            </div>
-
-            <div className="bg-[#1a1b3a]/5 p-5 rounded-xl mt-2 relative">
-              <div className="absolute top-2 left-2 opacity-10 text-4xl font-serif">
-                "
-              </div>
-              <div className="text-xs text-gray-500 mb-2 font-bold">
-                临终执念
-              </div>
-              <div className="italic font-serif text-[#1a1b3a] text-base leading-relaxed relative z-10 px-2">
-                {selectedDeceased.last_thought}
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 flex gap-3 border-t border-gray-200 bg-white">
-            <button
-              className="flex-1 py-3 rounded-xl bg-[#e8e5d9] text-[#5A5F4D] font-bold active:scale-95 transition-transform flex items-center justify-center"
-              onClick={() => {
-                const msg = prompt("写下你的寄语：");
-                if (msg) {
-                  alert("寄语已化作星光。");
-                  alert("已送上白菊，愿逝者安息。");
-                }
-              }}
-            >
-              <iconify-icon
-                icon="ph:flower-lotus-fill"
-                style={{ marginRight: "8px", fontSize: "18px" }}
-              ></iconify-icon>
-              送花缅怀
-            </button>
-            <button
-              className="flex-1 py-3 rounded-xl bg-[#1a1b3a] text-white font-bold active:scale-95 transition-transform flex items-center justify-center"
-              onClick={handleGenerateTributes}
-            >
-              <iconify-icon
-                icon="ph:paper-plane-tilt-fill"
-                style={{ marginRight: "8px", fontSize: "18px" }}
-              ></iconify-icon>
-              他人寄语
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ===== 新增：他人寄语弹出卡片 ===== */}
-      {showTributesModal && (
-        <div className="fixed inset-x-0 bottom-0 bg-[#F9F7F5] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-[60] animate-slide-up max-h-[85vh] flex flex-col">
-          <div className="p-5 flex justify-between items-center border-b border-gray-200">
-            <h3 className="text-xl font-bold text-[#1a1b3a] tracking-widest font-serif flex items-center gap-2">
-              <iconify-icon
-                icon="ph:paper-plane-tilt-fill"
-                style={{ color: "#D6724B" }}
-              ></iconify-icon>
-              众人寄语
-            </h3>
-            <button
-              onClick={() => setShowTributesModal(false)}
-              className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 active:scale-95"
-            >
-              <i className="ph-bold ph-x"></i>
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-5 bg-[#F9F7F5] no-scrollbar">
-            {isGeneratingTributes ? (
-              <div className="flex flex-col items-center justify-center h-48 text-[#8C917B] gap-3">
-                <iconify-icon
-                  icon="line-md:loading-twotone-loop"
-                  style={{ fontSize: "36px", color: "#1a1b3a" }}
-                ></iconify-icon>
-                <span className="text-sm font-bold tracking-widest font-serif">
-                  正在倾听世人的凭吊...
-                </span>
-              </div>
-            ) : tributesList.length > 0 ? (
-              <div className="flex flex-col gap-4 pb-8">
-                {tributesList.map((tribute, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-[#1a1b3a] flex items-center justify-center text-white text-sm font-bold font-serif shadow-inner">
-                          {tribute.name ? tribute.name.charAt(0) : "?"}
-                        </div>
-                        <div>
-                          <div className="font-bold text-[#1a1b3a] text-sm leading-tight">
-                            {tribute.name}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-0.5">
-                            {tribute.identity}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#fdfcf8] p-3 rounded-lg border-l-4 border-[#D6724B] mb-3 mt-2">
-                      <div className="text-xs text-gray-400 font-bold mb-1">
-                        <iconify-icon
-                          icon="ph:gift-fill"
-                          style={{ marginRight: "4px" }}
-                        ></iconify-icon>
-                        带来/献上了
-                      </div>
-                      <div className="text-sm text-[#4A4F55] font-medium">
-                        {tribute.item}
-                      </div>
-                    </div>
-
-                    <div className="text-sm text-[#4A4F55] leading-relaxed italic font-serif">
-                      "{tribute.message}"
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center text-gray-500 mt-10 font-serif">
-                此处空空如也，风中再无余音。
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ==================== T13 蝴蝶效应页面组件 ====================
-
-const ButterflyEffectPage = ({ onBack }) => {
-  const { useState } = React;
-
-  // 状态管理
-  const [inputText, setInputText] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [effectData, setEffectData] = useState([]); // 存储所有节点生成的推演数据
-  const [selectedDot, setSelectedDot] = useState(null); // 当前选中的圆点数据
-  const [showModal, setShowModal] = useState(false); // 控制卡片显示
-
-  // 莫兰迪色值
-  const colors = {
-    white: "#FFFFFF",
-    gray: "#A0A0A0",
-    pink: "#FF9B9B",
-  };
-
-  // 16个圆点坐标及类型定义：8白(好结局), 7灰(坏结局), 1粉(转折点)
-  const dots = [
-    // 左环 (4白3灰)
-    { id: 0, type: "好结局", x: -100, y: 0, color: colors.white },
-    { id: 1, type: "好结局", x: -85, y: -45, color: colors.white },
-    { id: 2, type: "好结局", x: -50, y: -65, color: colors.white },
-    { id: 3, type: "好结局", x: -10, y: -45, color: colors.white },
-    { id: 4, type: "坏结局", x: -10, y: 45, color: colors.gray },
-    { id: 5, type: "坏结局", x: -45, y: 65, color: colors.gray },
-    { id: 6, type: "坏结局", x: -82, y: 45, color: colors.gray },
-    // 右环 (4白4灰)
-    { id: 7, type: "坏结局", x: 100, y: -20, color: colors.gray },
-    { id: 8, type: "坏结局", x: 85, y: -55, color: colors.gray },
-    { id: 9, type: "坏结局", x: 50, y: -70, color: colors.gray },
-    { id: 10, type: "坏结局", x: 10, y: -45, color: colors.gray },
-    { id: 11, type: "好结局", x: 10, y: 45, color: colors.white },
-    { id: 12, type: "好结局", x: 45, y: 70, color: colors.white },
-    { id: 13, type: "好结局", x: 82, y: 55, color: colors.white },
-    { id: 14, type: "好结局", x: 100, y: 20, color: colors.white },
-    // 中心连接点 (1粉)
-    {
-      id: 15,
-      type: "转折点",
-      x: 0,
-      y: 0,
-      color: colors.pink,
-      isCenter: true,
-    },
-  ];
-
-  // 核心：调用 AI 生成蝴蝶效应
-  const handleGenerate = async () => {
-    if (!inputText.trim())
-      return alert("请先输入您想要引发蝴蝶效应的起源文字！");
-    if (isGenerating) return;
-
-    setIsGenerating(true);
-    setEffectData([]); // 清空旧数据
-
-    try {
-      // 获取世界书设定
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      const sysPrompt = "你是一个精通东汉历史、蝴蝶效应推演及人性洞察的大师。";
-      const userPrompt = `
-                        【世界设定】
-                        ${worldContext}
-
-                        【起源事件】
-                        ${inputText}
-
-                        【推演任务】
-                        基于上述起源，严格符合东汉史实推演蝴蝶效应的16个事件节点。
-                        - 节点 15 是【转折点】：好坏都会经历的一环，直接承接起源事件，它是分歧的共同连接点。
-                        - 节点 0,1,2,3,11,12,13,14 是【好结局线】：从左到右依次递进 (0->1->2->3->11->12->13->14)，后一个事件必须和前一个事件有关联，开端承接转折点15，最终导向一个相对圆满或给人希望的结局。
-                        - 节点 4,5,6,7,8,9,10 是【坏结局线】：从左到右依次递进 (4->5->6->7->8->9->10)，后一个事件必须和前一个事件有关联，开端承接转折点15，最终导向一个残缺、悲惨或混乱的结局。
-
-                        【重要提示】
-                        - 事件可以是日常生活中的小事，也可以是大格局或重大历史事件
-                        - 注重细节和真实感，让事件更贴近普通人的生活
-                        - 保持东汉时期的背景设定。
-
-                        【输出格式严格要求】
-                        必须返回一个长度严格为 16 的纯 JSON 数组，数组对象的 id 必须是从 0 到 15。
-                        请绝对不要包含 Markdown 代码块（如 \`\`\`json ），直接以 [ 开始，] 结尾。
-                        数组每个对象的结构如下：
-                        {
-                          "id": 数字索引(0-15),
-                          "name": "事件关联人（或物品）的姓名",
-                          "identity": "关联人的身份",
-                          "content": "事件具体内容（3到5句话，层层递进）",
-                          "original": "原本走向（若起源未发生，本来的日常轨迹）",
-                          "svgHtml": "一段表示此事件的简单几何SVG代码，宽高视口为 viewBox='0 0 100 100'，颜色建议符合该节点氛围，代码中可以加点行内CSS交互效果"
-                        }
-                        `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data) && data.length === 16) {
-                // 将数据通过 id 排序以便匹配
-                data.sort((a, b) => a.id - b.id);
-                setEffectData(data);
-                alert("蝴蝶效应推演完成！\n请点击页面上的圆点查看命运分歧。");
-              } else {
-                throw new Error("返回的数组长度不足或结构异常");
-              }
-            } catch (e) {
-              console.error("解析AI返回数据失败:", e, reply);
-              alert("天机受阻，推演失败，请重试！");
-            } finally {
-              setIsGenerating(false);
-              setIsEditing(false);
-            }
-          },
-          (err) => {
-            console.error("请求失败:", err);
-            alert("请求失败，请检查 API 接口配置！");
-            setIsGenerating(false);
-          },
-        );
-      } else {
-        alert("未找到 API 接口，请先在设置中配置！");
-        setIsGenerating(false);
-      }
-    } catch (e) {
-      console.error(e);
-      setIsGenerating(false);
-    }
-  };
-
-  // 处理点击圆点
-  const handleDotClick = (dot) => {
-    if (effectData.length === 0) {
-      alert("请先在底部的虚线上输入起源，并点击发送按钮引发推演！");
-      return;
-    }
-    const data = effectData.find((item) => item.id === dot.id);
-    if (data) {
-      setSelectedDot({ ...data, type: dot.type });
-      setShowModal(true);
-    }
-  };
-
-  return (
-    <div
-      className="butterfly-effect-overlay open"
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 900,
-        backgroundColor: "#000000",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        width: "100%",
-        height: "100%",
-        overflow: "hidden",
-      }}
-    >
-      {/* 顶部返回按钮 */}
-      <div
-        className="be-back-btn"
-        onClick={onBack}
-        style={{
-          position: "absolute",
-          top: "40px",
-          right: "25px",
-          color: "#ffffff",
-          fontSize: "24px",
-          cursor: "pointer",
-          opacity: 0.8,
-          zIndex: 20,
-        }}
-      >
-        ✕
-      </div>
-
-      {/* 圆点排列舞台 */}
-      <div
-        className="be-infinity-container"
-        style={{
-          position: "relative",
-          width: "320px",
-          height: "160px",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          marginTop: "-60px",
-        }}
-      >
-        {dots.map((dot, i) => (
-          <div
-            key={i}
-            className="be-dot"
-            onClick={() => handleDotClick(dot)}
-            style={{
-              position: "absolute",
-              width: "36px",
-              height: "36px",
-              borderRadius: "50%",
-              backgroundColor: dot.color,
-              transform: `translate(${dot.x}px, ${dot.y}px) ${effectData.length > 0 && selectedDot?.id === dot.id ? "scale(1.3)" : "scale(1)"}`,
-              boxShadow: dot.isCenter
-                ? "0 0 18px rgba(255,155,155,0.95)"
-                : effectData.length > 0
-                  ? "0 0 12px rgba(255,255,255,0.8)"
-                  : "0 0 6px rgba(255,255,255,0.4)",
-              zIndex: dot.isCenter ? 10 : 1,
-              cursor: effectData.length > 0 ? "pointer" : "default",
-              border:
-                effectData.length > 0
-                  ? "2px solid rgba(255,255,255,0.9)"
-                  : "none",
-              transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-            }}
-          />
-        ))}
-      </div>
-
-      {/* 底部虚线输入和发送按钮 */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: "100px",
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          width: "80%",
-          maxWidth: "400px",
-        }}
-      >
-        <div
-          style={{
-            flex: 1,
-            borderBottom: "3px dashed white",
-            position: "relative",
-            height: "30px",
-          }}
-        >
-          {isEditing ? (
-            <input
-              autoFocus
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onBlur={() => setIsEditing(false)}
-              onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
-              style={{
-                width: "100%",
-                background: "transparent",
-                border: "none",
-                color: "white",
-                outline: "none",
-                textAlign: "center",
-                position: "absolute",
-                bottom: "-5px",
-                fontSize: "16px",
-                fontFamily: "inherit",
-              }}
-            />
-          ) : (
-            <div
-              onClick={() => !isGenerating && setIsEditing(true)}
-              style={{
-                width: "100%",
-                height: "100%",
-                cursor: isGenerating ? "not-allowed" : "text",
-                color: "white",
-                textAlign: "center",
-                display: "flex",
-                alignItems: "flex-end",
-                justifyContent: "center",
-                paddingBottom: "5px",
-                fontSize: "15px",
-                opacity: inputText ? 1 : 0.6,
-                fontFamily: "inherit",
-              }}
-            >
-              {inputText || "在此输入起源，扇动命运的翅膀..."}
-            </div>
-          )}
-        </div>
-
-        {/* 发送按钮 */}
-        <div
-          onClick={handleGenerate}
-          style={{
-            width: "42px",
-            height: "42px",
-            backgroundColor:
-              inputText.trim() && !isGenerating
-                ? "#FF9B9B"
-                : "rgba(255, 155, 155, 0.3)",
-            borderRadius: "50%",
-            cursor:
-              inputText.trim() && !isGenerating ? "pointer" : "not-allowed",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow:
-              inputText.trim() && !isGenerating
-                ? "0 4px 12px rgba(255,155,155,0.4)"
-                : "none",
-            transition: "all 0.3s ease",
-          }}
-        >
-          {isGenerating ? (
-            <iconify-icon
-              icon="line-md:loading-twotone-loop"
-              style={{ color: "white", fontSize: "20px" }}
-            ></iconify-icon>
-          ) : (
-            <iconify-icon
-              icon="ph:paper-plane-tilt-fill"
-              style={{ color: "white", fontSize: "20px" }}
-            ></iconify-icon>
-          )}
-        </div>
-      </div>
-
-      {/* 弹出的卡片层 */}
-      {showModal && selectedDot && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: "rgba(30, 30, 30, 0.95)",
-            backdropFilter: "blur(12px)",
-            borderTopLeftRadius: "24px",
-            borderTopRightRadius: "24px",
-            padding: "30px 24px",
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.5)",
-            zIndex: 100,
-            animation:
-              "slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
-            color: "#fff",
-            maxHeight: "85vh",
-            overflowY: "auto",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "20px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
-              >
-                <span
-                  style={{
-                    background:
-                      selectedDot.type === "好结局"
-                        ? "#FFFFFF"
-                        : selectedDot.type === "坏结局"
-                          ? "#A0A0A0"
-                          : "#FF9B9B",
-                    color: selectedDot.type === "好结局" ? "#333" : "#FFF",
-                    padding: "4px 12px",
-                    borderRadius: "12px",
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {selectedDot.type}
-                </span>
-                <span
-                  style={{
-                    fontSize: "20px",
-                    fontWeight: "bold",
-                    fontFamily: "serif",
-                    letterSpacing: "2px",
-                  }}
-                >
-                  {selectedDot.name}
-                </span>
-              </div>
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: "rgba(255,255,255,0.6)",
-                }}
-              >
-                身份标签：{selectedDot.identity}
-              </span>
-            </div>
-            <button
-              onClick={() => setShowModal(false)}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#fff",
-                fontSize: "24px",
-                cursor: "pointer",
-                opacity: 0.7,
-              }}
-            >
-              ✕
-            </button>
-          </div>
-
-          <div
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              padding: "16px",
-              borderRadius: "12px",
-              marginBottom: "16px",
-              borderLeft: "4px solid #FF9B9B",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.5)",
-                marginBottom: "8px",
-                fontWeight: "bold",
-              }}
-            >
-              事件内容
-            </div>
-            <div
-              style={{
-                fontSize: "14px",
-                lineHeight: "1.7",
-                letterSpacing: "1px",
-                color: "rgba(255,255,255,0.95)",
-              }}
-            >
-              {selectedDot.content}
-            </div>
-          </div>
-
-          <div
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              padding: "16px",
-              borderRadius: "12px",
-              marginBottom: "24px",
-              borderLeft: "4px solid #A0A0A0",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.5)",
-                marginBottom: "8px",
-                fontWeight: "bold",
-              }}
-            >
-              原本走向
-            </div>
-            <div
-              style={{
-                fontSize: "13px",
-                lineHeight: "1.7",
-                color: "rgba(255,255,255,0.7)",
-              }}
-            >
-              {selectedDot.original}
-            </div>
-          </div>
-
-          <div
-            style={{
-              textAlign: "center",
-              marginTop: "10px",
-              paddingBottom: "20px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.4)",
-                marginBottom: "12px",
-                letterSpacing: "2px",
-              }}
-            >
-              - 象形之意 -
-            </div>
-            <div
-              style={{
-                width: "100px",
-                height: "100px",
-                margin: "0 auto",
-                background: "rgba(0,0,0,0.4)",
-                borderRadius: "16px",
-                padding: "15px",
-                boxShadow: "inset 0 0 10px rgba(0,0,0,0.5)",
-                cursor: "pointer",
-                transition: "transform 0.3s ease",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.transform = "scale(1.1)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.transform = "scale(1)")
-              }
-              dangerouslySetInnerHTML={{ __html: selectedDot.svgHtml }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ------------------- (插入位置6: const MasterApp = () => { 上方定义组件) -------------------
-
-const SandTablePage = ({ onBack }) => {
-  const [elements, setElements] = React.useState([]);
-  const [navCollapsed, setNavCollapsed] = React.useState(false);
-  const [scale, setScale] = React.useState(1);
-  const [lastDistance, setLastDistance] = React.useState(0);
-  const [selectedElement, setSelectedElement] = React.useState(null);
-  const [showWriteModal, setShowWriteModal] = React.useState(false);
-  const [writeContent, setWriteContent] = React.useState("");
-
-  // --- 新增推演系统状态 ---
-  const [simulationSteps, setSimulationSteps] = React.useState([]);
-  const [currentStep, setCurrentStep] = React.useState(-1);
-  const [showSimulationModal, setShowSimulationModal] = React.useState(false);
-  const [isSimulating, setIsSimulating] = React.useState(false);
-  const [simulationModalCollapsed, setSimulationModalCollapsed] =
-    React.useState(false);
-
-  // --- 沙盘拖动状态 ---
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
-  const [sandboxPosition, setSandboxPosition] = React.useState({
-    x: 0,
-    y: 0,
-  });
-
-  // 新增状态
-  const [isGenerating, setIsGenerating] = React.useState(false);
-  const [inventory, setInventory] = React.useState([]); // 底部物品栏数据
-  const [detailItem, setDetailItem] = React.useState(null); // 当前查看详情的物品
-  const [isConnecting, setIsConnecting] = React.useState(false); // 是否处于连接模式
-  const [connections, setConnections] = React.useState([]); // 连接关系数组
-  const [showConnections, setShowConnections] = React.useState(true); // 是否显示连接线
-
-  // 添加物品到沙盘（同时扣除库存）
-  const handleAddInventoryItem = (item) => {
-    if (!item.isInfinite && item.quantity <= 0) {
-      alert("该物资已耗尽！");
-      return;
-    }
-
-    // 扣除库存
-    if (!item.isInfinite) {
-      setInventory((prev) =>
-        prev.map((inv) =>
-          inv.id === item.id ? { ...inv, quantity: inv.quantity - 1 } : inv,
-        ),
-      );
-    }
-
-    // 添加到沙盘
-    const newElement = {
-      id: Date.now() + Math.random(),
-      invId: item.id, // 关联库存ID，方便删除时退回
-      char: item.emoji,
-      x: 150 + Math.random() * 50,
-      y: 150 + Math.random() * 50,
-      flipped: false,
-      detailInfo: item, // 将详情信息一并存入实体
-    };
-    setElements([...elements, newElement]);
-  };
-
-  // 删除沙盘物品（退回库存）
-  const handleDeleteElement = (id) => {
-    const elToDelete = elements.find((el) => el.id === id);
-    if (elToDelete) {
-      // 退回库存
-      setInventory((prev) =>
-        prev.map((inv) =>
-          inv.id === elToDelete.invId && !inv.isInfinite
-            ? { ...inv, quantity: inv.quantity + 1 }
-            : inv,
-        ),
-      );
-    }
-    // 删除相关的连接
-    setConnections((prev) =>
-      prev.filter((conn) => conn.source !== id && conn.target !== id),
-    );
-    setElements((prev) => prev.filter((el) => el.id !== id));
-    setSelectedElement(null);
-    setDetailItem(null); // 关闭可能打开的详情
-  };
-
-  // 查看详情
-  const handleElementDetail = (id) => {
-    const el = elements.find((e) => e.id === id);
-    if (el) {
-      setDetailItem(el.detailInfo);
-    }
-  };
-
-  // 处理连接按钮点击
-  const handleConnectElement = (id) => {
-    if (isConnecting) {
-      // 已经处于连接模式，完成连接
-      completeConnection(id);
-    } else {
-      // 开始连接模式
-      setIsConnecting(true);
-      setSelectedElement(id);
-    }
-  };
-
-  // 完成连接
-  const completeConnection = (targetId) => {
-    if (selectedElement && selectedElement !== targetId) {
-      // 检查是否已经存在相同的连接
-      const existingConnection = connections.find(
-        (conn) => conn.source === selectedElement && conn.target === targetId,
-      );
-
-      if (!existingConnection) {
-        // 添加新连接
-        setConnections([
-          ...connections,
-          {
-            id: Date.now(),
-            source: selectedElement,
-            target: targetId,
-          },
-        ]);
-      }
-    }
-    // 退出连接模式
-    setIsConnecting(false);
-    setSelectedElement(null);
-  };
-
-  // 移除连接
-  const removeConnection = (connectionId) => {
-    setConnections(connections.filter((conn) => conn.id !== connectionId));
-  };
-
-  // --- 模拟推演核心逻辑 ---
-  const handleSimulate = async () => {
-    if (elements.length === 0) {
-      alert("沙盘上空空如也，请先放置一些单位后再推演！");
-      return;
-    }
-
-    setIsSimulating(true);
-    setShowSimulationModal(true);
-    setCurrentStep(-1);
-    setSimulationSteps([]);
-
-    try {
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 提取元素简要信息供AI分析，以便明确有哪些可移动物体
-      const elementsInfo = elements.map((el) => ({
-        id: el.id,
-        name: el.detailInfo.name,
-        category: el.detailInfo.category,
-        x: Math.round(el.x),
-        y: Math.round(el.y),
-      }));
-
-      const connectionsInfo = connections.map((conn) => ({
-        sourceId: conn.source,
-        targetId: conn.target,
-      }));
-
-      const sysPrompt = "你是一个精通东汉末年兵法与沙盘推演的军师AI。";
-      const userPrompt = `
-            【世界设定】
-            ${worldContext}
-
-            【推演背景】
-            ${writeContent || "无特定背景"}
-
-            【沙盘当前单位】
-            ${JSON.stringify(elementsInfo, null, 2)}
-
-            【单位连线关系（从属/牵引关系，source带动target）】
-            ${JSON.stringify(connectionsInfo, null, 2)}
-
-            【推演任务】
-            请基于当前沙盘单位分布、连线关系和背景，生成一场10到15步的定格动画模拟推演。
-            要求：
-            1. 考虑地形，自然类单位（如山脉、密林）通常不可移动。
-            2. 让军队或武将相互靠近、绕后或交战。
-            3. 如果有父子连线的元素，只需要给出父元素(sourceId)的移动坐标，系统会自动带动子元素。
-            4. 每一步都要有对战局的描述，以及用诙谐专业的语气说明这步操作的兵法原因。
-            5. 每一步返回发生移动的元素和他们的新绝对坐标 (targetX, targetY)。确保坐标在 0 到 1000 之间变动，每次移动距离建议在 30-100 之间。
-
-            【输出格式】
-            必须严格返回纯 JSON 数组，格式如下（绝对不要包裹在 \`\`\`json 中）：
-            [
-              {
-                "step": 1,
-                "description": "我方主帅带领小弟绕开密林，准备偷袭。",
-                "reason": "老六兵法第一条，能苟绝不正面刚！",
-                "moves": [
-                  { "elementId": 123456789, "targetX": 150, "targetY": 250 }
-                ]
-              }
-            ]
-            `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data) && data.length > 0) {
-                setSimulationSteps(data);
-                setCurrentStep(0); // 开始第一步
-              } else {
-                throw new Error("解析数据为空");
-              }
-            } catch (e) {
-              console.error("推演解析失败:", e, reply);
-              alert("推演失败，军机受阻，请重新生成。");
-              setShowSimulationModal(false);
-            } finally {
-              setIsSimulating(false);
-            }
-          },
-          (err) => {
-            console.error("生成推演失败:", err);
-            setIsSimulating(false);
-            setShowSimulationModal(false);
-            alert("请求失败，请检查API配置");
-          },
-        );
-      } else {
-        alert("未配置API，请前往设置配置！");
-        setIsSimulating(false);
-        setShowSimulationModal(false);
-      }
-    } catch (error) {
-      console.error(error);
-      setIsSimulating(false);
-      setShowSimulationModal(false);
-    }
-  };
-
-  // 计算包含推演位移和父子联动后的实际元素坐标
-  const getSimulatedElements = () => {
-    let simElements = elements.map((el) => ({ ...el }));
-
-    if (currentStep < 0 || !simulationSteps.length) return simElements;
-
-    for (let i = 0; i <= currentStep; i++) {
-      const stepData = simulationSteps[i];
-      if (!stepData || !stepData.moves) continue;
-
-      const displacements = {};
-
-      // 1. 应用本步的主动绝对移动，并记录位移差 (dx, dy)
-      stepData.moves.forEach((move) => {
-        const elIndex = simElements.findIndex((e) => e.id === move.elementId);
-        if (elIndex !== -1) {
-          displacements[move.elementId] = {
-            dx: move.targetX - simElements[elIndex].x,
-            dy: move.targetY - simElements[elIndex].y,
-          };
-          simElements[elIndex].x = move.targetX;
-          simElements[elIndex].y = move.targetY;
-        }
-      });
-
-      // 2. 处理父子连带移动
-      let changed = true;
-      const propagated = { ...displacements };
-      while (changed) {
-        changed = false;
-        connections.forEach((conn) => {
-          const parentDisp = propagated[conn.source];
-          if (parentDisp && !propagated[conn.target]) {
-            const targetIndex = simElements.findIndex(
-              (e) => e.id === conn.target,
-            );
-            if (targetIndex !== -1) {
-              simElements[targetIndex].x += parentDisp.dx;
-              simElements[targetIndex].y += parentDisp.dy;
-              propagated[conn.target] = { ...parentDisp };
-              changed = true;
-            }
-          }
-        });
-      }
-    }
-    return simElements;
-  };
-
-  const simulatedElements = getSimulatedElements();
-  // --- 模拟推演核心逻辑结束 ---
-
-  // AI生成物品清单核心逻辑
-  const handleGenerateItems = async () => {
-    if (!writeContent.trim()) {
-      alert("请先书写战局背景或兵棋推演的需求！");
-      return;
-    }
-    setIsGenerating(true);
-
-    try {
-      // 1. 获取世界书设定
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 2. 构建 Prompt
-      const sysPrompt = "你是一个专业的三国/古风沙盘兵棋推演组件生成器。";
-      const userPrompt = `
-                          【世界设定】
-                          ${worldContext}
-
-                          【统帅（用户）书写的推演背景】
-                          ${writeContent}
-
-                          【任务】
-                          请根据以上背景，生成一场沙盘模拟所需的物品/地形清单，总数必须在 15 到 20 个之间。
-
-                          【严格生成规则】
-                          1. 必须包含的分类：
-                             - 自然类(nature)：必须有（如河流、森林、山脉），属性 isInfinite 必须为 true，quantity 设为 -1。
-                             - 工具类(tool)：必须有（如马车、船只、拒马），isInfinite 为 false，quantity 在 3-10 之间。
-                             - 物资类(resource)：必须有（如粮草、辎重、箭矢），isInfinite 为 false，quantity 在 2-5 之间。
-                             - 人物/建筑类(character/building)：（如斥候、城门、流民），isInfinite 为 false，quantity 根据常理设定。
-                          2. 必须包含的高亮特殊物品：
-                             - 必须生成且仅生成两个特殊标识（isSpecial 为 true）：一个代表【我方阵营】的emoji，一个代表【敌方阵营】的emoji。quantity 通常为 1 或 2。
-                          3. 趣味详情：
-                             - description：物品用途，必须用轻松、风趣、甚至带点吐槽的口吻编写（例如："一处被人遗弃的破碗，不知道有什么用，可能用来讨饭"）。
-                             - scale：物品实际换算比例（例如："此处的1辆 ≈ 现实100辆" 或 "1个兵 ≈ 1个营"）。
-
-                          【输出格式】
-                          必须严格返回纯 JSON 数组，不要包裹在 \`\`\`json 之中，格式示例：
-                          [
-                            {"id": 1, "emoji": "🔵", "name": "我方主帅", "category": "faction", "quantity": 1, "isInfinite": false, "isSpecial": true, "description": "全村的希望，死了就直接Game Over。", "scale": "1人 ≈ 主帅本阵"},
-                            {"emoji": "🔴", "name": "敌方主力", "category": "faction", "quantity": 3, "isInfinite": false, "isSpecial": true, "description": "看起来很凶的敌人，建议绕道走。", "scale": "1棋 ≈ 5000甲士"},
-                            {"emoji": "🌲", "name": "密林", "category": "nature", "quantity": -1, "isInfinite": true, "isSpecial": false, "description": "藏污纳垢的好地方，适合老六埋伏。", "scale": "1树 ≈ 10亩林地"},
-                            {"emoji": "🌾", "name": "粮草", "category": "resource", "quantity": 5, "isInfinite": false, "isSpecial": false, "description": "人是铁饭是钢，没这玩意儿兵要造反。", "scale": "1垛 ≈ 1000石"}
-                          ]
-                        `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data) && data.length >= 2) {
-                // 补充唯一ID，防止重复
-                const inventoryData = data.map((item, idx) => ({
-                  ...item,
-                  id: Date.now() + idx,
-                }));
-                setInventory(inventoryData);
-                setShowWriteModal(false);
-                alert("兵棋组件生成完毕，请在底部物品栏查看！");
-              } else {
-                throw new Error("数组为空或不符合要求");
-              }
-            } catch (e) {
-              console.error("沙盘解析失败:", e, reply);
-              alert("推演失败，军机受阻，请重新生成。");
-            } finally {
-              setIsGenerating(false);
-            }
-          },
-          (err) => {
-            console.error("生成沙盘物品失败:", err);
-            setIsGenerating(false);
-            alert("请求失败，请检查API配置");
-          },
-        );
-      } else {
-        alert("未配置API，请前往设置配置！");
-        setIsGenerating(false);
-      }
-    } catch (error) {
-      console.error(error);
-      setIsGenerating(false);
-    }
-  };
-
-  const handleDrag = (id, e) => {
-    const clientX = e.clientX || e.touches[0].clientX;
-    const clientY = e.clientY || e.touches[0].clientY;
-    // 考虑缩放比例，确保物品拖动在不同缩放级别下都能正常工作
-    setElements((prev) =>
-      prev.map((el) =>
-        el.id === id
-          ? {
-              ...el,
-              x: (clientX - 20) * scale,
-              y: (clientY - 80) * scale,
-            }
-          : el,
-      ),
-    );
-  };
-
-  const handleTouchStart = (e) => {
-    if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      setLastDistance(Math.sqrt(dx * dx + dy * dy));
-    }
-  };
-
-  const handleTouchMove = (e) => {
-    if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (lastDistance > 0) {
-        const scaleFactor = distance / lastDistance;
-        const newScale = Math.max(0.1, Math.min(5, scale * scaleFactor));
-        setScale(newScale);
-      }
-
-      setLastDistance(distance);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    setLastDistance(0);
-  };
-
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.1, Math.min(5, scale * scaleFactor));
-    setScale(newScale);
-  };
-
-  // 沙盘拖动事件处理
-  const handleSandboxMouseDown = (e) => {
-    // 只有在鼠标左键点击且没有其他元素被选中时才开始拖动
-    if (e.button === 0 && !isConnecting && !selectedElement) {
-      setIsDragging(true);
-      setDragStart({
-        x: e.clientX - sandboxPosition.x,
-        y: e.clientY - sandboxPosition.y,
-      });
-    }
-  };
-
-  const handleSandboxMouseMove = (e) => {
-    if (isDragging) {
-      setSandboxPosition({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y,
-      });
-    }
-  };
-
-  const handleSandboxMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleSandboxMouseLeave = () => {
-    setIsDragging(false);
-  };
-
-  // 触摸事件处理
-  const handleSandboxTouchStart = (e) => {
-    if (e.touches.length === 1 && !isConnecting && !selectedElement) {
-      setIsDragging(true);
-      setDragStart({
-        x: e.touches[0].clientX - sandboxPosition.x,
-        y: e.touches[0].clientY - sandboxPosition.y,
-      });
-    }
-  };
-
-  const handleSandboxTouchMove = (e) => {
-    if (isDragging && e.touches.length === 1) {
-      setSandboxPosition({
-        x: e.touches[0].clientX - dragStart.x,
-        y: e.touches[0].clientY - dragStart.y,
-      });
-    }
-  };
-
-  const handleSandboxTouchEnd = () => {
-    setIsDragging(false);
-  };
-
-  const handleElementClick = (id) => {
-    setSelectedElement(id === selectedElement ? null : id);
-  };
-
-  const handleFlipElement = (id) => {
-    setElements((prev) =>
-      prev.map((el) => (el.id === id ? { ...el, flipped: !el.flipped } : el)),
-    );
-  };
-
-  return (
-    <div
-      className="sand-table-overlay open fade-in"
-      style={{
-        position: "absolute",
-        inset: 0,
-        zIndex: 900,
-        backgroundColor: "#f2ebe3",
-        display: "flex",
-        flexDirection: "column",
-        overflow: "hidden",
-        width: "100%",
-        height: "100%",
-      }}
-    >
-      {/* 顶部磨砂栏 */}
-      <div className={`top-glass-nav ${navCollapsed ? "collapsed" : ""}`}>
-        <button className="morandi-glass-btn" onClick={onBack}>
-          撤离
-        </button>
-        <button className="morandi-glass-btn" onClick={() => setElements([])}>
-          清空
-        </button>
-        <button
-          className="morandi-glass-btn"
-          onClick={() => setShowConnections(!showConnections)}
-        >
-          {showConnections ? "隐藏连线" : "显示连线"}
-        </button>
-        <button
-          className="morandi-glass-btn"
-          onClick={() => setNavCollapsed(true)}
-        >
-          收起
-        </button>
-      </div>
-      {navCollapsed && (
-        <div
-          onClick={() => setNavCollapsed(false)}
-          style={{
-            position: "absolute",
-            top: 10,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 101,
-            background: "rgba(255,255,255,0.5)",
-            borderRadius: "50%",
-            padding: "5px",
-          }}
-        >
-          <i className="ph ph-caret-down"></i>
-        </div>
-      )}
-
-      {/* 功能按钮栏 */}
-      <div
-        style={{
-          position: "absolute",
-          top: "80px",
-          left: "50%",
-          transform: navCollapsed
-            ? "translate(-50%, -120px)"
-            : "translateX(-50%)",
-          width: "80%",
-          maxWidth: "300px",
-          padding: "12px",
-          background: "rgba(255, 255, 255, 0.4)",
-          backdropFilter: "blur(15px)",
-          WebkitBackdropFilter: "blur(15px)",
-          borderRadius: "30px",
-          display: "flex",
-          gap: "10px",
-          zIndex: 99,
-          opacity: navCollapsed ? 0 : 1,
-          transition: "all 0.4s cubic-bezier(0.23, 1, 0.32, 1)",
-        }}
-      >
-        <button
-          className="morandi-glass-btn"
-          onClick={() => setShowWriteModal(true)}
-        >
-          书写
-        </button>
-        <button
-          className="morandi-glass-btn"
-          onClick={() => alert("选择功能开发中")}
-        >
-          选择
-        </button>
-        <button className="morandi-glass-btn" onClick={handleSimulate}>
-          推演
-        </button>
-      </div>
-
-      {/* 大沙盘区域 */}
-      <div
-        className="sand-grid-container no-scrollbar"
-        onTouchStart={(e) => {
-          handleTouchStart(e);
-          handleSandboxTouchStart(e);
-        }}
-        onTouchMove={(e) => {
-          e.preventDefault();
-          handleTouchMove(e);
-          handleSandboxTouchMove(e);
-        }}
-        onTouchEnd={(e) => {
-          handleTouchEnd(e);
-          handleSandboxTouchEnd(e);
-        }}
-        onWheel={(e) => {
-          e.preventDefault();
-          handleWheel(e);
-        }}
-        onMouseDown={handleSandboxMouseDown}
-        onMouseMove={handleSandboxMouseMove}
-        onMouseUp={handleSandboxMouseUp}
-        onMouseLeave={handleSandboxMouseLeave}
-        style={{
-          position: "relative",
-          overflow: "hidden",
-          cursor: isDragging ? "grabbing" : "grab",
-          flex: 1,
-          background: "#f2ebe3",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "200%",
-            height: "200%",
-            backgroundImage: `radial-gradient(#e8ded6 2px, transparent 2px), radial-gradient(#e8ded6 2px, #f2ebe3 2px)`,
-            backgroundSize: `${40 * scale}px ${40 * scale}px`,
-            backgroundPosition: `${sandboxPosition.x % (40 * scale)}px ${sandboxPosition.y % (40 * scale)}px`,
-            backgroundRepeat: "repeat",
-            transform: `translate(${sandboxPosition.x}px, ${sandboxPosition.y}px) scale(${scale})`,
-            transformOrigin: "center center",
-          }}
-        >
-          {/* 渲染连接线 */}
-          {showConnections &&
-            connections.map((conn) => {
-              const sourceEl = elements.find((el) => el.id === conn.source);
-              const targetEl = elements.find((el) => el.id === conn.target);
-              if (sourceEl && targetEl) {
-                const sourceX = sourceEl.x / scale + 20;
-                const sourceY = sourceEl.y / scale + 20;
-                const targetX = targetEl.x / scale + 20;
-                const targetY = targetEl.y / scale + 20;
-
-                return (
-                  <svg
-                    key={conn.id}
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      top: 0,
-                      width: "100%",
-                      height: "100%",
-                      pointerEvents: "none",
-                      zIndex: 5,
-                    }}
-                  >
-                    <line
-                      x1={sourceX}
-                      y1={sourceY}
-                      x2={targetX}
-                      y2={targetY}
-                      stroke="rgba(138, 166, 193, 0.6)"
-                      strokeWidth="2"
-                      strokeDasharray="5,5"
-                    />
-                    <circle
-                      cx={targetX}
-                      cy={targetY}
-                      r="5"
-                      fill="rgba(138, 166, 193, 0.8)"
-                    />
-                    <circle
-                      cx={sourceX}
-                      cy={sourceY}
-                      r="5"
-                      fill="rgba(214, 114, 75, 0.8)"
-                    />
-                  </svg>
-                );
-              }
-              return null;
-            })}
-
-          {/* 渲染元素 */}
-          {simulatedElements.map((el) => (
-            <div
-              key={el.id}
-              className="placed-emoji"
-              style={{
-                left: el.x / scale,
-                top: el.y / scale,
-                fontSize: `${32 / scale}px`,
-                transform: el.flipped ? "scaleX(-1)" : "none",
-                border: isConnecting
-                  ? el.id === selectedElement
-                    ? "2px solid #D6724B"
-                    : "2px dashed #8AA6C1"
-                  : "none",
-              }}
-              onClick={() => {
-                if (isConnecting) {
-                  completeConnection(el.id);
-                } else {
-                  handleElementClick(el.id);
-                }
-              }}
-              onTouchMove={(e) => handleDrag(el.id, e)}
-              onMouseMove={(e) => e.buttons === 1 && handleDrag(el.id, e)}
-            >
-              {el.char}
-              {selectedElement === el.id && (
-                <div className="element-controls">
-                  <div
-                    className="control-btn flip-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleFlipElement(el.id);
-                    }}
-                  >
-                    翻转
-                  </div>
-                  <div
-                    className="control-btn delete-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteElement(el.id);
-                    }}
-                  >
-                    删除
-                  </div>
-                  <div
-                    className="control-btn detail-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleElementDetail(el.id);
-                    }}
-                  >
-                    详情
-                  </div>
-                  <div
-                    className="control-btn connect-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleConnectElement(el.id);
-                    }}
-                  >
-                    连接
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 下方物品栏 */}
-      {/* 下方物品栏 */}
-      <div
-        className="item-bar-bottom no-scrollbar"
-        style={{ alignItems: "center" }}
-      >
-        {inventory.length === 0 ? (
-          <div style={{ color: "#999", fontSize: "13px", margin: "auto" }}>
-            沙盘空空如也，请点击上方“书写”生成推演组件。
-          </div>
-        ) : (
-          inventory.map((item) => (
-            <div
-              key={item.id}
-              className="emoji-item active-press"
-              style={{
-                position: "relative",
-                opacity: !item.isInfinite && item.quantity <= 0 ? 0.3 : 1,
-                border: item.isSpecial ? "2px solid #D6724B" : "none",
-                boxShadow: item.isSpecial
-                  ? "0 0 8px rgba(214,114,75,0.4)"
-                  : "none",
-                flexShrink: 0,
-              }}
-              onClick={() => handleAddInventoryItem(item)}
-            >
-              <span style={{ fontSize: "28px" }}>{item.emoji}</span>
-
-              {/* 数量角标 */}
-              {!item.isInfinite && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "-5px",
-                    right: "-5px",
-                    background: "#8AA6C1",
-                    color: "white",
-                    fontSize: "10px",
-                    fontWeight: "bold",
-                    borderRadius: "10px",
-                    padding: "2px 6px",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-                  }}
-                >
-                  {item.quantity}
-                </div>
-              )}
-              {item.isInfinite && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "-5px",
-                    right: "-5px",
-                    background: "#A8C8BA",
-                    color: "white",
-                    fontSize: "10px",
-                    fontWeight: "bold",
-                    borderRadius: "10px",
-                    padding: "2px 6px",
-                  }}
-                >
-                  ∞
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* 书写弹窗 */}
-      {showWriteModal && (
-        <div
-          className="modal-overlay"
-          onClick={() => !isGenerating && setShowWriteModal(false)}
-        >
-          <div className="write-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ color: "#5A5F4D" }}>推演背景书写</h3>
-            <div className="write-input-container">
-              <textarea
-                className="write-input"
-                value={writeContent}
-                onChange={(e) => setWriteContent(e.target.value)}
-                placeholder="请输入当前局势背景，例如：曹操大军压境徐州，我方固守下邳城，需要粮草与水军支援..."
-                rows={6}
-                disabled={isGenerating}
-              />
-            </div>
-            <button
-              className="generate-btn"
-              onClick={handleGenerateItems}
-              disabled={isGenerating}
-              style={{
-                background: isGenerating
-                  ? "#ccc"
-                  : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
-                color: "white",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              {isGenerating ? (
-                <>
-                  <iconify-icon icon="line-md:loading-twotone-loop"></iconify-icon>
-                  推演中...
-                </>
-              ) : (
-                "开始推演"
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 物品详情弹窗（莫兰迪色温馨风格） */}
-      {detailItem && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: "#FDFCF8",
-            borderTopLeftRadius: "24px",
-            borderTopRightRadius: "24px",
-            padding: "24px",
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.1)",
-            zIndex: 1000,
-            animation:
-              "slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
-            borderTop: "1px solid #E8E5D9",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "16px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-              }}
-            >
-              <div
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  background: detailItem.isSpecial ? "#FADBD8" : "#E8F1ED",
-                  borderRadius: "14px",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  fontSize: "28px",
-                  border: detailItem.isSpecial
-                    ? "2px solid #D6724B"
-                    : "1px solid #A8C8BA",
-                }}
-              >
-                {detailItem.emoji}
-              </div>
-              <div>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "18px",
-                    color: "#5A5F4D",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {detailItem.name}
-                </h3>
-                <span
-                  style={{
-                    fontSize: "12px",
-                    color: "#8C917B",
-                    background: "#F0F0F0",
-                    padding: "2px 8px",
-                    borderRadius: "10px",
-                  }}
-                >
-                  {detailItem.category}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => setDetailItem(null)}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: "24px",
-                color: "#8C917B",
-                cursor: "pointer",
-              }}
-            >
-              ×
-            </button>
-          </div>
-
-          <div
-            style={{
-              background: "#F9F7F5",
-              padding: "16px",
-              borderRadius: "12px",
-              marginBottom: "16px",
-              borderLeft: "4px solid #D6724B",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "12px",
-                color: "#8C917B",
-                fontWeight: "bold",
-                marginBottom: "4px",
-              }}
-            >
-              物品图鉴
-            </div>
-            <div
-              style={{
-                fontSize: "14px",
-                color: "#5A5F4D",
-                lineHeight: "1.6",
-                fontStyle: "italic",
-              }}
-            >
-              "{detailItem.description}"
-            </div>
-          </div>
-
-          <div
-            style={{
-              background: "#F9F7F5",
-              padding: "12px 16px",
-              borderRadius: "12px",
-              borderLeft: "4px solid #A8C8BA",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <iconify-icon
-              icon="ph:scales-fill"
-              style={{ color: "#8FA99D", fontSize: "18px" }}
-            ></iconify-icon>
-            <span
-              style={{
-                fontSize: "13px",
-                color: "#5A5F4D",
-                fontWeight: "bold",
-              }}
-            >
-              实地推演：
-            </span>
-            <span style={{ fontSize: "13px", color: "#666" }}>
-              {detailItem.scale}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* 模拟推演底部控制卡片 */}
-      {showSimulationModal && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: "#FDFCF8",
-            borderTopLeftRadius: "24px",
-            borderTopRightRadius: "24px",
-            padding: "24px",
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
-            zIndex: 1100,
-            animation: "slideUp 0.3s ease-out forwards",
-            borderTop: "1px solid #E8E5D9",
-            transition: "all 0.3s ease",
-            minHeight: simulationModalCollapsed ? "100px" : "auto",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "16px",
-            }}
-          >
-            <h3
-              style={{
-                margin: 0,
-                fontSize: "18px",
-                color: "#5A5F4D",
-                fontWeight: "bold",
-              }}
-            >
-              沙盘定格推演
-            </h3>
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                alignItems: "center",
-              }}
-            >
-              <button
-                onClick={() =>
-                  setSimulationModalCollapsed(!simulationModalCollapsed)
-                }
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "18px",
-                  color: "#8C917B",
-                  cursor: "pointer",
-                }}
-              >
-                {simulationModalCollapsed ? "▲" : "▼"}
-              </button>
-              <button
-                onClick={() => {
-                  setShowSimulationModal(false);
-                  setCurrentStep(-1);
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#8C917B",
-                  cursor: "pointer",
-                }}
-              >
-                ×
-              </button>
-            </div>
-          </div>
-
-          {isSimulating ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "20px",
-                color: "#8FA99D",
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-                alignItems: "center",
-              }}
-            >
-              <iconify-icon
-                icon="line-md:loading-twotone-loop"
-                style={{ fontSize: "36px" }}
-              ></iconify-icon>
-              <span style={{ fontWeight: "bold" }}>
-                正在夜观天象，排兵布阵...
-              </span>
-            </div>
-          ) : simulationSteps.length > 0 && currentStep >= 0 ? (
-            <div>
-              {/* 翻页控制栏 */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: simulationModalCollapsed ? "0" : "16px",
-                }}
-              >
-                <button
-                  disabled={currentStep <= 0}
-                  onClick={() => setCurrentStep((prev) => prev - 1)}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "12px",
-                    border: "none",
-                    background:
-                      currentStep <= 0
-                        ? "#E0E0E0"
-                        : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
-                    color: "white",
-                    cursor: currentStep <= 0 ? "not-allowed" : "pointer",
-                    fontWeight: "bold",
-                  }}
-                >
-                  ◀ 上一步
-                </button>
-                <span
-                  style={{
-                    fontSize: "14px",
-                    color: "#8C917B",
-                    fontWeight: "bold",
-                  }}
-                >
-                  第 {currentStep + 1} / {simulationSteps.length} 步
-                </span>
-                <button
-                  disabled={currentStep >= simulationSteps.length - 1}
-                  onClick={() => setCurrentStep((prev) => prev + 1)}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "12px",
-                    border: "none",
-                    background:
-                      currentStep >= simulationSteps.length - 1
-                        ? "#E0E0E0"
-                        : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
-                    color: "white",
-                    cursor:
-                      currentStep >= simulationSteps.length - 1
-                        ? "not-allowed"
-                        : "pointer",
-                    fontWeight: "bold",
-                  }}
-                >
-                  下一步 ▶
-                </button>
-              </div>
-
-              {!simulationModalCollapsed && (
-                <>
-                  {/* 兵情播报 */}
-                  <div
-                    style={{
-                      background: "#F9F7F5",
-                      padding: "16px",
-                      borderRadius: "12px",
-                      borderLeft: "4px solid #D6724B",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "#8C917B",
-                        fontWeight: "bold",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      战况播报
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        color: "#5A5F4D",
-                        lineHeight: "1.6",
-                      }}
-                    >
-                      {simulationSteps[currentStep].description}
-                    </div>
-                  </div>
-
-                  {/* 军师点拨 */}
-                  <div
-                    style={{
-                      background: "#F9F7F5",
-                      padding: "12px 16px",
-                      borderRadius: "12px",
-                      borderLeft: "4px solid #A8C8BA",
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: "8px",
-                    }}
-                  >
-                    <iconify-icon
-                      icon="ph:lightbulb-fill"
-                      style={{
-                        color: "#8FA99D",
-                        fontSize: "18px",
-                        marginTop: "2px",
-                      }}
-                    ></iconify-icon>
-                    <div>
-                      <div
-                        style={{
-                          fontSize: "12px",
-                          color: "#8C917B",
-                          fontWeight: "bold",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        军师锐评
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          color: "#666",
-                          fontStyle: "italic",
-                          lineHeight: "1.5",
-                        }}
-                      >
-                        "{simulationSteps[currentStep].reason}"
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <div
-              style={{
-                textAlign: "center",
-                color: "#999",
-                padding: "20px",
-              }}
-            >
-              天机混沌，暂无推演结果
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// T9 情侣空间页面组件
-
-
-const T13Page = ({
-  setIsStarChartOpen,
-  setIsButterflyEffectOpen,
-  setIsSandTableOpen,
-  setIsRelativeOpen,
-  setIsFarmOpen,
-}) => {
-  const { useState } = React;
-  const [activeTab, setActiveTab] = useState("game");
-  const [showStats, setShowStats] = useState(false);
-  const [showMap, setShowMap] = useState(false);
-  const [showFortune, setShowFortune] = useState(false);
-  const [showEmperor, setShowEmperor] = useState(false);
-  const [showGambling, setShowGambling] = useState(false);
-  const [showLearning, setShowLearning] = useState(false);
-  const [showTraining, setShowTraining] = useState(false);
-  const [showStarChart, setShowStarChart] = useState(false);
-  const [showButterflyEffect, setShowButterflyEffect] = useState(false);
-  const [showSandTable, setShowSandTable] = useState(false);
-  const [showRelative, setShowRelative] = useState(false);
-  const [showFarm, setShowFarm] = useState(false);
-  const [showWaterMirror, setShowWaterMirror] = useState(false);
-
-  const getContentByTab = () => {
-    switch (activeTab) {
-      case "game":
-        return T13_GAMES;
-      case "tool":
-        return T13_TOOLS;
-      case "other":
-        return T13_OTHERS;
-      default:
-        return T13_GAMES;
-    }
-  };
-
-  const currentContent = getContentByTab();
-
-  return (
-    <div className="t13-container" style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
-      {showGambling && (
-        <T13GamblingPage onBack={() => setShowGambling(false)} />
-      )}
-      {showTraining && <T13TrainingPage onBack={() => setShowTraining(false)} />}
-      {showStats && <T13StatisticsPage onBack={() => setShowStats(false)} />}
-      {showMap && <T13MapPage onBack={() => setShowMap(false)} />}
-      {showFortune && <T13FortunePage onBack={() => setShowFortune(false)} />}
-      {showEmperor && <T13EmperorPage onBack={() => setShowEmperor(false)} />}
-      {showLearning && (
-        <T13LearningPage onBack={() => setShowLearning(false)} />
-      )}
-      {showStarChart && (
-        <StarChartPage onBack={() => { setShowStarChart(false); if (setIsStarChartOpen) setIsStarChartOpen(false); }} />
-      )}
-      {showButterflyEffect && (
-        <ButterflyEffectPage onBack={() => { setShowButterflyEffect(false); if (setIsButterflyEffectOpen) setIsButterflyEffectOpen(false); }} />
-      )}
-      {showSandTable && (
-        <SandTablePage onBack={() => { setShowSandTable(false); if (setIsSandTableOpen) setIsSandTableOpen(false); }} />
-      )}
-      {showRelative && (
-        <RelativeDeductionPage onBack={() => { setShowRelative(false); if (setIsRelativeOpen) setIsRelativeOpen(false); }} />
-      )}
-      {showFarm && (
-        <OddFarmPage onBack={() => { setShowFarm(false); if (setIsFarmOpen) setIsFarmOpen(false); }} />
-      )}
-      {showWaterMirror && (
-        <T13WaterMirrorPage onBack={() => setShowWaterMirror(false)} />
-      )}
-      <div className="scroll-container hide-scrollbar">
-        <T13Header />
-
-        <main className="relative">
-          <T13TabSection activeTab={activeTab} setActiveTab={setActiveTab} />
-
-          <div className="pt-2 pb-8 min-h-[500px]">
-            {currentContent.map((item) => (
-              <div
-                key={item.id}
-                onClick={() => {
-                  if (item.title === "修武扬文" || item.title.includes("修武")) {
-                    setShowTraining(true);
-                  } else if (item.title === "通灵赌坊" || item.title.includes("赌坊")) {
-                    setShowGambling(true);
-                  } else if (item.title === "州郡统计年表" || item.title === "金库统计" || item.title.includes("统计")) {
-                    setShowStats(true);
-                  } else if (item.title === "东汉驿路通" || item.title.includes("驿路通") || item.title.includes("路通")) {
-                    setShowMap(true);
-                  } else if (item.title === "谶纬小摊" || item.title === "八卦测算" || item.title.includes("测算") || item.title.includes("小摊")) {
-                    setShowFortune(true);
-                  } else if (item.title === "献帝晴雨表" || item.title.includes("晴雨表") || item.title.includes("献帝") || item.title.includes("皇帝")) {
-                    setShowEmperor(true);
-                  } else if (item.title === "列星" || item.title === "星象图" || item.title.includes("星")) {
-                    setShowStarChart(true);
-                    if (setIsStarChartOpen) setIsStarChartOpen(true);
-                  } else if (item.title === "蝴蝶效应" || item.title.includes("效应")) {
-                    setShowButterflyEffect(true);
-                    if (setIsButterflyEffectOpen) setIsButterflyEffectOpen(true);
-                  } else if (item.title === "沙盘模拟器" || item.title === "沙盘推演" || item.title.includes("沙盘")) {
-                    setShowSandTable(true);
-                    if (setIsSandTableOpen) setIsSandTableOpen(true);
-                  } else if (item.title === "相对演绎" || item.actionId === "re_deduction") {
-                    setShowRelative(true);
-                    if (setIsRelativeOpen) setIsRelativeOpen(true);
-                  } else if (item.title === "古怪农场" || item.title.includes("农场")) {
-                    setShowFarm(true);
-                    if (setIsFarmOpen) setIsFarmOpen(true);
-                  } else if (item.title === "学习系统" || item.title.includes("学习")) {
-                    setShowLearning(true);
-                  } else if (item.title === "方天水镜" || item.title.includes("水镜")) {
-                    setShowWaterMirror(true);
-                  }
-                }}
-              >
-                <T13GameCard item={item} />
-              </div>
-            ))}
-          </div>
-        </main>
-      </div>
-
-      <T13BottomNav />
-    </div>
-  );
-};
 const SlotMachineSelector = ({ options, onSelect, onClose }) => {
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const itemHeight = 60; // 每一项的高度，需要和 CSS 高度对应
