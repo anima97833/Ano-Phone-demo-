@@ -53952,6 +53952,68 @@ const SandTablePage = ({ onBack }) => {
 // T9 情侣空间页面组件
 
 
+// ==================== 安全解析大模型 JSON 结果辅助函数 (修复字符串内未转义换行与控制字符) ====================
+const safeParseLLMJson = (raw) => {
+  if (!raw || typeof raw !== "string") return null;
+  let str = raw.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
+  const firstBrace = str.indexOf("{");
+  const firstBracket = str.indexOf("[");
+  let start = -1;
+  let end = -1;
+
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    start = firstBrace;
+    end = str.lastIndexOf("}");
+  } else if (firstBracket !== -1) {
+    start = firstBracket;
+    end = str.lastIndexOf("]");
+  }
+
+  if (start !== -1 && end !== -1 && end >= start) {
+    str = str.slice(start, end + 1);
+  }
+
+  // 1. 尝试直接解析
+  try {
+    return JSON.parse(str);
+  } catch (e1) {
+    // 2. 状态机转义字符串内部的未转义控制字符 (如 raw newlines, carriage returns, tabs 等)
+    try {
+      let inString = false;
+      let escaped = false;
+      let out = "";
+      for (let i = 0; i < str.length; i++) {
+        const c = str[i];
+        if (c === '"' && !escaped) {
+          inString = !inString;
+          out += c;
+        } else if (inString) {
+          if (c === '\n') out += '\\n';
+          else if (c === '\r') out += '\\r';
+          else if (c === '\t') out += '\\t';
+          else if (c.charCodeAt(0) < 32) {}
+          else out += c;
+        } else {
+          out += c;
+        }
+        escaped = (c === '\\' && !escaped);
+      }
+      return JSON.parse(out);
+    } catch (e2) {
+      // 3. 宽松模式（去除尾随逗号）
+      try {
+        const relaxed = str
+          .replace(/,\s*([}\]])/g, "$1")
+          .replace(/[\u0000-\u001F\u007F-\u009F]/g, (c) => (c === '\n' ? '\\n' : c === '\r' ? '\\r' : c === '\t' ? '\\t' : ''));
+        return JSON.parse(relaxed);
+      } catch (e3) {
+        console.warn("safeParseLLMJson 无法解析模型返回:", e3, raw);
+        return null;
+      }
+    }
+  }
+};
+
 // ==================== 水镜头像安全渲染组件 ====================
 const WaterMirrorAvatar = ({ avatar, name, size = 38 }) => {
   const [imgError, setImgError] = React.useState(false);
@@ -54141,8 +54203,7 @@ ${userContext}
           null,
           (reply) => {
             try {
-              const clean = reply.replace(/```json|```/g, "").trim();
-              const parsed = JSON.parse(clean);
+              const parsed = safeParseLLMJson(reply);
               if (Array.isArray(parsed) && parsed.length >= 1) {
                 setSecretMessages(parsed);
                 localStorage.setItem(cacheKey, JSON.stringify(parsed));
@@ -54312,15 +54373,14 @@ ${worldContext}
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是该角色的私密心腹总管，通晓其个人备忘与私产家底。严格输出纯 JSON 对象。" },
+            { role: "system", content: "你是该角色的私密心腹总管，通晓其个人备忘与私产家底。严格输出纯 JSON 对象，切勿在字符串中换行。" },
             { role: "user", content: prompt },
           ],
           null,
           (reply) => {
             try {
-              const clean = reply.replace(/```json|```/g, "").trim();
-              const parsed = JSON.parse(clean);
-              if (parsed.memos && (parsed.assets || parsed.trips)) {
+              const parsed = safeParseLLMJson(reply);
+              if (parsed && parsed.memos && (parsed.assets || parsed.trips)) {
                 const assetList = parsed.assets || parsed.trips;
                 setMemos(parsed.memos);
                 setAssets(assetList);
@@ -54424,15 +54484,14 @@ ${userContext}
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是一个精通古代风雅六艺与琴棋书画的品鉴大师。请严格输出纯 JSON 对象。" },
+            { role: "system", content: "你是一个精通古代风雅六艺与琴棋书画的品鉴大师。请严格输出纯 JSON 对象，切勿在字符串中换行。" },
             { role: "user", content: prompt },
           ],
           null,
           (reply) => {
             try {
-              const clean = reply.replace(/```json|```/g, "").trim();
-              const parsed = JSON.parse(clean);
-              if (parsed.fourArts && parsed.sixSkills) {
+              const parsed = safeParseLLMJson(reply);
+              if (parsed && parsed.fourArts && parsed.sixSkills) {
                 setFourArts(parsed.fourArts);
                 setSixSkills(parsed.sixSkills);
                 localStorage.setItem(cacheKey, JSON.stringify(parsed));
@@ -54533,14 +54592,13 @@ ${userContext}
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是太疾驰商城的首席总账房。请严格输出纯 JSON 数组。" },
+            { role: "system", content: "你是太疾驰商城的首席总账房。请严格输出纯 JSON 数组，切勿在字符串中换行。" },
             { role: "user", content: prompt },
           ],
           null,
           (reply) => {
             try {
-              const clean = reply.replace(/```json|```/g, "").trim();
-              const parsed = JSON.parse(clean);
+              const parsed = safeParseLLMJson(reply);
               if (Array.isArray(parsed) && parsed.length >= 1) {
                 setOrders(parsed);
                 localStorage.setItem(cacheKey, JSON.stringify(parsed));
