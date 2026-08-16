@@ -28862,11 +28862,18 @@ const T11TeamworkSubPage = ({ onBack }) => {
   );
 };
 
-// ==================== T11 审批子页面组件 (新增) ====================
+// ==================== T11 审批子页面组件 (支持 AI 模式切换 + 世界书结合 + 经典随机模式) ====================
 const T11ApprovalSubPage = ({ onBack }) => {
   const [activeTab, setActiveTab] = React.useState("pending"); // pending | approved
   const [pendingList, setPendingList] = React.useState([]);
   const [approvedList, setApprovedList] = React.useState([]);
+
+  // AI 模式状态
+  const [isAIMode, setIsAIMode] = React.useState(() => {
+    return localStorage.getItem("xiuyi_approval_ai_mode") === "true";
+  });
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const aiPoolRef = React.useRef(null);
 
   // 弹窗相关状态
   const [showLeaveModal, setShowLeaveModal] = React.useState(false);
@@ -28876,21 +28883,15 @@ const T11ApprovalSubPage = ({ onBack }) => {
   const [showOutingModal, setShowOutingModal] = React.useState(false);
   const [currentOutingRequests, setCurrentOutingRequests] = React.useState([]);
   const [showExpenseModal, setShowExpenseModal] = React.useState(false);
-  const [currentExpenseRequests, setCurrentExpenseRequests] = React.useState(
-    [],
-  );
+  const [currentExpenseRequests, setCurrentExpenseRequests] = React.useState([]);
   const [showPurchaseModal, setShowPurchaseModal] = React.useState(false);
-  const [currentPurchaseRequests, setCurrentPurchaseRequests] = React.useState(
-    [],
-  );
+  const [currentPurchaseRequests, setCurrentPurchaseRequests] = React.useState([]);
   const [showHireModal, setShowHireModal] = React.useState(false);
   const [currentHireRequests, setCurrentHireRequests] = React.useState([]);
   const [showItemModal, setShowItemModal] = React.useState(false);
   const [currentItemRequests, setCurrentItemRequests] = React.useState([]);
   const [showTrainingModal, setShowTrainingModal] = React.useState(false);
-  const [currentTrainingRequests, setCurrentTrainingRequests] = React.useState(
-    [],
-  );
+  const [currentTrainingRequests, setCurrentTrainingRequests] = React.useState([]);
   const [feedback, setFeedback] = React.useState(null); // { text, id }
 
   // 数据常量
@@ -29149,8 +29150,17 @@ const T11ApprovalSubPage = ({ onBack }) => {
     "强化实操",
   ];
 
-  // 初始化：随机生成 3-5 个待审批项
+  // 初始化列表
   React.useEffect(() => {
+    if (isAIMode) {
+      generateAIApprovalData();
+    } else {
+      generateClassicPendingList();
+    }
+  }, []);
+
+  // 生成经典模式待办列表
+  const generateClassicPendingList = () => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5
     const newPending = [];
     for (let i = 0; i < count; i++) {
@@ -29164,15 +29174,111 @@ const T11ApprovalSubPage = ({ onBack }) => {
       });
     }
     setPendingList(newPending);
-  }, []);
+  };
+
+  // AI 调用生成审批事件池
+  const generateAIApprovalData = async () => {
+    if (!window.sendToLLM) {
+      alert("未检测到 AI 接口，已为您使用经典随机模式。");
+      setIsAIMode(false);
+      localStorage.setItem("xiuyi_approval_ai_mode", "false");
+      generateClassicPendingList();
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      let worldBookContext = "";
+      if (window.getWorldBookContext) {
+        worldBookContext = await window.getWorldBookContext();
+      }
+
+      const prompt = `你是一个熟悉《代号鸢》世界观与古代谍报机构（绣衣楼）的日常事务官。
+请根据以下启用的世界书背景与设定，为绣衣楼生成一组生动、幽默、符合谍报暗探日常的审批事务备选词库。
+
+【世界书设定与背景】：
+${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼楼主，掌管天下谍报。楼内有蛾部、雀部、蜂部、鸢部等情报暗探部门。副官傅融把控公账支出，暗探们各显神通提交各种稀奇古怪的审批单。"}
+
+【要求】：
+输出一个严格的 JSON 对象，包含以下分类的丰富词库（每类 4~6 条）：
+{
+  "leaveEvents": ["请假理由1", "请假理由2", "请假理由3", "请假理由4", "请假理由5"],
+  "fundActivities": ["活动名称1", "活动名称2", "活动名称3", "活动名称4", "活动名称5"],
+  "outingReasons": ["外出事由1", "外出事由2", "外出事由3", "外出事由4", "外出事由5"],
+  "expenseItems": ["报销项目1", "报销项目2", "报销项目3", "报销项目4", "报销项目5"],
+  "purchaseItems": ["采购物资1", "采购物资2", "采购物资3", "采购物资4", "采购物资5"],
+  "trainingEffects": ["培训效果1", "培训效果2", "培训效果3", "培训效果4", "培训效果5"]
+}`;
+
+      const apiMessages = [
+        {
+          role: "system",
+          content: "你是一个专业的古代谍报机构日常事务生成器。只输出合法的 JSON 对象，不包含任何 Markdown 代码块标记。",
+        },
+        { role: "user", content: prompt },
+      ];
+
+      window.sendToLLM(
+        apiMessages,
+        null,
+        (reply) => {
+          setIsGenerating(false);
+          try {
+            let cleanJson = reply.trim();
+            cleanJson = cleanJson.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
+            const parsed = JSON.parse(cleanJson);
+            if (parsed && typeof parsed === "object") {
+              aiPoolRef.current = parsed;
+              generateClassicPendingList();
+              console.log("✨ 成功根据世界书生成 AI 审批词库:", parsed);
+            } else {
+              throw new Error("AI 返回格式异常");
+            }
+          } catch (e) {
+            console.error("解析 AI 审批词库失败:", e, reply);
+            generateClassicPendingList();
+          }
+        },
+        (error) => {
+          setIsGenerating(false);
+          console.error("AI 审批词库请求失败:", error);
+          alert("AI 审批生成请求失败，已为您切回经典随机模式。");
+          setIsAIMode(false);
+          localStorage.setItem("xiuyi_approval_ai_mode", "false");
+          generateClassicPendingList();
+        },
+      );
+    } catch (e) {
+      setIsGenerating(false);
+      console.error("生成 AI 审批数据异常:", e);
+      generateClassicPendingList();
+    }
+  };
+
+  // 切换 AI 模式
+  const handleToggleAIMode = () => {
+    const nextMode = !isAIMode;
+    setIsAIMode(nextMode);
+    localStorage.setItem("xiuyi_approval_ai_mode", String(nextMode));
+    if (nextMode) {
+      generateAIApprovalData();
+    } else {
+      generateClassicPendingList();
+    }
+  };
 
   // 生成具体的请假申请单
   const generateLeaveRequests = () => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
+    const pool = (isAIMode && aiPoolRef.current?.leaveEvents?.length)
+      ? aiPoolRef.current.leaveEvents
+      : EVENTS;
+
     for (let i = 0; i < count; i++) {
       const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
-      const evt = EVENTS[Math.floor(Math.random() * EVENTS.length)];
+      const evt = pool[Math.floor(Math.random() * pool.length)];
       const days = Math.floor(Math.random() * 5) + 1; // 1-5 days
       requests.push({
         id: Date.now() + i,
@@ -29189,16 +29295,18 @@ const T11ApprovalSubPage = ({ onBack }) => {
   const generateFundRequests = () => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
+    const pool = (isAIMode && aiPoolRef.current?.fundActivities?.length)
+      ? aiPoolRef.current.fundActivities
+      : ACTIVITIES;
+
     for (let i = 0; i < count; i++) {
       const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
       const location = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
-      // 随机选择活动，可能是角色生日会
       let activity;
       if (Math.random() > 0.7) {
-        // 30% 概率是角色生日会
         activity = `${char}生日会`;
       } else {
-        activity = ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)];
+        activity = pool[Math.floor(Math.random() * pool.length)];
       }
       const amount = Math.floor(Math.random() * 10000) + 500; // >=500
       requests.push({
@@ -29217,10 +29325,13 @@ const T11ApprovalSubPage = ({ onBack }) => {
   const generateOutingRequests = () => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
+    const pool = (isAIMode && aiPoolRef.current?.outingReasons?.length)
+      ? aiPoolRef.current.outingReasons
+      : OUTING_REASONS;
+
     for (let i = 0; i < count; i++) {
       const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
-      const reason =
-        OUTING_REASONS[Math.floor(Math.random() * OUTING_REASONS.length)];
+      const reason = pool[Math.floor(Math.random() * pool.length)];
       const location = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
       const days = Math.floor(Math.random() * 5) + 3; // 3-7 days
       requests.push({
@@ -29239,21 +29350,28 @@ const T11ApprovalSubPage = ({ onBack }) => {
   const generateExpenseRequests = () => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
+    const reasonPool = (isAIMode && aiPoolRef.current?.outingReasons?.length)
+      ? aiPoolRef.current.outingReasons
+      : OUTING_REASONS;
+    const itemPool = (isAIMode && aiPoolRef.current?.expenseItems?.length)
+      ? aiPoolRef.current.expenseItems
+      : EXPENSE_ITEMS;
+
     for (let i = 0; i < count; i++) {
       const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
-      const reason =
-        OUTING_REASONS[Math.floor(Math.random() * OUTING_REASONS.length)];
-      // 随机生成 2-3 个具体费用
+      const reason = reasonPool[Math.floor(Math.random() * reasonPool.length)];
       const itemCount = Math.floor(Math.random() * 2) + 2; // 2-3 items
       const items = [];
       for (let j = 0; j < itemCount; j++) {
         let item;
-        // 确保不重复
+        let attempts = 0;
         do {
-          item =
-            EXPENSE_ITEMS[Math.floor(Math.random() * EXPENSE_ITEMS.length)];
-        } while (items.includes(item));
-        items.push(item);
+          item = itemPool[Math.floor(Math.random() * itemPool.length)];
+          attempts++;
+        } while (items.includes(item) && attempts < 10);
+        if (!items.includes(item)) {
+          items.push(item);
+        }
       }
       const amount = Math.floor(Math.random() * 10000) + 500; // >=500
       requests.push({
@@ -29272,26 +29390,32 @@ const T11ApprovalSubPage = ({ onBack }) => {
   const generatePurchaseRequests = () => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
+    const actPool = (isAIMode && aiPoolRef.current?.fundActivities?.length)
+      ? aiPoolRef.current.fundActivities
+      : ACTIVITIES;
+    const itemPool = (isAIMode && aiPoolRef.current?.purchaseItems?.length)
+      ? aiPoolRef.current.purchaseItems
+      : PURCHASE_ITEMS;
+
     for (let i = 0; i < count; i++) {
       const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
-      const activity =
-        ACTIVITIES[Math.floor(Math.random() * ACTIVITIES.length)];
+      const activity = actPool[Math.floor(Math.random() * actPool.length)];
       const location = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
-      // 随机生成 2-3 个采购材料
       const itemCount = Math.floor(Math.random() * 2) + 2; // 2-3 items
       const items = [];
       for (let j = 0; j < itemCount; j++) {
         let item;
-        // 确保不重复
+        let attempts = 0;
         do {
-          item =
-            PURCHASE_ITEMS[Math.floor(Math.random() * PURCHASE_ITEMS.length)];
-        } while (items.includes(item));
-        // 可能是角色布偶
+          item = itemPool[Math.floor(Math.random() * itemPool.length)];
+          attempts++;
+        } while (items.includes(item) && attempts < 10);
         if (item === "角色布偶") {
           item = `${char}布偶`;
         }
-        items.push(item);
+        if (!items.includes(item)) {
+          items.push(item);
+        }
       }
       requests.push({
         id: Date.now() + i,
@@ -29327,11 +29451,17 @@ const T11ApprovalSubPage = ({ onBack }) => {
   const generateItemRequests = () => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
+    const eventPool = (isAIMode && aiPoolRef.current?.leaveEvents?.length)
+      ? aiPoolRef.current.leaveEvents
+      : EVENTS;
+    const itemPool = (isAIMode && aiPoolRef.current?.purchaseItems?.length)
+      ? aiPoolRef.current.purchaseItems
+      : PURCHASE_ITEMS;
+
     for (let i = 0; i < count; i++) {
       const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
-      const event = EVENTS[Math.floor(Math.random() * EVENTS.length)];
-      const item =
-        PURCHASE_ITEMS[Math.floor(Math.random() * PURCHASE_ITEMS.length)];
+      const event = eventPool[Math.floor(Math.random() * eventPool.length)];
+      const item = itemPool[Math.floor(Math.random() * itemPool.length)];
       requests.push({
         id: Date.now() + i,
         char,
@@ -29347,12 +29477,17 @@ const T11ApprovalSubPage = ({ onBack }) => {
   const generateTrainingRequests = () => {
     const count = Math.floor(Math.random() * 3) + 3; // 3 to 5 requests
     const requests = [];
+    const itemPool = (isAIMode && aiPoolRef.current?.purchaseItems?.length)
+      ? aiPoolRef.current.purchaseItems
+      : PURCHASE_ITEMS;
+    const effectPool = (isAIMode && aiPoolRef.current?.trainingEffects?.length)
+      ? aiPoolRef.current.trainingEffects
+      : TRAINING_EFFECTS;
+
     for (let i = 0; i < count; i++) {
       const char = CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
-      const item =
-        PURCHASE_ITEMS[Math.floor(Math.random() * PURCHASE_ITEMS.length)];
-      const effect =
-        TRAINING_EFFECTS[Math.floor(Math.random() * TRAINING_EFFECTS.length)];
+      const item = itemPool[Math.floor(Math.random() * itemPool.length)];
+      const effect = effectPool[Math.floor(Math.random() * effectPool.length)];
       requests.push({
         id: Date.now() + i,
         char,
@@ -29391,7 +29526,6 @@ const T11ApprovalSubPage = ({ onBack }) => {
       generateTrainingRequests();
       setShowTrainingModal(true);
     } else {
-      // 其他申请，直接通过并移动到已审批
       if (confirm(`是否快速通过${item.type}？`)) {
         moveItemToApproved(item);
       }
@@ -29405,7 +29539,6 @@ const T11ApprovalSubPage = ({ onBack }) => {
 
   // 处理请假审批动作
   const handleLeaveAction = (reqId, action) => {
-    // 显示反馈
     const msg =
       action === "approve"
         ? "对方看起来很是开心的样子…"
@@ -29414,15 +29547,12 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setFeedback({ text: msg, id: Date.now() });
     setTimeout(() => setFeedback(null), 2000);
 
-    // 移除该条申请
     const remaining = currentLeaveRequests.filter((r) => r.id !== reqId);
     setCurrentLeaveRequests(remaining);
 
-    // 如果全部处理完，关闭弹窗，并将主列表的“请假申请”移动到已审批
     if (remaining.length === 0) {
       setTimeout(() => {
         setShowLeaveModal(false);
-        // 找到列表里的第一个请假申请并移动（简单处理）
         const leaveItem = pendingList.find((i) => i.type === "请假申请");
         if (leaveItem) {
           moveItemToApproved(leaveItem);
@@ -29433,7 +29563,6 @@ const T11ApprovalSubPage = ({ onBack }) => {
 
   // 处理经费审批动作
   const handleFundAction = (reqId, action) => {
-    // 显示反馈
     const msg =
       action === "approve"
         ? "对方看起来很是开心的样子…"
@@ -29442,15 +29571,12 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setFeedback({ text: msg, id: Date.now() });
     setTimeout(() => setFeedback(null), 2000);
 
-    // 移除该条申请
     const remaining = currentFundRequests.filter((r) => r.id !== reqId);
     setCurrentFundRequests(remaining);
 
-    // 如果全部处理完，关闭弹窗，并将主列表的“经费申请”移动到已审批
     if (remaining.length === 0) {
       setTimeout(() => {
         setShowFundModal(false);
-        // 找到列表里的第一个经费申请并移动（简单处理）
         const fundItem = pendingList.find((i) => i.type === "经费申请");
         if (fundItem) {
           moveItemToApproved(fundItem);
@@ -29461,7 +29587,6 @@ const T11ApprovalSubPage = ({ onBack }) => {
 
   // 处理外出审批动作
   const handleOutingAction = (reqId, action) => {
-    // 显示反馈
     const msg =
       action === "approve"
         ? "对方看起来很是开心的样子…"
@@ -29470,15 +29595,12 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setFeedback({ text: msg, id: Date.now() });
     setTimeout(() => setFeedback(null), 2000);
 
-    // 移除该条申请
     const remaining = currentOutingRequests.filter((r) => r.id !== reqId);
     setCurrentOutingRequests(remaining);
 
-    // 如果全部处理完，关闭弹窗，并将主列表的“外出申请”移动到已审批
     if (remaining.length === 0) {
       setTimeout(() => {
         setShowOutingModal(false);
-        // 找到列表里的第一个外出申请并移动（简单处理）
         const outingItem = pendingList.find((i) => i.type === "外出申请");
         if (outingItem) {
           moveItemToApproved(outingItem);
@@ -29489,7 +29611,6 @@ const T11ApprovalSubPage = ({ onBack }) => {
 
   // 处理费用报销审批动作
   const handleExpenseAction = (reqId, action) => {
-    // 显示反馈
     const msg =
       action === "approve"
         ? "对方看起来很是开心的样子…"
@@ -29498,15 +29619,12 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setFeedback({ text: msg, id: Date.now() });
     setTimeout(() => setFeedback(null), 2000);
 
-    // 移除该条申请
     const remaining = currentExpenseRequests.filter((r) => r.id !== reqId);
     setCurrentExpenseRequests(remaining);
 
-    // 如果全部处理完，关闭弹窗，并将主列表的“费用报销”移动到已审批
     if (remaining.length === 0) {
       setTimeout(() => {
         setShowExpenseModal(false);
-        // 找到列表里的第一个费用报销并移动（简单处理）
         const expenseItem = pendingList.find((i) => i.type === "费用报销");
         if (expenseItem) {
           moveItemToApproved(expenseItem);
@@ -29517,7 +29635,6 @@ const T11ApprovalSubPage = ({ onBack }) => {
 
   // 处理采购申请审批动作
   const handlePurchaseAction = (reqId, action) => {
-    // 显示反馈
     const msg =
       action === "approve"
         ? "对方看起来很是开心的样子…"
@@ -29526,15 +29643,12 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setFeedback({ text: msg, id: Date.now() });
     setTimeout(() => setFeedback(null), 2000);
 
-    // 移除该条申请
     const remaining = currentPurchaseRequests.filter((r) => r.id !== reqId);
     setCurrentPurchaseRequests(remaining);
 
-    // 如果全部处理完，关闭弹窗，并将主列表的“采购申请”移动到已审批
     if (remaining.length === 0) {
       setTimeout(() => {
         setShowPurchaseModal(false);
-        // 找到列表里的第一个采购申请并移动（简单处理）
         const purchaseItem = pendingList.find((i) => i.type === "采购申请");
         if (purchaseItem) {
           moveItemToApproved(purchaseItem);
@@ -29545,7 +29659,6 @@ const T11ApprovalSubPage = ({ onBack }) => {
 
   // 处理入职申请审批动作
   const handleHireAction = (reqId, action) => {
-    // 显示反馈
     const msg =
       action === "approve"
         ? "对方看起来很是开心的样子…"
@@ -29554,15 +29667,12 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setFeedback({ text: msg, id: Date.now() });
     setTimeout(() => setFeedback(null), 2000);
 
-    // 移除该条申请
     const remaining = currentHireRequests.filter((r) => r.id !== reqId);
     setCurrentHireRequests(remaining);
 
-    // 如果全部处理完，关闭弹窗，并将主列表的“入职申请”移动到已审批
     if (remaining.length === 0) {
       setTimeout(() => {
         setShowHireModal(false);
-        // 找到列表里的第一个入职申请并移动（简单处理）
         const hireItem = pendingList.find((i) => i.type === "入职申请");
         if (hireItem) {
           moveItemToApproved(hireItem);
@@ -29573,7 +29683,6 @@ const T11ApprovalSubPage = ({ onBack }) => {
 
   // 处理物品领用审批动作
   const handleItemAction = (reqId, action) => {
-    // 显示反馈
     const msg =
       action === "approve"
         ? "对方看起来很是开心的样子…"
@@ -29582,15 +29691,12 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setFeedback({ text: msg, id: Date.now() });
     setTimeout(() => setFeedback(null), 2000);
 
-    // 移除该条申请
     const remaining = currentItemRequests.filter((r) => r.id !== reqId);
     setCurrentItemRequests(remaining);
 
-    // 如果全部处理完，关闭弹窗，并将主列表的“物品领用”移动到已审批
     if (remaining.length === 0) {
       setTimeout(() => {
         setShowItemModal(false);
-        // 找到列表里的第一个物品领用并移动（简单处理）
         const itemItem = pendingList.find((i) => i.type === "物品领用");
         if (itemItem) {
           moveItemToApproved(itemItem);
@@ -29601,7 +29707,6 @@ const T11ApprovalSubPage = ({ onBack }) => {
 
   // 处理培训申请审批动作
   const handleTrainingAction = (reqId, action) => {
-    // 显示反馈
     const msg =
       action === "approve"
         ? "对方看起来很是开心的样子…"
@@ -29610,15 +29715,12 @@ const T11ApprovalSubPage = ({ onBack }) => {
     setFeedback({ text: msg, id: Date.now() });
     setTimeout(() => setFeedback(null), 2000);
 
-    // 移除该条申请
     const remaining = currentTrainingRequests.filter((r) => r.id !== reqId);
     setCurrentTrainingRequests(remaining);
 
-    // 如果全部处理完，关闭弹窗，并将主列表的“培训申请”移动到已审批
     if (remaining.length === 0) {
       setTimeout(() => {
         setShowTrainingModal(false);
-        // 找到列表里的第一个培训申请并移动（简单处理）
         const trainingItem = pendingList.find((i) => i.type === "培训申请");
         if (trainingItem) {
           moveItemToApproved(trainingItem);
@@ -29649,11 +29751,38 @@ const T11ApprovalSubPage = ({ onBack }) => {
       }}
     >
       {/* 顶部导航 */}
-      <div className="t11-nav">
-        <div className="back-btn" onClick={onBack}>
-          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+      <div className="t11-nav" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <div className="back-btn" onClick={onBack}>
+            <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+          </div>
+          <div className="title">审批中心</div>
         </div>
-        <div className="title">审批中心</div>
+
+        {/* 右上角 AI 模式切换开关 */}
+        <div
+          onClick={handleToggleAIMode}
+          style={{
+            marginRight: "12px",
+            padding: "4px 10px",
+            borderRadius: "14px",
+            background: isAIMode
+              ? "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)"
+              : "rgba(0,0,0,0.06)",
+            color: isAIMode ? "#fff" : "#666",
+            fontSize: "12px",
+            fontWeight: isAIMode ? "bold" : "normal",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            cursor: isGenerating ? "not-allowed" : "pointer",
+            boxShadow: isAIMode ? "0 2px 6px rgba(168, 200, 186, 0.4)" : "none",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <i className={`ph-bold ${isAIMode ? "ph-sparkle" : "ph-lightning"}`}></i>
+          <span>{isGenerating ? "生成中..." : isAIMode ? "AI 模式" : "经典模式"}</span>
+        </div>
       </div>
 
       {/* 左右分栏 Tab */}
@@ -29748,655 +29877,395 @@ const T11ApprovalSubPage = ({ onBack }) => {
                     style={{
                       fontSize: "16px",
                       fontWeight: "bold",
-                      color: "#8c8293",
+                      color: "#5a5f4d",
                       marginBottom: "4px",
                     }}
                   >
                     {item.type}
                   </div>
                   <div style={{ fontSize: "12px", color: "#999" }}>
-                    {item.date}
+                    {item.title}
                   </div>
                 </div>
-                <i
-                  className="ph-fill ph-check-circle"
-                  style={{ color: "#A8C8BA", fontSize: "24px" }}
-                ></i>
+                <div
+                  style={{
+                    background: "#F5F5F5",
+                    padding: "6px 12px",
+                    borderRadius: "20px",
+                    color: "#999",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {item.status || "已通过"}
+                </div>
               </div>
             ))}
-            {approvedList.length === 0 && (
-              <div
-                style={{
-                  textAlign: "center",
-                  color: "#ccc",
-                  marginTop: "50px",
-                }}
-              >
-                暂无记录
-              </div>
-            )}
           </div>
         )}
       </div>
 
-      {/* 请假审批弹窗 */}
+      {/* 请假申请弹窗 */}
       {showLeaveModal && (
-        <div className="t11-modal-mask">
-          <div className="leave-request-container">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "18px",
-                  color: "#5a5f4d",
-                  fontWeight: "bold",
-                }}
-              >
-                待批请假单 ({currentLeaveRequests.length})
-              </h3>
+        <div className="t11-modal-overlay">
+          <div className="t11-modal-content">
+            <div className="t11-modal-header">
+              <div className="t11-modal-title">请假申请</div>
               <div
+                className="t11-modal-close"
                 onClick={() => setShowLeaveModal(false)}
-                style={{ padding: "8px" }}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
-
-            {currentLeaveRequests.map((req) => (
-              <div key={req.id} className="leave-item">
-                <div
-                  style={{
-                    fontSize: "15px",
-                    color: "#333",
-                    lineHeight: "1.5",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: "bold", color: "#D6724B" }}>
-                    {req.char}
-                  </span>
-                  <span style={{ color: "#666" }}> 申请：</span>
-                </div>
-                <div
-                  style={{
-                    background: "#F9F7F5",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: "#5a5f4d",
-                    fontStyle: "italic",
-                  }}
-                >
-                  "{req.event}，需请假 {req.days} 天。"
-                </div>
-                <div className="leave-buttons">
-                  <div
-                    className="btn-reject"
-                    onClick={() => handleLeaveAction(req.id, "reject")}
-                  >
-                    驳回
-                  </div>
-                  <div
-                    className="btn-approve"
-                    onClick={() => handleLeaveAction(req.id, "approve")}
-                  >
-                    通过
+            <div
+              className="t11-modal-body no-scrollbar"
+              style={{ maxHeight: "60vh", overflowY: "auto" }}
+            >
+              {currentLeaveRequests.map((req) => (
+                <div key={req.id} className="t11-req-card">
+                  <div className="t11-req-char">{req.char}</div>
+                  <div className="t11-req-desc">{req.desc}</div>
+                  <div className="t11-req-actions">
+                    <button
+                      className="t11-req-btn reject"
+                      onClick={() => handleLeaveAction(req.id, "reject")}
+                    >
+                      驳回
+                    </button>
+                    <button
+                      className="t11-req-btn approve"
+                      onClick={() => handleLeaveAction(req.id, "approve")}
+                    >
+                      准了
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* 经费审批弹窗 */}
+      {/* 经费申请弹窗 */}
       {showFundModal && (
-        <div className="t11-modal-mask">
-          <div className="leave-request-container">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "18px",
-                  color: "#5a5f4d",
-                  fontWeight: "bold",
-                }}
-              >
-                待批经费申请 ({currentFundRequests.length})
-              </h3>
+        <div className="t11-modal-overlay">
+          <div className="t11-modal-content">
+            <div className="t11-modal-header">
+              <div className="t11-modal-title">经费申请</div>
               <div
+                className="t11-modal-close"
                 onClick={() => setShowFundModal(false)}
-                style={{ padding: "8px" }}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
-
-            {currentFundRequests.map((req) => (
-              <div key={req.id} className="leave-item">
-                <div
-                  style={{
-                    fontSize: "15px",
-                    color: "#333",
-                    lineHeight: "1.5",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: "bold", color: "#D6724B" }}>
-                    {req.char}
-                  </span>
-                  <span style={{ color: "#666" }}> 申请：</span>
-                </div>
-                <div
-                  style={{
-                    background: "#F9F7F5",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: "#5a5f4d",
-                    fontStyle: "italic",
-                  }}
-                >
-                  "为和{req.location}共同举办{req.activity}，{req.char}
-                  申请{req.amount}金。"
-                </div>
-                <div className="leave-buttons">
-                  <div
-                    className="btn-reject"
-                    onClick={() => handleFundAction(req.id, "reject")}
-                  >
-                    驳回
-                  </div>
-                  <div
-                    className="btn-approve"
-                    onClick={() => handleFundAction(req.id, "approve")}
-                  >
-                    通过
+            <div
+              className="t11-modal-body no-scrollbar"
+              style={{ maxHeight: "60vh", overflowY: "auto" }}
+            >
+              {currentFundRequests.map((req) => (
+                <div key={req.id} className="t11-req-card">
+                  <div className="t11-req-char">{req.char}</div>
+                  <div className="t11-req-desc">{req.desc}</div>
+                  <div className="t11-req-actions">
+                    <button
+                      className="t11-req-btn reject"
+                      onClick={() => handleFundAction(req.id, "reject")}
+                    >
+                      驳回
+                    </button>
+                    <button
+                      className="t11-req-btn approve"
+                      onClick={() => handleFundAction(req.id, "approve")}
+                    >
+                      准了
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* 外出审批弹窗 */}
+      {/* 外出申请弹窗 */}
       {showOutingModal && (
-        <div className="t11-modal-mask">
-          <div className="leave-request-container">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "18px",
-                  color: "#5a5f4d",
-                  fontWeight: "bold",
-                }}
-              >
-                待批外出申请 ({currentOutingRequests.length})
-              </h3>
+        <div className="t11-modal-overlay">
+          <div className="t11-modal-content">
+            <div className="t11-modal-header">
+              <div className="t11-modal-title">外出申请</div>
               <div
+                className="t11-modal-close"
                 onClick={() => setShowOutingModal(false)}
-                style={{ padding: "8px" }}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
-
-            {currentOutingRequests.map((req) => (
-              <div key={req.id} className="leave-item">
-                <div
-                  style={{
-                    fontSize: "15px",
-                    color: "#333",
-                    lineHeight: "1.5",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: "bold", color: "#D6724B" }}>
-                    {req.char}
-                  </span>
-                  <span style={{ color: "#666" }}> 申请：</span>
-                </div>
-                <div
-                  style={{
-                    background: "#F9F7F5",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: "#5a5f4d",
-                    fontStyle: "italic",
-                  }}
-                >
-                  "{req.char}因{req.reason}外出{req.location}，共
-                  {req.days}天。"
-                </div>
-                <div className="leave-buttons">
-                  <div
-                    className="btn-reject"
-                    onClick={() => handleOutingAction(req.id, "reject")}
-                  >
-                    驳回
-                  </div>
-                  <div
-                    className="btn-approve"
-                    onClick={() => handleOutingAction(req.id, "approve")}
-                  >
-                    通过
+            <div
+              className="t11-modal-body no-scrollbar"
+              style={{ maxHeight: "60vh", overflowY: "auto" }}
+            >
+              {currentOutingRequests.map((req) => (
+                <div key={req.id} className="t11-req-card">
+                  <div className="t11-req-char">{req.char}</div>
+                  <div className="t11-req-desc">{req.desc}</div>
+                  <div className="t11-req-actions">
+                    <button
+                      className="t11-req-btn reject"
+                      onClick={() => handleOutingAction(req.id, "reject")}
+                    >
+                      驳回
+                    </button>
+                    <button
+                      className="t11-req-btn approve"
+                      onClick={() => handleOutingAction(req.id, "approve")}
+                    >
+                      准了
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* 费用报销审批弹窗 */}
+      {/* 费用报销弹窗 */}
       {showExpenseModal && (
-        <div className="t11-modal-mask">
-          <div className="leave-request-container">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "18px",
-                  color: "#5a5f4d",
-                  fontWeight: "bold",
-                }}
-              >
-                待批费用报销 ({currentExpenseRequests.length})
-              </h3>
+        <div className="t11-modal-overlay">
+          <div className="t11-modal-content">
+            <div className="t11-modal-header">
+              <div className="t11-modal-title">费用报销</div>
               <div
+                className="t11-modal-close"
                 onClick={() => setShowExpenseModal(false)}
-                style={{ padding: "8px" }}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
-
-            {currentExpenseRequests.map((req) => (
-              <div key={req.id} className="leave-item">
-                <div
-                  style={{
-                    fontSize: "15px",
-                    color: "#333",
-                    lineHeight: "1.5",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: "bold", color: "#D6724B" }}>
-                    {req.char}
-                  </span>
-                  <span style={{ color: "#666" }}> 申请：</span>
-                </div>
-                <div
-                  style={{
-                    background: "#F9F7F5",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: "#5a5f4d",
-                    fontStyle: "italic",
-                  }}
-                >
-                  "{req.char}申请因{req.reason}产生的
-                  {req.items.join("、")}费用，共计{req.amount}钱。"
-                </div>
-                <div className="leave-buttons">
-                  <div
-                    className="btn-reject"
-                    onClick={() => handleExpenseAction(req.id, "reject")}
-                  >
-                    驳回
-                  </div>
-                  <div
-                    className="btn-approve"
-                    onClick={() => handleExpenseAction(req.id, "approve")}
-                  >
-                    通过
+            <div
+              className="t11-modal-body no-scrollbar"
+              style={{ maxHeight: "60vh", overflowY: "auto" }}
+            >
+              {currentExpenseRequests.map((req) => (
+                <div key={req.id} className="t11-req-card">
+                  <div className="t11-req-char">{req.char}</div>
+                  <div className="t11-req-desc">{req.desc}</div>
+                  <div className="t11-req-actions">
+                    <button
+                      className="t11-req-btn reject"
+                      onClick={() => handleExpenseAction(req.id, "reject")}
+                    >
+                      驳回
+                    </button>
+                    <button
+                      className="t11-req-btn approve"
+                      onClick={() => handleExpenseAction(req.id, "approve")}
+                    >
+                      准了
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* 采购申请审批弹窗 */}
+      {/* 采购申请弹窗 */}
       {showPurchaseModal && (
-        <div className="t11-modal-mask">
-          <div className="leave-request-container">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "18px",
-                  color: "#5a5f4d",
-                  fontWeight: "bold",
-                }}
-              >
-                待批采购申请 ({currentPurchaseRequests.length})
-              </h3>
+        <div className="t11-modal-overlay">
+          <div className="t11-modal-content">
+            <div className="t11-modal-header">
+              <div className="t11-modal-title">采购申请</div>
               <div
+                className="t11-modal-close"
                 onClick={() => setShowPurchaseModal(false)}
-                style={{ padding: "8px" }}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
-
-            {currentPurchaseRequests.map((req) => (
-              <div key={req.id} className="leave-item">
-                <div
-                  style={{
-                    fontSize: "15px",
-                    color: "#333",
-                    lineHeight: "1.5",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: "bold", color: "#D6724B" }}>
-                    {req.char}
-                  </span>
-                  <span style={{ color: "#666" }}> 申请：</span>
-                </div>
-                <div
-                  style={{
-                    background: "#F9F7F5",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: "#5a5f4d",
-                    fontStyle: "italic",
-                  }}
-                >
-                  "因举办{req.activity}，{req.char}要去{req.location}采购
-                  {req.items.join("、")}"
-                </div>
-                <div className="leave-buttons">
-                  <div
-                    className="btn-reject"
-                    onClick={() => handlePurchaseAction(req.id, "reject")}
-                  >
-                    驳回
-                  </div>
-                  <div
-                    className="btn-approve"
-                    onClick={() => handlePurchaseAction(req.id, "approve")}
-                  >
-                    通过
+            <div
+              className="t11-modal-body no-scrollbar"
+              style={{ maxHeight: "60vh", overflowY: "auto" }}
+            >
+              {currentPurchaseRequests.map((req) => (
+                <div key={req.id} className="t11-req-card">
+                  <div className="t11-req-char">{req.char}</div>
+                  <div className="t11-req-desc">{req.desc}</div>
+                  <div className="t11-req-actions">
+                    <button
+                      className="t11-req-btn reject"
+                      onClick={() => handlePurchaseAction(req.id, "reject")}
+                    >
+                      驳回
+                    </button>
+                    <button
+                      className="t11-req-btn approve"
+                      onClick={() => handlePurchaseAction(req.id, "approve")}
+                    >
+                      准了
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* 入职申请审批弹窗 */}
+      {/* 入职申请弹窗 */}
       {showHireModal && (
-        <div className="t11-modal-mask">
-          <div className="leave-request-container">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "18px",
-                  color: "#5a5f4d",
-                  fontWeight: "bold",
-                }}
-              >
-                待批入职申请 ({currentHireRequests.length})
-              </h3>
+        <div className="t11-modal-overlay">
+          <div className="t11-modal-content">
+            <div className="t11-modal-header">
+              <div className="t11-modal-title">入职申请</div>
               <div
+                className="t11-modal-close"
                 onClick={() => setShowHireModal(false)}
-                style={{ padding: "8px" }}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
-
-            {currentHireRequests.map((req) => (
-              <div key={req.id} className="leave-item">
-                <div
-                  style={{
-                    fontSize: "15px",
-                    color: "#333",
-                    lineHeight: "1.5",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: "bold", color: "#D6724B" }}>
-                    {req.char}
-                  </span>
-                  <span style={{ color: "#666" }}> 申请：</span>
-                </div>
-                <div
-                  style={{
-                    background: "#F9F7F5",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: "#5a5f4d",
-                    fontStyle: "italic",
-                  }}
-                >
-                  "{req.char} 申请入职{req.department}"
-                </div>
-                <div className="leave-buttons">
-                  <div
-                    className="btn-reject"
-                    onClick={() => handleHireAction(req.id, "reject")}
-                  >
-                    驳回
-                  </div>
-                  <div
-                    className="btn-approve"
-                    onClick={() => handleHireAction(req.id, "approve")}
-                  >
-                    通过
+            <div
+              className="t11-modal-body no-scrollbar"
+              style={{ maxHeight: "60vh", overflowY: "auto" }}
+            >
+              {currentHireRequests.map((req) => (
+                <div key={req.id} className="t11-req-card">
+                  <div className="t11-req-char">{req.char}</div>
+                  <div className="t11-req-desc">{req.desc}</div>
+                  <div className="t11-req-actions">
+                    <button
+                      className="t11-req-btn reject"
+                      onClick={() => handleHireAction(req.id, "reject")}
+                    >
+                      驳回
+                    </button>
+                    <button
+                      className="t11-req-btn approve"
+                      onClick={() => handleHireAction(req.id, "approve")}
+                    >
+                      准了
+                    </button>
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
         </div>
       )}
 
-      {/* 物品领用审批弹窗 */}
+      {/* 物品领用弹窗 */}
       {showItemModal && (
-        <div className="t11-modal-mask">
-          <div className="leave-request-container">
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3
-                style={{
-                  fontSize: "18px",
-                  color: "#5a5f4d",
-                  fontWeight: "bold",
-                }}
-              >
-                待批物品领用 ({currentItemRequests.length})
-              </h3>
+        <div className="t11-modal-overlay">
+          <div className="t11-modal-content">
+            <div className="t11-modal-header">
+              <div className="t11-modal-title">物品领用</div>
               <div
+                className="t11-modal-close"
                 onClick={() => setShowItemModal(false)}
-                style={{ padding: "8px" }}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
-
-            {currentItemRequests.map((req) => (
-              <div key={req.id} className="leave-item">
-                <div
-                  style={{
-                    fontSize: "15px",
-                    color: "#333",
-                    lineHeight: "1.5",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: "bold", color: "#D6724B" }}>
-                    {req.char}
-                  </span>
-                  <span style={{ color: "#666" }}> 申请：</span>
-                </div>
-                <div
-                  style={{
-                    background: "#F9F7F5",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: "#5a5f4d",
-                    fontStyle: "italic",
-                  }}
-                >
-                  "因{req.event}，{req.char}申请领用{req.item}"
-                </div>
-                <div className="leave-buttons">
-                  <div
-                    className="btn-reject"
-                    onClick={() => handleItemAction(req.id, "reject")}
-                  >
-                    驳回
-                  </div>
-                  <div
-                    className="btn-approve"
-                    onClick={() => handleItemAction(req.id, "approve")}
-                  >
-                    通过
-                  </div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* 培训申请审批弹窗 */}
-      {showTrainingModal && (
-        <div className="t11-modal-mask">
-          <div className="leave-request-container">
             <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
+              className="t11-modal-body no-scrollbar"
+              style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
-              <h3
-                style={{
-                  fontSize: "18px",
-                  color: "#5a5f4d",
-                  fontWeight: "bold",
-                }}
-              >
-                待批培训申请 ({currentTrainingRequests.length})
-              </h3>
-              <div
-                onClick={() => setShowTrainingModal(false)}
-                style={{ padding: "8px" }}
-              >
-                <i className="ph ph-x"></i>
-              </div>
+              {currentItemRequests.map((req) => (
+                <div key={req.id} className="t11-req-card">
+                  <div className="t11-req-char">{req.char}</div>
+                  <div className="t11-req-desc">{req.desc}</div>
+                  <div className="t11-req-actions">
+                    <button
+                      className="t11-req-btn reject"
+                      onClick={() => handleItemAction(req.id, "reject")}
+                    >
+                      驳回
+                    </button>
+                    <button
+                      className="t11-req-btn approve"
+                      onClick={() => handleItemAction(req.id, "approve")}
+                    >
+                      准了
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
-
-            {currentTrainingRequests.map((req) => (
-              <div key={req.id} className="leave-item">
-                <div
-                  style={{
-                    fontSize: "15px",
-                    color: "#333",
-                    lineHeight: "1.5",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <span style={{ fontWeight: "bold", color: "#D6724B" }}>
-                    {req.char}
-                  </span>
-                  <span style={{ color: "#666" }}> 申请：</span>
-                </div>
-                <div
-                  style={{
-                    background: "#F9F7F5",
-                    padding: "10px",
-                    borderRadius: "8px",
-                    fontSize: "14px",
-                    color: "#5a5f4d",
-                    fontStyle: "italic",
-                  }}
-                >
-                  "{req.char}申请用{req.item}训练部门新人，以此
-                  {req.effect}"
-                </div>
-                <div className="leave-buttons">
-                  <div
-                    className="btn-reject"
-                    onClick={() => handleTrainingAction(req.id, "reject")}
-                  >
-                    驳回
-                  </div>
-                  <div
-                    className="btn-approve"
-                    onClick={() => handleTrainingAction(req.id, "approve")}
-                  >
-                    通过
-                  </div>
-                </div>
-              </div>
-            ))}
           </div>
         </div>
       )}
 
-      {/* 提示吐司 */}
-      {feedback && <div className="feedback-toast">{feedback.text}</div>}
+      {/* 培训申请弹窗 */}
+      {showTrainingModal && (
+        <div className="t11-modal-overlay">
+          <div className="t11-modal-content">
+            <div className="t11-modal-header">
+              <div className="t11-modal-title">培训申请</div>
+              <div
+                className="t11-modal-close"
+                onClick={() => setShowTrainingModal(false)}
+              >
+                <i className="ph ph-x"></i>
+              </div>
+            </div>
+            <div
+              className="t11-modal-body no-scrollbar"
+              style={{ maxHeight: "60vh", overflowY: "auto" }}
+            >
+              {currentTrainingRequests.map((req) => (
+                <div key={req.id} className="t11-req-card">
+                  <div className="t11-req-char">{req.char}</div>
+                  <div className="t11-req-desc">{req.desc}</div>
+                  <div className="t11-req-actions">
+                    <button
+                      className="t11-req-btn reject"
+                      onClick={() => handleTrainingAction(req.id, "reject")}
+                    >
+                      驳回
+                    </button>
+                    <button
+                      className="t11-req-btn approve"
+                      onClick={() => handleTrainingAction(req.id, "approve")}
+                    >
+                      准了
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 底部浮动操作反馈提示 */}
+      {feedback && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "80px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(0, 0, 0, 0.75)",
+            color: "#fff",
+            padding: "10px 20px",
+            borderRadius: "20px",
+            fontSize: "14px",
+            zIndex: 1000,
+            animation: "fadeIn 0.2s ease",
+            pointerEvents: "none",
+          }}
+        >
+          {feedback.text}
+        </div>
+      )}
     </div>
   );
 };
+
 
 // T11 工作台页面主组件 (修改后)
 const T11Page = ({ onBack }) => {
