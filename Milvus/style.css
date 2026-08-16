@@ -1912,26 +1912,36 @@
 
       
       .calendar-modal-overlay {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        background-color: rgba(0, 0, 0, 0.5);
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        z-index: 1000;
+        position: fixed !important;
+        top: 0 !important;
+        left: 0 !important;
+        right: 0 !important;
+        bottom: 0 !important;
+        width: 100vw !important;
+        height: 100vh !important;
+        background-color: rgba(0, 0, 0, 0.45) !important;
+        backdrop-filter: blur(3px) !important;
+        -webkit-backdrop-filter: blur(3px) !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        z-index: 99999 !important;
+        padding: 16px;
+        box-sizing: border-box;
       }
 
       .calendar-modal-content {
-        background-color: white;
+        background-color: #ffffff;
         border-radius: 20px;
-        padding: 24px;
-        width: 90%;
-        max-width: 400px;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
-        animation: modalFadeIn 0.3s ease;
+        padding: 22px;
+        width: 100%;
+        max-width: 360px;
+        max-height: 85vh;
+        overflow-y: auto;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+        animation: modalFadeIn 0.25s ease;
+        position: relative;
+        z-index: 100000;
       }
 
       @keyframes modalFadeIn {
@@ -10628,8 +10638,8 @@
   visibility: hidden !important;
 }
 
-/* Backup global rule */
-[class*="-overlay"]:not(.open):not(.join-us-overlay):not(.area-modal-overlay):not(.saved-areas-overlay) {
+/* Backup global rule - strictly for app pages, excluding all internal dialogs and modals */
+[class*="-overlay"]:not(.open):not([class*="modal"]):not(.calendar-modal-overlay):not(.join-us-overlay):not(.area-modal-overlay):not(.saved-areas-overlay) {
   display: none !important;
   pointer-events: none !important;
   visibility: hidden !important;

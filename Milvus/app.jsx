@@ -422,10 +422,21 @@ const WeatherPage = () => {
       const suggestions = generateSuggestions(temp);
       setSuggestionData({ temp, suggestions });
       setShowSuggestionModal(true);
+      try {
+        const weatherAdviceObj = {
+          characterName: theirLoc?.characterName && theirLoc?.characterName !== "对方" ? theirLoc.characterName : "天气助手",
+          temp: temp,
+          date: `${new Date().getMonth() + 1}月${new Date().getDate()}日`,
+          timestamp: Date.now(),
+          suggestions: suggestions,
+        };
+        localStorage.setItem("homepage_weather_advice", JSON.stringify(weatherAdviceObj));
+        window.dispatchEvent(new Event("homepage_weather_advice_updated"));
+      } catch (e) {}
     }
   };
 
-  // 使用LLM大模型生成个性化建议
+  // 使用LLM大模型生成个性化建议 (结合世界书、用户面具与角色设定，同步主页折叠天气卡片)
   const generateAISuggestions = async (temp) => {
     try {
       // 获取当前关联角色的完整信息
@@ -438,37 +449,68 @@ const WeatherPage = () => {
         const suggestions = generateSuggestions(temp);
         setSuggestionData({ temp, suggestions });
         setShowSuggestionModal(true);
+        const weatherAdviceObj = {
+          characterName: theirLoc?.characterName && theirLoc?.characterName !== "对方" ? theirLoc.characterName : "天气助手",
+          temp: temp,
+          date: `${new Date().getMonth() + 1}月${new Date().getDate()}日`,
+          timestamp: Date.now(),
+          suggestions: suggestions,
+        };
+        localStorage.setItem("homepage_weather_advice", JSON.stringify(weatherAdviceObj));
+        window.dispatchEvent(new Event("homepage_weather_advice_updated"));
         return;
       }
 
+      // 提取世界书上下文
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
+
+      // 提取用户身份设定
+      let userContext = "";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId && savedPersonas.length > 0) {
+          const activeUser = savedPersonas.find((p) => String(p.id) === String(activeId));
+          if (activeUser) userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 身份:绣衣楼楼主`;
+        }
+      } catch (e) {}
+
+      // 提取角色设定
+      let biosMap = {};
+      try {
+        if (window.settingsStore?.getCharacterNotes) {
+          biosMap = (await window.settingsStore.getCharacterNotes()) || {};
+        }
+      } catch (e) {}
+      const charProfile = selectedChar.profile?.personality || biosMap[selectedChar.name] || selectedChar.profile || "";
+
       // 准备LLM大模型的提示词
       const prompt = `
-                                                                                                      你是${selectedChar.name}，请根据以下信息为用户提供天气建议：
+${worldContext ? `【世界书设定】\n${worldContext}\n` : ""}
+${userContext ? `${userContext}\n` : ""}
+【你的角色设定】
+姓名：${selectedChar.name}
+性格特质与口吻风格：${typeof charProfile === "string" ? charProfile : JSON.stringify(charProfile)}
 
-                                                                                                      1. 当前温度：${temp}°C
-                                                                                                      2. 角色信息：${JSON.stringify(selectedChar)}
-                                                                                                      3. 请使用${selectedChar.name}的口吻和风格，必须生成3-5条具体、实用的天气建议，从以下几个方面去谈：
-                                                                                                         - 穿衣建议
-                                                                                                         - 出行建议
-                                                                                                         - 感冒预防
-                                                                                                         - 防晒建议（如果适用）
-                                                                                                         - 交通工具选择
-                                                                                                      4. 建议要符合当前温度，具体实用，每条建议要完整，不要截断。
-                                                                                                      5. 请直接列出建议，每条建议占一行，不要有编号或引言。
-                                                                                                      6. 请确保生成至少3条不同方面的建议，最多5条。
-                                                                                                      7. 每条建议要简洁明了，不要过长，确保在一行内能够完整显示。
-                                                                                                                                `;
+【当前情境】
+楼主（用户）所在地的当前气温为：${temp}°C。
+请以【${selectedChar.name}】的第一人称口吻与性格风格，为楼主提供 3 到 5 条生动、实用且关切的天气建议（可包含：穿衣添衣、出门防备、饮食汤药、行踪出行或专属吐槽/叮嘱等）。
+
+要求：
+1. 语气极具【${selectedChar.name}】的辨识度（或傲娇、或温和内敛、或霸道体贴）。
+2. 每条建议独立占一行，语言精炼到位。
+3. 请直接输出 3-5 行建议正文，不要有任何编号（如1. 2.）、Markdown标记或引言说明。
+`;
 
       // 检查window.sendToLLM是否存在
       if (!window.sendToLLM) {
         throw new Error("window.sendToLLM函数不存在");
       }
 
-      // 准备消息数组
       const messages = [
         {
           role: "system",
-          content: "你是一个根据角色信息生成个性化天气建议的助手。",
+          content: "你是一个根据角色人设为用户提供沉浸式天气关怀建议的助手。",
         },
         {
           role: "user",
@@ -476,18 +518,17 @@ const WeatherPage = () => {
         },
       ];
 
-      // 使用window.sendToLLM调用API
       console.log("使用window.sendToLLM调用API生成天气建议...");
       window.sendToLLM(
         messages,
-        null, // 不需要流式响应
+        null,
         (reply) => {
           console.log("API响应结果:", reply);
-          // 解析AI生成的建议，每行一条
           const aiSuggestions = reply
             .trim()
             .split("\n")
-            .filter((line) => line.trim() !== "");
+            .map((line) => line.trim())
+            .filter((line) => line !== "");
 
           if (aiSuggestions.length === 0) {
             throw new Error("AI生成的建议为空");
@@ -500,6 +541,21 @@ const WeatherPage = () => {
             characterName: selectedChar.name,
           });
           setShowSuggestionModal(true);
+
+          // 核心：同步保存到主页折叠卡片天气提醒中
+          try {
+            const weatherAdviceObj = {
+              characterName: selectedChar.name,
+              temp: temp,
+              date: `${new Date().getMonth() + 1}月${new Date().getDate()}日`,
+              timestamp: Date.now(),
+              suggestions: aiSuggestions,
+            };
+            localStorage.setItem("homepage_weather_advice", JSON.stringify(weatherAdviceObj));
+            window.dispatchEvent(new Event("homepage_weather_advice_updated"));
+          } catch (e) {
+            console.error("同步主页天气建议失败:", e);
+          }
         },
         (error) => {
           console.error("API调用失败:", error);
@@ -508,7 +564,6 @@ const WeatherPage = () => {
       );
     } catch (error) {
       console.error("生成AI建议失败:", error);
-      // 出错时使用默认建议
       const suggestions = generateSuggestions(temp);
       setSuggestionData({ temp, suggestions });
       setShowSuggestionModal(true);
@@ -1330,6 +1385,7 @@ const CalendarPage = () => {
   const [dayColors, setDayColors] = React.useState({}); // 存储日历数字块颜色
   const [showColorPicker, setShowColorPicker] = React.useState(false); // 控制颜色选择器显示
   const [selectedDay, setSelectedDay] = React.useState(null); // 当前选中的日期
+  const [selectedDayForTask, setSelectedDayForTask] = React.useState(null);
 
   // 任务操作相关状态
   const [editingTask, setEditingTask] = React.useState(null); // 当前编辑的任务
@@ -1337,6 +1393,34 @@ const CalendarPage = () => {
   const [deletingTask, setDeletingTask] = React.useState(null); // 当前删除的任务
   const [showDeleteConfirm, setShowDeleteConfirm] = React.useState(false); // 控制删除确认对话框显示
   const [swipeOffset, setSwipeOffset] = React.useState({}); // 存储每个任务卡片的滑动偏移量
+
+  // 创建日程相关状态
+  const [showCreateScheduleConfirm, setShowCreateScheduleConfirm] =
+    React.useState(false);
+  const [showCategorySelect, setShowCategorySelect] = React.useState(false);
+  const [selectedCategory, setSelectedCategory] = React.useState(null);
+
+  // 日期选择相关状态
+  const [currentYear, setCurrentYear] = React.useState(
+    new Date().getFullYear(),
+  );
+  const [currentMonth, setCurrentMonth] = React.useState(new Date().getMonth());
+  const [showYearSelector, setShowYearSelector] = React.useState(false);
+  const [showMonthSelector, setShowMonthSelector] = React.useState(false);
+  const [selectedYear, setSelectedYear] = React.useState(
+    new Date().getFullYear(),
+  );
+  const [selectedMonth, setSelectedMonth] = React.useState(
+    new Date().getMonth(),
+  );
+
+  // 角色选择相关状态
+  const [showCharacterSelector, setShowCharacterSelector] =
+    React.useState(false);
+  const [selectedCharacter, setSelectedCharacter] = React.useState(null);
+  const [characters, setCharacters] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [loadingCharacter, setLoadingCharacter] = React.useState(null);
 
   // 预设颜色选项
   const colorOptions = [
@@ -1368,79 +1452,51 @@ const CalendarPage = () => {
     setActiveTab(tab);
   };
 
-  // 检查指定日期是否有对应的任务
-  const findTaskByDay = (day) => {
-    // 获取当前日期块对应的角色ID
-    const dayColorData = dayColors[day];
-    const characterId = dayColorData?.characterId || null;
-
-    // 遍历所有任务类别
-    for (const category in tasks) {
-      const categoryTasks = tasks[category];
-      // 查找包含该日期的任务，优先匹配时间字段中的日期
-      const foundTask = categoryTasks.find((task) => {
-        // 使用正则表达式确保只匹配完整的日期数字
-        const dayPattern = `\\b${day}\\b`;
-        const dayRegex = new RegExp(dayPattern, "g");
-        // 如果日期块有对应的角色ID，只匹配该角色的任务
-        const characterMatch = !characterId || task.characterId === characterId;
-        // 优先匹配时间字段中的日期，确保一一对应
-        return characterMatch && dayRegex.test(task.time);
-      });
-      if (foundTask) {
-        return { task: foundTask, category: category };
-      }
-    }
-    return null;
+  // 打开新建待办弹窗
+  const openNewTaskModal = (day, category = "进行之事") => {
+    const newId = Date.now();
+    const targetDay = day || selectedDay || new Date().getDate();
+    const timeWithDay = targetDay ? `${targetDay}日 ` : "";
+    const defaultTask = {
+      id: newId,
+      day: targetDay ? String(targetDay) : "",
+      title: "新待办",
+      subtitle: "任务描述",
+      time: `${timeWithDay}14:00 ~ 15:00`,
+      description: "",
+      progress: category === "已毕之事" ? 100 : (category === "进行之事" ? 50 : 0),
+      category: category,
+      characterId: selectedCharacter?.id || null,
+    };
+    setSelectedDayForTask(targetDay);
+    setSelectedDay(targetDay);
+    setEditingTask(defaultTask);
+    setShowEditModal(true);
   };
 
-  // 处理日历数字块点击
+  // 处理日历数字块点击：记录选中日期并打开颜色与日程面板
   const handleDayClick = (day) => {
-    // 检查该日期是否有对应的任务
-    const taskInfo = findTaskByDay(day);
-
-    if (taskInfo) {
-      // 如果有任务，跳转到对应类别并滚动到任务位置
-      setActiveTab(taskInfo.category);
-
-      // 使用setTimeout确保DOM更新后再滚动
-      setTimeout(() => {
-        const taskRef = taskRefs.current[taskInfo.task.id];
-        if (taskRef) {
-          taskRef.scrollIntoView({
-            behavior: "smooth",
-            block: "center",
-          });
-          // 添加高亮动画
-          taskRef.style.boxShadow = "0 0 15px rgba(180, 199, 231, 0.8)";
-          setTimeout(() => {
-            taskRef.style.boxShadow = "";
-          }, 1000);
-        }
-      }, 100);
-
-      // 显示提示信息
-      alert(`已跳转到${taskInfo.category}类别，任务：${taskInfo.task.title}`);
-    } else {
-      // 如果没有任务，显示颜色选择器
-      setSelectedDay(day);
-      setShowColorPicker(true);
-    }
+    setSelectedDay(day);
+    setSelectedDayForTask(day);
+    setShowColorPicker(true);
   };
 
-  // 处理颜色选择
+  // 处理颜色选择：为日期着色并直接弹出具体待办创建弹窗
   const handleColorSelect = (color) => {
+    const day = selectedDay;
     setDayColors((prev) => ({
       ...prev,
-      [selectedDay]: {
+      [day]: {
         color: color,
         characterId: selectedCharacter?.id || null,
       },
     }));
     setShowColorPicker(false);
 
-    // 弹出确认创建日程的自定义弹窗（兼容嵌入式 WebView，原生 confirm 可能被拦截）
-    setShowCreateScheduleConfirm(true);
+    // 选中颜色后，直接弹出记录具体事情待办的弹窗
+    setTimeout(() => {
+      openNewTaskModal(day, "进行之事");
+    }, 50);
   };
 
   // 触摸事件处理 - 开始
@@ -1508,31 +1564,36 @@ const CalendarPage = () => {
     }));
   };
 
-  // 处理更新任务
+  // 处理更新/保存任务
   const handleUpdateTask = (updatedTask) => {
-    const { category, ...taskData } = updatedTask;
-    setTasks((prev) => {
-      // 检查任务是否已存在
-      const taskExists = prev[category].some((task) => task.id === taskData.id);
+    const category = updatedTask.category || "进行之事";
+    const { category: _cat, ...taskData } = updatedTask;
+    const taskToSave = {
+      ...taskData,
+      day: selectedDay ? String(selectedDay) : (taskData.day || ""),
+    };
 
-      if (taskExists) {
-        // 更新现有任务
-        return {
-          ...prev,
-          [category]: prev[category].map((task) =>
-            task.id === taskData.id ? taskData : task,
-          ),
-        };
-      } else {
-        // 添加新任务
-        return {
-          ...prev,
-          [category]: [...prev[category], taskData],
-        };
-      }
+    setTasks((prev) => {
+      const nextTasks = {
+        已毕之事: [...(prev["已毕之事"] || [])],
+        进行之事: [...(prev["进行之事"] || [])],
+        未竟之事: [...(prev["未竟之事"] || [])],
+      };
+
+      // 从所有分类中移除原有的同ID任务（支持在编辑时切换分类）
+      Object.keys(nextTasks).forEach((cat) => {
+        nextTasks[cat] = nextTasks[cat].filter((t) => t.id !== taskToSave.id);
+      });
+
+      // 插入到当前所选分类
+      if (!nextTasks[category]) nextTasks[category] = [];
+      nextTasks[category].push(taskToSave);
+      return nextTasks;
     });
+
     setShowEditModal(false);
     setEditingTask(null);
+    setActiveTab(category);
   };
 
   // 处理确认删除
@@ -1699,34 +1760,7 @@ const CalendarPage = () => {
   // 任务ref管理
   const taskRefs = React.useRef({});
 
-  // 创建日程相关状态
-  const [showCreateScheduleConfirm, setShowCreateScheduleConfirm] =
-    React.useState(false);
-  const [showCategorySelect, setShowCategorySelect] = React.useState(false);
-  const [selectedCategory, setSelectedCategory] = React.useState(null);
 
-  // 日期选择相关状态
-  const [currentYear, setCurrentYear] = React.useState(
-    new Date().getFullYear(),
-  );
-  const [currentMonth, setCurrentMonth] = React.useState(new Date().getMonth());
-  const [showYearSelector, setShowYearSelector] = React.useState(false);
-  const [showMonthSelector, setShowMonthSelector] = React.useState(false);
-  const [selectedYear, setSelectedYear] = React.useState(
-    new Date().getFullYear(),
-  );
-  const [selectedMonth, setSelectedMonth] = React.useState(
-    new Date().getMonth(),
-  );
-  const [selectedDayForTask, setSelectedDayForTask] = React.useState(null);
-
-  // 角色选择相关状态
-  const [showCharacterSelector, setShowCharacterSelector] =
-    React.useState(false);
-  const [selectedCharacter, setSelectedCharacter] = React.useState(null);
-  const [characters, setCharacters] = React.useState([]);
-  const [isLoading, setIsLoading] = React.useState(false);
-  const [loadingCharacter, setLoadingCharacter] = React.useState(null);
 
   // 处理年份选择
   const handleYearSelect = (year) => {
@@ -1969,27 +2003,104 @@ const CalendarPage = () => {
         <div className="calendar-hint-text">有志者，成成成</div>
       </section>
 
-      {/* 颜色选择器 */}
+      {/* 颜色与日程选择器模态框 */}
       {showColorPicker && (
-        <div className="calendar-color-picker">
-          <div className="calendar-color-picker-header">
-            <h3>选择颜色</h3>
-            <button onClick={() => setShowColorPicker(false)}>关闭</button>
-          </div>
-          <div className="calendar-color-options">
-            {colorOptions.map((color) => (
-              <div
-                key={color.value}
-                className="calendar-color-option"
-                onClick={() => handleColorSelect(color.value)}
+        <div
+          className="calendar-modal-overlay"
+          onClick={() => setShowColorPicker(false)}
+        >
+          <div
+            className="calendar-modal-content"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="calendar-modal-header">
+              <h3>📅 {currentMonth + 1}月{selectedDay}日 · 标记与日程</h3>
+              <button
+                className="calendar-modal-close"
+                onClick={() => setShowColorPicker(false)}
+              >
+                ×
+              </button>
+            </div>
+            <div className="calendar-modal-body">
+              <p
                 style={{
-                  backgroundColor: color.value || "transparent",
-                  border: color.value ? "none" : "2px solid #ccc",
+                  margin: "0 0 14px 0",
+                  fontSize: "0.9rem",
+                  color: "#666",
+                  lineHeight: "1.4",
                 }}
               >
-                <span>{color.name}</span>
+                点击颜色为该日添加/修改标记，选定后自动开启具体待办事项记录：
+              </p>
+              <div
+                className="calendar-color-options"
+                style={{ marginBottom: "18px" }}
+              >
+                {colorOptions.map((color) => {
+                  const isCurrent =
+                    (dayColors[selectedDay]?.color || "") === color.value;
+                  return (
+                    <div
+                      key={color.value || "none"}
+                      className="calendar-color-option"
+                      onClick={() => handleColorSelect(color.value)}
+                      style={{
+                        backgroundColor: color.value || "#f5f5f5",
+                        border: isCurrent
+                          ? "2px solid #55676d"
+                          : color.value
+                            ? "1px solid rgba(0,0,0,0.1)"
+                            : "1px dashed #bbb",
+                        position: "relative",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        padding: "10px 4px",
+                        boxShadow: isCurrent
+                          ? "0 2px 8px rgba(0,0,0,0.15)"
+                          : "none",
+                        transform: isCurrent ? "scale(1.05)" : "none",
+                        borderRadius: "12px",
+                        cursor: "pointer",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          color: color.value ? "#333" : "#888",
+                          fontWeight: isCurrent ? "bold" : "normal",
+                        }}
+                      >
+                        {color.name}
+                      </span>
+                    </div>
+                  );
+                })}
               </div>
-            ))}
+              <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+                <button
+                  type="button"
+                  className="calendar-btn cancel-btn"
+                  style={{ flex: 1 }}
+                  onClick={() => setShowColorPicker(false)}
+                >
+                  关闭
+                </button>
+                <button
+                  type="button"
+                  className="calendar-btn save-btn"
+                  style={{ flex: 1.5 }}
+                  onClick={() => {
+                    setShowColorPicker(false);
+                    openNewTaskModal(selectedDay, "进行之事");
+                  }}
+                >
+                  📝 记录具体待办
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -2330,21 +2441,48 @@ const CalendarPage = () => {
                   const formData = new FormData(e.target);
                   const updatedTask = {
                     ...editingTask,
+                    category: formData.get("category") || editingTask.category || "进行之事",
                     title: formData.get("title"),
                     subtitle: formData.get("subtitle"),
                     time: formData.get("time"),
                     description: formData.get("description"),
-                    progress: parseInt(formData.get("progress"), 10),
+                    progress: parseInt(formData.get("progress"), 10) || 0,
                   };
                   handleUpdateTask(updatedTask);
                 }}
               >
                 <div className="calendar-form-group">
+                  <label>任务类别</label>
+                  <select
+                    name="category"
+                    value={editingTask.category || "进行之事"}
+                    onChange={(e) =>
+                      setEditingTask((prev) => ({
+                        ...prev,
+                        category: e.target.value,
+                      }))
+                    }
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      border: "1px solid #ddd",
+                      borderRadius: "10px",
+                      fontSize: "1rem",
+                      background: "#fff",
+                    }}
+                  >
+                    <option value="进行之事">进行之事 (进行中)</option>
+                    <option value="未竟之事">未竟之事 (待办/待会面)</option>
+                    <option value="已毕之事">已毕之事 (已完成)</option>
+                  </select>
+                </div>
+                <div className="calendar-form-group">
                   <label>标题</label>
                   <input
                     type="text"
                     name="title"
-                    value={editingTask.title}
+                    value={editingTask.title || ""}
+                    placeholder="请输入任务标题"
                     onChange={(e) =>
                       setEditingTask((prev) => ({
                         ...prev,
@@ -2355,18 +2493,18 @@ const CalendarPage = () => {
                   />
                 </div>
                 <div className="calendar-form-group">
-                  <label>副标题</label>
+                  <label>副标题 / 备注</label>
                   <input
                     type="text"
                     name="subtitle"
-                    value={editingTask.subtitle}
+                    value={editingTask.subtitle || ""}
+                    placeholder="如：地点、主要参与者等"
                     onChange={(e) =>
                       setEditingTask((prev) => ({
                         ...prev,
                         subtitle: e.target.value,
                       }))
                     }
-                    required
                   />
                 </div>
                 <div className="calendar-form-group">
@@ -2374,7 +2512,8 @@ const CalendarPage = () => {
                   <input
                     type="text"
                     name="time"
-                    value={editingTask.time}
+                    value={editingTask.time || ""}
+                    placeholder="如：16日 14:00 ~ 15:00"
                     onChange={(e) =>
                       setEditingTask((prev) => ({
                         ...prev,
@@ -2385,10 +2524,11 @@ const CalendarPage = () => {
                   />
                 </div>
                 <div className="calendar-form-group">
-                  <label>描述</label>
+                  <label>具体事情 / 待办详情</label>
                   <textarea
                     name="description"
-                    value={editingTask.description}
+                    value={editingTask.description || ""}
+                    placeholder="请输入该日期待办的具体事情与要求..."
                     onChange={(e) =>
                       setEditingTask((prev) => ({
                         ...prev,
@@ -2399,17 +2539,17 @@ const CalendarPage = () => {
                   ></textarea>
                 </div>
                 <div className="calendar-form-group">
-                  <label>进度 ({editingTask.progress}%)</label>
+                  <label>进度 ({editingTask.progress || 0}%)</label>
                   <input
                     type="range"
                     name="progress"
                     min="0"
                     max="100"
-                    value={editingTask.progress}
+                    value={editingTask.progress || 0}
                     onChange={(e) =>
                       setEditingTask((prev) => ({
                         ...prev,
-                        progress: parseInt(e.target.value, 10),
+                        progress: parseInt(e.target.value, 10) || 0,
                       }))
                     }
                   />
@@ -2430,9 +2570,10 @@ const CalendarPage = () => {
                       border: "1px solid #ddd",
                       borderRadius: "10px",
                       fontSize: "1rem",
+                      background: "#fff",
                     }}
                   >
-                    <option value="">无</option>
+                    <option value="">无关联角色</option>
                     {characters.map((character) => (
                       <option key={character.id} value={character.id}>
                         {character.name}
@@ -2452,7 +2593,7 @@ const CalendarPage = () => {
                     取消
                   </button>
                   <button type="submit" className="calendar-btn save-btn">
-                    保存
+                    保存待办
                   </button>
                 </div>
               </form>
@@ -89158,6 +89299,33 @@ const MasterApp = () => {
   }, []);
   const [currentImgIndex, setCurrentImgIndex] = useState(-1);
   const [expanded, setExpanded] = useState(false);
+  // 天气提醒数据同步 (从 localStorage 恢复与监听更新)
+  const [weatherAdvice, setWeatherAdvice] = useState(() => {
+    try {
+      const saved = localStorage.getItem("homepage_weather_advice");
+      return saved ? JSON.parse(saved) : null;
+    } catch (e) {
+      return null;
+    }
+  });
+
+  useEffect(() => {
+    const updateWeatherAdvice = () => {
+      try {
+        const saved = localStorage.getItem("homepage_weather_advice");
+        if (saved) {
+          setWeatherAdvice(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error("读取主页天气建议失败:", e);
+      }
+    };
+
+    window.addEventListener("homepage_weather_advice_updated", updateWeatherAdvice);
+    return () => {
+      window.removeEventListener("homepage_weather_advice_updated", updateWeatherAdvice);
+    };
+  }, []);
   const [battery, setBattery] = useState(85);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isWeatherOpen, setIsWeatherOpen] = useState(false);
@@ -90784,7 +90952,9 @@ const MasterApp = () => {
               <div>
                 <h1 className="card-title">折叠式卡片</h1>
                 <p className="card-subtitle">
-                  天气提醒 · {time.getMonth() + 1}月{time.getDate()}日
+                  {weatherAdvice && weatherAdvice.characterName
+                    ? `${weatherAdvice.characterName}的天气提醒 · ${weatherAdvice.temp !== undefined ? `${weatherAdvice.temp}°C` : `${time.getMonth() + 1}月${time.getDate()}日`}`
+                    : `天气提醒 · ${time.getMonth() + 1}月${time.getDate()}日`}
                 </p>
               </div>
               <svg width="50" height="30" viewBox="0 0 100 60">
@@ -90809,8 +90979,26 @@ const MasterApp = () => {
                   color: "var(--text-main)",
                 }}
               >
-                <p>✦ 去年今日：那是一段美好的回忆</p>
-                <p>✦ 提醒：新年伊始，万事顺遂</p>
+                {weatherAdvice && Array.isArray(weatherAdvice.suggestions) && weatherAdvice.suggestions.length > 0 ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                    {weatherAdvice.suggestions.map((item, idx) => (
+                      <p key={idx} style={{ margin: 0, lineHeight: "1.5" }}>
+                        <span style={{ color: "#6d735b", fontWeight: "bold", marginRight: "6px" }}>✦</span>
+                        {item}
+                      </p>
+                    ))}
+                    {weatherAdvice.characterName && (
+                      <div style={{ textAlign: "right", fontSize: "11px", color: "#8a927a", marginTop: "4px" }}>
+                        —— 来自 {weatherAdvice.characterName} 的关照
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ color: "#8a927a", fontStyle: "italic", textAlign: "center", padding: "8px 0" }}>
+                    <p style={{ margin: "0 0 4px 0" }}>✦ 暂无角色天气叮嘱</p>
+                    <p style={{ margin: 0, fontSize: "11px" }}>可进入「天气」选择角色并点击蓝色温度圈获取</p>
+                  </div>
+                )}
               </div>
             )}
           </div>
