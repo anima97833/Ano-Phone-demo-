@@ -32410,7 +32410,19 @@ const T11TelegramChatPage = ({ character, characterBio, avatar, onBack }) => {
     }
   };
 
-  // 触发 AI 执笔回复
+  // 清洗文本中的任何括号动作描述（绝对铁律）
+  const sanitizeMessageText = (text) => {
+    if (!text) return "";
+    return text
+      .replace(/（[^）]*）/g, "")
+      .replace(/\([^)]*\)/g, "")
+      .replace(/\[[^\]]*\]/g, "")
+      .replace(/\*[^\*]*\*/g, "")
+      .replace(/【(?!考勤)[^】]*】/g, "") // 保护考勤令前缀，去除其他括号
+      .trim();
+  };
+
+  // 触发 AI 执笔回复 (3-5 条独立消息 + 绝对禁止括号动作)
   const triggerAIReply = async (currentMessages) => {
     if (isGeneratingRef.current) return;
     isGeneratingRef.current = true;
@@ -32458,8 +32470,20 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
 2. 若收到【考勤问责令】（打卡失败），请根据人设生动辩解、认罚或幽默反应（例如傅融会辩解通宵对公账或提议用利息抵扣，郭嘉会借酒意调侃，阿蝉会自请领罚领双倍巡逻等）；
 3. 若收到【考勤嘉奖令】（打卡成功），请根据人设感谢、傲娇或索要实物补贴（例如傅融会打听是否有额外赏银或包子，荀彧会躬身谢恩并叮嘱楼主亦需保重，阿蝉会表示愿为主公继续斩尽险阻等）；
 4. 人际关系：正确称呼对方为"殿下"、"楼主"或符合人设的专属称谓。
-5. 严禁出戏：绝对不要输出任何 AI、助手或现代分析性质的语言，不要以旁白括号解释动作（除非必要神态），直接输出角色说出的话或密信正文。保持沉浸式体验。
-6. 篇幅：适度自然，如同 Telegram 即时密信一般生动鲜活。`;
+
+【分条输出规则（极度重要！）】：
+1. 你必须以手机即时通讯软件（IM / Telegram）连续发多条短消息的真实聊天习惯进行回复。
+2. 每次回复必须严格包含 3 至 5 条连续发送的简短消息，且每条消息之间必须用 "|||" 符号单独一行隔开！
+例如：
+第一句消息内容
+|||
+第二句消息内容
+|||
+第三句消息内容
+
+【绝对铁律（严禁违背！）】：
+线上即时聊天模式下，绝对禁止使用任何全角或半角括号（如 （）、()、[]、【】、*动作* 等）来描述任何动作、心理活动、神态、语气说明或旁白！
+所有内容必须是纯粹的角色口述文字，直接发送纯文字！`;
 
       // 4. 构建历史消息上下文 (最近 10 条)
       const recentHistory = currentMessages.slice(-10).map((m) => ({
@@ -32482,16 +32506,44 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         async (reply) => {
           isGeneratingRef.current = false;
           setIsTyping(false);
-          const cleanReply = (reply || "").trim();
-          const aiMsg = {
-            id: Date.now() + Math.random(),
-            sender: "character",
-            text: cleanReply || "（密信已被阅毕，但未留只字）",
-            time: formatTime(),
-            timestamp: Date.now(),
-          };
 
-          const finalMessages = [...currentMessages, aiMsg];
+          let rawText = (reply || "").trim();
+          if (!rawText) rawText = "属下在此，请殿下吩咐。";
+
+          // 按照 ||| 或换行拆分为 3-5 条消息
+          let segments = rawText.split(/|||/).map((s) => sanitizeMessageText(s)).filter((s) => s.length > 0);
+
+          if (segments.length < 3) {
+            // 如果模型未按 ||| 隔开，按多换行或句号拆分
+            const lineSplit = rawText.split(/\n+/).map((s) => sanitizeMessageText(s)).filter((s) => s.length > 0);
+            if (lineSplit.length >= 3) {
+              segments = lineSplit;
+            } else {
+              const sentenceSplit = rawText.match(/[^。！？!?]+[。！？!?]?/g) || [rawText];
+              segments = sentenceSplit.map((s) => sanitizeMessageText(s)).filter((s) => s.length > 0);
+            }
+          }
+
+          // 限制在 3-5 条之间
+          if (segments.length < 3 && segments.length > 0) {
+            // 保持现有段落
+          } else if (segments.length > 5) {
+            segments = segments.slice(0, 5);
+          }
+
+          if (segments.length === 0) {
+            segments = ["（密信已被阅毕）"];
+          }
+
+          const newAiMessages = segments.map((seg, idx) => ({
+            id: Date.now() + Math.random() + idx,
+            sender: "character",
+            text: seg,
+            time: formatTime(),
+            timestamp: Date.now() + idx * 10,
+          }));
+
+          const finalMessages = [...currentMessages, ...newAiMessages];
           setMessages(finalMessages);
           if (window.settingsStore?.saveXiuyiChatHistory) {
             await window.settingsStore.saveXiuyiChatHistory(character, finalMessages);
@@ -32599,30 +32651,31 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
   return (
     <div
       style={{
-        position: "absolute",
+        position: "fixed",
         top: 0,
         left: 0,
         width: "100%",
         height: "100%",
         background: "#EBE5DF",
-        zIndex: 30,
+        zIndex: 250,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
       }}
     >
-      {/* 1. Telegram 风格顶部导航栏 */}
+      {/* 1. Telegram 风格顶部导航栏 (独立专属顶栏，展示对方密探信息) */}
       <div
         style={{
-          height: "60px",
+          height: "56px",
           background: "#FFFFFF",
           borderBottom: "1px solid #E5E0D8",
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "0 14px",
+          padding: "0 12px",
           boxShadow: "0 2px 10px rgba(0, 0, 0, 0.04)",
           zIndex: 10,
+          flexShrink: 0,
         }}
       >
         <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
@@ -32648,8 +32701,8 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
           <div style={{ position: "relative", flexShrink: 0 }}>
             <div
               style={{
-                width: "42px",
-                height: "42px",
+                width: "40px",
+                height: "40px",
                 borderRadius: "50%",
                 overflow: "hidden",
                 border: "2px solid #A8C8BA",
@@ -32659,7 +32712,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
                 justifyContent: "center",
                 color: "#fff",
                 fontWeight: "bold",
-                fontSize: "17px",
+                fontSize: "16px",
               }}
             >
               {avatar ? (
@@ -32672,8 +32725,8 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
             <div
               style={{
                 position: "absolute",
-                bottom: 1,
-                right: 1,
+                bottom: 0,
+                right: 0,
                 width: "10px",
                 height: "10px",
                 borderRadius: "50%",
@@ -32687,7 +32740,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
           <div style={{ minWidth: 0, flex: 1 }}>
             <div
               style={{
-                fontSize: "16px",
+                fontSize: "15.5px",
                 fontWeight: "700",
                 color: "#383D31",
                 whiteSpace: "nowrap",
@@ -32697,7 +32750,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
             >
               {character}
             </div>
-            <div style={{ fontSize: "12px", color: isTyping ? "#4EBA6F" : "#999DA0", display: "flex", alignItems: "center", gap: "4px" }}>
+            <div style={{ fontSize: "11.5px", color: isTyping ? "#4EBA6F" : "#999DA0", display: "flex", alignItems: "center", gap: "4px" }}>
               {isTyping ? "正在执笔密信..." : "在线 · 密探专线"}
             </div>
           </div>
@@ -32730,15 +32783,15 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "16px 14px 20px 14px",
+          padding: "14px 12px 16px 12px",
           background: "linear-gradient(180deg, #F0EAE1 0%, #E8E2D8 100%)",
           display: "flex",
           flexDirection: "column",
-          gap: "10px",
+          gap: "8px",
         }}
       >
         {/* Telegram 风格日期徽章 */}
-        <div style={{ textAlign: "center", margin: "4px 0 10px 0" }}>
+        <div style={{ textAlign: "center", margin: "2px 0 8px 0" }}>
           <span
             style={{
               background: "rgba(0, 0, 0, 0.12)",
@@ -32806,7 +32859,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
                       ? "#D8ECE1"
                       : "#FFFFFF",
                   color: "#2C3127",
-                  padding: isAttCard ? "12px 14px" : "10px 14px 8px 14px",
+                  padding: isAttCard ? "12px 14px" : "9px 13px 7px 13px",
                   borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
                   boxShadow: "0 2px 8px rgba(0, 0, 0, 0.07)",
                   border: isAttCard
@@ -32816,8 +32869,8 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
                     : "none",
                   position: "relative",
                   wordBreak: "break-word",
-                  lineHeight: "1.55",
-                  fontSize: "14.5px",
+                  lineHeight: "1.5",
+                  fontSize: "14px",
                 }}
               >
                 {/* 独立考勤卡片特别渲染 */}
@@ -32829,7 +32882,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
                         alignItems: "center",
                         gap: "6px",
                         fontWeight: "700",
-                        fontSize: "14px",
+                        fontSize: "13.5px",
                         color: isFailCard ? "#B8535C" : "#2E7554",
                         marginBottom: "6px",
                         borderBottom: "1px dashed rgba(0,0,0,0.1)",
@@ -32839,7 +32892,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
                       <i className={isFailCard ? "ph-fill ph-gavel" : "ph-fill ph-medal"}></i>
                       <span>{isFailCard ? "考勤问责令" : "考勤嘉奖令"}</span>
                     </div>
-                    <div style={{ fontSize: "13px", whiteSpace: "pre-line", color: "#4A4F44", lineHeight: "1.6" }}>
+                    <div style={{ fontSize: "12.5px", whiteSpace: "pre-line", color: "#4A4F44", lineHeight: "1.6" }}>
                       {msg.text.split("\n").slice(1).join("\n")}
                     </div>
                   </div>
@@ -32854,14 +32907,14 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
                     alignItems: "center",
                     justifyContent: "flex-end",
                     gap: "4px",
-                    marginTop: "4px",
+                    marginTop: "3px",
                     fontSize: "10px",
                     color: isUser ? "#6F8E7E" : "#A1A4A8",
                   }}
                 >
                   <span>{msg.time}</span>
                   {isUser && (
-                    <i className="ph-bold ph-checks" style={{ fontSize: "13px", color: "#5EA37E" }}></i>
+                    <i className="ph-bold ph-checks" style={{ fontSize: "12px", color: "#5EA37E" }}></i>
                   )}
                 </div>
               </div>
@@ -32900,7 +32953,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
             <div
               style={{
                 background: "#FFFFFF",
-                padding: "10px 16px",
+                padding: "9px 15px",
                 borderRadius: "18px 18px 18px 4px",
                 boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
                 display: "flex",
@@ -32918,15 +32971,16 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 3. Telegram 风格底部输入栏 */}
+      {/* 3. Telegram 风格底部输入栏 (位于底部独立层，避开 tab 栏) */}
       <div
         style={{
           background: "#FFFFFF",
-          padding: "8px 12px",
+          padding: "8px 10px 12px 10px",
           borderTop: "1px solid #E5E0D8",
           display: "flex",
           alignItems: "center",
           gap: "8px",
+          flexShrink: 0,
         }}
       >
         {/* 附件夹按钮 */}
@@ -32962,11 +33016,11 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
             style={{
               width: "100%",
               boxSizing: "border-box",
-              padding: "10px 14px",
+              padding: "9px 14px",
               borderRadius: "20px",
               border: "1.5px solid #E2DDD5",
               background: "#F9F8F6",
-              fontSize: "14.5px",
+              fontSize: "14px",
               color: "#383D31",
               outline: "none",
               transition: "border-color 0.2s ease",
@@ -32980,8 +33034,8 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         <div
           onClick={handleSendMessage}
           style={{
-            width: "40px",
-            height: "40px",
+            width: "38px",
+            height: "38px",
             borderRadius: "50%",
             background: inputText.trim()
               ? "linear-gradient(135deg, #A8C8BA 0%, #7DA493 100%)"
@@ -32996,7 +33050,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
             transform: inputText.trim() ? "scale(1.03)" : "scale(1)",
           }}
         >
-          <i className="ph-fill ph-paper-plane-right" style={{ fontSize: "18px", marginLeft: "2px" }}></i>
+          <i className="ph-fill ph-paper-plane-right" style={{ fontSize: "17px", marginLeft: "2px" }}></i>
         </div>
       </div>
 
@@ -33007,8 +33061,8 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
           to { opacity: 1; transform: translateY(0); }
         }
         .tg-typing-dot {
-          width: 6px;
-          height: 6px;
+          width: 5px;
+          height: 5px;
           border-radius: 50%;
           background: #A8C8BA;
           animation: tgDotBounce 1.2s infinite ease-in-out;
@@ -33201,7 +33255,7 @@ const T11MessageListPage = ({ onBack, directChatChar, onClearDirectChatChar }) =
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "16px 18px 40px 18px",
+          padding: "16px 18px 80px 18px",
           boxSizing: "border-box",
         }}
       >
@@ -33338,7 +33392,7 @@ const T11MessageListPage = ({ onBack, directChatChar, onClearDirectChatChar }) =
         )}
       </div>
 
-      {/* 嵌套 Telegram 聊天页面 */}
+      {/* 嵌套 Telegram 聊天页面 (全屏高层级显示) */}
       {activeChatChar && (
         <T11TelegramChatPage
           character={activeChatChar}
@@ -33353,6 +33407,7 @@ const T11MessageListPage = ({ onBack, directChatChar, onClearDirectChatChar }) =
     </div>
   );
 };
+
 
 // ==================== T11 楼内联系人页面组件 (支持点击底部弹出人物介绍填写卡片 + IndexedDB 持久化) ====================
 const T11InsideContactsPage = ({ onBack }) => {
