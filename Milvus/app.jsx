@@ -53952,6 +53952,60 @@ const SandTablePage = ({ onBack }) => {
 // T9 情侣空间页面组件
 
 
+// ==================== 水镜头像安全渲染组件 ====================
+const WaterMirrorAvatar = ({ avatar, name, size = 38 }) => {
+  const [imgError, setImgError] = React.useState(false);
+
+  React.useEffect(() => {
+    setImgError(false);
+  }, [avatar]);
+
+  const isValidUrl =
+    typeof avatar === "string" &&
+    avatar.trim().length > 0 &&
+    (avatar.startsWith("data:image") ||
+      avatar.startsWith("http://") ||
+      avatar.startsWith("https://") ||
+      avatar.startsWith("blob:") ||
+      avatar.startsWith("/") ||
+      avatar.startsWith("./"));
+
+  return (
+    <div
+      style={{
+        width: `${size}px`,
+        height: `${size}px`,
+        borderRadius: "50%",
+        overflow: "hidden",
+        background: "linear-gradient(135deg, #E8C3A8 0%, #D4AB90 100%)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#FFFFFF",
+        fontWeight: "bold",
+        fontSize: `${Math.max(12, Math.round(size * 0.42))}px`,
+        flexShrink: 0,
+        position: "relative",
+        border: "1.5px solid rgba(255, 255, 255, 0.4)",
+        boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+      }}
+    >
+      {isValidUrl && !imgError ? (
+        <img
+          src={avatar}
+          alt={name || ""}
+          onError={() => setImgError(true)}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      ) : (
+        <span style={{ userSelect: "none", textShadow: "0 1px 3px rgba(0,0,0,0.3)" }}>
+          {(name || "").trim().charAt(0) || "密"}
+        </span>
+      )}
+    </div>
+  );
+};
+
 // ==================== T13 方天水镜·人物专属视界组件 (传讯、动向、娱乐、购物) ====================
 const T13CharacterMirrorView = ({ character, characterProfile, avatar, onBack }) => {
   const [activeTab, setActiveTab] = React.useState("msg"); // msg | dynamics | play | shop
@@ -53962,10 +54016,10 @@ const T13CharacterMirrorView = ({ character, characterProfile, avatar, onBack })
   const [selectedSecret, setSelectedSecret] = React.useState(null);
   const [isLoadingSecrets, setIsLoadingSecrets] = React.useState(false);
 
-  // 2. 动向模块状态 (近期备忘录 + 出门动向)
+  // 2. 动向模块状态 (随身备忘录 + 私人资产与交易变动)
   const [memos, setMemos] = React.useState([]);
-  const [trips, setTrips] = React.useState([]);
-  const [dynamicsSubTab, setDynamicsSubTab] = React.useState("memo"); // memo | trip
+  const [assets, setAssets] = React.useState([]);
+  const [dynamicsSubTab, setDynamicsSubTab] = React.useState("memo"); // memo | asset
   const [isLoadingDynamics, setIsLoadingDynamics] = React.useState(false);
 
   // 3. 娱乐模块状态 (琴棋书画 + 君子六艺)
@@ -53997,21 +54051,30 @@ const T13CharacterMirrorView = ({ character, characterProfile, avatar, onBack })
     return txt || JSON.stringify(characterProfile);
   };
 
-  // 获取世界书与用户面具
+  // 获取世界书与用户在身份配置库中选定的角色信息
   const getContexts = async () => {
     const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
-    let userContext = "";
+    let activeUser = { name: "广陵王", personality: "机警从容，深谋远虑", background: "绣衣楼之主", role: "广陵王/楼主" };
     try {
       const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
       const activeId = localStorage.getItem("active_persona_id");
-      if (savedPersonas.length > 0 && activeId) {
-        const activeUser = savedPersonas.find((p) => p.id == activeId);
-        if (activeUser) {
-          userContext = `【广陵王(用户)设定】姓名:${activeUser.name}，性格:${activeUser.personality || "未设定"}`;
+      if (savedPersonas.length > 0) {
+        const found = activeId ? savedPersonas.find((p) => String(p.id) === String(activeId)) : savedPersonas[0];
+        if (found) {
+          activeUser = {
+            name: found.name || "广陵王",
+            personality: found.personality || "机警从容",
+            background: found.background || "绣衣楼楼主",
+            role: found.role || found.name || "广陵王",
+            gender: found.gender || "未知",
+            identityNote: found.description || found.background || ""
+          };
         }
       }
     } catch (e) {}
-    return { worldContext, userContext };
+
+    const userContext = `【当前用户(主公/楼主设定)】姓名:${activeUser.name}，身份:${activeUser.role}，性格:${activeUser.personality}，背景:${activeUser.background || "无"}`;
+    return { worldContext, userContext, activeUser };
   };
 
   // ================= 1. 加载 / 生成【传讯】(>= 5条与他人的暗中通信) =================
@@ -54048,7 +54111,7 @@ ${userContext}
 角色人设与风格：${charInfo}
 
 【任务要求】
-请结合世界书与该角色的人设背景，探查并生成该角色近期与【其他人（如：楼内同僚、外勤线人、隐市掌柜、朝廷官员、故交亲友等，不能是广陵王本人）】的【至少 5 条】暗中传讯往来记录。
+请结合世界书与该角色的人设背景，探查并生成该角色近期与【其他人（如：楼内同僚、外勤线人、隐市掌柜、朝廷官员、故交亲友等，绝对不能是广陵王本人）】的【至少 5 条】暗中传讯往来记录。
 内容必须充满古风谍报感，符合角色的行事作风。
 
 必须严格返回纯 JSON 数组格式（不要包含 \`\`\`json 标记），格式如下：
@@ -54083,7 +54146,7 @@ ${userContext}
               if (Array.isArray(parsed) && parsed.length >= 1) {
                 setSecretMessages(parsed);
                 localStorage.setItem(cacheKey, JSON.stringify(parsed));
-                showToast("已捕获最新秘信卷宗！");
+                showToast("已捕获最新密信卷宗！");
               }
             } catch (err) {
               console.error("解析传讯失败:", err);
@@ -54103,7 +54166,7 @@ ${userContext}
             summary: "宛城太守府私铸铜钱之账册残卷已得手，候命接应。",
             secretLevel: "绝密",
             messages: [
-              { sender: "宛城暗桩·阿全", time: "13:20", text: "主簿大人，账册残卷已从后厨地窖取出，藏于茶砖之内。" },
+              { sender: "宛城暗桩·阿全", time: "13:20", text: "大人，账册残卷已从后厨地窖取出，藏于茶砖之内。" },
               { sender: character, time: "13:23", text: "切勿走宛洛官道，绕行伏牛山水道，酉时在城南驿馆密接。" },
               { sender: "宛城暗桩·阿全", time: "13:25", text: "遵命！属下定誓死护送。" }
             ]
@@ -54126,11 +54189,11 @@ ${userContext}
             correspondent: "绣衣楼·雀部暗卫",
             role: "同僚下属",
             time: "前日亥时二刻",
-            summary: "广陵王府邸周边防务夜巡换岗密报与伏哨排查。",
+            summary: "广陵府邸周边防务夜巡换岗密报与伏哨排查。",
             secretLevel: "密函",
             messages: [
               { sender: "雀部暗卫", time: "21:30", text: "大人，后园水榭外围已增设三道暗铃与浸毒铁蒺藜。" },
-              { sender: character, time: "21:35", text: "殿下近来常夜读卷宗，东侧更夫巡夜需放轻脚步，莫扰了殿下安歇。" },
+              { sender: character, time: "21:35", text: "东侧更夫巡夜需放轻脚步，莫扰了贵人安歇。" },
               { sender: "雀部暗卫", time: "21:36", text: "属下明白，已令暗哨换软底鹿皮靴。" }
             ]
           },
@@ -54157,7 +54220,7 @@ ${userContext}
             messages: [
               { sender: "回春堂主", time: "08:20", text: "大人所托之百年老山参及川贝雪梨膏已配好，去除了苦涩之气，甘甜适口。" },
               { sender: character, time: "08:25", text: "封泥务必严密，明日派可靠之人送至绣衣楼侧门。" },
-              { sender: "回春堂主", time: "08:30", text: "大人放心，已按殿下最喜之甜度特别调配。" }
+              { sender: "回春堂主", time: "08:30", text: "大人放心，已按特选之甜度特别调配。" }
             ]
           }
         ];
@@ -54171,7 +54234,7 @@ ${userContext}
     }
   };
 
-  // ================= 2. 加载 / 生成【动向】(备忘录 + 出门足迹) =================
+  // ================= 2. 加载 / 生成【动向】(用户强相关备忘录 + 私人资产与交易变动) =================
   const loadOrGenerateDynamics = async (forceRefresh = false) => {
     const cacheKey = `fangtian_dynamics_${character}`;
     if (!forceRefresh) {
@@ -54179,9 +54242,9 @@ ${userContext}
       if (cached) {
         try {
           const parsed = JSON.parse(cached);
-          if (parsed.memos && parsed.trips) {
+          if (parsed.memos && parsed.assets) {
             setMemos(parsed.memos);
-            setTrips(parsed.trips);
+            setAssets(parsed.assets);
             return;
           }
         } catch (e) {}
@@ -54189,44 +54252,58 @@ ${userContext}
     }
 
     setIsLoadingDynamics(true);
-    showToast("神识观微，正在探查其近期备忘手记与出门足迹...");
+    showToast("神识观微，正在探查备忘录与私人财产资产变动...");
 
     try {
-      const { worldContext, userContext } = await getContexts();
+      const { worldContext, userContext, activeUser } = await getContexts();
       const charInfo = getCharProfileText();
 
       const prompt = `
-【世界观设定】
+【世界观背景】
 ${worldContext}
 
-${userContext}
+【用户(主公/心上人/楼主)在身份配置库中的设定】
+用户姓名：${activeUser.name}
+用户身份：${activeUser.role}
+用户性格：${activeUser.personality}
+用户背景：${activeUser.background || "无"}
 
-【密探角色设定】
+【当前角色设定】
 角色姓名：${character}
-角色人设与风格：${charInfo}
+角色人设与性格：${charInfo}
 
-【任务要求】
-请以该角色的视角与习惯，生成其近期的【随身备忘录 (memos)】（4-6条）与【出门动向轨迹 (trips)】（4-6条）。
-内容要极其生活化、细节化，体现角色性格（如若是傅融则精打细算、关注账目与殿下；若是刘辩则向往民间肆意与殿下相伴等）。
+【核心任务与生成规则】
+请为角色【${character}】生成两类极其真实的私密手记：
+
+一、【随身备忘录 (memos)】(4-6条)：
+1. 语言风格：必须现代通俗、自然接地气！严禁冗长生涩的文言文！每条一两句话（20-40字以内），口吻鲜活。
+2. 强相关性：必须与用户【${activeUser.name}】强相关！记录关于${activeUser.name}的琐事、关心、提醒、隐秘算计或行程安排（例如给${activeUser.name}备好点心热茶、核查${activeUser.name}出行防备、为${activeUser.name}定制物件、算清给${activeUser.name}垫付的开销等）。
+
+二、【私人资产与交易变动 (assets)】(4-6条)：
+详细展现该角色近期的【私人固有资产变动、与外界的土地良田/坞堡要塞/军队私兵/商队矿脉的买卖处置交易】！
+包含：良田亩数、坞堡险隘、私兵军队编制、金银矿脉、商铺粮仓等交易买卖。
 
 必须严格返回纯 JSON 对象格式（不要包含 \`\`\`json 标记）：
 {
   "memos": [
     {
       "id": 1,
-      "tag": "急务 / 账目 / 私隐 / 挂念",
+      "tag": "提醒 / 备办 / 挂念 / 账目",
       "time": "今日辰时",
-      "title": "备忘标题",
-      "content": "备忘录详细内容"
+      "title": "简短备忘标题",
+      "content": "与${activeUser.name}强相关的简短备忘内容（通俗自然，20-40字）"
     }
   ],
-  "trips": [
+  "assets": [
     {
       "id": 1,
-      "time": "今日巳时 (09:30)",
-      "destination": "目的地地点（如：广陵东市药铺 / 城外松涛林）",
-      "purpose": "出行缘由（如：选购安神香料 / 巡查潜伏暗哨）",
-      "detail": "出行见闻与细节心得"
+      "time": "近期时日（如：本月初三 / 昨日申时）",
+      "type": "良田田庄 / 险要坞堡 / 私曲兵甲 / 粮仓矿脉 / 战马商队",
+      "changeTitle": "资产变动概要（如：斥资万缗购入宛南肥沃良田四百亩）",
+      "partner": "交易对象 / 处置方（如：宛城豪族赵氏 / 河东大盐商 / 琅琊坞堡主）",
+      "scale": "变动规模与金额（如：+400亩良田，支铜钱八十万）",
+      "totalHold": "当前名下总持有量（如：总良田 1600亩，总坞堡 2座）",
+      "detail": "私下运作考量与战略算计"
     }
   ]
 }
@@ -54235,7 +54312,7 @@ ${userContext}
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是该古风角色的心腹书吏，负责整理其个人备忘与行踪手记。严格输出纯 JSON 对象。" },
+            { role: "system", content: "你是该角色的私密心腹总管，通晓其个人备忘与私产家底。严格输出纯 JSON 对象。" },
             { role: "user", content: prompt },
           ],
           null,
@@ -54243,11 +54320,12 @@ ${userContext}
             try {
               const clean = reply.replace(/```json|```/g, "").trim();
               const parsed = JSON.parse(clean);
-              if (parsed.memos && parsed.trips) {
+              if (parsed.memos && (parsed.assets || parsed.trips)) {
+                const assetList = parsed.assets || parsed.trips;
                 setMemos(parsed.memos);
-                setTrips(parsed.trips);
-                localStorage.setItem(cacheKey, JSON.stringify(parsed));
-                showToast("已捕获最新备忘与出行轨迹！");
+                setAssets(assetList);
+                localStorage.setItem(cacheKey, JSON.stringify({ memos: parsed.memos, assets: assetList }));
+                showToast("已捕获最新备忘与私产交易账单！");
               }
             } catch (err) {
               console.error("解析动向失败:", err);
@@ -54259,20 +54337,20 @@ ${userContext}
       } else {
         const defaultDyn = {
           memos: [
-            { id: 1, tag: "急务", time: "今日辰时", title: "清核隐市三月份铁矿进出账目", content: "账面尚差银铢八十二两，需亲自前往城西货栈复查提货单据，严防贪墨。" },
-            { id: 2, tag: "挂念", time: "昨日戌时", title: "购置南山银针茶饼及蜜饯", content: "广陵王殿下近日批阅谍报甚晚，需着人备好温热甜润之饮品置于案头。" },
-            { id: 3, tag: "防备", time: "前日未时", title: "更替后苑暗桩轮值口令", content: "近日有可疑飞鸽盘旋于广陵城北，需将接头暗号改为'春山夜雨'。" },
-            { id: 4, tag: "修缮", time: "四日前", title: "擦拭龙泉短刃与暗弩机括", content: "弩机簧片微有锈涩，已用菜籽油精心擦拭保养，填装透甲毒针十二支。" }
+            { id: 1, tag: "提醒", time: "今日辰时", title: `提醒${activeUser.name}添衣`, content: `${activeUser.name}这几天总在风口看密信，后厨熬的雪梨百合汤得盯着趁热喝完。` },
+            { id: 2, tag: "账目", time: "今日巳时", title: `核对${activeUser.name}私账`, content: `昨日替${activeUser.name}垫付了买古籍的六十两银子，得记在小本上，找机会报销。` },
+            { id: 3, tag: "防备", time: "昨日未时", title: `排查${activeUser.name}必经之路`, content: `城西那家铁匠铺形迹可疑，${activeUser.name}明日出巡得换走东侧大街，避开闲杂人。` },
+            { id: 4, tag: "备办", time: "昨日戌时", title: `定做防刺软甲`, content: `找江东最好的裁缝给${activeUser.name}缝制一件金丝软甲，轻便又贴身，月底前要交货。` }
           ],
-          trips: [
-            { id: 1, time: "今日巳时 (09:45)", destination: "广陵南市·茗香阁", purpose: "秘密接头", detail: "乔装为茶商与宛城信使碰头，取得西凉驻军调防密图，未见尾随之人。" },
-            { id: 2, time: "昨日未时 (14:20)", destination: "广陵府衙户曹", purpose: "核查赋税", detail: "查验今年广陵郡春蚕丝绢税赋名册，发现两处漏报庄园，已暗中记录。" },
-            { id: 3, time: "前日申时 (16:00)", destination: "城北郊外落霞亭", purpose: "放鹰传书", detail: "向江东密探放飞灵鸢二只，传达最新戒备指令，归途顺道采撷野菊数朵。" },
-            { id: 4, time: "四日前酉时 (18:30)", destination: "绣衣楼隐秘地窖", purpose: "清点军械", detail: "核实新到短刀八十柄、轻甲三十具，成色上乘，已入库封存。" }
+          assets: [
+            { id: 1, time: "本月初五", type: "良田田庄", changeTitle: "购置宛南沃野庄园", partner: "宛城富商李氏", scale: "+350亩良田，耗银铢五百两", totalHold: "良田累计 1,200 亩", detail: "此地土质肥沃引灌便利，产粮充裕，可作为秘密粮草供给基地。" },
+            { id: 2, time: "上月望日", type: "险要坞堡", changeTitle: "修缮伏牛山隐秘坞堡", partner: "南阳墨家工匠", scale: "加固箭楼三座，耗铁料五千斤", totalHold: "名下掌控坞堡 3 座", detail: "扼守南阳通往广陵之咽喉，暗设连弩机位，进可据守退可策应。" },
+            { id: 3, time: "上月廿二", type: "私曲兵甲", changeTitle: "整编招募精壮死士", partner: "青州流亡健勇", scale: "+60名披甲锐士，月饷钱二十万", totalHold: "精锐私兵 480 人", detail: "皆配备双槽短刀与重张蹶张弩，日夜操练，专职护卫暗线重地。" },
+            { id: 4, time: "昨日午时", type: "战马商队", changeTitle: "向河东卫氏转让粮秣", partner: "河东大盐商卫氏", scale: "出粮两千石，换得北地健马四十匹", totalHold: "商队战马 120 匹", detail: "以此批骏马扩充急行传令骑卒，确保谍报传递风驰电掣。" }
           ]
         };
         setMemos(defaultDyn.memos);
-        setTrips(defaultDyn.trips);
+        setAssets(defaultDyn.assets);
         localStorage.setItem(cacheKey, JSON.stringify(defaultDyn));
         setIsLoadingDynamics(false);
       }
@@ -54326,8 +54404,8 @@ ${userContext}
     {
       "id": 1,
       "category": "琴 / 棋 / 书 / 画",
-      "title": "作品/曲目/棋局名（如：绿绮引《高山流水》 / 与某人对弈《烂柯残局》 / 临《石门颂》汉隶 / 泼墨《墨竹栖鸢图》）",
-      "time": "修习时日（如：昨日雨夜 / 暮春初九）",
+      "title": "作品/曲目/棋局名",
+      "time": "修习时日（如：昨夜子时 / 暮春初九）",
       "detail": "抚琴/弈棋/挥毫/泼墨之细节与内心意境感悟"
     }
   ],
@@ -54335,7 +54413,7 @@ ${userContext}
     {
       "id": 1,
       "skill": "礼 / 乐 / 射 / 御 / 书 / 数",
-      "title": "修习项目（如：射·百步穿杨校场演练 / 数·九章算术推演粮秣 / 御·策烈马奔驰于平川）",
+      "title": "修习项目",
       "time": "演练时日",
       "detail": "具体的游玩演习过程与收获"
     }
@@ -54413,7 +54491,7 @@ ${userContext}
     showToast("方天通灵，正在调取其在太疾驰商城的消费订单账册...");
 
     try {
-      const { worldContext, userContext } = await getContexts();
+      const { worldContext, userContext, activeUser } = await getContexts();
       const charInfo = getCharProfileText();
 
       const prompt = `
@@ -54433,7 +54511,7 @@ ${userContext}
 2. 所属分类 (category)
 3. 购买数量 (quantity)
 4. 花费金额 (cost)
-5. 到底买给谁 (recipient，如：赠广陵王殿下 / 犒赏楼内部属 / 自用 / 寄送远方故友等)
+5. 到底买给谁 (recipient，如：赠${activeUser.name} / 犒赏楼内部属 / 自用 / 寄送远方故友等)
 6. 购买缘由与内心备注 (reason)
 
 必须严格返回纯 JSON 数组格式（不要包含 \`\`\`json 标记）：
@@ -54444,7 +54522,7 @@ ${userContext}
     "category": "太疾驰分类（如：珍馐餐饮 / 文房雅玩 / 暗阁器械 / 灵药补剂 / 锦衣配饰）",
     "quantity": "数量（如：2匣 / 1柄 / 3坛）",
     "cost": "花费金额（如：120 银铢）",
-    "recipient": "给谁（如：赠广陵王殿下 / 自用备战）",
+    "recipient": "给谁（如：赠${activeUser.name} / 自用备战）",
     "status": "已派达 / 运输中 / 隐秘代签",
     "time": "下单时辰（如：今日午时）",
     "reason": "购买动机与心意备注"
@@ -54483,10 +54561,10 @@ ${userContext}
             category: "珍馐餐饮",
             quantity: "2 罐",
             cost: "160 银铢",
-            recipient: "赠广陵王殿下",
+            recipient: `赠${activeUser.name}`,
             status: "已派达·亲手奉上",
             time: "今日辰时",
-            reason: "殿下近来常夜读卷宗至天明，特选高山初采嫩芽，甘冽清甜，最宜提神静气。"
+            reason: `${activeUser.name}近来常夜读卷宗至天明，特选高山初采嫩芽，甘冽清甜，最宜提神静气。`
           },
           {
             id: 2,
@@ -54497,7 +54575,7 @@ ${userContext}
             recipient: "自用备战",
             status: "已派达·暗匣封存",
             time: "昨日申时",
-            reason: "替换佩弩中磨损之箭镞，此锥破重铠如裂帛，护卫殿下巡行之必备杀器。"
+            reason: `替换佩弩中磨损之箭镞，此锥破重铠如裂帛，护卫${activeUser.name}巡行之必备杀器。`
           },
           {
             id: 3,
@@ -54505,10 +54583,10 @@ ${userContext}
             category: "珍馐餐饮",
             quantity: "3 匣",
             cost: "45 银铢",
-            recipient: "赠广陵王殿下",
+            recipient: `赠${activeUser.name}`,
             status: "已派达·置于书案",
             time: "前日未时",
-            reason: "尝闻殿下偶喜甜食，此糖入口酥松甜而不腻，劳神之余可佐茶充饥。"
+            reason: `尝闻${activeUser.name}偶喜甜食，此糖入口酥松甜而不腻，劳神之余可佐茶充饥。`
           },
           {
             id: 4,
@@ -54598,23 +54676,7 @@ ${userContext}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-            <div
-              style={{
-                width: "38px",
-                height: "38px",
-                borderRadius: "50%",
-                overflow: "hidden",
-                border: "2px solid #89A8B2",
-                background: "#E8C3A8",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#fff",
-                fontWeight: "bold",
-              }}
-            >
-              {avatar ? <img src={avatar} alt={character} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : character.charAt(0)}
-            </div>
+            <WaterMirrorAvatar avatar={avatar} name={character} size={38} />
             <div>
               <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4033" }}>{character} · 方天视界</div>
               <div style={{ fontSize: "11px", color: "#8E9482" }}>神识通灵 · 虚实尽览</div>
@@ -54792,7 +54854,7 @@ ${userContext}
           </div>
         )}
 
-        {/* ================= 2. 动向模块：备忘录 + 出门足迹 ================= */}
+        {/* ================= 2. 动向模块：用户强相关备忘录 + 私人固有资产与交易变动 ================= */}
         {activeTab === "dynamics" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {/* 子分类切换 */}
@@ -54815,31 +54877,31 @@ ${userContext}
                 <i className="ph ph-note-pencil mr-1"></i> 随身备忘录 ({memos.length})
               </button>
               <button
-                onClick={() => setDynamicsSubTab("trip")}
+                onClick={() => setDynamicsSubTab("asset")}
                 style={{
                   flex: 1,
                   padding: "8px 0",
                   borderRadius: "10px",
                   border: "none",
                   fontSize: "13px",
-                  fontWeight: dynamicsSubTab === "trip" ? "700" : "500",
-                  background: dynamicsSubTab === "trip" ? "#FFFFFF" : "transparent",
-                  color: dynamicsSubTab === "trip" ? "#3B4235" : "#7B8072",
+                  fontWeight: dynamicsSubTab === "asset" ? "700" : "500",
+                  background: dynamicsSubTab === "asset" ? "#FFFFFF" : "transparent",
+                  color: dynamicsSubTab === "asset" ? "#3B4235" : "#7B8072",
                   cursor: "pointer",
-                  boxShadow: dynamicsSubTab === "trip" ? "0 2px 6px rgba(0,0,0,0.06)" : "none"
+                  boxShadow: dynamicsSubTab === "asset" ? "0 2px 6px rgba(0,0,0,0.06)" : "none"
                 }}
               >
-                <i className="ph ph-footprints mr-1"></i> 出门行踪轨迹 ({trips.length})
+                <i className="ph ph-coins mr-1"></i> 私产与势力交易 ({assets.length})
               </button>
             </div>
 
             {isLoadingDynamics ? (
               <div style={{ textAlign: "center", padding: "40px 20px", color: "#7B8072" }}>
                 <i className="ph ph-spinner animate-spin text-3xl mb-2" style={{ color: "#4D7C8A" }}></i>
-                <div style={{ fontSize: "13px" }}>正在感应动向手记...</div>
+                <div style={{ fontSize: "13px" }}>正在感应私密动向与资产变化...</div>
               </div>
             ) : dynamicsSubTab === "memo" ? (
-              // 备忘录列表
+              // 备忘录列表 (简短通俗，与用户强相关)
               memos.map((m) => (
                 <div
                   key={m.id}
@@ -54866,30 +54928,53 @@ ${userContext}
                 </div>
               ))
             ) : (
-              // 出门足迹列表
-              trips.map((t) => (
+              // 私人资产变动与交易列表 (良田、坞堡、军队人数、矿产)
+              assets.map((a) => (
                 <div
-                  key={t.id}
+                  key={a.id}
                   style={{
                     background: "#FFFFFF",
                     borderRadius: "16px",
                     padding: "14px",
                     boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
                     borderLeft: "4px solid #D6724B",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "6px"
                   }}
                 >
-                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
-                    <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235", display: "flex", alignItems: "center", gap: "6px" }}>
-                      <i className="ph ph-map-pin-fill" style={{ color: "#D6724B" }}></i>
-                      <span>{t.destination}</span>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span style={{
+                        background: "#D6724B",
+                        color: "#fff",
+                        padding: "2px 6px",
+                        borderRadius: "6px",
+                        fontSize: "11px",
+                        fontWeight: "700"
+                      }}>
+                        {a.type || "资产变动"}
+                      </span>
+                      <span style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>
+                        {a.changeTitle || a.destination || "资产交易"}
+                      </span>
                     </div>
-                    <span style={{ fontSize: "11px", color: "#8E9485" }}>{t.time}</span>
+                    <span style={{ fontSize: "11px", color: "#8E9485" }}>{a.time}</span>
                   </div>
-                  <div style={{ fontSize: "12px", color: "#D6724B", fontWeight: "600", marginBottom: "4px" }}>
-                    【缘由】{t.purpose}
+
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#FFF8F2", padding: "6px 10px", borderRadius: "8px", fontSize: "12px" }}>
+                    <span style={{ color: "#8C4A1E" }}><b>交易方：</b>{a.partner || a.purpose || "隐秘处置"}</span>
+                    <span style={{ color: "#D6724B", fontWeight: "700" }}>{a.scale || a.totalHold || ""}</span>
                   </div>
-                  <div style={{ fontSize: "13px", color: "#4A4F44", lineHeight: "1.55" }}>
-                    {t.detail}
+
+                  {a.totalHold && (
+                    <div style={{ fontSize: "11.5px", color: "#5A8F76", fontWeight: "600" }}>
+                      <i className="ph ph-vault mr-1"></i>当前累计掌控：{a.totalHold}
+                    </div>
+                  )}
+
+                  <div style={{ fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FDFCF8", padding: "6px 8px", borderRadius: "6px" }}>
+                    "{a.detail}"
                   </div>
                 </div>
               ))
@@ -55092,8 +55177,8 @@ ${userContext}
                     </span>
                     <span style={{
                       fontSize: "11px",
-                      background: ord.recipient.includes("殿下") || ord.recipient.includes("广陵王") ? "#FBE9E7" : "#E8EAF6",
-                      color: ord.recipient.includes("殿下") || ord.recipient.includes("广陵王") ? "#D84315" : "#3949AB",
+                      background: ord.recipient.includes("广陵王") || ord.recipient.includes("主公") || ord.recipient.includes("殿下") ? "#FBE9E7" : "#E8EAF6",
+                      color: ord.recipient.includes("广陵王") || ord.recipient.includes("主公") || ord.recipient.includes("殿下") ? "#D84315" : "#3949AB",
                       fontWeight: "700",
                       padding: "2px 8px",
                       borderRadius: "6px"
@@ -55544,24 +55629,8 @@ const T13WaterMirrorPage = ({ onBack }) => {
           {selectedCharObj ? (
             /* 镜中显化人物倒影 */
             <div style={{ display: "flex", flexDirection: "column", alignItems: "center", animation: "fadeIn 0.5s ease-out" }}>
-              <div
-                style={{
-                  width: "90px",
-                  height: "90px",
-                  borderRadius: "50%",
-                  overflow: "hidden",
-                  border: "2px solid #D1E5EE",
-                  boxShadow: "0 0 20px rgba(209, 229, 238, 0.6)",
-                  marginBottom: "10px",
-                }}
-              >
-                {selectedCharObj.avatar ? (
-                  <img src={selectedCharObj.avatar} alt={selectedCharObj.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                ) : (
-                  <div style={{ width: "100%", height: "100%", background: "#E8C3A8", display: "flex", alignItems: "center", justifyContent: "center", fontSize: "28px", color: "#fff", fontWeight: "bold" }}>
-                    {selectedCharObj.name.charAt(0)}
-                  </div>
-                )}
+              <div style={{ marginBottom: "10px" }}>
+                <WaterMirrorAvatar avatar={selectedCharObj.avatar} name={selectedCharObj.name} size={90} />
               </div>
               <div style={{ fontSize: "16px", fontWeight: "700", color: "#EAF4F8", letterSpacing: "1px" }}>
                 {selectedCharObj.name}
@@ -55704,27 +55773,7 @@ const T13WaterMirrorPage = ({ onBack }) => {
                         cursor: "pointer",
                       }}
                     >
-                      <div
-                        style={{
-                          width: "44px",
-                          height: "44px",
-                          borderRadius: "50%",
-                          overflow: "hidden",
-                          background: "#E8C3A8",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#fff",
-                          fontWeight: "bold",
-                          flexShrink: 0,
-                        }}
-                      >
-                        {charObj.avatar ? (
-                          <img src={charObj.avatar} alt={charObj.name} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                        ) : (
-                          charObj.name.charAt(0)
-                        )}
-                      </div>
+                      <WaterMirrorAvatar avatar={charObj.avatar} name={charObj.name} size={44} />
 
                       <div style={{ flex: 1, minWidth: 0 }}>
                         <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4235" }}>{charObj.name}</div>
