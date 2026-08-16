@@ -826,6 +826,47 @@
             request.onerror = () => reject("保存注册状态失败");
           });
         },
+
+        // 获取楼内联系人自定义笔记/备注字典
+        getCharacterNotes: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("xiuyi_character_notes");
+            request.onsuccess = () => resolve(request.result?.value || {});
+            request.onerror = () => reject("获取人物笔记失败");
+          });
+        },
+
+        // 保存某个楼内联系人的自定义笔记/备注
+        saveCharacterNote: async (character, note) => {
+          const db = await openDB();
+          return new Promise(async (resolve, reject) => {
+            try {
+              let existingNotes = {};
+              try {
+                const transactionRead = db.transaction(STORES.USER_SETTINGS, "readonly");
+                const storeRead = transactionRead.objectStore(STORES.USER_SETTINGS);
+                const reqRead = storeRead.get("xiuyi_character_notes");
+                existingNotes = await new Promise((res) => {
+                  reqRead.onsuccess = () => res(reqRead.result?.value || {});
+                  reqRead.onerror = () => res({});
+                });
+              } catch (e) {}
+
+              existingNotes[character] = note;
+
+              const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+              const store = transaction.objectStore(STORES.USER_SETTINGS);
+              const request = store.put({ key: "xiuyi_character_notes", value: existingNotes });
+              request.onsuccess = () => resolve(request.result);
+              request.onerror = () => reject("保存人物笔记失败");
+            } catch (err) {
+              reject(err);
+            }
+          });
+        },
       };
 
       // 迁移用户数据从 localStorage 到 IndexedDB（新增）
