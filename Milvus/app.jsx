@@ -58169,59 +58169,127 @@ const T8ChatDetail = ({
 
       {/* 通话中页面 */}
       {showInCallUI && (
-        <div className="incall-container">
-          {/* 顶部状态 */}
-          <div className="incall-top-status">通话中</div>
-
-          {/* 右上角关闭按钮 */}
+        <div
+          className="incall-container"
+          style={{
+            position: "absolute",
+            inset: 0,
+            width: "100%",
+            height: "100%",
+            backgroundColor: "#0d0d0f",
+            backgroundImage: "radial-gradient(circle at 50% 25%, #1c1917 0%, #0a0a0c 80%)",
+            zIndex: 1300,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "calc(16px + var(--safe-top, 0px)) 16px calc(20px + var(--safe-bottom, 0px)) 16px",
+            boxSizing: "border-box",
+            overflow: "hidden",
+            fontFamily: '"PingFang SC", "Noto Sans SC", "SimSun", serif',
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          {/* 顶部状态与关闭按钮 */}
           <div
-            className="incall-top-icon"
-            style={{ cursor: "pointer" }}
-            onClick={() => {
-              // 关闭通话中页面
-              setShowInCallUI(false);
-              // 添加"（挂断了语音通话）"消息
-              const hangupMsg = {
-                id: Date.now(),
-                text: "（挂断了语音通话）",
-                type: "narration",
-                isMe: false,
-                time: new Date().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-              };
-              setMessages((prev) => [...prev, hangupMsg]);
-              // 清空通话中消息列表
-              setInCallMessages([]);
+            style={{
+              position: "relative",
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "10px 0",
+              zIndex: 20,
             }}
           >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
+            <div
+              className="incall-top-status"
+              style={{
+                color: "#d4b275",
+                fontSize: "18px",
+                letterSpacing: "3px",
+                fontWeight: "bold",
+                fontFamily: '"STKaiti", "KaiTi", serif',
+              }}
             >
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
+              通话中
+            </div>
+
+            {/* 右上角关闭挂断按钮 */}
+            <div
+              className="incall-top-icon"
+              style={{
+                position: "absolute",
+                right: "4px",
+                top: "8px",
+                width: "32px",
+                height: "32px",
+                border: "1px solid rgba(212, 178, 117, 0.4)",
+                borderRadius: "50%",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#d4b275",
+                backgroundColor: "rgba(255, 255, 255, 0.05)",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+              }}
+              onClick={() => {
+                setShowInCallUI(false);
+                const hangupMsg = {
+                  id: Date.now(),
+                  text: "（挂断了语音通话）",
+                  type: "narration",
+                  isMe: false,
+                  time: new Date().toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                };
+                setMessages((prev) => [...prev, hangupMsg]);
+                setInCallMessages([]);
+              }}
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18"></line>
+                <line x1="6" y1="6" x2="18" y2="18"></line>
+              </svg>
+            </div>
           </div>
 
-          {/* 中央虚线框 */}
+          {/* 中央虚线框 / 头像展示区 */}
           <div
             className="incall-dashed-box"
             id={`incall-avatar-${chatData.id}`}
-            style={{ cursor: "pointer" }}
+            style={{
+              width: "150px",
+              height: "190px",
+              border: "2px dashed rgba(212, 178, 117, 0.45)",
+              borderRadius: "8px",
+              margin: "6px 0 10px 0",
+              cursor: "pointer",
+              backgroundColor: "rgba(255, 255, 255, 0.02)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              flexShrink: 0,
+            }}
             onClick={() => {
-              // 创建文件输入框
               const fileInput = document.createElement("input");
               fileInput.type = "file";
               fileInput.accept = "image/*,video/mp4,video/webm";
               fileInput.style.display = "none";
 
-              // 处理文件选择
               fileInput.onchange = async (e) => {
                 const file = e.target.files[0];
                 if (file) {
@@ -58229,8 +58297,6 @@ const T8ChatDetail = ({
                     const reader = new FileReader();
                     reader.onload = async (event) => {
                       const imageUrl = event.target.result;
-
-                      // 保存到IndexedDB
                       try {
                         const db = await openDB();
                         const transaction = db.transaction(
@@ -58246,17 +58312,14 @@ const T8ChatDetail = ({
                         });
                         console.log("语音通话头像保存成功");
 
-                        // 更新当前显示
                         const avatarElement = document.getElementById(
                           `incall-avatar-${chatData.id}`,
                         );
                         if (avatarElement) {
                           avatarElement.style.backgroundImage = `url(${imageUrl})`;
-                          avatarElement.style.backgroundSize = "contain";
+                          avatarElement.style.backgroundSize = "cover";
                           avatarElement.style.backgroundPosition = "center";
-                          avatarElement.style.backgroundRepeat = "no-repeat";
-                          avatarElement.style.border =
-                            "3px dashed rgba(200, 200, 200, 0.5)";
+                          avatarElement.style.border = "1.5px solid rgba(212, 178, 117, 0.6)";
                         }
                       } catch (error) {
                         console.error("保存头像到IndexedDB失败:", error);
@@ -58275,52 +58338,66 @@ const T8ChatDetail = ({
             }}
           ></div>
 
-          {/* 气泡区域 */}
+          {/* 通话对话气泡区域 */}
           <div
             id="incall-scroll-area"
             className="incall-dialogue-area"
-            style={{ backgroundColor: "rgba(0, 0, 0, 0.1)" }}
+            style={{
+              flex: 1,
+              width: "100%",
+              maxWidth: "400px",
+              padding: "10px 4px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+              overflowY: "auto",
+              boxSizing: "border-box",
+            }}
           >
-            {/* 通话消息列表 */}
             {inCallMessages.map((msg, index) => (
               <div
                 key={index}
                 className="incall-bubble-wrapper"
                 style={{
-                  justifyContent: msg.isMe ? "flex-start" : "flex-end",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: msg.isMe ? "flex-end" : "flex-start",
                   width: "100%",
+                  padding: "0 8px",
+                  boxSizing: "border-box",
                 }}
               >
                 {/* 名字标签 */}
                 <div
                   className="incall-name-tag"
                   style={{
-                    right: msg.isMe ? "auto" : "12px",
-                    left: msg.isMe ? "12px" : "auto",
+                    color: "#d4b275",
+                    fontSize: "12px",
+                    marginBottom: "4px",
+                    letterSpacing: "1px",
+                    fontFamily: '"STKaiti", "KaiTi", serif',
                   }}
                 >
                   {msg.isMe ? "我" : chatData.name}
                 </div>
+
                 {/* 气泡主体 */}
                 <div
                   className="incall-bubble-body"
                   style={{
-                    display: "flex",
-                    alignItems: "center",
-                    padding: "12px 20px",
-                    color: "#000",
+                    display: "inline-block",
+                    padding: "10px 16px",
+                    color: msg.isMe ? "#2c2c2c" : "#1a1a1a",
                     fontSize: "14px",
+                    lineHeight: "1.6",
                     background: msg.isMe
-                      ? "rgba(240, 240, 240, 0.9)"
-                      : "rgba(255, 255, 255, 0.95)",
-                    minWidth: "100px",
-                    maxWidth: "80%",
-                    height: "auto",
-                    textAlign: "center",
+                      ? "linear-gradient(135deg, #f0ebd8 0%, #e2dac2 100%)"
+                      : "#ffffff",
+                    borderRadius: msg.isMe ? "14px 2px 14px 14px" : "2px 14px 14px 14px",
+                    maxWidth: "85%",
                     wordBreak: "break-word",
-                    whiteSpace: "normal",
-                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
-                    border: "1px solid rgba(255, 255, 255, 0.5)",
+                    boxShadow: "0 3px 12px rgba(0, 0, 0, 0.35)",
+                    border: "1px solid rgba(255, 255, 255, 0.6)",
                   }}
                 >
                   {msg.text}
@@ -58330,12 +58407,37 @@ const T8ChatDetail = ({
           </div>
 
           {/* 底部输入区域 */}
-          <div className="incall-bottom-bar">
+          <div
+            className="incall-bottom-bar"
+            style={{
+              width: "100%",
+              maxWidth: "400px",
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              padding: "10px 4px 4px 4px",
+              boxSizing: "border-box",
+            }}
+          >
             {/* 麦克风图标 */}
-            <div className="incall-mic-icon">
+            <div
+              className="incall-mic-icon"
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "50%",
+                backgroundColor: "rgba(212, 178, 117, 0.15)",
+                border: "1px solid rgba(212, 178, 117, 0.3)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#d4b275",
+                flexShrink: 0,
+              }}
+            >
               <svg
-                width="24"
-                height="24"
+                width="20"
+                height="20"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
@@ -58349,13 +58451,19 @@ const T8ChatDetail = ({
             {/* 输入框 */}
             <input
               type="text"
+              id="incall-input-element"
               className="incall-input-pill"
               style={{
+                flex: 1,
+                height: "40px",
                 padding: "0 16px",
                 fontSize: "14px",
-                border: "none",
+                borderRadius: "20px",
+                border: "1px solid rgba(212, 178, 117, 0.3)",
+                backgroundColor: "rgba(255, 255, 255, 0.9)",
                 outline: "none",
                 color: "#333",
+                boxSizing: "border-box",
               }}
               placeholder="输入消息..."
               onKeyPress={(e) => {
@@ -58363,18 +58471,12 @@ const T8ChatDetail = ({
                   const inputElement = e.target;
                   const message = inputElement.value.trim();
                   if (message) {
-                    // 发送消息逻辑
-                    console.log("发送消息:", message);
-                    // 添加到通话中消息列表
                     setInCallMessages((prev) => [
                       ...prev,
                       { text: message, isMe: true },
                     ]);
-                    // 清空输入框
                     inputElement.value = "";
-                    // 触发AI回复
                     setTimeout(() => {
-                      // 创建用户消息对象
                       const userMsg = {
                         id: Date.now(),
                         text: message,
@@ -58385,7 +58487,6 @@ const T8ChatDetail = ({
                           minute: "2-digit",
                         }),
                       };
-                      // 触发AI回复
                       handleAITrigger(null, userMsg);
                     }, 100);
                   }
@@ -58396,25 +58497,30 @@ const T8ChatDetail = ({
             {/* 发送按钮 */}
             <div
               className="incall-arrow-icon"
-              style={{ cursor: "pointer" }}
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "50%",
+                backgroundColor: "#d4b275",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#1a1a1a",
+                cursor: "pointer",
+                flexShrink: 0,
+                boxShadow: "0 2px 8px rgba(212, 178, 117, 0.4)",
+              }}
               onClick={() => {
-                const inputElement =
-                  document.querySelector(".incall-input-pill");
+                const inputElement = document.getElementById("incall-input-element");
                 if (inputElement) {
                   const message = inputElement.value.trim();
                   if (message) {
-                    // 发送消息逻辑
-                    console.log("发送消息:", message);
-                    // 添加到通话中消息列表
                     setInCallMessages((prev) => [
                       ...prev,
                       { text: message, isMe: true },
                     ]);
-                    // 清空输入框
                     inputElement.value = "";
-                    // 触发AI回复
                     setTimeout(() => {
-                      // 创建用户消息对象
                       const userMsg = {
                         id: Date.now(),
                         text: message,
@@ -58425,7 +58531,6 @@ const T8ChatDetail = ({
                           minute: "2-digit",
                         }),
                       };
-                      // 触发AI回复
                       handleAITrigger(null, userMsg);
                     }, 100);
                   }
@@ -58433,12 +58538,14 @@ const T8ChatDetail = ({
               }}
             >
               <svg
-                width="24"
-                height="24"
+                width="20"
+                height="20"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
                 <line x1="22" y1="2" x2="11" y2="13" />
                 <polygon points="22 2 15 22 11 13 2 9 22 2" />
@@ -58447,371 +58554,7 @@ const T8ChatDetail = ({
           </div>
         </div>
       )}
-
-      {/* [新增] 整合记录弹窗 */}
-      {showConsolidateModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            zIndex: 9999,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "flex-end",
-          }}
-          onClick={() => setShowConsolidateModal(false)}
-        >
-          <div
-            style={{
-              background: "#FDFCF8",
-              width: "100%",
-              borderTopLeftRadius: "24px",
-              borderTopRightRadius: "24px",
-              padding: "24px",
-              paddingBottom: "calc(24px + var(--safe-bottom))",
-              animation: "slideUp 0.3s ease-out",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: "18px", color: "#5a5f4d" }}>
-                整合选中的 {selectedMsgIds.length} 条记录
-              </h3>
-              <button
-                onClick={() => setShowConsolidateModal(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#999",
-                  cursor: "pointer",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* 模式切换 */}
-            <div
-              style={{
-                display: "flex",
-                gap: "12px",
-                marginBottom: "20px",
-              }}
-            >
-              <button
-                onClick={() => setConsolidateMode("manual")}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  borderRadius: "12px",
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  background:
-                    consolidateMode === "manual" ? "#D6724B" : "#F5F5F5",
-                  color: consolidateMode === "manual" ? "#fff" : "#666",
-                  border: "none",
-                }}
-              >
-                手动记录
-              </button>
-              <button
-                onClick={() => {
-                  setConsolidateMode("auto");
-                  handleAutoConsolidate();
-                }}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  borderRadius: "12px",
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  background:
-                    consolidateMode === "auto" ? "#A8C8BA" : "#F5F5F5",
-                  color: consolidateMode === "auto" ? "#fff" : "#666",
-                  border: "none",
-                }}
-              >
-                自动记录(AI)
-              </button>
-            </div>
-
-            {/* 内容展示与编辑区 */}
-            {isConsolidating ? (
-              <div
-                style={{
-                  height: "200px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#8c917b",
-                }}
-              >
-                <iconify-icon
-                  icon="line-md:loading-twotone-loop"
-                  style={{ fontSize: "40px", marginBottom: "10px" }}
-                ></iconify-icon>
-                <span>雀使正在为您提炼卷宗...</span>
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
-                <input
-                  type="text"
-                  placeholder="请输入核心要义（标题）..."
-                  value={consolidateTitle}
-                  onChange={(e) => setConsolidateTitle(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "12px",
-                    border: "1px solid #EAEAEA",
-                    outline: "none",
-                    fontSize: "15px",
-                    color: "#5a5f4d",
-                    background: "#fff",
-                  }}
-                />
-                <textarea
-                  placeholder="请输入这段对话大概讲了什么..."
-                  value={consolidateContent}
-                  onChange={(e) => setConsolidateContent(e.target.value)}
-                  style={{
-                    width: "100%",
-                    height: "150px",
-                    padding: "12px",
-                    borderRadius: "12px",
-                    border: "1px solid #EAEAEA",
-                    outline: "none",
-                    fontSize: "14px",
-                    color: "#666",
-                    background: "#fff",
-                    resize: "none",
-                    lineHeight: "1.5",
-                  }}
-                />
-                <button
-                  onClick={handleSaveConsolidation}
-                  style={{
-                    width: "100%",
-                    padding: "14px",
-                    borderRadius: "16px",
-                    border: "none",
-                    marginTop: "10px",
-                    background:
-                      "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
-                    color: "white",
-                    fontSize: "16px",
-                    fontWeight: "bold",
-                    cursor: "pointer",
-                    boxShadow: "0 4px 12px rgba(214,114,75,0.3)",
-                  }}
-                >
-                  保存记录
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-
-
-      {/* ================= [新增] 语音输入莫兰迪粉弹窗 ================= */}
-      {showVoiceModal && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            background: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 1100,
-          }}
-        >
-          <div
-            style={{
-              width: "85%",
-              maxWidth: "340px",
-              background: "#f8ecef" /* 莫兰迪粉 */,
-              borderRadius: "20px",
-              padding: "24px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.1)",
-            }}
-          >
-            <h3
-              style={{
-                margin: "0 0 16px",
-                color: "#5d4e50",
-                fontSize: "16px",
-              }}
-            >
-              语音输入
-            </h3>
-
-            {/* 弹窗中间的显示区域改为显示状态 */}
-            <div
-              style={{
-                width: "100%",
-                height: "80px",
-                background: "#fff",
-                borderRadius: "12px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                marginBottom: "20px",
-                border: "1px solid #e0c8d0",
-                color: "#5d4e50",
-              }}
-            >
-              {isRecording
-                ? "正在录音..."
-                : audioUrl
-                  ? "录制完成，可试听后发送"
-                  : "点击麦克风开始说话"}
-            </div>
-
-            {/* 新增输入框，支持用户打字 */}
-            <input
-              type="text"
-              value={voiceText}
-              onChange={(e) => setVoiceText(e.target.value)}
-              placeholder="输入文字..."
-              style={{
-                width: "100%",
-                padding: "10px",
-                borderRadius: "10px",
-                border: "1px solid #e0c8d0",
-                marginBottom: "20px",
-                fontSize: "14px",
-                outline: "none",
-              }}
-            />
-
-            <button
-              onClick={toggleRecording}
-              style={{
-                width: "64px",
-                height: "64px",
-                borderRadius: "50%",
-                border: "none",
-                background: isRecording ? "#ff6b6b" : "#e8afaf",
-                color: "#fff",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 4px 12px rgba(232, 175, 175, 0.4)",
-                cursor: "pointer",
-                marginBottom: "20px",
-                transition: "all 0.3s",
-              }}
-            >
-              {/* 为了防止 Lucide 重绘引发的 bug，这里直接写原生的 SVG 图标 */}
-              {isRecording ? (
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <rect x="6" y="6" width="12" height="12" rx="2" ry="2"></rect>
-                </svg>
-              ) : (
-                <svg
-                  width="24"
-                  height="24"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"></path>
-                  <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                  <line x1="12" y1="19" x2="12" y2="22"></line>
-                </svg>
-              )}
-            </button>
-
-            {/* 如果录制完成，显示试听按钮 */}
-            {audioUrl && !isRecording && (
-              <audio
-                src={audioUrl}
-                controls
-                style={{
-                  width: "100%",
-                  marginBottom: "20px",
-                  height: "30px",
-                }}
-              />
-            )}
-
-            <div style={{ display: "flex", gap: "12px", width: "100%" }}>
-              <button
-                onClick={() => {
-                  if (isRecording) mediaRecorderRef.current?.stop();
-                  setShowVoiceModal(false);
-                  setAudioUrl(null);
-                }}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  borderRadius: "10px",
-                  border: "1px solid #e8afaf",
-                  background: "#fff",
-                  color: "#e8afaf",
-                  cursor: "pointer",
-                }}
-              >
-                取消
-              </button>
-              <button
-                onClick={handleSendVoice}
-                disabled={!audioUrl}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  borderRadius: "10px",
-                  border: "none",
-                  background: audioUrl ? "#e8afaf" : "#ccc",
-                  color: "#fff",
-                  cursor: "pointer",
-                }}
-              >
-                发送
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* ============================================================= */}
-
+      
       {/* 活动选择页面 */}
       {showActivitySelect && (
         <ActivitySelectionPage
