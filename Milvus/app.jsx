@@ -54069,7 +54069,7 @@ const WaterMirrorAvatar = ({ avatar, name, size = 38 }) => {
 };
 
 // ==================== T13 方天水镜·人物专属视界组件 (传讯、动向、娱乐、购物) ====================
-const T13CharacterMirrorView = ({ character, characterProfile, avatar, onBack }) => {
+const T13CharacterMirrorView = ({ character, characterId, characterProfile, avatar, onBack }) => {
   const [activeTab, setActiveTab] = React.useState("msg"); // msg | dynamics | play | shop
   const [toastText, setToastText] = React.useState("");
 
@@ -54113,7 +54113,77 @@ const T13CharacterMirrorView = ({ character, characterProfile, avatar, onBack })
     return txt || JSON.stringify(characterProfile);
   };
 
-  // 获取世界书与用户在身份配置库中选定的角色信息
+  // 获取该角色与用户在传讯页面的历史聊天记录
+  const getUserChatHistory = async () => {
+    let messages = [];
+
+    // 1. 优先尝试 settingsStore 的 1v1 传讯记录
+    try {
+      if (window.settingsStore?.getXiuyiChatHistory) {
+        const hist = await window.settingsStore.getXiuyiChatHistory(character);
+        if (Array.isArray(hist) && hist.length > 0) {
+          messages = hist;
+        }
+      }
+    } catch (e) {}
+
+    // 2. 尝试 chatHistoryStore (支持 id 或 name)
+    if (messages.length === 0 && window.chatHistoryStore) {
+      try {
+        if (characterId) {
+          const res = await window.chatHistoryStore.getMessages(characterId, 1, 30);
+          if (res && Array.isArray(res.messages) && res.messages.length > 0) {
+            messages = res.messages;
+          }
+        }
+        if (messages.length === 0) {
+          const res = await window.chatHistoryStore.getMessages(character, 1, 30);
+          if (res && Array.isArray(res.messages) && res.messages.length > 0) {
+            messages = res.messages;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // 3. 尝试 localStorage 各种备用 key
+    if (messages.length === 0) {
+      const candidateKeys = [
+        `t8_chat_history_${character}`,
+        `t8_messages_${character}`,
+        `chat_history_${character}`,
+        `xiuyi_chat_${character}`,
+        characterId ? `t8_chat_history_${characterId}` : null,
+        characterId ? `t8_messages_${characterId}` : null,
+      ].filter(Boolean);
+
+      for (const key of candidateKeys) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              messages = parsed;
+              break;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (messages.length === 0) return "【暂无近期传讯聊天记录】";
+
+    // 格式化为对话文本 (取最近 15 条)
+    const recent = messages.slice(-15);
+    return recent
+      .map((m) => {
+        const senderName = m.sender === "user" || m.isMe ? "广陵王(用户)" : character;
+        const content = m.text || m.content || "";
+        return `${senderName}: ${content}`;
+      })
+      .join("\n");
+  };
+
+  // 获取世界书、用户人设与聊天记录上下文
   const getContexts = async () => {
     const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
     let activeUser = { name: "广陵王", personality: "机警从容，深谋远虑", background: "绣衣楼之主", role: "广陵王/楼主" };
@@ -54135,8 +54205,9 @@ const T13CharacterMirrorView = ({ character, characterProfile, avatar, onBack })
       }
     } catch (e) {}
 
+    const chatHistoryContext = await getUserChatHistory();
     const userContext = `【当前用户(主公/楼主设定)】姓名:${activeUser.name}，身份:${activeUser.role}，性格:${activeUser.personality}，背景:${activeUser.background || "无"}`;
-    return { worldContext, userContext, activeUser };
+    return { worldContext, userContext, activeUser, chatHistoryContext };
   };
 
   // ================= 1. 加载 / 生成【传讯】(>= 5条与他人的暗中通信) =================
@@ -54159,7 +54230,7 @@ const T13CharacterMirrorView = ({ character, characterProfile, avatar, onBack })
     showToast("方天通灵，正在探查其与外界的密信往来...");
 
     try {
-      const { worldContext, userContext } = await getContexts();
+      const { worldContext, userContext, chatHistoryContext } = await getContexts();
       const charInfo = getCharProfileText();
 
       const prompt = `
@@ -54172,11 +54243,15 @@ ${userContext}
 角色姓名：${character}
 角色人设与风格：${charInfo}
 
+【该角色与用户在传讯页面的近期真实聊天记录】：
+${chatHistoryContext}
+
 【任务要求】
-请结合世界书与该角色的人设背景，探查并生成该角色近期与【其他人（如：楼内同僚、外勤线人、隐市掌柜、朝廷官员、故交亲友等，绝对不能是广陵王本人）】的【至少 5 条】暗中传讯往来记录。
+请结合世界书、该角色人设以及【其与用户在传讯页面的真实聊天记录】，探查并生成该角色近期与【其他人（如：楼内同僚、外勤线人、隐市掌柜、朝廷官员、故交亲友等，绝对不能是广陵王本人）】的【至少 5 条】暗中传讯往来记录。
+密信内容可暗中呼应其与用户的聊天进展（如奉命排查、暗中准备、私下打点、为用户善后等）。
 内容必须充满古风谍报感，符合角色的行事作风。
 
-必须严格返回纯 JSON 数组格式（不要包含 \`\`\`json 标记），格式如下：
+必须严格返回纯 JSON 数组格式（不要包含 \`\`\`json 标记）：
 [
   {
     "id": 1,
@@ -54197,7 +54272,7 @@ ${userContext}
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是一个深谙东汉暗流与绣衣楼谍报运作的古风史官。请严格输出纯 JSON 数组。" },
+            { role: "system", content: "你是一个深谙东汉暗流与绣衣楼谍报运作的古风史官。请严格输出纯 JSON 数组，切勿在字符串中换行。" },
             { role: "user", content: prompt },
           ],
           null,
@@ -54316,7 +54391,7 @@ ${userContext}
     showToast("神识观微，正在探查备忘录与私人财产资产变动...");
 
     try {
-      const { worldContext, userContext, activeUser } = await getContexts();
+      const { worldContext, userContext, activeUser, chatHistoryContext } = await getContexts();
       const charInfo = getCharProfileText();
 
       const prompt = `
@@ -54333,12 +54408,15 @@ ${worldContext}
 角色姓名：${character}
 角色人设与性格：${charInfo}
 
+【该角色与用户在传讯页面的近期真实聊天记录】：
+${chatHistoryContext}
+
 【核心任务与生成规则】
 请为角色【${character}】生成两类极其真实的私密手记：
 
 一、【随身备忘录 (memos)】(4-6条)：
 1. 语言风格：必须现代通俗、自然接地气！严禁冗长生涩的文言文！每条一两句话（20-40字以内），口吻鲜活。
-2. 强相关性：必须与用户【${activeUser.name}】强相关！记录关于${activeUser.name}的琐事、关心、提醒、隐秘算计或行程安排（例如给${activeUser.name}备好点心热茶、核查${activeUser.name}出行防备、为${activeUser.name}定制物件、算清给${activeUser.name}垫付的开销等）。
+2. 深度结合聊天记录：必须与用户【${activeUser.name}】强相关，并【深度呼应传讯聊天记录中聊过的事情、承诺、打卡考勤、抱怨或吩咐】！记录关于${activeUser.name}的琐事、关心、提醒、隐秘算计或行程安排。
 
 二、【私人资产与交易变动 (assets)】(4-6条)：
 详细展现该角色近期的【私人固有资产变动、与外界的土地良田/坞堡要塞/军队私兵/商队矿脉的买卖处置交易】！
@@ -54352,7 +54430,7 @@ ${worldContext}
       "tag": "提醒 / 备办 / 挂念 / 账目",
       "time": "今日辰时",
       "title": "简短备忘标题",
-      "content": "与${activeUser.name}强相关的简短备忘内容（通俗自然，20-40字）"
+      "content": "与${activeUser.name}及聊天记录强相关的简短备忘内容（通俗自然，20-40字）"
     }
   ],
   "assets": [
@@ -54441,7 +54519,7 @@ ${worldContext}
     showToast("方天通灵，正在探查其琴棋书画与六艺修习情况...");
 
     try {
-      const { worldContext, userContext } = await getContexts();
+      const { worldContext, userContext, chatHistoryContext } = await getContexts();
       const charInfo = getCharProfileText();
 
       const prompt = `
@@ -54454,8 +54532,12 @@ ${userContext}
 角色姓名：${character}
 角色人设与风格：${charInfo}
 
+【该角色与用户在传讯页面的近期真实聊天记录】：
+${chatHistoryContext}
+
 【任务要求】
 请细致生成该角色近期的【琴棋书画 (fourArts)】与【君子六艺 (sixSkills)】游玩修习记录。
+修习过程与内心感悟可自然融入与用户聊天时的话题或情感纽带。
 要求描绘极具古典意蕴与文人雅士风采，极其贴合其人设特质。
 
 必须严格返回纯 JSON 对象格式（不要包含 \`\`\`json 标记）：
@@ -54550,7 +54632,7 @@ ${userContext}
     showToast("方天通灵，正在调取其在太疾驰商城的消费订单账册...");
 
     try {
-      const { worldContext, userContext, activeUser } = await getContexts();
+      const { worldContext, userContext, activeUser, chatHistoryContext } = await getContexts();
       const charInfo = getCharProfileText();
 
       const prompt = `
@@ -54563,8 +54645,13 @@ ${userContext}
 角色姓名：${character}
 角色人设与风格：${charInfo}
 
+【该角色与用户在传讯页面的近期真实聊天记录】：
+${chatHistoryContext}
+
 【任务要求】
 请结合太疾驰购物平台（包含：餐饮美食、生活百货、古董文玩、兵刃暗器、药材灵香、戏折票务等分类），生成该角色近期的【5-7条太疾驰购物订单】。
+必须紧密结合【其与用户在传讯页面的聊天记录与互动内容】（例如聊天中提到的喜好、伤病需要补药、提到的军械、商量过的礼物等）。
+
 必须清晰注明：
 1. 买了什么 (itemName)
 2. 所属分类 (category)
@@ -54959,7 +55046,7 @@ ${userContext}
                 <div style={{ fontSize: "13px" }}>正在感应私密动向与资产变化...</div>
               </div>
             ) : dynamicsSubTab === "memo" ? (
-              // 备忘录列表 (简短通俗，与用户强相关)
+              // 备忘录列表 (简短通俗，与用户及聊天记录强相关)
               memos.map((m) => (
                 <div
                   key={m.id}
@@ -55854,6 +55941,7 @@ const T13WaterMirrorPage = ({ onBack }) => {
       {viewingCharObj && (
         <T13CharacterMirrorView
           character={viewingCharObj.name}
+          characterId={viewingCharObj.id}
           characterProfile={viewingCharObj.profile}
           avatar={viewingCharObj.avatar}
           onBack={() => setViewingCharObj(null)}
