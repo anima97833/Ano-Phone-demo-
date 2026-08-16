@@ -33708,13 +33708,13 @@ const T13GameCard = ({ item }) => (
       <h3 className="text-[17px] font-bold text-[var(--text-main)] leading-tight">
         {item.title}
       </h3>
-      <button className="self-start px-3 py-1 bg-[#F5F5F5] rounded-full flex items-center gap-1.5 active:bg-[#EEE] transition-colors">
-        <span className="text-xs text-[var(--text-sub)]">收藏</span>
-        <i className="ph ph-heart text-gray-400 text-xs"></i>
+      <button style={{ pointerEvents: 'none' }} className="self-start px-3 py-1 bg-[#F5F5F5] rounded-full flex items-center gap-1.5 active:bg-[#EEE] transition-colors">
+        <span className="text-xs text-[var(--text-sub)]">进入</span>
+        <i className="ph ph-arrow-right text-gray-400 text-xs"></i>
       </button>
     </div>
 
-    <div className="flex flex-col gap-3 items-center justify-center">
+    <div className="flex flex-col gap-3 items-center justify-center" style={{ pointerEvents: 'none' }}>
       <button className="w-9 h-9 rounded-full bg-[var(--accent-primary)] text-white flex items-center justify-center shadow-[var(--shadow-button)] active:scale-90 transition-transform">
         <i className="ph-fill ph-play text-sm"></i>
       </button>
@@ -33893,12 +33893,12 @@ const T13StatisticsPage = ({ onBack }) => {
     "荆州",
     "益州",
     "司隶",
-    "青州",
-    "凉州",
-    "兖州",
     "幽州",
     "并州",
+    "凉州",
     "交州",
+    "青州",
+    "兖州",
   ];
 
   const [idx, setIdx] = useState(0);
@@ -33909,293 +33909,251 @@ const T13StatisticsPage = ({ onBack }) => {
   const [customItems, setCustomItems] = useState([]);
   const [selectedItem, setSelectedItem] = useState(null);
 
-  // 状态：柱子高度和加载状态
   const [heights, setHeights] = useState(() => {
-    // 为每个产业初始化一组数据
     const initialHeights = {};
     industries.forEach((industry) => {
       initialHeights[industry] = allProvinces.map(() => 50);
     });
     return initialHeights;
-  }); // 默认初始高度
+  });
   const [isAiLoading, setIsAiLoading] = useState(false);
 
-  // 状态：分析弹窗
   const [showAnalysisModal, setShowAnalysisModal] = useState(false);
   const [analysisContent, setAnalysisContent] = useState("");
   const [selectedProvince, setSelectedProvince] = useState("");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
 
-  // 加载数据
   useEffect(() => {
     const loadStoredData = async () => {
-      const storedData = await loadData();
-      if (storedData) {
-        // 确保 heights 是正确的对象结构
-        if (storedData.heights && typeof storedData.heights === "object") {
-          // 检查是否所有产业都有数据
-          const validHeights = { ...storedData.heights };
-          industries.forEach((industry) => {
-            if (
-              !validHeights[industry] ||
-              !Array.isArray(validHeights[industry])
-            ) {
-              validHeights[industry] = allProvinces.map(() => 50);
-            }
-          });
-          setHeights(validHeights);
+      try {
+        let storedData = null;
+        if (window.dbManager) {
+          const raw = await window.dbManager.get("t13_statistics_data");
+          if (raw) storedData = JSON.parse(raw);
+        } else {
+          const raw = localStorage.getItem("t13_statistics_data");
+          if (raw) storedData = JSON.parse(raw);
         }
-        if (storedData.customItems) setCustomItems(storedData.customItems);
-        if (storedData.idx !== undefined)
-          setIdx(Math.min(storedData.idx, industries.length - 1));
+        if (storedData) {
+          if (storedData.heights && typeof storedData.heights === "object") {
+            const validHeights = { ...storedData.heights };
+            industries.forEach((industry) => {
+              if (!validHeights[industry] || !Array.isArray(validHeights[industry])) {
+                validHeights[industry] = allProvinces.map(() => 50);
+              }
+            });
+            setHeights(validHeights);
+          }
+          if (storedData.customItems && Array.isArray(storedData.customItems)) {
+            setCustomItems(storedData.customItems);
+          }
+        }
+      } catch (e) {
+        console.error("加载统计数据失败", e);
       }
     };
     loadStoredData();
   }, []);
 
-  // 保存数据
-  useEffect(() => {
-    saveData({
-      heights,
-      customItems,
-      idx,
-    });
-  }, [heights, customItems, idx]);
-
-  // 计算当前显示的省份
-  const currentProvinces = allProvinces.slice(
-    currentPage * provincesPerPage,
-    (currentPage + 1) * provincesPerPage,
-  );
-
-  // --- 核心 AI 逻辑开始 ---
-  const handleAiUpdate = async () => {
-    if (isAiLoading) return;
-    setIsAiLoading(true);
-
+  const saveData = async (newHeights, newCustomItems) => {
     try {
-      // 1. 获取世界书上下文
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
+      const dataToSave = {
+        heights: newHeights || heights,
+        customItems: newCustomItems || customItems,
+      };
+      if (window.dbManager) {
+        await window.dbManager.set("t13_statistics_data", JSON.stringify(dataToSave));
+      } else {
+        localStorage.setItem("t13_statistics_data", JSON.stringify(dataToSave));
+      }
+    } catch (e) {
+      console.error("保存统计数据失败", e);
+    }
+  };
 
-      // 2. 整合右侧自定义条目
-      const customContext =
-        customItems.length > 0
-          ? `当前发生的特殊事件：${customItems.join("、")}`
-          : "暂无特殊事件";
+  const changeIndustry = (step) => {
+    setIdx((prev) => {
+      let next = prev + step;
+      if (next < 0) next = industries.length - 1;
+      if (next >= industries.length) next = 0;
+      return next;
+    });
+  };
 
-      // 3. 构建提示词
-      const systemPrompt = `你是一个历史模拟器和数据分析专家。你需要根据世界背景和实时发生的事件，评估各个省郡在特定产业下的繁荣度（数值0-100）。`;
+  const touchStartX = useRef(0);
+  const onTouchStart = (e) => {
+    touchStartX.current = e.touches[0].clientX;
+  };
+  const onTouchEnd = (e) => {
+    const diff = e.changedTouches[0].clientX - touchStartX.current;
+    if (diff > 50) changeIndustry(-1);
+    else if (diff < -50) changeIndustry(1);
+  };
+
+  const analyzeProvince = async (province) => {
+    setSelectedProvince(province);
+    setShowAnalysisModal(true);
+    setIsAnalyzing(true);
+    setAnalysisContent("正在推演" + province + "的发展情势...");
+    try {
+      const currentIndustry = industries[idx];
+      const pIndex = allProvinces.indexOf(province);
+      const val = heights[currentIndustry] ? heights[currentIndustry][pIndex] : 50;
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "东汉末年乱世背景";
+      const sysPrompt = "你是一个精通东汉政经地理、赋税粮秣、州郡军政的幕僚谋士。";
       const userPrompt = `
-                                                                 【世界设定】
-                                                                 ${worldContext}
+【世界背景】${worldContext}
+【当前州郡】${province}
+【当前考察行业】${currentIndustry}
+【当前繁荣指数】${val} / 100
 
-                                                                 【即时事件】
-                                                                 ${customContext}
-
-                                                                 【当前产业】
-                                                                 ${industries[idx]}
-
-                                                                 【任务】
-                                                                 请分析上述设定与事件对以下省郡 ${industries[idx]} 产业的影响。
-                                                                 省郡列表：${allProvinces.join("、")}
-
-                                                                 【要求】
-                                                                 1. 严格返回一个JSON格式的数字数组。
-                                                                 2. 数组长度必须为 ${allProvinces.length}。
-                                                                 3. 每个数值代表繁荣度百分比（0-100）。
-                                                                 4. 逻辑要严密：比如若发生战乱，农业和手工业应下降；若世界书提到某地繁荣，数值应升高。
-                                                                 5. 只输出JSON数组，不要任何Markdown标记或文字说明。
-                                                                 `;
-
-      // 4. 调用全局 LLM 服务
+请对${province}当前的${currentIndustry}发展现状、民生困境或战略潜力进行一段精辟、古风兼带生动的评述（150字以内）。
+`;
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: systemPrompt },
+            { role: "system", content: sysPrompt },
             { role: "user", content: userPrompt },
           ],
-          null, // 不使用流式
+          null,
+          (reply) => {
+            setAnalysisContent(reply.trim());
+            setIsAnalyzing(false);
+          },
+          (err) => {
+            console.error(err);
+            setAnalysisContent("州郡邸报传递受阻，请检查网络或API设置。");
+            setIsAnalyzing(false);
+          }
+        );
+      } else {
+        setAnalysisContent("【" + province + " " + currentIndustry + "评述】\n繁盛度：" + val + "分。山川形胜，民庶丰沃，然值乱世，尤需休养生息，固本培元。");
+        setIsAnalyzing(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setAnalysisContent("分析发生异常，请重试。");
+      setIsAnalyzing(false);
+    }
+  };
+
+  const handleAiUpdate = async () => {
+    if (isAiLoading) return;
+    setIsAiLoading(true);
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "东汉末年乱世背景";
+      const sysPrompt = "你是一个东汉末年天下大势与各州郡百业兴衰推演系统。根据当前局势，合理评估各州郡各项产业的指数(0-100)。";
+      const userPrompt = `
+【世界背景】${worldContext}
+【行业列表】${industries.join("、")}
+【州郡列表】${allProvinces.join("、")}
+
+请基于世界背景与东汉历史地理，为每个行业中的每个州郡生成 0-100 的数值。
+必须严格返回纯 JSON 格式：
+{
+  "农业": [50, 60, 55, 45, 70, 65, 80, 40, 50, 45, 60, 55, 50],
+  "林业": [40, 50, 60, 55, 65, 70, 45, 50, 40, 35, 75, 45, 40],
+  "畜牧业": [65, 45, 40, 50, 55, 60, 70, 80, 85, 90, 50, 60, 55],
+  "手工业": [60, 70, 75, 80, 65, 60, 85, 45, 40, 35, 55, 65, 70],
+  "渔业": [30, 75, 85, 45, 80, 60, 40, 35, 30, 20, 70, 80, 50],
+  "调味制造业": [50, 60, 65, 70, 55, 80, 75, 40, 45, 30, 60, 65, 60]
+}
+每个数组长度必须严格等于 ${allProvinces.length}。
+`;
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          null,
           (reply) => {
             try {
-              // 提取并解析JSON
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const newHeights = JSON.parse(cleanJson);
-
-              if (
-                Array.isArray(newHeights) &&
-                newHeights.length === allProvinces.length
-              ) {
-                setHeights((prev) => ({
-                  ...prev,
-                  [industries[idx]]: newHeights,
-                }));
-              } else {
-                console.error("AI返回数据长度不匹配");
-              }
+              const clean = reply.replace(/```json|```/g, "").trim();
+              const parsed = JSON.parse(clean);
+              const newHeights = {};
+              industries.forEach((ind) => {
+                if (parsed[ind] && Array.isArray(parsed[ind])) {
+                  newHeights[ind] = parsed[ind].slice(0, allProvinces.length);
+                  while (newHeights[ind].length < allProvinces.length) newHeights[ind].push(50);
+                } else {
+                  newHeights[ind] = allProvinces.map(() => Math.floor(Math.random() * 60) + 30);
+                }
+              });
+              setHeights(newHeights);
+              saveData(newHeights, customItems);
+              alert("各州郡统计年表数据已根据天下大势推演刷新！");
             } catch (e) {
-              console.error("解析AI高度数据失败:", e, reply);
-              // 兜底：随机轻微波动
-              setHeights((prev) => ({
-                ...prev,
-                [industries[idx]]: allProvinces.map(
-                  () => Math.floor(Math.random() * 40) + 30,
-                ),
-              }));
+              console.error("解析AI返回数据失败", e, reply);
+              alert("推演数据解析失败，请重试。");
             } finally {
               setIsAiLoading(false);
             }
           },
           (err) => {
-            console.error("AI请求失败:", err);
+            console.error(err);
+            alert("请求AI失败，请检查设置中的API配置。");
             setIsAiLoading(false);
-            alert("同步AI数据失败，请检查API设置");
-          },
+          }
         );
+      } else {
+        alert("未配置大模型API，已随机微调各州郡指数。");
+        const newHeights = {};
+        industries.forEach((ind) => {
+          newHeights[ind] = allProvinces.map(() => Math.floor(Math.random() * 60) + 30);
+        });
+        setHeights(newHeights);
+        saveData(newHeights, customItems);
+        setIsAiLoading(false);
       }
-    } catch (error) {
-      console.error("处理AI逻辑出错:", error);
+    } catch (e) {
+      console.error(e);
       setIsAiLoading(false);
     }
-  };
-  // --- 核心 AI 逻辑结束 ---
-
-  const changeIndustry = (dir) => {
-    const nextIdx = (idx + dir + industries.length) % industries.length;
-    setIdx(nextIdx);
-    // 切换产业时不自动调用AI，只起到切换作用
-  };
-
-  const handleSwipe = (dir) => {
-    const maxPage = Math.ceil(allProvinces.length / provincesPerPage) - 1;
-    const nextPage = currentPage + dir;
-    if (nextPage >= 0 && nextPage <= maxPage) {
-      setCurrentPage(nextPage);
-    }
-  };
-
-  // 处理触摸事件
-  const [touchStart, setTouchStart] = useState(0);
-  const [touchEnd, setTouchEnd] = useState(0);
-
-  const onTouchStart = (e) => setTouchStart(e.targetTouches[0].clientX);
-  const onTouchEnd = (e) => {
-    setTouchEnd(e.changedTouches[0].clientX);
-    const swipeThreshold = 50;
-    if (touchEnd - touchStart > swipeThreshold) handleSwipe(-1);
-    else if (touchStart - touchEnd > swipeThreshold) handleSwipe(1);
   };
 
   const handleSave = () => {
     if (inputText.trim()) {
-      setCustomItems([...customItems, inputText.trim()]);
+      const nextItems = [...customItems, inputText.trim()];
+      setCustomItems(nextItems);
+      saveData(heights, nextItems);
       setInputText("");
       setShowModal(false);
     }
   };
 
-  // 分析省份产业情况
-  const analyzeProvince = async (province) => {
-    setSelectedProvince(province);
-    setIsAnalyzing(true);
-
-    try {
-      // 1. 获取世界书上下文
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 2. 整合右侧自定义条目
-      const customContext =
-        customItems.length > 0
-          ? `当前发生的特殊事件：${customItems.join("、")}`
-          : "暂无特殊事件";
-
-      // 3. 构建提示词
-      const systemPrompt = `你是一个历史模拟器和数据分析专家，擅长用轻松愉快的口语化语言分析地区产业发展情况。`;
-      const userPrompt = `
-                                                                 【世界设定】
-                                                                 ${worldContext}
-
-                                                                 【即时事件】
-                                                                 ${customContext}
-
-                                                                 【分析对象】
-                                                                 省份：${province}
-                                                                 产业：${industries[idx]}
-                                                                 繁荣度数值：${heights[industries[idx]][allProvinces.indexOf(province)]}
-
-                                                                 【任务】
-                                                                 请用轻松愉快的口语化语言分析该省份在当前产业下的发展情况，包括：
-                                                                 1. 什么发展得好，什么发展得不好
-                                                                 2. 与什么因素有关
-                                                                 3. 当时发生了什么事导致这个结果
-                                                                 4. 与其他省份的对比
-                                                                 5. 是否和其他省份就什么做了交易
-                                                                 6. 结合世界设定和即时事件进行分析
-
-                                                                 【要求】
-                                                                 1. 语言要口语化、轻松愉快，不要太正式
-                                                                 2. 要参考具体的繁荣度数值
-                                                                 3. 结合世界设定和即时事件进行分析
-                                                                 4. 不要使用任何Markdown标记
-                                                                 5. 分析结果要与当前产业相关
-                                                                 6. 条理清晰，列项分析
-                                                                 `;
-
-      // 4. 调用全局 LLM 服务
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null, // 不使用流式
-          (reply) => {
-            try {
-              setAnalysisContent(reply);
-              setShowAnalysisModal(true);
-              // 保存分析历史
-              saveAnalysis({
-                province,
-                industry: industries[idx],
-                value: heights[industries[idx]][allProvinces.indexOf(province)],
-                content: reply,
-              });
-            } catch (e) {
-              console.error("解析AI分析数据失败:", e);
-              setAnalysisContent("分析失败，请重试");
-              setShowAnalysisModal(true);
-            } finally {
-              setIsAnalyzing(false);
-            }
-          },
-          (err) => {
-            console.error("AI请求失败:", err);
-            setIsAnalyzing(false);
-            alert("分析失败，请检查API设置");
-          },
-        );
-      }
-    } catch (error) {
-      console.error("处理分析逻辑出错:", error);
-      setIsAnalyzing(false);
-    }
-  };
+  const currentProvinces = allProvinces.slice(
+    currentPage * provincesPerPage,
+    (currentPage + 1) * provincesPerPage
+  );
 
   return (
-    <div className="stats-page-container fade-in">
+    <div
+      className="stats-page-container fade-in"
+      style={{
+        position: "absolute",
+        inset: 0,
+        background: "#fdfcf8",
+        zIndex: 600,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        fontFamily: "'PingFang SC', sans-serif",
+      }}
+    >
       {/* 顶部清晰返回导航栏 */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
-          padding: "16px 20px 8px",
+          padding: "16px 20px 12px",
           width: "100%",
+          background: "rgba(255, 255, 255, 0.95)",
+          backdropFilter: "blur(8px)",
+          borderBottom: "1px solid rgba(0, 0, 0, 0.06)",
           zIndex: 100,
-          position: "relative",
+          flexShrink: 0,
         }}
       >
         <div
@@ -34206,7 +34164,6 @@ const T13StatisticsPage = ({ onBack }) => {
             height: "36px",
             borderRadius: "50%",
             background: "rgba(255, 255, 255, 0.9)",
-            backdropFilter: "blur(8px)",
             boxShadow: "0 2px 8px rgba(0, 0, 0, 0.1)",
             display: "flex",
             alignItems: "center",
@@ -34229,10 +34186,27 @@ const T13StatisticsPage = ({ onBack }) => {
         >
           州郡统计年表
         </div>
-        <div style={{ width: "36px" }}></div>
+        <div
+          onClick={handleAiUpdate}
+          style={{
+            cursor: isAiLoading ? "not-allowed" : "pointer",
+            color: isAiLoading ? "#ccc" : "#b8bedd",
+            width: "36px",
+            height: "36px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+          }}
+          title="AI推演同步"
+        >
+          <iconify-icon
+            icon={isAiLoading ? "line-md:loading-twotone-loop" : "line-md:gauge"}
+            style={{ fontSize: "24px" }}
+          ></iconify-icon>
+        </div>
       </div>
 
-      {/* 弹窗 */}
+      {/* 分析模态框 */}
       {showAnalysisModal && (
         <div
           style={{
@@ -34249,73 +34223,60 @@ const T13StatisticsPage = ({ onBack }) => {
             style={{
               background: "#fff",
               borderRadius: "16px",
-              padding: "24px",
+              padding: "20px",
               width: "85%",
-              maxWidth: "400px",
-              maxHeight: "70vh",
-              overflowY: "auto",
+              maxWidth: "340px",
+              boxShadow: "0 10px 25px rgba(0,0,0,0.15)",
             }}
           >
             <h3
               style={{
-                marginBottom: "16px",
+                fontSize: "16px",
+                fontWeight: "bold",
+                color: "#5a5f4d",
+                marginBottom: "12px",
                 textAlign: "center",
-                color: "#333",
               }}
             >
-              {selectedProvince} {industries[idx]} 分析
+              【{selectedProvince} · {industries[idx]}】情势
             </h3>
-            {isAnalyzing ? (
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  padding: "40px",
-                }}
-              >
-                <iconify-icon
-                  icon="line-md:loading-twotone-loop"
-                  style={{ fontSize: "32px", color: "#b8bedd" }}
-                ></iconify-icon>
-              </div>
-            ) : (
-              <div
-                style={{
-                  fontSize: "14px",
-                  lineHeight: "1.6",
-                  color: "#5a5f4d",
-                  whiteSpace: "pre-line",
-                }}
-              >
-                {analysisContent}
-              </div>
-            )}
             <div
               style={{
-                marginTop: "20px",
-                display: "flex",
-                justifyContent: "center",
+                fontSize: "13px",
+                color: "#4a4a4a",
+                lineHeight: "1.6",
+                minHeight: "80px",
+                maxHeight: "220px",
+                overflowY: "auto",
+                background: "#faf8f5",
+                padding: "12px",
+                borderRadius: "10px",
+                marginBottom: "16px",
+                whiteSpace: "pre-wrap",
               }}
             >
-              <button
-                onClick={() => setShowAnalysisModal(false)}
-                style={{
-                  padding: "10px 24px",
-                  border: "1px solid #dcd6c5",
-                  borderRadius: "8px",
-                  background: "#fff",
-                  color: "#333",
-                  cursor: "pointer",
-                }}
-              >
-                关闭
-              </button>
+              {analysisContent}
             </div>
+            <button
+              onClick={() => setShowAnalysisModal(false)}
+              style={{
+                width: "100%",
+                padding: "10px",
+                border: "none",
+                borderRadius: "10px",
+                background: "#b8bedd",
+                color: "#fff",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              知悉
+            </button>
           </div>
         </div>
       )}
 
-      {/* 弹窗 */}
+      {/* 自定义条目模态框 */}
       {showModal && (
         <div
           style={{
@@ -34332,44 +34293,47 @@ const T13StatisticsPage = ({ onBack }) => {
             style={{
               background: "#fff",
               borderRadius: "16px",
-              padding: "24px",
+              padding: "20px",
               width: "80%",
               maxWidth: "300px",
             }}
           >
             <h3
               style={{
-                marginBottom: "16px",
+                marginBottom: "14px",
                 textAlign: "center",
-                color: "#333",
+                color: "#5a5f4d",
+                fontSize: "15px",
+                fontWeight: "bold",
               }}
             >
-              添加自定义情报
+              添加备忘条目
             </h3>
             <input
               type="text"
               value={inputText}
               onChange={(e) => setInputText(e.target.value)}
-              placeholder="如：冀州连年大旱 / 豫州喜获丰收"
+              placeholder="如：冀州连年大旱 / 豫州丰收"
               style={{
                 width: "100%",
-                padding: "12px",
+                padding: "10px 12px",
                 border: "1px solid #dcd6c5",
                 borderRadius: "8px",
                 marginBottom: "16px",
-                fontSize: "14px",
+                fontSize: "13px",
+                outline: "none",
               }}
             />
-            <div style={{ display: "flex", gap: "12px" }}>
+            <div style={{ display: "flex", gap: "10px" }}>
               <button
                 onClick={() => setShowModal(false)}
                 style={{
                   flex: 1,
-                  padding: "10px",
+                  padding: "9px",
                   border: "1px solid #dcd6c5",
                   borderRadius: "8px",
                   background: "#fff",
-                  color: "#333",
+                  color: "#666",
                   cursor: "pointer",
                 }}
               >
@@ -34379,11 +34343,12 @@ const T13StatisticsPage = ({ onBack }) => {
                 onClick={handleSave}
                 style={{
                   flex: 1,
-                  padding: "10px",
+                  padding: "9px",
                   border: "none",
                   borderRadius: "8px",
                   background: "#b8bedd",
                   color: "#fff",
+                  fontWeight: "bold",
                   cursor: "pointer",
                 }}
               >
@@ -34394,201 +34359,255 @@ const T13StatisticsPage = ({ onBack }) => {
         </div>
       )}
 
-      <div
-        className="stats-left-main"
-        onTouchStart={onTouchStart}
-        onTouchEnd={onTouchEnd}
-      >
-        <div className="stats-header">
-          <div className="industry-toggle">
-            <span
-              onClick={() => changeIndustry(-1)}
-              style={{ cursor: "pointer" }}
-            >
-              {"<"}
-            </span>
-            <span
+      {/* 主体两栏区域 */}
+      <div style={{ flex: 1, display: "flex", overflow: "hidden", position: "relative" }}>
+        {/* 左侧柱状图及行业切换 */}
+        <div
+          className="stats-left-main"
+          onTouchStart={onTouchStart}
+          onTouchEnd={onTouchEnd}
+          style={{
+            flex: 1.2,
+            display: "flex",
+            flexDirection: "column",
+            padding: "16px 14px",
+            position: "relative",
+            overflowY: "auto",
+          }}
+        >
+          {/* 行业切换 */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              marginBottom: "16px",
+            }}
+          >
+            <div
+              className="industry-toggle"
               style={{
-                letterSpacing: "2px",
-                minWidth: "160px",
+                display: "flex",
+                alignItems: "center",
+                gap: "14px",
+                fontSize: "18px",
+                fontWeight: "bold",
+                color: "#b8bedd",
+              }}
+            >
+              <span
+                onClick={() => changeIndustry(-1)}
+                style={{ cursor: "pointer", padding: "4px 8px" }}
+              >
+                &lt;
+              </span>
+              <span
+                style={{
+                  letterSpacing: "2px",
+                  minWidth: "120px",
+                  textAlign: "center",
+                  color: "#5a5f4d",
+                  fontSize: "16px",
+                }}
+              >
+                {industries[idx]}
+              </span>
+              <span
+                onClick={() => changeIndustry(1)}
+                style={{ cursor: "pointer", padding: "4px 8px" }}
+              >
+                &gt;
+              </span>
+            </div>
+          </div>
+
+          {selectedItem && (
+            <div
+              style={{
+                background: "#fff",
+                borderRadius: "10px",
+                padding: "8px",
+                marginBottom: "12px",
+                textAlign: "center",
+                boxShadow: "0 2px 6px rgba(0, 0, 0, 0.05)",
+                fontSize: "12px",
+                color: "#5a5f4d",
+              }}
+            >
+              查看中：{selectedItem}
+            </div>
+          )}
+
+          {/* 柱状图区域 */}
+          <div
+            className="stats-chart-area"
+            style={{
+              flex: 1,
+              minHeight: "220px",
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "space-around",
+              padding: "20px 4px 36px",
+              position: "relative",
+            }}
+          >
+            {currentProvinces.map((p, i) => {
+              const index = currentPage * provincesPerPage + i;
+              const h = (heights[industries[idx]] && heights[industries[idx]][index]) || 50;
+              return (
+                <div
+                  key={p}
+                  className="stats-bar"
+                  style={{
+                    height: `${Math.max(15, h)}%`,
+                    width: "28px",
+                    background: "#f2d0d0",
+                    borderRadius: "14px",
+                    cursor: "pointer",
+                    position: "relative",
+                    transition: "height 0.4s ease",
+                  }}
+                  onClick={() => analyzeProvince(p)}
+                >
+                  <span
+                    className="province-label"
+                    style={{
+                      position: "absolute",
+                      bottom: "-24px",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      whiteSpace: "nowrap",
+                      fontSize: "11px",
+                      color: "#8c8375",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {p}
+                  </span>
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: "-18px",
+                      left: "50%",
+                      transform: "translateX(-50%)",
+                      fontSize: "10px",
+                      color: "#b8bedd",
+                    }}
+                  >
+                    {h}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+
+          <div
+            className="stats-circles"
+            style={{ display: "flex", justifyContent: "space-around", marginTop: "8px" }}
+          >
+            {currentProvinces.map((p) => (
+              <div
+                key={p}
+                className="stats-circle"
+                style={{ width: "24px", height: "24px", borderRadius: "50%", background: "#fde9d2" }}
+              ></div>
+            ))}
+          </div>
+
+          {/* 分页圆点 */}
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "center",
+              marginTop: "16px",
+              gap: "8px",
+            }}
+          >
+            {Array.from({
+              length: Math.ceil(allProvinces.length / provincesPerPage),
+            }).map((_, i) => (
+              <div
+                key={i}
+                onClick={() => setCurrentPage(i)}
+                style={{
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  background: i === currentPage ? "#b8bedd" : "#dcd6c5",
+                  cursor: "pointer",
+                }}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* 右侧备忘边栏 */}
+        <div
+          className="stats-right-sidebar"
+          style={{
+            width: "80px",
+            background: "#fde9d2",
+            padding: "16px 6px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+            alignItems: "center",
+            overflowY: "auto",
+            borderLeft: "1px solid rgba(0,0,0,0.04)",
+          }}
+        >
+          <div
+            className="sidebar-top-box"
+            onClick={() => setShowModal(true)}
+            style={{ cursor: "pointer", fontSize: "22px", color: "#5a5f4d" }}
+            title="添加备忘条目"
+          >
+            <i className="ph ph-plus-circle"></i>
+          </div>
+          {customItems.map((item, index) => (
+            <div
+              key={index}
+              style={{
+                width: "100%",
+                padding: "8px 4px",
+                background: "#fff",
+                borderRadius: "10px",
+                position: "relative",
+                cursor: "pointer",
+                boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
                 textAlign: "center",
               }}
             >
-              {industries[idx]}
-            </span>
-            <span
-              onClick={() => changeIndustry(1)}
-              style={{ cursor: "pointer" }}
-            >
-              {">"}
-            </span>
-          </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "15px" }}>
-            {/* 加载/同步按钮 */}
-            <div
-              onClick={handleAiUpdate}
-              style={{
-                cursor: isAiLoading ? "not-allowed" : "pointer",
-                color: isAiLoading ? "#ccc" : "#b8bedd",
-                transition: "all 0.3s",
-              }}
-            >
-              <iconify-icon
-                icon={
-                  isAiLoading ? "line-md:loading-twotone-loop" : "line-md:gauge"
-                }
-                style={{ fontSize: "28px" }}
-              ></iconify-icon>
-            </div>
-            <div
-              onClick={onBack}
-              style={{ cursor: "pointer", color: "#b8bedd" }}
-            >
-              <iconify-icon
-                icon="ph:x-bold"
-                style={{ fontSize: "28px" }}
-              ></iconify-icon>
-            </div>
-          </div>
-        </div>
-
-        {selectedItem && (
-          <div
-            style={{
-              background: "#fff",
-              borderRadius: "12px",
-              padding: "12px",
-              margin: "10px 0",
-              textAlign: "center",
-              boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
-              fontSize: "13px",
-              color: "#5a5f4d",
-            }}
-          >
-            查看中：{selectedItem}
-          </div>
-        )}
-
-        <div className="stats-chart-area">
-          {currentProvinces.map((p, i) => {
-            const index = currentPage * provincesPerPage + i;
-            return (
               <div
-                key={p}
-                className="stats-bar"
+                onClick={() => setSelectedItem(item)}
+                style={{ fontSize: "10px", color: "#5a5f4d", wordBreak: "break-all" }}
+              >
+                {item.length > 5 ? item.substring(0, 5) + ".." : item}
+              </div>
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setCustomItems(customItems.filter((_, i) => i !== index));
+                  if (selectedItem === item) setSelectedItem(null);
+                }}
                 style={{
-                  height: `${heights[industries[idx]][index]}%`,
+                  position: "absolute",
+                  top: "0px",
+                  right: "2px",
+                  fontSize: "12px",
+                  color: "#f2d0d0",
                   cursor: "pointer",
                 }}
-                onClick={() => analyzeProvince(p)}
               >
-                <span className="province-label">{p}</span>
-                {/* 数值标签 */}
-                <span
-                  style={{
-                    position: "absolute",
-                    top: "-20px",
-                    left: "50%",
-                    transform: "translateX(-50%)",
-                    fontSize: "10px",
-                    color: "#b8bedd",
-                  }}
-                >
-                  {heights[industries[idx]][index]}
-                </span>
+                ×
               </div>
-            );
-          })}
-        </div>
-
-        <div className="stats-circles">
-          {currentProvinces.map((p) => (
-            <div key={p} className="stats-circle"></div>
+            </div>
           ))}
         </div>
-
-        <div
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            marginTop: "30px",
-            gap: "8px",
-          }}
-        >
-          {Array.from({
-            length: Math.ceil(allProvinces.length / provincesPerPage),
-          }).map((_, i) => (
-            <div
-              key={i}
-              style={{
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: i === currentPage ? "#b8bedd" : "#dcd6c5",
-              }}
-            />
-          ))}
-        </div>
-      </div>
-
-      <div className="stats-right-sidebar">
-        <div
-          className="sidebar-top-box"
-          onClick={() => setShowModal(true)}
-          style={{ cursor: "pointer", fontSize: "20px" }}
-        >
-          <i className="ph ph-plus-circle"></i>
-        </div>
-        {customItems.map((item, index) => (
-          <div
-            key={index}
-            style={{
-              width: "100%",
-              padding: "10px",
-              background: "#fff",
-              borderRadius: "12px",
-              marginTop: "10px",
-              position: "relative",
-              cursor: "pointer",
-              boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
-            }}
-          >
-            <div
-              onClick={() => setSelectedItem(item)}
-              style={{
-                fontSize: "11px",
-                color: "#5a5f4d",
-                paddingRight: "15px",
-              }}
-            >
-              {item.length > 8 ? item.substring(0, 8) + "..." : item}
-            </div>
-            <div
-              onClick={(e) => {
-                e.stopPropagation();
-                setCustomItems(customItems.filter((_, i) => i !== index));
-                if (selectedItem === item) setSelectedItem(null);
-              }}
-              style={{
-                position: "absolute",
-                top: "2px",
-                left: "5px",
-                fontSize: "14px",
-                color: "#f2d0d0",
-                cursor: "pointer",
-              }}
-            >
-              ×
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   );
 };
-
-// ==================== [新增] 郡县市井地图详情页组件 ====================
-// ==================== [重构升级] 游戏级沙盘古风郡县舆图组件 ====================
 const CountyMapViewer = ({ regionName, countyName, mapData, onBack }) => {
   const svgRef = React.useRef(null);
   const containerRef = React.useRef(null);
@@ -43700,7 +43719,7 @@ const T13LearningPage = ({ onBack }) => {
   // =========================================================
 
   return (
-    <div className="learning-overlay notebook-bg font-body text-on-surface">
+    <div className="learning-overlay open notebook-bg font-body text-on-surface">
       {/* --- 新增：侧边栏开关 --- */}
       <div
         className="fixed right-0 top-[20%] z-[60] bg-[#EADDCA] p-3 rounded-l-2xl shadow-[0_4px_15px_rgba(0,0,0,0.1)] cursor-pointer border-2 border-r-0 border-[#DAA06D] transition-transform hover:-translate-x-1"
@@ -45097,6 +45116,2378 @@ const T13LearningPage = ({ onBack }) => {
 };
 
 // T13 休闲一刻主页面组件
+const StarChartPage = ({ onBack }) => {
+  // 生成随机星座的函数
+  const generateRandomConstellation = (
+    starCount = Math.floor(Math.random() * 7) + 6,
+  ) => {
+    const nodes = [];
+    const links = [];
+
+    for (let i = 0; i < starCount; i++) {
+      const x = Math.random() * 200 + 100; // 100-300（缩小水平范围）
+      const y = Math.random() * 305 + 125; // 180-430（缩小垂直范围，避开统计文本区域）
+      const size = Math.random() * 3 + 2; // 2-5（缩小星星大小）
+      nodes.push([x, y, size]);
+    }
+
+    const sortedNodes = [...nodes].map((node, index) => ({
+      index,
+      node,
+    }));
+    if (Math.random() > 0.5) {
+      sortedNodes.sort((a, b) => a.node[0] - b.node[0]);
+    } else {
+      sortedNodes.sort((a, b) => a.node[1] - b.node[1]);
+    }
+
+    for (let i = 0; i < sortedNodes.length - 1; i++) {
+      links.push([sortedNodes[i].index, sortedNodes[i + 1].index]);
+    }
+
+    for (let i = 0; i < nodes.length; i++) {
+      if (Math.random() > 0.7) {
+        const distances = [];
+        for (let j = 0; j < nodes.length; j++) {
+          if (i !== j) {
+            const dx = nodes[i][0] - nodes[j][0];
+            const dy = nodes[i][1] - nodes[j][1];
+            const distance = Math.sqrt(dx * dx + dy * dy);
+            const linkExists = links.some(
+              (link) =>
+                (link[0] === i && link[1] === j) ||
+                (link[0] === j && link[1] === i),
+            );
+            if (!linkExists) {
+              distances.push({ index: j, distance });
+            }
+          }
+        }
+        if (distances.length > 0) {
+          distances.sort((a, b) => a.distance - b.distance);
+          links.push([i, distances[0].index]);
+        }
+      }
+    }
+
+    return { nodes, links, starCount };
+  };
+
+  const [constellation, setConstellation] = React.useState(
+    generateRandomConstellation(),
+  );
+  const [inputText, setInputText] = React.useState("");
+  const [displayText, setDisplayText] = React.useState("");
+  const [showText, setShowText] = React.useState(false);
+
+  // 新增：AI及逝者相关状态
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [statistics, setStatistics] = React.useState("");
+  const [deceasedList, setDeceasedList] = React.useState([]);
+  const [selectedDeceased, setSelectedDeceased] = React.useState(null);
+
+  // ===== 新增：他人寄语相关状态 =====
+  const [showTributesModal, setShowTributesModal] = React.useState(false);
+  const [isGeneratingTributes, setIsGeneratingTributes] = React.useState(false);
+  const [tributesList, setTributesList] = React.useState([]);
+
+  // ===== 新增：处理生成他人寄语 =====
+  const handleGenerateTributes = async () => {
+    if (!selectedDeceased || isGeneratingTributes) return;
+
+    setIsGeneratingTributes(true);
+    setShowTributesModal(true); // 打开弹窗显示加载中
+    setTributesList([]); // 清空旧数据
+
+    try {
+      // 1. 获取世界书设定
+      const worldContext = window.getWorldBookContext
+        ? await window.getWorldBookContext()
+        : "无特定背景设定";
+
+      // 2. 获取传讯角色 (排除群聊和装饰)
+      let allChars = [];
+      if (window.chatCharacterStore) {
+        allChars = await window.chatCharacterStore.getAll();
+      } else {
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+      }
+      const validChars = allChars.filter(
+        (c) => !String(c.id).startsWith("group") && c.type !== "decor",
+      );
+
+      // 随机抽取 2 到 3 个现有的传讯角色
+      const shuffled = [...validChars].sort(() => 0.5 - Math.random());
+      const selectedChars = shuffled.slice(
+        0,
+        Math.max(2, Math.min(3, validChars.length)),
+      );
+
+      const charsInfo = selectedChars
+        .map(
+          (c) =>
+            `【已有角色】姓名: ${c.name} | 身份/背景: ${c.profile?.background || "未知"} | 性格: ${c.profile?.personality || "无"} | 语言风格: ${c.profile?.style || "无"}`,
+        )
+        .join("\n");
+
+      // 3. 构建 Prompt
+      const sysPrompt =
+        "你是一个深谙东汉末年历史与人情冷暖的文案生成器，擅长模拟不同身份人物的口吻表达对逝者的缅怀或态度。";
+      const userPrompt = `
+                            【世界设定】
+                            ${worldContext}
+
+                            【逝者信息】
+                            姓名：${selectedDeceased.name}
+                            年龄：${selectedDeceased.age}
+                            身份/家族：${selectedDeceased.family} - ${selectedDeceased.profession}
+                            死因：${selectedDeceased.death_cause}
+                            生前最爱：${selectedDeceased.favorite}
+                            生前愿景：${selectedDeceased.wish}
+
+                            【必须包含的特定已知角色】
+                            ${charsInfo}
+                            (注意：必须使用上述列出的已有角色生成缅怀，并且寄语的语气必须严格符合他们的性格和语言风格)
+
+                            【任务】
+                            请生成 10 到 15 条针对该逝者的缅怀/寄语。
+                            要求：
+                            1. 评价的人中必须包含上面提供的【已有角色】（如果有的话）。
+                            2. 其余评价人可以是随机生成的NPC（如当地人、客居者、家人、陌生人、甚至是坏人、仇人等）。
+                            3. 每条寄语的语言风格必须符合评价人的身份和立场（如仇人可能冷嘲热讽，亲人悲痛欲绝，路人只作叹息）。
+                            4. 严格返回纯 JSON 数组格式，不要包含任何 Markdown 标记（如 \`\`\`json ），直接以 [ 开头，] 结尾。
+
+                            返回格式示例：
+                            [
+                              {
+                                "name": "评价人名字",
+                                "identity": "评价人身份（如：幽州商贩、死者长兄、或者是已有角色）",
+                                "item": "带给逝者的东西（如：一壶浊酒、一束野花、一把残剑、甚至是一口唾沫）",
+                                "message": "想告诉逝者的话"
+                              }
+                            ]
+                        `;
+
+      // 4. 调用大模型
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              const cleanJson = reply.replace(/```json|```/g, "").trim();
+              const data = JSON.parse(cleanJson);
+              if (Array.isArray(data) && data.length > 0) {
+                setTributesList(data);
+              } else {
+                throw new Error("返回格式非数组");
+              }
+            } catch (e) {
+              console.error("解析寄语失败:", e, reply);
+              alert("获取寄语失败，请重试。");
+              setShowTributesModal(false);
+            } finally {
+              setIsGeneratingTributes(false);
+            }
+          },
+          (err) => {
+            console.error(err);
+            alert("网络波动，获取寄语失败。请检查API设置。");
+            setIsGeneratingTributes(false);
+            setShowTributesModal(false);
+          },
+        );
+      } else {
+        alert("未找到 API 接口，请先在设置中配置 API！");
+        setIsGeneratingTributes(false);
+        setShowTributesModal(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsGeneratingTributes(false);
+      setShowTributesModal(false);
+    }
+  };
+
+  // 处理发送按钮点击 (接入大模型推演)
+  const handleSend = async () => {
+    if (!inputText.trim() || isGenerating) return;
+
+    setIsGenerating(true);
+    try {
+      const worldContext = window.getWorldBookContext
+        ? await window.getWorldBookContext()
+        : "无特定背景设定";
+
+      // 预先生成下一张星图，以确定需生成的逝者数量
+      const newConstellation = generateRandomConstellation();
+      const count = newConstellation.starCount;
+
+      const sysPrompt =
+        "你是一个沉浸式的东汉末年历史推演AI计算器，深谙世事沧桑与平民百态。";
+      const userPrompt = `
+                            【世界设定】
+                            ${worldContext}
+
+                            【发生的事件记录】
+                            ${inputText}
+
+                            【任务要求】
+                            基于上述事件和世界观，推演这场事件造成的伤亡情况，并具体生成 ${count} 名在此事件中丧生的人物信息以点亮星象。
+                            人物身份要多样（包括老者、孩童、士兵、士族、平民等），人物的性格、生前愿望和临终念头要严格符合其年龄、身份与当前的时代背景。
+
+                            【输出格式严格要求】
+                            必须直接输出纯JSON格式数据，绝对不要包含Markdown代码块（如 \`\`\`json ）。格式如下：
+                            {
+                              "statistics": "这段文字描述此次事件造成的总伤亡人数及职业/身份分布（如：此次事件造成共计xxx人伤亡，其中平民xx人，士兵xx人等。言简意赅）",
+                              "deceased": [
+                                {
+                                  "name": "姓名",
+                                  "family": "家族或出身（如：河内平民、颍川陈氏）",
+                                  "profession": "职业/身份",
+                                  "age": "年龄（包含单位，如'7岁'、'54岁'）",
+                                  "death_cause": "死法（在三五句话以内，需要描述清楚）",
+                                  "favorite": "生前喜欢的事物",
+                                  "wish": "生前最大的愿望",
+                                  "last_thought": "死之前的最后一个念头（以第一人称主观视角表达）"
+                                }
+                              ]
+                            }
+                            注：deceased 数组的长度必须严格等于 ${count}。
+                        `;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              const cleanJson = reply.replace(/```json|```/g, "").trim();
+              const data = JSON.parse(cleanJson);
+
+              setConstellation(newConstellation);
+              setStatistics(data.statistics || "");
+
+              const dList = data.deceased || [];
+              // 兜底补齐，以防大模型生成数量不够导致报错
+              while (dList.length < count) {
+                dList.push({
+                  name: "无名氏",
+                  family: "未知",
+                  profession: "平民",
+                  age: "未知",
+                  death_cause:
+                    "今天是农历初三。父母放他出去玩。他找到了小伙伴，一起提着蹴鞠。但遇到了府兵，被殴打致死。",
+                  favorite: "活着",
+                  wish: "天下太平",
+                  last_thought: "好冷...",
+                });
+              }
+              setDeceasedList(dList);
+
+              setDisplayText(inputText.trim());
+              setShowText(true);
+              setInputText("");
+            } catch (e) {
+              console.error("星轨数据解析失败:", e, reply);
+              alert("星轨推演失败，请重试。");
+            } finally {
+              setIsGenerating(false);
+            }
+          },
+          (err) => {
+            console.error(err);
+            alert("星轨推演请求失败，请检查API设置。");
+            setIsGenerating(false);
+          },
+        );
+      } else {
+        alert("未找到 API 接口，请前往设置配置！");
+        setIsGenerating(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsGenerating(false);
+    }
+  };
+
+  return (
+    <div className="starchart-overlay open fade-in">
+      <div className="flex justify-between p-6 items-center z-10">
+        <div className="flex items-center gap-4 flex-1">
+          <input
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            placeholder="记录灾厄、战乱或变故..."
+            className="border-b-2 border-dashed border-white/30 flex-1 bg-transparent text-white placeholder-white/50 py-2 focus:outline-none"
+            disabled={isGenerating}
+          />
+          <button
+            onClick={handleSend}
+            disabled={isGenerating}
+            className="constellation-btn flex items-center justify-center"
+          >
+            <i className="ph ph-paper-plane text-white text-sm"></i>
+          </button>
+        </div>
+        <i
+          className="ph ph-x text-white text-2xl ml-6 cursor-pointer"
+          onClick={onBack}
+        ></i>
+      </div>
+
+      {/* 顶部统计数据展示区 */}
+      {statistics && !isGenerating && (
+        <div className="px-6 pb-2 text-white/80 text-sm text-center leading-relaxed z-10 font-serif">
+          {statistics}
+        </div>
+      )}
+
+      <div className="flex-1 relative">
+        <svg viewBox="0 0 400 600" width="100%" height="100%">
+          {/* 连线层 */}
+          {constellation.links.map((link, i) => (
+            <g key={`link-${i}`}>
+              <line
+                className="star-glow"
+                x1={constellation.nodes[link[0]][0]}
+                y1={constellation.nodes[link[0]][1]}
+                x2={constellation.nodes[link[1]][0]}
+                y2={constellation.nodes[link[1]][1]}
+              />
+              <line
+                className="star-line"
+                x1={constellation.nodes[link[0]][0]}
+                y1={constellation.nodes[link[0]][1]}
+                x2={constellation.nodes[link[1]][0]}
+                y2={constellation.nodes[link[1]][1]}
+              />
+            </g>
+          ))}
+          {/* 节点层 (可点击查看逝者信息) */}
+          {constellation.nodes.map((node, i) => (
+            <circle
+              key={i}
+              className="star-node pulse-anim"
+              cx={node[0]}
+              cy={node[1]}
+              r={node[2] / 1.5}
+              style={{
+                animationDelay: `${i * 0.5}s`,
+                cursor: deceasedList.length > 0 ? "pointer" : "default",
+              }}
+              onClick={() => {
+                if (deceasedList[i]) {
+                  setSelectedDeceased(deceasedList[i]);
+                }
+              }}
+            />
+          ))}
+        </svg>
+
+        {/* 加载状态遮罩 */}
+        {isGenerating && (
+          <div className="absolute inset-0 flex items-center justify-center bg-[#0a0b16]/70 z-20">
+            <div className="text-white flex flex-col items-center gap-3">
+              <iconify-icon
+                icon="line-md:loading-twotone-loop"
+                style={{ fontSize: "36px" }}
+              ></iconify-icon>
+              <span className="text-sm tracking-widest font-serif">
+                星象交替，命轨推演中...
+              </span>
+            </div>
+          </div>
+        )}
+
+        {/* 用户输入文字底部显示区域 */}
+        {showText && !isGenerating && (
+          <div className="absolute bottom-20 left-0 right-0 text-center pointer-events-none">
+            <div
+              className={`text-white font-serif text-lg transition-all duration-1000 ease-in-out ${
+                showText ? "opacity-100 blur-0" : "opacity-0 blur-md"
+              }`}
+            >
+              {displayText}
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="p-10 text-center text-white/30 text-xs tracking-widest font-serif italic">
+        - 嘒彼小星 ，三五在东 -
+      </div>
+
+      {/* 逝者信息弹出卡片 */}
+      {selectedDeceased && (
+        <div className="fixed inset-x-0 bottom-0 bg-[#F9F7F5] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-50 animate-slide-up max-h-[85vh] flex flex-col">
+          <div className="p-5 flex justify-between items-center border-b border-gray-200">
+            <h3 className="text-xl font-bold text-[#1a1b3a] tracking-widest font-serif">
+              命轨记录
+            </h3>
+            <button
+              onClick={() => setSelectedDeceased(null)}
+              className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 active:scale-95"
+            >
+              <i className="ph-bold ph-x"></i>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 text-[#4A4F55] no-scrollbar">
+            <div className="flex items-end gap-3 mb-2">
+              <h2 className="text-3xl font-bold text-[#1a1b3a] font-serif">
+                {selectedDeceased.name}
+              </h2>
+              <span className="text-sm bg-gray-200 px-3 py-1 rounded-full text-gray-600 font-medium">
+                {selectedDeceased.age}
+              </span>
+            </div>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                <div className="text-xs text-gray-400 mb-1">家族 / 出身</div>
+                <div className="font-medium text-[#1a1b3a]">
+                  {selectedDeceased.family}
+                </div>
+              </div>
+              <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
+                <div className="text-xs text-gray-400 mb-1">职业 / 身份</div>
+                <div className="font-medium text-[#1a1b3a]">
+                  {selectedDeceased.profession}
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-red-50 p-4 rounded-xl border-l-4 border-red-300">
+              <div className="text-xs text-red-400 mb-1 font-bold">
+                殒命之因
+              </div>
+              <div className="text-sm font-medium text-red-800 leading-relaxed">
+                {selectedDeceased.death_cause}
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+              <div className="text-xs text-gray-400 mb-1">生前偏爱</div>
+              <div className="font-medium text-[#4A4F55] leading-relaxed">
+                {selectedDeceased.favorite}
+              </div>
+            </div>
+
+            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
+              <div className="text-xs text-gray-400 mb-1">最大愿景</div>
+              <div className="font-medium text-[#4A4F55] leading-relaxed">
+                {selectedDeceased.wish}
+              </div>
+            </div>
+
+            <div className="bg-[#1a1b3a]/5 p-5 rounded-xl mt-2 relative">
+              <div className="absolute top-2 left-2 opacity-10 text-4xl font-serif">
+                "
+              </div>
+              <div className="text-xs text-gray-500 mb-2 font-bold">
+                临终执念
+              </div>
+              <div className="italic font-serif text-[#1a1b3a] text-base leading-relaxed relative z-10 px-2">
+                {selectedDeceased.last_thought}
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 flex gap-3 border-t border-gray-200 bg-white">
+            <button
+              className="flex-1 py-3 rounded-xl bg-[#e8e5d9] text-[#5A5F4D] font-bold active:scale-95 transition-transform flex items-center justify-center"
+              onClick={() => {
+                const msg = prompt("写下你的寄语：");
+                if (msg) {
+                  alert("寄语已化作星光。");
+                  alert("已送上白菊，愿逝者安息。");
+                }
+              }}
+            >
+              <iconify-icon
+                icon="ph:flower-lotus-fill"
+                style={{ marginRight: "8px", fontSize: "18px" }}
+              ></iconify-icon>
+              送花缅怀
+            </button>
+            <button
+              className="flex-1 py-3 rounded-xl bg-[#1a1b3a] text-white font-bold active:scale-95 transition-transform flex items-center justify-center"
+              onClick={handleGenerateTributes}
+            >
+              <iconify-icon
+                icon="ph:paper-plane-tilt-fill"
+                style={{ marginRight: "8px", fontSize: "18px" }}
+              ></iconify-icon>
+              他人寄语
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ===== 新增：他人寄语弹出卡片 ===== */}
+      {showTributesModal && (
+        <div className="fixed inset-x-0 bottom-0 bg-[#F9F7F5] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-[60] animate-slide-up max-h-[85vh] flex flex-col">
+          <div className="p-5 flex justify-between items-center border-b border-gray-200">
+            <h3 className="text-xl font-bold text-[#1a1b3a] tracking-widest font-serif flex items-center gap-2">
+              <iconify-icon
+                icon="ph:paper-plane-tilt-fill"
+                style={{ color: "#D6724B" }}
+              ></iconify-icon>
+              众人寄语
+            </h3>
+            <button
+              onClick={() => setShowTributesModal(false)}
+              className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 active:scale-95"
+            >
+              <i className="ph-bold ph-x"></i>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 bg-[#F9F7F5] no-scrollbar">
+            {isGeneratingTributes ? (
+              <div className="flex flex-col items-center justify-center h-48 text-[#8C917B] gap-3">
+                <iconify-icon
+                  icon="line-md:loading-twotone-loop"
+                  style={{ fontSize: "36px", color: "#1a1b3a" }}
+                ></iconify-icon>
+                <span className="text-sm font-bold tracking-widest font-serif">
+                  正在倾听世人的凭吊...
+                </span>
+              </div>
+            ) : tributesList.length > 0 ? (
+              <div className="flex flex-col gap-4 pb-8">
+                {tributesList.map((tribute, idx) => (
+                  <div
+                    key={idx}
+                    className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative"
+                  >
+                    <div className="flex justify-between items-start mb-2">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-[#1a1b3a] flex items-center justify-center text-white text-sm font-bold font-serif shadow-inner">
+                          {tribute.name ? tribute.name.charAt(0) : "?"}
+                        </div>
+                        <div>
+                          <div className="font-bold text-[#1a1b3a] text-sm leading-tight">
+                            {tribute.name}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-0.5">
+                            {tribute.identity}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-[#fdfcf8] p-3 rounded-lg border-l-4 border-[#D6724B] mb-3 mt-2">
+                      <div className="text-xs text-gray-400 font-bold mb-1">
+                        <iconify-icon
+                          icon="ph:gift-fill"
+                          style={{ marginRight: "4px" }}
+                        ></iconify-icon>
+                        带来/献上了
+                      </div>
+                      <div className="text-sm text-[#4A4F55] font-medium">
+                        {tribute.item}
+                      </div>
+                    </div>
+
+                    <div className="text-sm text-[#4A4F55] leading-relaxed italic font-serif">
+                      "{tribute.message}"
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 mt-10 font-serif">
+                此处空空如也，风中再无余音。
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ==================== T13 蝴蝶效应页面组件 ====================
+
+const ButterflyEffectPage = ({ onBack }) => {
+  const { useState } = React;
+
+  // 状态管理
+  const [inputText, setInputText] = useState("");
+  const [isEditing, setIsEditing] = useState(false);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [effectData, setEffectData] = useState([]); // 存储所有节点生成的推演数据
+  const [selectedDot, setSelectedDot] = useState(null); // 当前选中的圆点数据
+  const [showModal, setShowModal] = useState(false); // 控制卡片显示
+
+  // 莫兰迪色值
+  const colors = {
+    white: "#FFFFFF",
+    gray: "#A0A0A0",
+    pink: "#FF9B9B",
+  };
+
+  // 16个圆点坐标及类型定义：8白(好结局), 7灰(坏结局), 1粉(转折点)
+  const dots = [
+    // 左环 (4白3灰)
+    { id: 0, type: "好结局", x: -100, y: 0, color: colors.white },
+    { id: 1, type: "好结局", x: -85, y: -45, color: colors.white },
+    { id: 2, type: "好结局", x: -50, y: -65, color: colors.white },
+    { id: 3, type: "好结局", x: -10, y: -45, color: colors.white },
+    { id: 4, type: "坏结局", x: -10, y: 45, color: colors.gray },
+    { id: 5, type: "坏结局", x: -45, y: 65, color: colors.gray },
+    { id: 6, type: "坏结局", x: -82, y: 45, color: colors.gray },
+    // 右环 (4白4灰)
+    { id: 7, type: "坏结局", x: 100, y: -20, color: colors.gray },
+    { id: 8, type: "坏结局", x: 85, y: -55, color: colors.gray },
+    { id: 9, type: "坏结局", x: 50, y: -70, color: colors.gray },
+    { id: 10, type: "坏结局", x: 10, y: -45, color: colors.gray },
+    { id: 11, type: "好结局", x: 10, y: 45, color: colors.white },
+    { id: 12, type: "好结局", x: 45, y: 70, color: colors.white },
+    { id: 13, type: "好结局", x: 82, y: 55, color: colors.white },
+    { id: 14, type: "好结局", x: 100, y: 20, color: colors.white },
+    // 中心连接点 (1粉)
+    {
+      id: 15,
+      type: "转折点",
+      x: 0,
+      y: 0,
+      color: colors.pink,
+      isCenter: true,
+    },
+  ];
+
+  // 核心：调用 AI 生成蝴蝶效应
+  const handleGenerate = async () => {
+    if (!inputText.trim())
+      return alert("请先输入您想要引发蝴蝶效应的起源文字！");
+    if (isGenerating) return;
+
+    setIsGenerating(true);
+    setEffectData([]); // 清空旧数据
+
+    try {
+      // 获取世界书设定
+      const worldContext = window.getWorldBookContext
+        ? await window.getWorldBookContext()
+        : "无特定背景设定";
+
+      const sysPrompt = "你是一个精通东汉历史、蝴蝶效应推演及人性洞察的大师。";
+      const userPrompt = `
+                        【世界设定】
+                        ${worldContext}
+
+                        【起源事件】
+                        ${inputText}
+
+                        【推演任务】
+                        基于上述起源，严格符合东汉史实推演蝴蝶效应的16个事件节点。
+                        - 节点 15 是【转折点】：好坏都会经历的一环，直接承接起源事件，它是分歧的共同连接点。
+                        - 节点 0,1,2,3,11,12,13,14 是【好结局线】：从左到右依次递进 (0->1->2->3->11->12->13->14)，后一个事件必须和前一个事件有关联，开端承接转折点15，最终导向一个相对圆满或给人希望的结局。
+                        - 节点 4,5,6,7,8,9,10 是【坏结局线】：从左到右依次递进 (4->5->6->7->8->9->10)，后一个事件必须和前一个事件有关联，开端承接转折点15，最终导向一个残缺、悲惨或混乱的结局。
+
+                        【重要提示】
+                        - 事件可以是日常生活中的小事，也可以是大格局或重大历史事件
+                        - 注重细节和真实感，让事件更贴近普通人的生活
+                        - 保持东汉时期的背景设定。
+
+                        【输出格式严格要求】
+                        必须返回一个长度严格为 16 的纯 JSON 数组，数组对象的 id 必须是从 0 到 15。
+                        请绝对不要包含 Markdown 代码块（如 \`\`\`json ），直接以 [ 开始，] 结尾。
+                        数组每个对象的结构如下：
+                        {
+                          "id": 数字索引(0-15),
+                          "name": "事件关联人（或物品）的姓名",
+                          "identity": "关联人的身份",
+                          "content": "事件具体内容（3到5句话，层层递进）",
+                          "original": "原本走向（若起源未发生，本来的日常轨迹）",
+                          "svgHtml": "一段表示此事件的简单几何SVG代码，宽高视口为 viewBox='0 0 100 100'，颜色建议符合该节点氛围，代码中可以加点行内CSS交互效果"
+                        }
+                        `;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              const cleanJson = reply.replace(/```json|```/g, "").trim();
+              const data = JSON.parse(cleanJson);
+              if (Array.isArray(data) && data.length === 16) {
+                // 将数据通过 id 排序以便匹配
+                data.sort((a, b) => a.id - b.id);
+                setEffectData(data);
+                alert("蝴蝶效应推演完成！\n请点击页面上的圆点查看命运分歧。");
+              } else {
+                throw new Error("返回的数组长度不足或结构异常");
+              }
+            } catch (e) {
+              console.error("解析AI返回数据失败:", e, reply);
+              alert("天机受阻，推演失败，请重试！");
+            } finally {
+              setIsGenerating(false);
+              setIsEditing(false);
+            }
+          },
+          (err) => {
+            console.error("请求失败:", err);
+            alert("请求失败，请检查 API 接口配置！");
+            setIsGenerating(false);
+          },
+        );
+      } else {
+        alert("未找到 API 接口，请先在设置中配置！");
+        setIsGenerating(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsGenerating(false);
+    }
+  };
+
+  // 处理点击圆点
+  const handleDotClick = (dot) => {
+    if (effectData.length === 0) {
+      alert("请先在底部的虚线上输入起源，并点击发送按钮引发推演！");
+      return;
+    }
+    const data = effectData.find((item) => item.id === dot.id);
+    if (data) {
+      setSelectedDot({ ...data, type: dot.type });
+      setShowModal(true);
+    }
+  };
+
+  return (
+    <div className="butterfly-effect-overlay open">
+      {/* 顶部返回按钮 */}
+      <div className="be-back-btn" onClick={onBack}>
+        ✕
+      </div>
+
+      {/* 圆点排列舞台 */}
+      <div className="be-infinity-container" style={{ marginTop: "-60px" }}>
+        {dots.map((dot, i) => (
+          <div
+            key={i}
+            className="be-dot"
+            onClick={() => handleDotClick(dot)}
+            style={{
+              backgroundColor: dot.color,
+              transform: `translate(${dot.x}px, ${dot.y}px) ${effectData.length > 0 && selectedDot?.id === dot.id ? "scale(1.3)" : "scale(1)"}`,
+              boxShadow: dot.isCenter
+                ? "0 0 15px rgba(255,155,155,0.6)"
+                : effectData.length > 0
+                  ? "0 0 10px rgba(255,255,255,0.4)"
+                  : "none",
+              zIndex: dot.isCenter ? 10 : 1,
+              cursor: effectData.length > 0 ? "pointer" : "default",
+              border:
+                effectData.length > 0
+                  ? "2px solid rgba(255,255,255,0.8)"
+                  : "none",
+              transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+            }}
+          />
+        ))}
+      </div>
+
+      {/* 底部虚线输入和发送按钮 */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: "100px",
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          width: "80%",
+          maxWidth: "400px",
+        }}
+      >
+        <div
+          style={{
+            flex: 1,
+            borderBottom: "3px dashed white",
+            position: "relative",
+            height: "30px",
+          }}
+        >
+          {isEditing ? (
+            <input
+              autoFocus
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onBlur={() => setIsEditing(false)}
+              onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
+              style={{
+                width: "100%",
+                background: "transparent",
+                border: "none",
+                color: "white",
+                outline: "none",
+                textAlign: "center",
+                position: "absolute",
+                bottom: "-5px",
+                fontSize: "16px",
+                fontFamily: "inherit",
+              }}
+            />
+          ) : (
+            <div
+              onClick={() => !isGenerating && setIsEditing(true)}
+              style={{
+                width: "100%",
+                height: "100%",
+                cursor: isGenerating ? "not-allowed" : "text",
+                color: "white",
+                textAlign: "center",
+                display: "flex",
+                alignItems: "flex-end",
+                justifyContent: "center",
+                paddingBottom: "5px",
+                fontSize: "15px",
+                opacity: inputText ? 1 : 0.6,
+                fontFamily: "inherit",
+              }}
+            >
+              {inputText || "在此输入起源，扇动命运的翅膀..."}
+            </div>
+          )}
+        </div>
+
+        {/* 发送按钮 */}
+        <div
+          onClick={handleGenerate}
+          style={{
+            width: "42px",
+            height: "42px",
+            backgroundColor:
+              inputText.trim() && !isGenerating
+                ? "#FF9B9B"
+                : "rgba(255, 155, 155, 0.3)",
+            borderRadius: "50%",
+            cursor:
+              inputText.trim() && !isGenerating ? "pointer" : "not-allowed",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow:
+              inputText.trim() && !isGenerating
+                ? "0 4px 12px rgba(255,155,155,0.4)"
+                : "none",
+            transition: "all 0.3s ease",
+          }}
+        >
+          {isGenerating ? (
+            <iconify-icon
+              icon="line-md:loading-twotone-loop"
+              style={{ color: "white", fontSize: "20px" }}
+            ></iconify-icon>
+          ) : (
+            <iconify-icon
+              icon="ph:paper-plane-tilt-fill"
+              style={{ color: "white", fontSize: "20px" }}
+            ></iconify-icon>
+          )}
+        </div>
+      </div>
+
+      {/* 弹出的卡片层 */}
+      {showModal && selectedDot && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: "rgba(30, 30, 30, 0.95)",
+            backdropFilter: "blur(12px)",
+            borderTopLeftRadius: "24px",
+            borderTopRightRadius: "24px",
+            padding: "30px 24px",
+            boxShadow: "0 -10px 40px rgba(0,0,0,0.5)",
+            zIndex: 100,
+            animation:
+              "slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
+            color: "#fff",
+            maxHeight: "85vh",
+            overflowY: "auto",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              marginBottom: "20px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <span
+                  style={{
+                    background:
+                      selectedDot.type === "好结局"
+                        ? "#FFFFFF"
+                        : selectedDot.type === "坏结局"
+                          ? "#A0A0A0"
+                          : "#FF9B9B",
+                    color: selectedDot.type === "好结局" ? "#333" : "#FFF",
+                    padding: "4px 12px",
+                    borderRadius: "12px",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {selectedDot.type}
+                </span>
+                <span
+                  style={{
+                    fontSize: "20px",
+                    fontWeight: "bold",
+                    fontFamily: "serif",
+                    letterSpacing: "2px",
+                  }}
+                >
+                  {selectedDot.name}
+                </span>
+              </div>
+              <span
+                style={{
+                  fontSize: "12px",
+                  color: "rgba(255,255,255,0.6)",
+                }}
+              >
+                身份标签：{selectedDot.identity}
+              </span>
+            </div>
+            <button
+              onClick={() => setShowModal(false)}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#fff",
+                fontSize: "24px",
+                cursor: "pointer",
+                opacity: 0.7,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+
+          <div
+            style={{
+              background: "rgba(255,255,255,0.08)",
+              padding: "16px",
+              borderRadius: "12px",
+              marginBottom: "16px",
+              borderLeft: "4px solid #FF9B9B",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "12px",
+                color: "rgba(255,255,255,0.5)",
+                marginBottom: "8px",
+                fontWeight: "bold",
+              }}
+            >
+              事件内容
+            </div>
+            <div
+              style={{
+                fontSize: "14px",
+                lineHeight: "1.7",
+                letterSpacing: "1px",
+                color: "rgba(255,255,255,0.95)",
+              }}
+            >
+              {selectedDot.content}
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              padding: "16px",
+              borderRadius: "12px",
+              marginBottom: "24px",
+              borderLeft: "4px solid #A0A0A0",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "12px",
+                color: "rgba(255,255,255,0.5)",
+                marginBottom: "8px",
+                fontWeight: "bold",
+              }}
+            >
+              原本走向
+            </div>
+            <div
+              style={{
+                fontSize: "13px",
+                lineHeight: "1.7",
+                color: "rgba(255,255,255,0.7)",
+              }}
+            >
+              {selectedDot.original}
+            </div>
+          </div>
+
+          <div
+            style={{
+              textAlign: "center",
+              marginTop: "10px",
+              paddingBottom: "20px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "12px",
+                color: "rgba(255,255,255,0.4)",
+                marginBottom: "12px",
+                letterSpacing: "2px",
+              }}
+            >
+              - 象形之意 -
+            </div>
+            <div
+              style={{
+                width: "100px",
+                height: "100px",
+                margin: "0 auto",
+                background: "rgba(0,0,0,0.4)",
+                borderRadius: "16px",
+                padding: "15px",
+                boxShadow: "inset 0 0 10px rgba(0,0,0,0.5)",
+                cursor: "pointer",
+                transition: "transform 0.3s ease",
+              }}
+              onMouseEnter={(e) =>
+                (e.currentTarget.style.transform = "scale(1.1)")
+              }
+              onMouseLeave={(e) =>
+                (e.currentTarget.style.transform = "scale(1)")
+              }
+              dangerouslySetInnerHTML={{ __html: selectedDot.svgHtml }}
+            />
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+// ------------------- (插入位置6: const MasterApp = () => { 上方定义组件) -------------------
+
+const SandTablePage = ({ onBack }) => {
+  const [elements, setElements] = React.useState([]);
+  const [navCollapsed, setNavCollapsed] = React.useState(false);
+  const [scale, setScale] = React.useState(1);
+  const [lastDistance, setLastDistance] = React.useState(0);
+  const [selectedElement, setSelectedElement] = React.useState(null);
+  const [showWriteModal, setShowWriteModal] = React.useState(false);
+  const [writeContent, setWriteContent] = React.useState("");
+
+  // --- 新增推演系统状态 ---
+  const [simulationSteps, setSimulationSteps] = React.useState([]);
+  const [currentStep, setCurrentStep] = React.useState(-1);
+  const [showSimulationModal, setShowSimulationModal] = React.useState(false);
+  const [isSimulating, setIsSimulating] = React.useState(false);
+  const [simulationModalCollapsed, setSimulationModalCollapsed] =
+    React.useState(false);
+
+  // --- 沙盘拖动状态 ---
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
+  const [sandboxPosition, setSandboxPosition] = React.useState({
+    x: 0,
+    y: 0,
+  });
+
+  // 新增状态
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [inventory, setInventory] = React.useState([]); // 底部物品栏数据
+  const [detailItem, setDetailItem] = React.useState(null); // 当前查看详情的物品
+  const [isConnecting, setIsConnecting] = React.useState(false); // 是否处于连接模式
+  const [connections, setConnections] = React.useState([]); // 连接关系数组
+  const [showConnections, setShowConnections] = React.useState(true); // 是否显示连接线
+
+  // 添加物品到沙盘（同时扣除库存）
+  const handleAddInventoryItem = (item) => {
+    if (!item.isInfinite && item.quantity <= 0) {
+      alert("该物资已耗尽！");
+      return;
+    }
+
+    // 扣除库存
+    if (!item.isInfinite) {
+      setInventory((prev) =>
+        prev.map((inv) =>
+          inv.id === item.id ? { ...inv, quantity: inv.quantity - 1 } : inv,
+        ),
+      );
+    }
+
+    // 添加到沙盘
+    const newElement = {
+      id: Date.now() + Math.random(),
+      invId: item.id, // 关联库存ID，方便删除时退回
+      char: item.emoji,
+      x: 150 + Math.random() * 50,
+      y: 150 + Math.random() * 50,
+      flipped: false,
+      detailInfo: item, // 将详情信息一并存入实体
+    };
+    setElements([...elements, newElement]);
+  };
+
+  // 删除沙盘物品（退回库存）
+  const handleDeleteElement = (id) => {
+    const elToDelete = elements.find((el) => el.id === id);
+    if (elToDelete) {
+      // 退回库存
+      setInventory((prev) =>
+        prev.map((inv) =>
+          inv.id === elToDelete.invId && !inv.isInfinite
+            ? { ...inv, quantity: inv.quantity + 1 }
+            : inv,
+        ),
+      );
+    }
+    // 删除相关的连接
+    setConnections((prev) =>
+      prev.filter((conn) => conn.source !== id && conn.target !== id),
+    );
+    setElements((prev) => prev.filter((el) => el.id !== id));
+    setSelectedElement(null);
+    setDetailItem(null); // 关闭可能打开的详情
+  };
+
+  // 查看详情
+  const handleElementDetail = (id) => {
+    const el = elements.find((e) => e.id === id);
+    if (el) {
+      setDetailItem(el.detailInfo);
+    }
+  };
+
+  // 处理连接按钮点击
+  const handleConnectElement = (id) => {
+    if (isConnecting) {
+      // 已经处于连接模式，完成连接
+      completeConnection(id);
+    } else {
+      // 开始连接模式
+      setIsConnecting(true);
+      setSelectedElement(id);
+    }
+  };
+
+  // 完成连接
+  const completeConnection = (targetId) => {
+    if (selectedElement && selectedElement !== targetId) {
+      // 检查是否已经存在相同的连接
+      const existingConnection = connections.find(
+        (conn) => conn.source === selectedElement && conn.target === targetId,
+      );
+
+      if (!existingConnection) {
+        // 添加新连接
+        setConnections([
+          ...connections,
+          {
+            id: Date.now(),
+            source: selectedElement,
+            target: targetId,
+          },
+        ]);
+      }
+    }
+    // 退出连接模式
+    setIsConnecting(false);
+    setSelectedElement(null);
+  };
+
+  // 移除连接
+  const removeConnection = (connectionId) => {
+    setConnections(connections.filter((conn) => conn.id !== connectionId));
+  };
+
+  // --- 模拟推演核心逻辑 ---
+  const handleSimulate = async () => {
+    if (elements.length === 0) {
+      alert("沙盘上空空如也，请先放置一些单位后再推演！");
+      return;
+    }
+
+    setIsSimulating(true);
+    setShowSimulationModal(true);
+    setCurrentStep(-1);
+    setSimulationSteps([]);
+
+    try {
+      const worldContext = window.getWorldBookContext
+        ? await window.getWorldBookContext()
+        : "无特定背景设定";
+
+      // 提取元素简要信息供AI分析，以便明确有哪些可移动物体
+      const elementsInfo = elements.map((el) => ({
+        id: el.id,
+        name: el.detailInfo.name,
+        category: el.detailInfo.category,
+        x: Math.round(el.x),
+        y: Math.round(el.y),
+      }));
+
+      const connectionsInfo = connections.map((conn) => ({
+        sourceId: conn.source,
+        targetId: conn.target,
+      }));
+
+      const sysPrompt = "你是一个精通东汉末年兵法与沙盘推演的军师AI。";
+      const userPrompt = `
+            【世界设定】
+            ${worldContext}
+
+            【推演背景】
+            ${writeContent || "无特定背景"}
+
+            【沙盘当前单位】
+            ${JSON.stringify(elementsInfo, null, 2)}
+
+            【单位连线关系（从属/牵引关系，source带动target）】
+            ${JSON.stringify(connectionsInfo, null, 2)}
+
+            【推演任务】
+            请基于当前沙盘单位分布、连线关系和背景，生成一场10到15步的定格动画模拟推演。
+            要求：
+            1. 考虑地形，自然类单位（如山脉、密林）通常不可移动。
+            2. 让军队或武将相互靠近、绕后或交战。
+            3. 如果有父子连线的元素，只需要给出父元素(sourceId)的移动坐标，系统会自动带动子元素。
+            4. 每一步都要有对战局的描述，以及用诙谐专业的语气说明这步操作的兵法原因。
+            5. 每一步返回发生移动的元素和他们的新绝对坐标 (targetX, targetY)。确保坐标在 0 到 1000 之间变动，每次移动距离建议在 30-100 之间。
+
+            【输出格式】
+            必须严格返回纯 JSON 数组，格式如下（绝对不要包裹在 \`\`\`json 中）：
+            [
+              {
+                "step": 1,
+                "description": "我方主帅带领小弟绕开密林，准备偷袭。",
+                "reason": "老六兵法第一条，能苟绝不正面刚！",
+                "moves": [
+                  { "elementId": 123456789, "targetX": 150, "targetY": 250 }
+                ]
+              }
+            ]
+            `;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              const cleanJson = reply.replace(/```json|```/g, "").trim();
+              const data = JSON.parse(cleanJson);
+              if (Array.isArray(data) && data.length > 0) {
+                setSimulationSteps(data);
+                setCurrentStep(0); // 开始第一步
+              } else {
+                throw new Error("解析数据为空");
+              }
+            } catch (e) {
+              console.error("推演解析失败:", e, reply);
+              alert("推演失败，军机受阻，请重新生成。");
+              setShowSimulationModal(false);
+            } finally {
+              setIsSimulating(false);
+            }
+          },
+          (err) => {
+            console.error("生成推演失败:", err);
+            setIsSimulating(false);
+            setShowSimulationModal(false);
+            alert("请求失败，请检查API配置");
+          },
+        );
+      } else {
+        alert("未配置API，请前往设置配置！");
+        setIsSimulating(false);
+        setShowSimulationModal(false);
+      }
+    } catch (error) {
+      console.error(error);
+      setIsSimulating(false);
+      setShowSimulationModal(false);
+    }
+  };
+
+  // 计算包含推演位移和父子联动后的实际元素坐标
+  const getSimulatedElements = () => {
+    let simElements = elements.map((el) => ({ ...el }));
+
+    if (currentStep < 0 || !simulationSteps.length) return simElements;
+
+    for (let i = 0; i <= currentStep; i++) {
+      const stepData = simulationSteps[i];
+      if (!stepData || !stepData.moves) continue;
+
+      const displacements = {};
+
+      // 1. 应用本步的主动绝对移动，并记录位移差 (dx, dy)
+      stepData.moves.forEach((move) => {
+        const elIndex = simElements.findIndex((e) => e.id === move.elementId);
+        if (elIndex !== -1) {
+          displacements[move.elementId] = {
+            dx: move.targetX - simElements[elIndex].x,
+            dy: move.targetY - simElements[elIndex].y,
+          };
+          simElements[elIndex].x = move.targetX;
+          simElements[elIndex].y = move.targetY;
+        }
+      });
+
+      // 2. 处理父子连带移动
+      let changed = true;
+      const propagated = { ...displacements };
+      while (changed) {
+        changed = false;
+        connections.forEach((conn) => {
+          const parentDisp = propagated[conn.source];
+          if (parentDisp && !propagated[conn.target]) {
+            const targetIndex = simElements.findIndex(
+              (e) => e.id === conn.target,
+            );
+            if (targetIndex !== -1) {
+              simElements[targetIndex].x += parentDisp.dx;
+              simElements[targetIndex].y += parentDisp.dy;
+              propagated[conn.target] = { ...parentDisp };
+              changed = true;
+            }
+          }
+        });
+      }
+    }
+    return simElements;
+  };
+
+  const simulatedElements = getSimulatedElements();
+  // --- 模拟推演核心逻辑结束 ---
+
+  // AI生成物品清单核心逻辑
+  const handleGenerateItems = async () => {
+    if (!writeContent.trim()) {
+      alert("请先书写战局背景或兵棋推演的需求！");
+      return;
+    }
+    setIsGenerating(true);
+
+    try {
+      // 1. 获取世界书设定
+      const worldContext = window.getWorldBookContext
+        ? await window.getWorldBookContext()
+        : "无特定背景设定";
+
+      // 2. 构建 Prompt
+      const sysPrompt = "你是一个专业的三国/古风沙盘兵棋推演组件生成器。";
+      const userPrompt = `
+                          【世界设定】
+                          ${worldContext}
+
+                          【统帅（用户）书写的推演背景】
+                          ${writeContent}
+
+                          【任务】
+                          请根据以上背景，生成一场沙盘模拟所需的物品/地形清单，总数必须在 15 到 20 个之间。
+
+                          【严格生成规则】
+                          1. 必须包含的分类：
+                             - 自然类(nature)：必须有（如河流、森林、山脉），属性 isInfinite 必须为 true，quantity 设为 -1。
+                             - 工具类(tool)：必须有（如马车、船只、拒马），isInfinite 为 false，quantity 在 3-10 之间。
+                             - 物资类(resource)：必须有（如粮草、辎重、箭矢），isInfinite 为 false，quantity 在 2-5 之间。
+                             - 人物/建筑类(character/building)：（如斥候、城门、流民），isInfinite 为 false，quantity 根据常理设定。
+                          2. 必须包含的高亮特殊物品：
+                             - 必须生成且仅生成两个特殊标识（isSpecial 为 true）：一个代表【我方阵营】的emoji，一个代表【敌方阵营】的emoji。quantity 通常为 1 或 2。
+                          3. 趣味详情：
+                             - description：物品用途，必须用轻松、风趣、甚至带点吐槽的口吻编写（例如："一处被人遗弃的破碗，不知道有什么用，可能用来讨饭"）。
+                             - scale：物品实际换算比例（例如："此处的1辆 ≈ 现实100辆" 或 "1个兵 ≈ 1个营"）。
+
+                          【输出格式】
+                          必须严格返回纯 JSON 数组，不要包裹在 \`\`\`json 之中，格式示例：
+                          [
+                            {"id": 1, "emoji": "🔵", "name": "我方主帅", "category": "faction", "quantity": 1, "isInfinite": false, "isSpecial": true, "description": "全村的希望，死了就直接Game Over。", "scale": "1人 ≈ 主帅本阵"},
+                            {"emoji": "🔴", "name": "敌方主力", "category": "faction", "quantity": 3, "isInfinite": false, "isSpecial": true, "description": "看起来很凶的敌人，建议绕道走。", "scale": "1棋 ≈ 5000甲士"},
+                            {"emoji": "🌲", "name": "密林", "category": "nature", "quantity": -1, "isInfinite": true, "isSpecial": false, "description": "藏污纳垢的好地方，适合老六埋伏。", "scale": "1树 ≈ 10亩林地"},
+                            {"emoji": "🌾", "name": "粮草", "category": "resource", "quantity": 5, "isInfinite": false, "isSpecial": false, "description": "人是铁饭是钢，没这玩意儿兵要造反。", "scale": "1垛 ≈ 1000石"}
+                          ]
+                        `;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              const cleanJson = reply.replace(/```json|```/g, "").trim();
+              const data = JSON.parse(cleanJson);
+              if (Array.isArray(data) && data.length >= 2) {
+                // 补充唯一ID，防止重复
+                const inventoryData = data.map((item, idx) => ({
+                  ...item,
+                  id: Date.now() + idx,
+                }));
+                setInventory(inventoryData);
+                setShowWriteModal(false);
+                alert("兵棋组件生成完毕，请在底部物品栏查看！");
+              } else {
+                throw new Error("数组为空或不符合要求");
+              }
+            } catch (e) {
+              console.error("沙盘解析失败:", e, reply);
+              alert("推演失败，军机受阻，请重新生成。");
+            } finally {
+              setIsGenerating(false);
+            }
+          },
+          (err) => {
+            console.error("生成沙盘物品失败:", err);
+            setIsGenerating(false);
+            alert("请求失败，请检查API配置");
+          },
+        );
+      } else {
+        alert("未配置API，请前往设置配置！");
+        setIsGenerating(false);
+      }
+    } catch (error) {
+      console.error(error);
+      setIsGenerating(false);
+    }
+  };
+
+  const handleDrag = (id, e) => {
+    const clientX = e.clientX || e.touches[0].clientX;
+    const clientY = e.clientY || e.touches[0].clientY;
+    // 考虑缩放比例，确保物品拖动在不同缩放级别下都能正常工作
+    setElements((prev) =>
+      prev.map((el) =>
+        el.id === id
+          ? {
+              ...el,
+              x: (clientX - 20) * scale,
+              y: (clientY - 80) * scale,
+            }
+          : el,
+      ),
+    );
+  };
+
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      setLastDistance(Math.sqrt(dx * dx + dy * dy));
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (e.touches.length === 2) {
+      const dx = e.touches[0].clientX - e.touches[1].clientX;
+      const dy = e.touches[0].clientY - e.touches[1].clientY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+
+      if (lastDistance > 0) {
+        const scaleFactor = distance / lastDistance;
+        const newScale = Math.max(0.1, Math.min(5, scale * scaleFactor));
+        setScale(newScale);
+      }
+
+      setLastDistance(distance);
+    }
+  };
+
+  const handleTouchEnd = () => {
+    setLastDistance(0);
+  };
+
+  const handleWheel = (e) => {
+    e.preventDefault();
+    const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
+    const newScale = Math.max(0.1, Math.min(5, scale * scaleFactor));
+    setScale(newScale);
+  };
+
+  // 沙盘拖动事件处理
+  const handleSandboxMouseDown = (e) => {
+    // 只有在鼠标左键点击且没有其他元素被选中时才开始拖动
+    if (e.button === 0 && !isConnecting && !selectedElement) {
+      setIsDragging(true);
+      setDragStart({
+        x: e.clientX - sandboxPosition.x,
+        y: e.clientY - sandboxPosition.y,
+      });
+    }
+  };
+
+  const handleSandboxMouseMove = (e) => {
+    if (isDragging) {
+      setSandboxPosition({
+        x: e.clientX - dragStart.x,
+        y: e.clientY - dragStart.y,
+      });
+    }
+  };
+
+  const handleSandboxMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleSandboxMouseLeave = () => {
+    setIsDragging(false);
+  };
+
+  // 触摸事件处理
+  const handleSandboxTouchStart = (e) => {
+    if (e.touches.length === 1 && !isConnecting && !selectedElement) {
+      setIsDragging(true);
+      setDragStart({
+        x: e.touches[0].clientX - sandboxPosition.x,
+        y: e.touches[0].clientY - sandboxPosition.y,
+      });
+    }
+  };
+
+  const handleSandboxTouchMove = (e) => {
+    if (isDragging && e.touches.length === 1) {
+      setSandboxPosition({
+        x: e.touches[0].clientX - dragStart.x,
+        y: e.touches[0].clientY - dragStart.y,
+      });
+    }
+  };
+
+  const handleSandboxTouchEnd = () => {
+    setIsDragging(false);
+  };
+
+  const handleElementClick = (id) => {
+    setSelectedElement(id === selectedElement ? null : id);
+  };
+
+  const handleFlipElement = (id) => {
+    setElements((prev) =>
+      prev.map((el) => (el.id === id ? { ...el, flipped: !el.flipped } : el)),
+    );
+  };
+
+  return (
+    <div className="sand-table-overlay open fade-in">
+      {/* 顶部磨砂栏 */}
+      <div className={`top-glass-nav ${navCollapsed ? "collapsed" : ""}`}>
+        <button className="morandi-glass-btn" onClick={onBack}>
+          撤离
+        </button>
+        <button className="morandi-glass-btn" onClick={() => setElements([])}>
+          清空
+        </button>
+        <button
+          className="morandi-glass-btn"
+          onClick={() => setShowConnections(!showConnections)}
+        >
+          {showConnections ? "隐藏连线" : "显示连线"}
+        </button>
+        <button
+          className="morandi-glass-btn"
+          onClick={() => setNavCollapsed(true)}
+        >
+          收起
+        </button>
+      </div>
+      {navCollapsed && (
+        <div
+          onClick={() => setNavCollapsed(false)}
+          style={{
+            position: "absolute",
+            top: 10,
+            left: "50%",
+            transform: "translateX(-50%)",
+            zIndex: 101,
+            background: "rgba(255,255,255,0.5)",
+            borderRadius: "50%",
+            padding: "5px",
+          }}
+        >
+          <i className="ph ph-caret-down"></i>
+        </div>
+      )}
+
+      {/* 功能按钮栏 */}
+      <div
+        style={{
+          position: "absolute",
+          top: "80px",
+          left: "50%",
+          transform: navCollapsed
+            ? "translate(-50%, -120px)"
+            : "translateX(-50%)",
+          width: "80%",
+          maxWidth: "300px",
+          padding: "12px",
+          background: "rgba(255, 255, 255, 0.4)",
+          backdropFilter: "blur(15px)",
+          WebkitBackdropFilter: "blur(15px)",
+          borderRadius: "30px",
+          display: "flex",
+          gap: "10px",
+          zIndex: 99,
+          opacity: navCollapsed ? 0 : 1,
+          transition: "all 0.4s cubic-bezier(0.23, 1, 0.32, 1)",
+        }}
+      >
+        <button
+          className="morandi-glass-btn"
+          onClick={() => setShowWriteModal(true)}
+        >
+          书写
+        </button>
+        <button
+          className="morandi-glass-btn"
+          onClick={() => alert("选择功能开发中")}
+        >
+          选择
+        </button>
+        <button className="morandi-glass-btn" onClick={handleSimulate}>
+          推演
+        </button>
+      </div>
+
+      {/* 大沙盘区域 */}
+      <div
+        className="sand-grid-container no-scrollbar"
+        onTouchStart={(e) => {
+          handleTouchStart(e);
+          handleSandboxTouchStart(e);
+        }}
+        onTouchMove={(e) => {
+          e.preventDefault();
+          handleTouchMove(e);
+          handleSandboxTouchMove(e);
+        }}
+        onTouchEnd={(e) => {
+          handleTouchEnd(e);
+          handleSandboxTouchEnd(e);
+        }}
+        onWheel={(e) => {
+          e.preventDefault();
+          handleWheel(e);
+        }}
+        onMouseDown={handleSandboxMouseDown}
+        onMouseMove={handleSandboxMouseMove}
+        onMouseUp={handleSandboxMouseUp}
+        onMouseLeave={handleSandboxMouseLeave}
+        style={{
+          position: "relative",
+          overflow: "hidden",
+          cursor: isDragging ? "grabbing" : "grab",
+          flex: 1,
+          background: "#f2ebe3",
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "200%",
+            height: "200%",
+            backgroundImage: `radial-gradient(#e8ded6 2px, transparent 2px), radial-gradient(#e8ded6 2px, #f2ebe3 2px)`,
+            backgroundSize: `${40 * scale}px ${40 * scale}px`,
+            backgroundPosition: `${sandboxPosition.x % (40 * scale)}px ${sandboxPosition.y % (40 * scale)}px`,
+            backgroundRepeat: "repeat",
+            transform: `translate(${sandboxPosition.x}px, ${sandboxPosition.y}px) scale(${scale})`,
+            transformOrigin: "center center",
+          }}
+        >
+          {/* 渲染连接线 */}
+          {showConnections &&
+            connections.map((conn) => {
+              const sourceEl = elements.find((el) => el.id === conn.source);
+              const targetEl = elements.find((el) => el.id === conn.target);
+              if (sourceEl && targetEl) {
+                const sourceX = sourceEl.x / scale + 20;
+                const sourceY = sourceEl.y / scale + 20;
+                const targetX = targetEl.x / scale + 20;
+                const targetY = targetEl.y / scale + 20;
+
+                return (
+                  <svg
+                    key={conn.id}
+                    style={{
+                      position: "absolute",
+                      left: 0,
+                      top: 0,
+                      width: "100%",
+                      height: "100%",
+                      pointerEvents: "none",
+                      zIndex: 5,
+                    }}
+                  >
+                    <line
+                      x1={sourceX}
+                      y1={sourceY}
+                      x2={targetX}
+                      y2={targetY}
+                      stroke="rgba(138, 166, 193, 0.6)"
+                      strokeWidth="2"
+                      strokeDasharray="5,5"
+                    />
+                    <circle
+                      cx={targetX}
+                      cy={targetY}
+                      r="5"
+                      fill="rgba(138, 166, 193, 0.8)"
+                    />
+                    <circle
+                      cx={sourceX}
+                      cy={sourceY}
+                      r="5"
+                      fill="rgba(214, 114, 75, 0.8)"
+                    />
+                  </svg>
+                );
+              }
+              return null;
+            })}
+
+          {/* 渲染元素 */}
+          {simulatedElements.map((el) => (
+            <div
+              key={el.id}
+              className="placed-emoji"
+              style={{
+                left: el.x / scale,
+                top: el.y / scale,
+                fontSize: `${32 / scale}px`,
+                transform: el.flipped ? "scaleX(-1)" : "none",
+                border: isConnecting
+                  ? el.id === selectedElement
+                    ? "2px solid #D6724B"
+                    : "2px dashed #8AA6C1"
+                  : "none",
+              }}
+              onClick={() => {
+                if (isConnecting) {
+                  completeConnection(el.id);
+                } else {
+                  handleElementClick(el.id);
+                }
+              }}
+              onTouchMove={(e) => handleDrag(el.id, e)}
+              onMouseMove={(e) => e.buttons === 1 && handleDrag(el.id, e)}
+            >
+              {el.char}
+              {selectedElement === el.id && (
+                <div className="element-controls">
+                  <div
+                    className="control-btn flip-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleFlipElement(el.id);
+                    }}
+                  >
+                    翻转
+                  </div>
+                  <div
+                    className="control-btn delete-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDeleteElement(el.id);
+                    }}
+                  >
+                    删除
+                  </div>
+                  <div
+                    className="control-btn detail-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleElementDetail(el.id);
+                    }}
+                  >
+                    详情
+                  </div>
+                  <div
+                    className="control-btn connect-btn"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleConnectElement(el.id);
+                    }}
+                  >
+                    连接
+                  </div>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* 下方物品栏 */}
+      {/* 下方物品栏 */}
+      <div
+        className="item-bar-bottom no-scrollbar"
+        style={{ alignItems: "center" }}
+      >
+        {inventory.length === 0 ? (
+          <div style={{ color: "#999", fontSize: "13px", margin: "auto" }}>
+            沙盘空空如也，请点击上方“书写”生成推演组件。
+          </div>
+        ) : (
+          inventory.map((item) => (
+            <div
+              key={item.id}
+              className="emoji-item active-press"
+              style={{
+                position: "relative",
+                opacity: !item.isInfinite && item.quantity <= 0 ? 0.3 : 1,
+                border: item.isSpecial ? "2px solid #D6724B" : "none",
+                boxShadow: item.isSpecial
+                  ? "0 0 8px rgba(214,114,75,0.4)"
+                  : "none",
+                flexShrink: 0,
+              }}
+              onClick={() => handleAddInventoryItem(item)}
+            >
+              <span style={{ fontSize: "28px" }}>{item.emoji}</span>
+
+              {/* 数量角标 */}
+              {!item.isInfinite && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-5px",
+                    right: "-5px",
+                    background: "#8AA6C1",
+                    color: "white",
+                    fontSize: "10px",
+                    fontWeight: "bold",
+                    borderRadius: "10px",
+                    padding: "2px 6px",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
+                  }}
+                >
+                  {item.quantity}
+                </div>
+              )}
+              {item.isInfinite && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-5px",
+                    right: "-5px",
+                    background: "#A8C8BA",
+                    color: "white",
+                    fontSize: "10px",
+                    fontWeight: "bold",
+                    borderRadius: "10px",
+                    padding: "2px 6px",
+                  }}
+                >
+                  ∞
+                </div>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* 书写弹窗 */}
+      {showWriteModal && (
+        <div
+          className="modal-overlay"
+          onClick={() => !isGenerating && setShowWriteModal(false)}
+        >
+          <div className="write-modal" onClick={(e) => e.stopPropagation()}>
+            <h3 style={{ color: "#5A5F4D" }}>推演背景书写</h3>
+            <div className="write-input-container">
+              <textarea
+                className="write-input"
+                value={writeContent}
+                onChange={(e) => setWriteContent(e.target.value)}
+                placeholder="请输入当前局势背景，例如：曹操大军压境徐州，我方固守下邳城，需要粮草与水军支援..."
+                rows={6}
+                disabled={isGenerating}
+              />
+            </div>
+            <button
+              className="generate-btn"
+              onClick={handleGenerateItems}
+              disabled={isGenerating}
+              style={{
+                background: isGenerating
+                  ? "#ccc"
+                  : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                color: "white",
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "8px",
+              }}
+            >
+              {isGenerating ? (
+                <>
+                  <iconify-icon icon="line-md:loading-twotone-loop"></iconify-icon>
+                  推演中...
+                </>
+              ) : (
+                "开始推演"
+              )}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 物品详情弹窗（莫兰迪色温馨风格） */}
+      {detailItem && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: "#FDFCF8",
+            borderTopLeftRadius: "24px",
+            borderTopRightRadius: "24px",
+            padding: "24px",
+            boxShadow: "0 -10px 40px rgba(0,0,0,0.1)",
+            zIndex: 1000,
+            animation:
+              "slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
+            borderTop: "1px solid #E8E5D9",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              marginBottom: "16px",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+              }}
+            >
+              <div
+                style={{
+                  width: "50px",
+                  height: "50px",
+                  background: detailItem.isSpecial ? "#FADBD8" : "#E8F1ED",
+                  borderRadius: "14px",
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  fontSize: "28px",
+                  border: detailItem.isSpecial
+                    ? "2px solid #D6724B"
+                    : "1px solid #A8C8BA",
+                }}
+              >
+                {detailItem.emoji}
+              </div>
+              <div>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "18px",
+                    color: "#5A5F4D",
+                    fontWeight: "bold",
+                  }}
+                >
+                  {detailItem.name}
+                </h3>
+                <span
+                  style={{
+                    fontSize: "12px",
+                    color: "#8C917B",
+                    background: "#F0F0F0",
+                    padding: "2px 8px",
+                    borderRadius: "10px",
+                  }}
+                >
+                  {detailItem.category}
+                </span>
+              </div>
+            </div>
+            <button
+              onClick={() => setDetailItem(null)}
+              style={{
+                background: "none",
+                border: "none",
+                fontSize: "24px",
+                color: "#8C917B",
+                cursor: "pointer",
+              }}
+            >
+              ×
+            </button>
+          </div>
+
+          <div
+            style={{
+              background: "#F9F7F5",
+              padding: "16px",
+              borderRadius: "12px",
+              marginBottom: "16px",
+              borderLeft: "4px solid #D6724B",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "12px",
+                color: "#8C917B",
+                fontWeight: "bold",
+                marginBottom: "4px",
+              }}
+            >
+              物品图鉴
+            </div>
+            <div
+              style={{
+                fontSize: "14px",
+                color: "#5A5F4D",
+                lineHeight: "1.6",
+                fontStyle: "italic",
+              }}
+            >
+              "{detailItem.description}"
+            </div>
+          </div>
+
+          <div
+            style={{
+              background: "#F9F7F5",
+              padding: "12px 16px",
+              borderRadius: "12px",
+              borderLeft: "4px solid #A8C8BA",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <iconify-icon
+              icon="ph:scales-fill"
+              style={{ color: "#8FA99D", fontSize: "18px" }}
+            ></iconify-icon>
+            <span
+              style={{
+                fontSize: "13px",
+                color: "#5A5F4D",
+                fontWeight: "bold",
+              }}
+            >
+              实地推演：
+            </span>
+            <span style={{ fontSize: "13px", color: "#666" }}>
+              {detailItem.scale}
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* 模拟推演底部控制卡片 */}
+      {showSimulationModal && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            background: "#FDFCF8",
+            borderTopLeftRadius: "24px",
+            borderTopRightRadius: "24px",
+            padding: "24px",
+            boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
+            zIndex: 1100,
+            animation: "slideUp 0.3s ease-out forwards",
+            borderTop: "1px solid #E8E5D9",
+            transition: "all 0.3s ease",
+            minHeight: simulationModalCollapsed ? "100px" : "auto",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "flex-start",
+              marginBottom: "16px",
+            }}
+          >
+            <h3
+              style={{
+                margin: 0,
+                fontSize: "18px",
+                color: "#5A5F4D",
+                fontWeight: "bold",
+              }}
+            >
+              沙盘定格推演
+            </h3>
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                alignItems: "center",
+              }}
+            >
+              <button
+                onClick={() =>
+                  setSimulationModalCollapsed(!simulationModalCollapsed)
+                }
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "18px",
+                  color: "#8C917B",
+                  cursor: "pointer",
+                }}
+              >
+                {simulationModalCollapsed ? "▲" : "▼"}
+              </button>
+              <button
+                onClick={() => {
+                  setShowSimulationModal(false);
+                  setCurrentStep(-1);
+                }}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  color: "#8C917B",
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
+            </div>
+          </div>
+
+          {isSimulating ? (
+            <div
+              style={{
+                textAlign: "center",
+                padding: "20px",
+                color: "#8FA99D",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px",
+                alignItems: "center",
+              }}
+            >
+              <iconify-icon
+                icon="line-md:loading-twotone-loop"
+                style={{ fontSize: "36px" }}
+              ></iconify-icon>
+              <span style={{ fontWeight: "bold" }}>
+                正在夜观天象，排兵布阵...
+              </span>
+            </div>
+          ) : simulationSteps.length > 0 && currentStep >= 0 ? (
+            <div>
+              {/* 翻页控制栏 */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  marginBottom: simulationModalCollapsed ? "0" : "16px",
+                }}
+              >
+                <button
+                  disabled={currentStep <= 0}
+                  onClick={() => setCurrentStep((prev) => prev - 1)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "12px",
+                    border: "none",
+                    background:
+                      currentStep <= 0
+                        ? "#E0E0E0"
+                        : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                    color: "white",
+                    cursor: currentStep <= 0 ? "not-allowed" : "pointer",
+                    fontWeight: "bold",
+                  }}
+                >
+                  ◀ 上一步
+                </button>
+                <span
+                  style={{
+                    fontSize: "14px",
+                    color: "#8C917B",
+                    fontWeight: "bold",
+                  }}
+                >
+                  第 {currentStep + 1} / {simulationSteps.length} 步
+                </span>
+                <button
+                  disabled={currentStep >= simulationSteps.length - 1}
+                  onClick={() => setCurrentStep((prev) => prev + 1)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "12px",
+                    border: "none",
+                    background:
+                      currentStep >= simulationSteps.length - 1
+                        ? "#E0E0E0"
+                        : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                    color: "white",
+                    cursor:
+                      currentStep >= simulationSteps.length - 1
+                        ? "not-allowed"
+                        : "pointer",
+                    fontWeight: "bold",
+                  }}
+                >
+                  下一步 ▶
+                </button>
+              </div>
+
+              {!simulationModalCollapsed && (
+                <>
+                  {/* 兵情播报 */}
+                  <div
+                    style={{
+                      background: "#F9F7F5",
+                      padding: "16px",
+                      borderRadius: "12px",
+                      borderLeft: "4px solid #D6724B",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#8C917B",
+                        fontWeight: "bold",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      战况播报
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        color: "#5A5F4D",
+                        lineHeight: "1.6",
+                      }}
+                    >
+                      {simulationSteps[currentStep].description}
+                    </div>
+                  </div>
+
+                  {/* 军师点拨 */}
+                  <div
+                    style={{
+                      background: "#F9F7F5",
+                      padding: "12px 16px",
+                      borderRadius: "12px",
+                      borderLeft: "4px solid #A8C8BA",
+                      display: "flex",
+                      alignItems: "flex-start",
+                      gap: "8px",
+                    }}
+                  >
+                    <iconify-icon
+                      icon="ph:lightbulb-fill"
+                      style={{
+                        color: "#8FA99D",
+                        fontSize: "18px",
+                        marginTop: "2px",
+                      }}
+                    ></iconify-icon>
+                    <div>
+                      <div
+                        style={{
+                          fontSize: "12px",
+                          color: "#8C917B",
+                          fontWeight: "bold",
+                          marginBottom: "4px",
+                        }}
+                      >
+                        军师锐评
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "13px",
+                          color: "#666",
+                          fontStyle: "italic",
+                          lineHeight: "1.5",
+                        }}
+                      >
+                        "{simulationSteps[currentStep].reason}"
+                      </div>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+          ) : (
+            <div
+              style={{
+                textAlign: "center",
+                color: "#999",
+                padding: "20px",
+              }}
+            >
+              天机混沌，暂无推演结果
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// T9 情侣空间页面组件
+
+
 const T13Page = ({
   setIsStarChartOpen,
   setIsButterflyEffectOpen,
@@ -45113,8 +47504,12 @@ const T13Page = ({
   const [showGambling, setShowGambling] = useState(false);
   const [showLearning, setShowLearning] = useState(false);
   const [showTraining, setShowTraining] = useState(false);
+  const [showStarChart, setShowStarChart] = useState(false);
+  const [showButterflyEffect, setShowButterflyEffect] = useState(false);
+  const [showSandTable, setShowSandTable] = useState(false);
+  const [showRelative, setShowRelative] = useState(false);
+  const [showFarm, setShowFarm] = useState(false);
 
-  // 根据当前标签页获取对应内容
   const getContentByTab = () => {
     switch (activeTab) {
       case "game":
@@ -45131,7 +47526,7 @@ const T13Page = ({
   const currentContent = getContentByTab();
 
   return (
-    <div className="t13-container">
+    <div className="t13-container" style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
       {showGambling && (
         <T13GamblingPage onBack={() => setShowGambling(false)} />
       )}
@@ -45142,6 +47537,21 @@ const T13Page = ({
       {showEmperor && <T13EmperorPage onBack={() => setShowEmperor(false)} />}
       {showLearning && (
         <T13LearningPage onBack={() => setShowLearning(false)} />
+      )}
+      {showStarChart && (
+        <StarChartPage onBack={() => { setShowStarChart(false); if (setIsStarChartOpen) setIsStarChartOpen(false); }} />
+      )}
+      {showButterflyEffect && (
+        <ButterflyEffectPage onBack={() => { setShowButterflyEffect(false); if (setIsButterflyEffectOpen) setIsButterflyEffectOpen(false); }} />
+      )}
+      {showSandTable && (
+        <SandTablePage onBack={() => { setShowSandTable(false); if (setIsSandTableOpen) setIsSandTableOpen(false); }} />
+      )}
+      {showRelative && (
+        <ReDeductionPage onBack={() => { setShowRelative(false); if (setIsRelativeOpen) setIsRelativeOpen(false); }} />
+      )}
+      {showFarm && (
+        <OddFarmPage onBack={() => { setShowFarm(false); if (setIsFarmOpen) setIsFarmOpen(false); }} />
       )}
       <div className="scroll-container hide-scrollbar">
         <T13Header />
@@ -45154,29 +47564,34 @@ const T13Page = ({
               <div
                 key={item.id}
                 onClick={() => {
-                  if (item.title === "修武扬文") {
+                  if (item.title === "修武扬文" || item.title.includes("修武")) {
                     setShowTraining(true);
-                  } else if (item.title === "通灵赌坊") {
+                  } else if (item.title === "通灵赌坊" || item.title.includes("赌坊")) {
                     setShowGambling(true);
-                  } else if (item.title === "金库统计" || item.title.includes("统计")) {
+                  } else if (item.title === "州郡统计年表" || item.title === "金库统计" || item.title.includes("统计")) {
                     setShowStats(true);
                   } else if (item.title === "东汉驿路通" || item.title.includes("驿路通") || item.title.includes("路通")) {
                     setShowMap(true);
-                  } else if (item.title === "八卦测算" || item.title.includes("测算") || item.title.includes("小摊")) {
+                  } else if (item.title === "谶纬小摊" || item.title === "八卦测算" || item.title.includes("测算") || item.title.includes("小摊")) {
                     setShowFortune(true);
-                  } else if (item.title === "皇帝的新衣" || item.title.includes("皇帝")) {
+                  } else if (item.title === "献帝晴雨表" || item.title.includes("晴雨表") || item.title.includes("献帝") || item.title.includes("皇帝")) {
                     setShowEmperor(true);
-                  } else if (item.title === "星象图" || item.title.includes("星")) {
-                    setIsStarChartOpen(true);
+                  } else if (item.title === "列星" || item.title === "星象图" || item.title.includes("星")) {
+                    setShowStarChart(true);
+                    if (setIsStarChartOpen) setIsStarChartOpen(true);
                   } else if (item.title === "蝴蝶效应" || item.title.includes("效应")) {
-                    setIsButterflyEffectOpen(true);
-                  } else if (item.title === "沙盘推演" || item.title.includes("沙盘")) {
-                    setIsSandTableOpen(true);
-                  } else if (item.title === "推演重现" || item.actionId === "re_deduction") {
-                    setIsRelativeOpen(true);
+                    setShowButterflyEffect(true);
+                    if (setIsButterflyEffectOpen) setIsButterflyEffectOpen(true);
+                  } else if (item.title === "沙盘模拟器" || item.title === "沙盘推演" || item.title.includes("沙盘")) {
+                    setShowSandTable(true);
+                    if (setIsSandTableOpen) setIsSandTableOpen(true);
+                  } else if (item.title === "相对演绎" || item.actionId === "re_deduction") {
+                    setShowRelative(true);
+                    if (setIsRelativeOpen) setIsRelativeOpen(true);
                   } else if (item.title === "古怪农场" || item.title.includes("农场")) {
-                    setIsFarmOpen(true);
-                  } else if (item.title === "学习系统") {
+                    setShowFarm(true);
+                    if (setIsFarmOpen) setIsFarmOpen(true);
+                  } else if (item.title === "学习系统" || item.title.includes("学习")) {
                     setShowLearning(true);
                   }
                 }}
@@ -45192,11 +47607,6 @@ const T13Page = ({
     </div>
   );
 };
-
-// ==================== T13 组件群结束 ====================
-
-// ==================== 相对演绎页面组件 ====================
-// --- 老虎机 3D 滚动选择器组件 ---
 const SlotMachineSelector = ({ options, onSelect, onClose }) => {
   const [selectedIndex, setSelectedIndex] = React.useState(0);
   const itemHeight = 60; // 每一项的高度，需要和 CSS 高度对应
@@ -73222,1095 +75632,6 @@ const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
 };
 
 // ==================== [修改] 列星页面组件 (AI 命轨推演版) ====================
-const StarChartPage = ({ onBack }) => {
-  // 生成随机星座的函数
-  const generateRandomConstellation = (
-    starCount = Math.floor(Math.random() * 7) + 6,
-  ) => {
-    const nodes = [];
-    const links = [];
-
-    for (let i = 0; i < starCount; i++) {
-      const x = Math.random() * 200 + 100; // 100-300（缩小水平范围）
-      const y = Math.random() * 305 + 125; // 180-430（缩小垂直范围，避开统计文本区域）
-      const size = Math.random() * 3 + 2; // 2-5（缩小星星大小）
-      nodes.push([x, y, size]);
-    }
-
-    const sortedNodes = [...nodes].map((node, index) => ({
-      index,
-      node,
-    }));
-    if (Math.random() > 0.5) {
-      sortedNodes.sort((a, b) => a.node[0] - b.node[0]);
-    } else {
-      sortedNodes.sort((a, b) => a.node[1] - b.node[1]);
-    }
-
-    for (let i = 0; i < sortedNodes.length - 1; i++) {
-      links.push([sortedNodes[i].index, sortedNodes[i + 1].index]);
-    }
-
-    for (let i = 0; i < nodes.length; i++) {
-      if (Math.random() > 0.7) {
-        const distances = [];
-        for (let j = 0; j < nodes.length; j++) {
-          if (i !== j) {
-            const dx = nodes[i][0] - nodes[j][0];
-            const dy = nodes[i][1] - nodes[j][1];
-            const distance = Math.sqrt(dx * dx + dy * dy);
-            const linkExists = links.some(
-              (link) =>
-                (link[0] === i && link[1] === j) ||
-                (link[0] === j && link[1] === i),
-            );
-            if (!linkExists) {
-              distances.push({ index: j, distance });
-            }
-          }
-        }
-        if (distances.length > 0) {
-          distances.sort((a, b) => a.distance - b.distance);
-          links.push([i, distances[0].index]);
-        }
-      }
-    }
-
-    return { nodes, links, starCount };
-  };
-
-  const [constellation, setConstellation] = React.useState(
-    generateRandomConstellation(),
-  );
-  const [inputText, setInputText] = React.useState("");
-  const [displayText, setDisplayText] = React.useState("");
-  const [showText, setShowText] = React.useState(false);
-
-  // 新增：AI及逝者相关状态
-  const [isGenerating, setIsGenerating] = React.useState(false);
-  const [statistics, setStatistics] = React.useState("");
-  const [deceasedList, setDeceasedList] = React.useState([]);
-  const [selectedDeceased, setSelectedDeceased] = React.useState(null);
-
-  // ===== 新增：他人寄语相关状态 =====
-  const [showTributesModal, setShowTributesModal] = React.useState(false);
-  const [isGeneratingTributes, setIsGeneratingTributes] = React.useState(false);
-  const [tributesList, setTributesList] = React.useState([]);
-
-  // ===== 新增：处理生成他人寄语 =====
-  const handleGenerateTributes = async () => {
-    if (!selectedDeceased || isGeneratingTributes) return;
-
-    setIsGeneratingTributes(true);
-    setShowTributesModal(true); // 打开弹窗显示加载中
-    setTributesList([]); // 清空旧数据
-
-    try {
-      // 1. 获取世界书设定
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 2. 获取传讯角色 (排除群聊和装饰)
-      let allChars = [];
-      if (window.chatCharacterStore) {
-        allChars = await window.chatCharacterStore.getAll();
-      } else {
-        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
-      }
-      const validChars = allChars.filter(
-        (c) => !String(c.id).startsWith("group") && c.type !== "decor",
-      );
-
-      // 随机抽取 2 到 3 个现有的传讯角色
-      const shuffled = [...validChars].sort(() => 0.5 - Math.random());
-      const selectedChars = shuffled.slice(
-        0,
-        Math.max(2, Math.min(3, validChars.length)),
-      );
-
-      const charsInfo = selectedChars
-        .map(
-          (c) =>
-            `【已有角色】姓名: ${c.name} | 身份/背景: ${c.profile?.background || "未知"} | 性格: ${c.profile?.personality || "无"} | 语言风格: ${c.profile?.style || "无"}`,
-        )
-        .join("\n");
-
-      // 3. 构建 Prompt
-      const sysPrompt =
-        "你是一个深谙东汉末年历史与人情冷暖的文案生成器，擅长模拟不同身份人物的口吻表达对逝者的缅怀或态度。";
-      const userPrompt = `
-                            【世界设定】
-                            ${worldContext}
-
-                            【逝者信息】
-                            姓名：${selectedDeceased.name}
-                            年龄：${selectedDeceased.age}
-                            身份/家族：${selectedDeceased.family} - ${selectedDeceased.profession}
-                            死因：${selectedDeceased.death_cause}
-                            生前最爱：${selectedDeceased.favorite}
-                            生前愿景：${selectedDeceased.wish}
-
-                            【必须包含的特定已知角色】
-                            ${charsInfo}
-                            (注意：必须使用上述列出的已有角色生成缅怀，并且寄语的语气必须严格符合他们的性格和语言风格)
-
-                            【任务】
-                            请生成 10 到 15 条针对该逝者的缅怀/寄语。
-                            要求：
-                            1. 评价的人中必须包含上面提供的【已有角色】（如果有的话）。
-                            2. 其余评价人可以是随机生成的NPC（如当地人、客居者、家人、陌生人、甚至是坏人、仇人等）。
-                            3. 每条寄语的语言风格必须符合评价人的身份和立场（如仇人可能冷嘲热讽，亲人悲痛欲绝，路人只作叹息）。
-                            4. 严格返回纯 JSON 数组格式，不要包含任何 Markdown 标记（如 \`\`\`json ），直接以 [ 开头，] 结尾。
-
-                            返回格式示例：
-                            [
-                              {
-                                "name": "评价人名字",
-                                "identity": "评价人身份（如：幽州商贩、死者长兄、或者是已有角色）",
-                                "item": "带给逝者的东西（如：一壶浊酒、一束野花、一把残剑、甚至是一口唾沫）",
-                                "message": "想告诉逝者的话"
-                              }
-                            ]
-                        `;
-
-      // 4. 调用大模型
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data) && data.length > 0) {
-                setTributesList(data);
-              } else {
-                throw new Error("返回格式非数组");
-              }
-            } catch (e) {
-              console.error("解析寄语失败:", e, reply);
-              alert("获取寄语失败，请重试。");
-              setShowTributesModal(false);
-            } finally {
-              setIsGeneratingTributes(false);
-            }
-          },
-          (err) => {
-            console.error(err);
-            alert("网络波动，获取寄语失败。请检查API设置。");
-            setIsGeneratingTributes(false);
-            setShowTributesModal(false);
-          },
-        );
-      } else {
-        alert("未找到 API 接口，请先在设置中配置 API！");
-        setIsGeneratingTributes(false);
-        setShowTributesModal(false);
-      }
-    } catch (e) {
-      console.error(e);
-      setIsGeneratingTributes(false);
-      setShowTributesModal(false);
-    }
-  };
-
-  // 处理发送按钮点击 (接入大模型推演)
-  const handleSend = async () => {
-    if (!inputText.trim() || isGenerating) return;
-
-    setIsGenerating(true);
-    try {
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 预先生成下一张星图，以确定需生成的逝者数量
-      const newConstellation = generateRandomConstellation();
-      const count = newConstellation.starCount;
-
-      const sysPrompt =
-        "你是一个沉浸式的东汉末年历史推演AI计算器，深谙世事沧桑与平民百态。";
-      const userPrompt = `
-                            【世界设定】
-                            ${worldContext}
-
-                            【发生的事件记录】
-                            ${inputText}
-
-                            【任务要求】
-                            基于上述事件和世界观，推演这场事件造成的伤亡情况，并具体生成 ${count} 名在此事件中丧生的人物信息以点亮星象。
-                            人物身份要多样（包括老者、孩童、士兵、士族、平民等），人物的性格、生前愿望和临终念头要严格符合其年龄、身份与当前的时代背景。
-
-                            【输出格式严格要求】
-                            必须直接输出纯JSON格式数据，绝对不要包含Markdown代码块（如 \`\`\`json ）。格式如下：
-                            {
-                              "statistics": "这段文字描述此次事件造成的总伤亡人数及职业/身份分布（如：此次事件造成共计xxx人伤亡，其中平民xx人，士兵xx人等。言简意赅）",
-                              "deceased": [
-                                {
-                                  "name": "姓名",
-                                  "family": "家族或出身（如：河内平民、颍川陈氏）",
-                                  "profession": "职业/身份",
-                                  "age": "年龄（包含单位，如'7岁'、'54岁'）",
-                                  "death_cause": "死法（在三五句话以内，需要描述清楚）",
-                                  "favorite": "生前喜欢的事物",
-                                  "wish": "生前最大的愿望",
-                                  "last_thought": "死之前的最后一个念头（以第一人称主观视角表达）"
-                                }
-                              ]
-                            }
-                            注：deceased 数组的长度必须严格等于 ${count}。
-                        `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-
-              setConstellation(newConstellation);
-              setStatistics(data.statistics || "");
-
-              const dList = data.deceased || [];
-              // 兜底补齐，以防大模型生成数量不够导致报错
-              while (dList.length < count) {
-                dList.push({
-                  name: "无名氏",
-                  family: "未知",
-                  profession: "平民",
-                  age: "未知",
-                  death_cause:
-                    "今天是农历初三。父母放他出去玩。他找到了小伙伴，一起提着蹴鞠。但遇到了府兵，被殴打致死。",
-                  favorite: "活着",
-                  wish: "天下太平",
-                  last_thought: "好冷...",
-                });
-              }
-              setDeceasedList(dList);
-
-              setDisplayText(inputText.trim());
-              setShowText(true);
-              setInputText("");
-            } catch (e) {
-              console.error("星轨数据解析失败:", e, reply);
-              alert("星轨推演失败，请重试。");
-            } finally {
-              setIsGenerating(false);
-            }
-          },
-          (err) => {
-            console.error(err);
-            alert("星轨推演请求失败，请检查API设置。");
-            setIsGenerating(false);
-          },
-        );
-      } else {
-        alert("未找到 API 接口，请前往设置配置！");
-        setIsGenerating(false);
-      }
-    } catch (e) {
-      console.error(e);
-      setIsGenerating(false);
-    }
-  };
-
-  return (
-    <div className="starchart-overlay open fade-in">
-      <div className="flex justify-between p-6 items-center z-10">
-        <div className="flex items-center gap-4 flex-1">
-          <input
-            type="text"
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            placeholder="记录灾厄、战乱或变故..."
-            className="border-b-2 border-dashed border-white/30 flex-1 bg-transparent text-white placeholder-white/50 py-2 focus:outline-none"
-            disabled={isGenerating}
-          />
-          <button
-            onClick={handleSend}
-            disabled={isGenerating}
-            className="constellation-btn flex items-center justify-center"
-          >
-            <i className="ph ph-paper-plane text-white text-sm"></i>
-          </button>
-        </div>
-        <i
-          className="ph ph-x text-white text-2xl ml-6 cursor-pointer"
-          onClick={onBack}
-        ></i>
-      </div>
-
-      {/* 顶部统计数据展示区 */}
-      {statistics && !isGenerating && (
-        <div className="px-6 pb-2 text-white/80 text-sm text-center leading-relaxed z-10 font-serif">
-          {statistics}
-        </div>
-      )}
-
-      <div className="flex-1 relative">
-        <svg viewBox="0 0 400 600" width="100%" height="100%">
-          {/* 连线层 */}
-          {constellation.links.map((link, i) => (
-            <g key={`link-${i}`}>
-              <line
-                className="star-glow"
-                x1={constellation.nodes[link[0]][0]}
-                y1={constellation.nodes[link[0]][1]}
-                x2={constellation.nodes[link[1]][0]}
-                y2={constellation.nodes[link[1]][1]}
-              />
-              <line
-                className="star-line"
-                x1={constellation.nodes[link[0]][0]}
-                y1={constellation.nodes[link[0]][1]}
-                x2={constellation.nodes[link[1]][0]}
-                y2={constellation.nodes[link[1]][1]}
-              />
-            </g>
-          ))}
-          {/* 节点层 (可点击查看逝者信息) */}
-          {constellation.nodes.map((node, i) => (
-            <circle
-              key={i}
-              className="star-node pulse-anim"
-              cx={node[0]}
-              cy={node[1]}
-              r={node[2] / 1.5}
-              style={{
-                animationDelay: `${i * 0.5}s`,
-                cursor: deceasedList.length > 0 ? "pointer" : "default",
-              }}
-              onClick={() => {
-                if (deceasedList[i]) {
-                  setSelectedDeceased(deceasedList[i]);
-                }
-              }}
-            />
-          ))}
-        </svg>
-
-        {/* 加载状态遮罩 */}
-        {isGenerating && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[#0a0b16]/70 z-20">
-            <div className="text-white flex flex-col items-center gap-3">
-              <iconify-icon
-                icon="line-md:loading-twotone-loop"
-                style={{ fontSize: "36px" }}
-              ></iconify-icon>
-              <span className="text-sm tracking-widest font-serif">
-                星象交替，命轨推演中...
-              </span>
-            </div>
-          </div>
-        )}
-
-        {/* 用户输入文字底部显示区域 */}
-        {showText && !isGenerating && (
-          <div className="absolute bottom-20 left-0 right-0 text-center pointer-events-none">
-            <div
-              className={`text-white font-serif text-lg transition-all duration-1000 ease-in-out ${
-                showText ? "opacity-100 blur-0" : "opacity-0 blur-md"
-              }`}
-            >
-              {displayText}
-            </div>
-          </div>
-        )}
-      </div>
-
-      <div className="p-10 text-center text-white/30 text-xs tracking-widest font-serif italic">
-        - 嘒彼小星 ，三五在东 -
-      </div>
-
-      {/* 逝者信息弹出卡片 */}
-      {selectedDeceased && (
-        <div className="fixed inset-x-0 bottom-0 bg-[#F9F7F5] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-50 animate-slide-up max-h-[85vh] flex flex-col">
-          <div className="p-5 flex justify-between items-center border-b border-gray-200">
-            <h3 className="text-xl font-bold text-[#1a1b3a] tracking-widest font-serif">
-              命轨记录
-            </h3>
-            <button
-              onClick={() => setSelectedDeceased(null)}
-              className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 active:scale-95"
-            >
-              <i className="ph-bold ph-x"></i>
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-6 flex flex-col gap-4 text-[#4A4F55] no-scrollbar">
-            <div className="flex items-end gap-3 mb-2">
-              <h2 className="text-3xl font-bold text-[#1a1b3a] font-serif">
-                {selectedDeceased.name}
-              </h2>
-              <span className="text-sm bg-gray-200 px-3 py-1 rounded-full text-gray-600 font-medium">
-                {selectedDeceased.age}
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                <div className="text-xs text-gray-400 mb-1">家族 / 出身</div>
-                <div className="font-medium text-[#1a1b3a]">
-                  {selectedDeceased.family}
-                </div>
-              </div>
-              <div className="bg-white p-3 rounded-xl shadow-sm border border-gray-100">
-                <div className="text-xs text-gray-400 mb-1">职业 / 身份</div>
-                <div className="font-medium text-[#1a1b3a]">
-                  {selectedDeceased.profession}
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-red-50 p-4 rounded-xl border-l-4 border-red-300">
-              <div className="text-xs text-red-400 mb-1 font-bold">
-                殒命之因
-              </div>
-              <div className="text-sm font-medium text-red-800 leading-relaxed">
-                {selectedDeceased.death_cause}
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-              <div className="text-xs text-gray-400 mb-1">生前偏爱</div>
-              <div className="font-medium text-[#4A4F55] leading-relaxed">
-                {selectedDeceased.favorite}
-              </div>
-            </div>
-
-            <div className="bg-white p-4 rounded-xl border border-gray-100 shadow-sm">
-              <div className="text-xs text-gray-400 mb-1">最大愿景</div>
-              <div className="font-medium text-[#4A4F55] leading-relaxed">
-                {selectedDeceased.wish}
-              </div>
-            </div>
-
-            <div className="bg-[#1a1b3a]/5 p-5 rounded-xl mt-2 relative">
-              <div className="absolute top-2 left-2 opacity-10 text-4xl font-serif">
-                "
-              </div>
-              <div className="text-xs text-gray-500 mb-2 font-bold">
-                临终执念
-              </div>
-              <div className="italic font-serif text-[#1a1b3a] text-base leading-relaxed relative z-10 px-2">
-                {selectedDeceased.last_thought}
-              </div>
-            </div>
-          </div>
-
-          <div className="p-4 flex gap-3 border-t border-gray-200 bg-white">
-            <button
-              className="flex-1 py-3 rounded-xl bg-[#e8e5d9] text-[#5A5F4D] font-bold active:scale-95 transition-transform flex items-center justify-center"
-              onClick={() => {
-                const msg = prompt("写下你的寄语：");
-                if (msg) {
-                  alert("寄语已化作星光。");
-                  alert("已送上白菊，愿逝者安息。");
-                }
-              }}
-            >
-              <iconify-icon
-                icon="ph:flower-lotus-fill"
-                style={{ marginRight: "8px", fontSize: "18px" }}
-              ></iconify-icon>
-              送花缅怀
-            </button>
-            <button
-              className="flex-1 py-3 rounded-xl bg-[#1a1b3a] text-white font-bold active:scale-95 transition-transform flex items-center justify-center"
-              onClick={handleGenerateTributes}
-            >
-              <iconify-icon
-                icon="ph:paper-plane-tilt-fill"
-                style={{ marginRight: "8px", fontSize: "18px" }}
-              ></iconify-icon>
-              他人寄语
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ===== 新增：他人寄语弹出卡片 ===== */}
-      {showTributesModal && (
-        <div className="fixed inset-x-0 bottom-0 bg-[#F9F7F5] rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.5)] z-[60] animate-slide-up max-h-[85vh] flex flex-col">
-          <div className="p-5 flex justify-between items-center border-b border-gray-200">
-            <h3 className="text-xl font-bold text-[#1a1b3a] tracking-widest font-serif flex items-center gap-2">
-              <iconify-icon
-                icon="ph:paper-plane-tilt-fill"
-                style={{ color: "#D6724B" }}
-              ></iconify-icon>
-              众人寄语
-            </h3>
-            <button
-              onClick={() => setShowTributesModal(false)}
-              className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 active:scale-95"
-            >
-              <i className="ph-bold ph-x"></i>
-            </button>
-          </div>
-
-          <div className="flex-1 overflow-y-auto p-5 bg-[#F9F7F5] no-scrollbar">
-            {isGeneratingTributes ? (
-              <div className="flex flex-col items-center justify-center h-48 text-[#8C917B] gap-3">
-                <iconify-icon
-                  icon="line-md:loading-twotone-loop"
-                  style={{ fontSize: "36px", color: "#1a1b3a" }}
-                ></iconify-icon>
-                <span className="text-sm font-bold tracking-widest font-serif">
-                  正在倾听世人的凭吊...
-                </span>
-              </div>
-            ) : tributesList.length > 0 ? (
-              <div className="flex flex-col gap-4 pb-8">
-                {tributesList.map((tribute, idx) => (
-                  <div
-                    key={idx}
-                    className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 relative"
-                  >
-                    <div className="flex justify-between items-start mb-2">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-[#1a1b3a] flex items-center justify-center text-white text-sm font-bold font-serif shadow-inner">
-                          {tribute.name ? tribute.name.charAt(0) : "?"}
-                        </div>
-                        <div>
-                          <div className="font-bold text-[#1a1b3a] text-sm leading-tight">
-                            {tribute.name}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-0.5">
-                            {tribute.identity}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="bg-[#fdfcf8] p-3 rounded-lg border-l-4 border-[#D6724B] mb-3 mt-2">
-                      <div className="text-xs text-gray-400 font-bold mb-1">
-                        <iconify-icon
-                          icon="ph:gift-fill"
-                          style={{ marginRight: "4px" }}
-                        ></iconify-icon>
-                        带来/献上了
-                      </div>
-                      <div className="text-sm text-[#4A4F55] font-medium">
-                        {tribute.item}
-                      </div>
-                    </div>
-
-                    <div className="text-sm text-[#4A4F55] leading-relaxed italic font-serif">
-                      "{tribute.message}"
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center text-gray-500 mt-10 font-serif">
-                此处空空如也，风中再无余音。
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ==================== T13 蝴蝶效应页面组件 ====================
-const ButterflyEffectPage = ({ onBack }) => {
-  const { useState } = React;
-
-  // 状态管理
-  const [inputText, setInputText] = useState("");
-  const [isEditing, setIsEditing] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const [effectData, setEffectData] = useState([]); // 存储所有节点生成的推演数据
-  const [selectedDot, setSelectedDot] = useState(null); // 当前选中的圆点数据
-  const [showModal, setShowModal] = useState(false); // 控制卡片显示
-
-  // 莫兰迪色值
-  const colors = {
-    white: "#FFFFFF",
-    gray: "#A0A0A0",
-    pink: "#FF9B9B",
-  };
-
-  // 16个圆点坐标及类型定义：8白(好结局), 7灰(坏结局), 1粉(转折点)
-  const dots = [
-    // 左环 (4白3灰)
-    { id: 0, type: "好结局", x: -100, y: 0, color: colors.white },
-    { id: 1, type: "好结局", x: -85, y: -45, color: colors.white },
-    { id: 2, type: "好结局", x: -50, y: -65, color: colors.white },
-    { id: 3, type: "好结局", x: -10, y: -45, color: colors.white },
-    { id: 4, type: "坏结局", x: -10, y: 45, color: colors.gray },
-    { id: 5, type: "坏结局", x: -45, y: 65, color: colors.gray },
-    { id: 6, type: "坏结局", x: -82, y: 45, color: colors.gray },
-    // 右环 (4白4灰)
-    { id: 7, type: "坏结局", x: 100, y: -20, color: colors.gray },
-    { id: 8, type: "坏结局", x: 85, y: -55, color: colors.gray },
-    { id: 9, type: "坏结局", x: 50, y: -70, color: colors.gray },
-    { id: 10, type: "坏结局", x: 10, y: -45, color: colors.gray },
-    { id: 11, type: "好结局", x: 10, y: 45, color: colors.white },
-    { id: 12, type: "好结局", x: 45, y: 70, color: colors.white },
-    { id: 13, type: "好结局", x: 82, y: 55, color: colors.white },
-    { id: 14, type: "好结局", x: 100, y: 20, color: colors.white },
-    // 中心连接点 (1粉)
-    {
-      id: 15,
-      type: "转折点",
-      x: 0,
-      y: 0,
-      color: colors.pink,
-      isCenter: true,
-    },
-  ];
-
-  // 核心：调用 AI 生成蝴蝶效应
-  const handleGenerate = async () => {
-    if (!inputText.trim())
-      return alert("请先输入您想要引发蝴蝶效应的起源文字！");
-    if (isGenerating) return;
-
-    setIsGenerating(true);
-    setEffectData([]); // 清空旧数据
-
-    try {
-      // 获取世界书设定
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      const sysPrompt = "你是一个精通东汉历史、蝴蝶效应推演及人性洞察的大师。";
-      const userPrompt = `
-                        【世界设定】
-                        ${worldContext}
-
-                        【起源事件】
-                        ${inputText}
-
-                        【推演任务】
-                        基于上述起源，严格符合东汉史实推演蝴蝶效应的16个事件节点。
-                        - 节点 15 是【转折点】：好坏都会经历的一环，直接承接起源事件，它是分歧的共同连接点。
-                        - 节点 0,1,2,3,11,12,13,14 是【好结局线】：从左到右依次递进 (0->1->2->3->11->12->13->14)，后一个事件必须和前一个事件有关联，开端承接转折点15，最终导向一个相对圆满或给人希望的结局。
-                        - 节点 4,5,6,7,8,9,10 是【坏结局线】：从左到右依次递进 (4->5->6->7->8->9->10)，后一个事件必须和前一个事件有关联，开端承接转折点15，最终导向一个残缺、悲惨或混乱的结局。
-
-                        【重要提示】
-                        - 事件可以是日常生活中的小事，也可以是大格局或重大历史事件
-                        - 注重细节和真实感，让事件更贴近普通人的生活
-                        - 保持东汉时期的背景设定。
-
-                        【输出格式严格要求】
-                        必须返回一个长度严格为 16 的纯 JSON 数组，数组对象的 id 必须是从 0 到 15。
-                        请绝对不要包含 Markdown 代码块（如 \`\`\`json ），直接以 [ 开始，] 结尾。
-                        数组每个对象的结构如下：
-                        {
-                          "id": 数字索引(0-15),
-                          "name": "事件关联人（或物品）的姓名",
-                          "identity": "关联人的身份",
-                          "content": "事件具体内容（3到5句话，层层递进）",
-                          "original": "原本走向（若起源未发生，本来的日常轨迹）",
-                          "svgHtml": "一段表示此事件的简单几何SVG代码，宽高视口为 viewBox='0 0 100 100'，颜色建议符合该节点氛围，代码中可以加点行内CSS交互效果"
-                        }
-                        `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data) && data.length === 16) {
-                // 将数据通过 id 排序以便匹配
-                data.sort((a, b) => a.id - b.id);
-                setEffectData(data);
-                alert("蝴蝶效应推演完成！\n请点击页面上的圆点查看命运分歧。");
-              } else {
-                throw new Error("返回的数组长度不足或结构异常");
-              }
-            } catch (e) {
-              console.error("解析AI返回数据失败:", e, reply);
-              alert("天机受阻，推演失败，请重试！");
-            } finally {
-              setIsGenerating(false);
-              setIsEditing(false);
-            }
-          },
-          (err) => {
-            console.error("请求失败:", err);
-            alert("请求失败，请检查 API 接口配置！");
-            setIsGenerating(false);
-          },
-        );
-      } else {
-        alert("未找到 API 接口，请先在设置中配置！");
-        setIsGenerating(false);
-      }
-    } catch (e) {
-      console.error(e);
-      setIsGenerating(false);
-    }
-  };
-
-  // 处理点击圆点
-  const handleDotClick = (dot) => {
-    if (effectData.length === 0) {
-      alert("请先在底部的虚线上输入起源，并点击发送按钮引发推演！");
-      return;
-    }
-    const data = effectData.find((item) => item.id === dot.id);
-    if (data) {
-      setSelectedDot({ ...data, type: dot.type });
-      setShowModal(true);
-    }
-  };
-
-  return (
-    <div className="butterfly-effect-overlay open">
-      {/* 顶部返回按钮 */}
-      <div className="be-back-btn" onClick={onBack}>
-        ✕
-      </div>
-
-      {/* 圆点排列舞台 */}
-      <div className="be-infinity-container" style={{ marginTop: "-60px" }}>
-        {dots.map((dot, i) => (
-          <div
-            key={i}
-            className="be-dot"
-            onClick={() => handleDotClick(dot)}
-            style={{
-              backgroundColor: dot.color,
-              transform: `translate(${dot.x}px, ${dot.y}px) ${effectData.length > 0 && selectedDot?.id === dot.id ? "scale(1.3)" : "scale(1)"}`,
-              boxShadow: dot.isCenter
-                ? "0 0 15px rgba(255,155,155,0.6)"
-                : effectData.length > 0
-                  ? "0 0 10px rgba(255,255,255,0.4)"
-                  : "none",
-              zIndex: dot.isCenter ? 10 : 1,
-              cursor: effectData.length > 0 ? "pointer" : "default",
-              border:
-                effectData.length > 0
-                  ? "2px solid rgba(255,255,255,0.8)"
-                  : "none",
-              transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-            }}
-          />
-        ))}
-      </div>
-
-      {/* 底部虚线输入和发送按钮 */}
-      <div
-        style={{
-          position: "absolute",
-          bottom: "100px",
-          display: "flex",
-          alignItems: "center",
-          gap: "10px",
-          width: "80%",
-          maxWidth: "400px",
-        }}
-      >
-        <div
-          style={{
-            flex: 1,
-            borderBottom: "3px dashed white",
-            position: "relative",
-            height: "30px",
-          }}
-        >
-          {isEditing ? (
-            <input
-              autoFocus
-              value={inputText}
-              onChange={(e) => setInputText(e.target.value)}
-              onBlur={() => setIsEditing(false)}
-              onKeyDown={(e) => e.key === "Enter" && handleGenerate()}
-              style={{
-                width: "100%",
-                background: "transparent",
-                border: "none",
-                color: "white",
-                outline: "none",
-                textAlign: "center",
-                position: "absolute",
-                bottom: "-5px",
-                fontSize: "16px",
-                fontFamily: "inherit",
-              }}
-            />
-          ) : (
-            <div
-              onClick={() => !isGenerating && setIsEditing(true)}
-              style={{
-                width: "100%",
-                height: "100%",
-                cursor: isGenerating ? "not-allowed" : "text",
-                color: "white",
-                textAlign: "center",
-                display: "flex",
-                alignItems: "flex-end",
-                justifyContent: "center",
-                paddingBottom: "5px",
-                fontSize: "15px",
-                opacity: inputText ? 1 : 0.6,
-                fontFamily: "inherit",
-              }}
-            >
-              {inputText || "在此输入起源，扇动命运的翅膀..."}
-            </div>
-          )}
-        </div>
-
-        {/* 发送按钮 */}
-        <div
-          onClick={handleGenerate}
-          style={{
-            width: "42px",
-            height: "42px",
-            backgroundColor:
-              inputText.trim() && !isGenerating
-                ? "#FF9B9B"
-                : "rgba(255, 155, 155, 0.3)",
-            borderRadius: "50%",
-            cursor:
-              inputText.trim() && !isGenerating ? "pointer" : "not-allowed",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            boxShadow:
-              inputText.trim() && !isGenerating
-                ? "0 4px 12px rgba(255,155,155,0.4)"
-                : "none",
-            transition: "all 0.3s ease",
-          }}
-        >
-          {isGenerating ? (
-            <iconify-icon
-              icon="line-md:loading-twotone-loop"
-              style={{ color: "white", fontSize: "20px" }}
-            ></iconify-icon>
-          ) : (
-            <iconify-icon
-              icon="ph:paper-plane-tilt-fill"
-              style={{ color: "white", fontSize: "20px" }}
-            ></iconify-icon>
-          )}
-        </div>
-      </div>
-
-      {/* 弹出的卡片层 */}
-      {showModal && selectedDot && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: "rgba(30, 30, 30, 0.95)",
-            backdropFilter: "blur(12px)",
-            borderTopLeftRadius: "24px",
-            borderTopRightRadius: "24px",
-            padding: "30px 24px",
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.5)",
-            zIndex: 100,
-            animation:
-              "slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
-            color: "#fff",
-            maxHeight: "85vh",
-            overflowY: "auto",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "20px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                flexDirection: "column",
-                gap: "8px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
-              >
-                <span
-                  style={{
-                    background:
-                      selectedDot.type === "好结局"
-                        ? "#FFFFFF"
-                        : selectedDot.type === "坏结局"
-                          ? "#A0A0A0"
-                          : "#FF9B9B",
-                    color: selectedDot.type === "好结局" ? "#333" : "#FFF",
-                    padding: "4px 12px",
-                    borderRadius: "12px",
-                    fontSize: "12px",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {selectedDot.type}
-                </span>
-                <span
-                  style={{
-                    fontSize: "20px",
-                    fontWeight: "bold",
-                    fontFamily: "serif",
-                    letterSpacing: "2px",
-                  }}
-                >
-                  {selectedDot.name}
-                </span>
-              </div>
-              <span
-                style={{
-                  fontSize: "12px",
-                  color: "rgba(255,255,255,0.6)",
-                }}
-              >
-                身份标签：{selectedDot.identity}
-              </span>
-            </div>
-            <button
-              onClick={() => setShowModal(false)}
-              style={{
-                background: "none",
-                border: "none",
-                color: "#fff",
-                fontSize: "24px",
-                cursor: "pointer",
-                opacity: 0.7,
-              }}
-            >
-              ✕
-            </button>
-          </div>
-
-          <div
-            style={{
-              background: "rgba(255,255,255,0.08)",
-              padding: "16px",
-              borderRadius: "12px",
-              marginBottom: "16px",
-              borderLeft: "4px solid #FF9B9B",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.5)",
-                marginBottom: "8px",
-                fontWeight: "bold",
-              }}
-            >
-              事件内容
-            </div>
-            <div
-              style={{
-                fontSize: "14px",
-                lineHeight: "1.7",
-                letterSpacing: "1px",
-                color: "rgba(255,255,255,0.95)",
-              }}
-            >
-              {selectedDot.content}
-            </div>
-          </div>
-
-          <div
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              padding: "16px",
-              borderRadius: "12px",
-              marginBottom: "24px",
-              borderLeft: "4px solid #A0A0A0",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.5)",
-                marginBottom: "8px",
-                fontWeight: "bold",
-              }}
-            >
-              原本走向
-            </div>
-            <div
-              style={{
-                fontSize: "13px",
-                lineHeight: "1.7",
-                color: "rgba(255,255,255,0.7)",
-              }}
-            >
-              {selectedDot.original}
-            </div>
-          </div>
-
-          <div
-            style={{
-              textAlign: "center",
-              marginTop: "10px",
-              paddingBottom: "20px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.4)",
-                marginBottom: "12px",
-                letterSpacing: "2px",
-              }}
-            >
-              - 象形之意 -
-            </div>
-            <div
-              style={{
-                width: "100px",
-                height: "100px",
-                margin: "0 auto",
-                background: "rgba(0,0,0,0.4)",
-                borderRadius: "16px",
-                padding: "15px",
-                boxShadow: "inset 0 0 10px rgba(0,0,0,0.5)",
-                cursor: "pointer",
-                transition: "transform 0.3s ease",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.transform = "scale(1.1)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.transform = "scale(1)")
-              }
-              dangerouslySetInnerHTML={{ __html: selectedDot.svgHtml }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
-  );
-};
-
-// ------------------- (插入位置6: const MasterApp = () => { 上方定义组件) -------------------
 const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
   const { character, chatId } = session;
   const [messages, setMessages] = React.useState([]);
@@ -79488,1286 +80809,6 @@ const MasterApp = () => {
 };
 
 // 沙盘模拟器页面组件
-const SandTablePage = ({ onBack }) => {
-  const [elements, setElements] = React.useState([]);
-  const [navCollapsed, setNavCollapsed] = React.useState(false);
-  const [scale, setScale] = React.useState(1);
-  const [lastDistance, setLastDistance] = React.useState(0);
-  const [selectedElement, setSelectedElement] = React.useState(null);
-  const [showWriteModal, setShowWriteModal] = React.useState(false);
-  const [writeContent, setWriteContent] = React.useState("");
-
-  // --- 新增推演系统状态 ---
-  const [simulationSteps, setSimulationSteps] = React.useState([]);
-  const [currentStep, setCurrentStep] = React.useState(-1);
-  const [showSimulationModal, setShowSimulationModal] = React.useState(false);
-  const [isSimulating, setIsSimulating] = React.useState(false);
-  const [simulationModalCollapsed, setSimulationModalCollapsed] =
-    React.useState(false);
-
-  // --- 沙盘拖动状态 ---
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
-  const [sandboxPosition, setSandboxPosition] = React.useState({
-    x: 0,
-    y: 0,
-  });
-
-  // 新增状态
-  const [isGenerating, setIsGenerating] = React.useState(false);
-  const [inventory, setInventory] = React.useState([]); // 底部物品栏数据
-  const [detailItem, setDetailItem] = React.useState(null); // 当前查看详情的物品
-  const [isConnecting, setIsConnecting] = React.useState(false); // 是否处于连接模式
-  const [connections, setConnections] = React.useState([]); // 连接关系数组
-  const [showConnections, setShowConnections] = React.useState(true); // 是否显示连接线
-
-  // 添加物品到沙盘（同时扣除库存）
-  const handleAddInventoryItem = (item) => {
-    if (!item.isInfinite && item.quantity <= 0) {
-      alert("该物资已耗尽！");
-      return;
-    }
-
-    // 扣除库存
-    if (!item.isInfinite) {
-      setInventory((prev) =>
-        prev.map((inv) =>
-          inv.id === item.id ? { ...inv, quantity: inv.quantity - 1 } : inv,
-        ),
-      );
-    }
-
-    // 添加到沙盘
-    const newElement = {
-      id: Date.now() + Math.random(),
-      invId: item.id, // 关联库存ID，方便删除时退回
-      char: item.emoji,
-      x: 150 + Math.random() * 50,
-      y: 150 + Math.random() * 50,
-      flipped: false,
-      detailInfo: item, // 将详情信息一并存入实体
-    };
-    setElements([...elements, newElement]);
-  };
-
-  // 删除沙盘物品（退回库存）
-  const handleDeleteElement = (id) => {
-    const elToDelete = elements.find((el) => el.id === id);
-    if (elToDelete) {
-      // 退回库存
-      setInventory((prev) =>
-        prev.map((inv) =>
-          inv.id === elToDelete.invId && !inv.isInfinite
-            ? { ...inv, quantity: inv.quantity + 1 }
-            : inv,
-        ),
-      );
-    }
-    // 删除相关的连接
-    setConnections((prev) =>
-      prev.filter((conn) => conn.source !== id && conn.target !== id),
-    );
-    setElements((prev) => prev.filter((el) => el.id !== id));
-    setSelectedElement(null);
-    setDetailItem(null); // 关闭可能打开的详情
-  };
-
-  // 查看详情
-  const handleElementDetail = (id) => {
-    const el = elements.find((e) => e.id === id);
-    if (el) {
-      setDetailItem(el.detailInfo);
-    }
-  };
-
-  // 处理连接按钮点击
-  const handleConnectElement = (id) => {
-    if (isConnecting) {
-      // 已经处于连接模式，完成连接
-      completeConnection(id);
-    } else {
-      // 开始连接模式
-      setIsConnecting(true);
-      setSelectedElement(id);
-    }
-  };
-
-  // 完成连接
-  const completeConnection = (targetId) => {
-    if (selectedElement && selectedElement !== targetId) {
-      // 检查是否已经存在相同的连接
-      const existingConnection = connections.find(
-        (conn) => conn.source === selectedElement && conn.target === targetId,
-      );
-
-      if (!existingConnection) {
-        // 添加新连接
-        setConnections([
-          ...connections,
-          {
-            id: Date.now(),
-            source: selectedElement,
-            target: targetId,
-          },
-        ]);
-      }
-    }
-    // 退出连接模式
-    setIsConnecting(false);
-    setSelectedElement(null);
-  };
-
-  // 移除连接
-  const removeConnection = (connectionId) => {
-    setConnections(connections.filter((conn) => conn.id !== connectionId));
-  };
-
-  // --- 模拟推演核心逻辑 ---
-  const handleSimulate = async () => {
-    if (elements.length === 0) {
-      alert("沙盘上空空如也，请先放置一些单位后再推演！");
-      return;
-    }
-
-    setIsSimulating(true);
-    setShowSimulationModal(true);
-    setCurrentStep(-1);
-    setSimulationSteps([]);
-
-    try {
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 提取元素简要信息供AI分析，以便明确有哪些可移动物体
-      const elementsInfo = elements.map((el) => ({
-        id: el.id,
-        name: el.detailInfo.name,
-        category: el.detailInfo.category,
-        x: Math.round(el.x),
-        y: Math.round(el.y),
-      }));
-
-      const connectionsInfo = connections.map((conn) => ({
-        sourceId: conn.source,
-        targetId: conn.target,
-      }));
-
-      const sysPrompt = "你是一个精通东汉末年兵法与沙盘推演的军师AI。";
-      const userPrompt = `
-            【世界设定】
-            ${worldContext}
-
-            【推演背景】
-            ${writeContent || "无特定背景"}
-
-            【沙盘当前单位】
-            ${JSON.stringify(elementsInfo, null, 2)}
-
-            【单位连线关系（从属/牵引关系，source带动target）】
-            ${JSON.stringify(connectionsInfo, null, 2)}
-
-            【推演任务】
-            请基于当前沙盘单位分布、连线关系和背景，生成一场10到15步的定格动画模拟推演。
-            要求：
-            1. 考虑地形，自然类单位（如山脉、密林）通常不可移动。
-            2. 让军队或武将相互靠近、绕后或交战。
-            3. 如果有父子连线的元素，只需要给出父元素(sourceId)的移动坐标，系统会自动带动子元素。
-            4. 每一步都要有对战局的描述，以及用诙谐专业的语气说明这步操作的兵法原因。
-            5. 每一步返回发生移动的元素和他们的新绝对坐标 (targetX, targetY)。确保坐标在 0 到 1000 之间变动，每次移动距离建议在 30-100 之间。
-
-            【输出格式】
-            必须严格返回纯 JSON 数组，格式如下（绝对不要包裹在 \`\`\`json 中）：
-            [
-              {
-                "step": 1,
-                "description": "我方主帅带领小弟绕开密林，准备偷袭。",
-                "reason": "老六兵法第一条，能苟绝不正面刚！",
-                "moves": [
-                  { "elementId": 123456789, "targetX": 150, "targetY": 250 }
-                ]
-              }
-            ]
-            `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data) && data.length > 0) {
-                setSimulationSteps(data);
-                setCurrentStep(0); // 开始第一步
-              } else {
-                throw new Error("解析数据为空");
-              }
-            } catch (e) {
-              console.error("推演解析失败:", e, reply);
-              alert("推演失败，军机受阻，请重新生成。");
-              setShowSimulationModal(false);
-            } finally {
-              setIsSimulating(false);
-            }
-          },
-          (err) => {
-            console.error("生成推演失败:", err);
-            setIsSimulating(false);
-            setShowSimulationModal(false);
-            alert("请求失败，请检查API配置");
-          },
-        );
-      } else {
-        alert("未配置API，请前往设置配置！");
-        setIsSimulating(false);
-        setShowSimulationModal(false);
-      }
-    } catch (error) {
-      console.error(error);
-      setIsSimulating(false);
-      setShowSimulationModal(false);
-    }
-  };
-
-  // 计算包含推演位移和父子联动后的实际元素坐标
-  const getSimulatedElements = () => {
-    let simElements = elements.map((el) => ({ ...el }));
-
-    if (currentStep < 0 || !simulationSteps.length) return simElements;
-
-    for (let i = 0; i <= currentStep; i++) {
-      const stepData = simulationSteps[i];
-      if (!stepData || !stepData.moves) continue;
-
-      const displacements = {};
-
-      // 1. 应用本步的主动绝对移动，并记录位移差 (dx, dy)
-      stepData.moves.forEach((move) => {
-        const elIndex = simElements.findIndex((e) => e.id === move.elementId);
-        if (elIndex !== -1) {
-          displacements[move.elementId] = {
-            dx: move.targetX - simElements[elIndex].x,
-            dy: move.targetY - simElements[elIndex].y,
-          };
-          simElements[elIndex].x = move.targetX;
-          simElements[elIndex].y = move.targetY;
-        }
-      });
-
-      // 2. 处理父子连带移动
-      let changed = true;
-      const propagated = { ...displacements };
-      while (changed) {
-        changed = false;
-        connections.forEach((conn) => {
-          const parentDisp = propagated[conn.source];
-          if (parentDisp && !propagated[conn.target]) {
-            const targetIndex = simElements.findIndex(
-              (e) => e.id === conn.target,
-            );
-            if (targetIndex !== -1) {
-              simElements[targetIndex].x += parentDisp.dx;
-              simElements[targetIndex].y += parentDisp.dy;
-              propagated[conn.target] = { ...parentDisp };
-              changed = true;
-            }
-          }
-        });
-      }
-    }
-    return simElements;
-  };
-
-  const simulatedElements = getSimulatedElements();
-  // --- 模拟推演核心逻辑结束 ---
-
-  // AI生成物品清单核心逻辑
-  const handleGenerateItems = async () => {
-    if (!writeContent.trim()) {
-      alert("请先书写战局背景或兵棋推演的需求！");
-      return;
-    }
-    setIsGenerating(true);
-
-    try {
-      // 1. 获取世界书设定
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
-
-      // 2. 构建 Prompt
-      const sysPrompt = "你是一个专业的三国/古风沙盘兵棋推演组件生成器。";
-      const userPrompt = `
-                          【世界设定】
-                          ${worldContext}
-
-                          【统帅（用户）书写的推演背景】
-                          ${writeContent}
-
-                          【任务】
-                          请根据以上背景，生成一场沙盘模拟所需的物品/地形清单，总数必须在 15 到 20 个之间。
-
-                          【严格生成规则】
-                          1. 必须包含的分类：
-                             - 自然类(nature)：必须有（如河流、森林、山脉），属性 isInfinite 必须为 true，quantity 设为 -1。
-                             - 工具类(tool)：必须有（如马车、船只、拒马），isInfinite 为 false，quantity 在 3-10 之间。
-                             - 物资类(resource)：必须有（如粮草、辎重、箭矢），isInfinite 为 false，quantity 在 2-5 之间。
-                             - 人物/建筑类(character/building)：（如斥候、城门、流民），isInfinite 为 false，quantity 根据常理设定。
-                          2. 必须包含的高亮特殊物品：
-                             - 必须生成且仅生成两个特殊标识（isSpecial 为 true）：一个代表【我方阵营】的emoji，一个代表【敌方阵营】的emoji。quantity 通常为 1 或 2。
-                          3. 趣味详情：
-                             - description：物品用途，必须用轻松、风趣、甚至带点吐槽的口吻编写（例如："一处被人遗弃的破碗，不知道有什么用，可能用来讨饭"）。
-                             - scale：物品实际换算比例（例如："此处的1辆 ≈ 现实100辆" 或 "1个兵 ≈ 1个营"）。
-
-                          【输出格式】
-                          必须严格返回纯 JSON 数组，不要包裹在 \`\`\`json 之中，格式示例：
-                          [
-                            {"id": 1, "emoji": "🔵", "name": "我方主帅", "category": "faction", "quantity": 1, "isInfinite": false, "isSpecial": true, "description": "全村的希望，死了就直接Game Over。", "scale": "1人 ≈ 主帅本阵"},
-                            {"emoji": "🔴", "name": "敌方主力", "category": "faction", "quantity": 3, "isInfinite": false, "isSpecial": true, "description": "看起来很凶的敌人，建议绕道走。", "scale": "1棋 ≈ 5000甲士"},
-                            {"emoji": "🌲", "name": "密林", "category": "nature", "quantity": -1, "isInfinite": true, "isSpecial": false, "description": "藏污纳垢的好地方，适合老六埋伏。", "scale": "1树 ≈ 10亩林地"},
-                            {"emoji": "🌾", "name": "粮草", "category": "resource", "quantity": 5, "isInfinite": false, "isSpecial": false, "description": "人是铁饭是钢，没这玩意儿兵要造反。", "scale": "1垛 ≈ 1000石"}
-                          ]
-                        `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data) && data.length >= 2) {
-                // 补充唯一ID，防止重复
-                const inventoryData = data.map((item, idx) => ({
-                  ...item,
-                  id: Date.now() + idx,
-                }));
-                setInventory(inventoryData);
-                setShowWriteModal(false);
-                alert("兵棋组件生成完毕，请在底部物品栏查看！");
-              } else {
-                throw new Error("数组为空或不符合要求");
-              }
-            } catch (e) {
-              console.error("沙盘解析失败:", e, reply);
-              alert("推演失败，军机受阻，请重新生成。");
-            } finally {
-              setIsGenerating(false);
-            }
-          },
-          (err) => {
-            console.error("生成沙盘物品失败:", err);
-            setIsGenerating(false);
-            alert("请求失败，请检查API配置");
-          },
-        );
-      } else {
-        alert("未配置API，请前往设置配置！");
-        setIsGenerating(false);
-      }
-    } catch (error) {
-      console.error(error);
-      setIsGenerating(false);
-    }
-  };
-
-  const handleDrag = (id, e) => {
-    const clientX = e.clientX || e.touches[0].clientX;
-    const clientY = e.clientY || e.touches[0].clientY;
-    // 考虑缩放比例，确保物品拖动在不同缩放级别下都能正常工作
-    setElements((prev) =>
-      prev.map((el) =>
-        el.id === id
-          ? {
-              ...el,
-              x: (clientX - 20) * scale,
-              y: (clientY - 80) * scale,
-            }
-          : el,
-      ),
-    );
-  };
-
-  const handleTouchStart = (e) => {
-    if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      setLastDistance(Math.sqrt(dx * dx + dy * dy));
-    }
-  };
-
-  const handleTouchMove = (e) => {
-    if (e.touches.length === 2) {
-      const dx = e.touches[0].clientX - e.touches[1].clientX;
-      const dy = e.touches[0].clientY - e.touches[1].clientY;
-      const distance = Math.sqrt(dx * dx + dy * dy);
-
-      if (lastDistance > 0) {
-        const scaleFactor = distance / lastDistance;
-        const newScale = Math.max(0.1, Math.min(5, scale * scaleFactor));
-        setScale(newScale);
-      }
-
-      setLastDistance(distance);
-    }
-  };
-
-  const handleTouchEnd = () => {
-    setLastDistance(0);
-  };
-
-  const handleWheel = (e) => {
-    e.preventDefault();
-    const scaleFactor = e.deltaY > 0 ? 0.9 : 1.1;
-    const newScale = Math.max(0.1, Math.min(5, scale * scaleFactor));
-    setScale(newScale);
-  };
-
-  // 沙盘拖动事件处理
-  const handleSandboxMouseDown = (e) => {
-    // 只有在鼠标左键点击且没有其他元素被选中时才开始拖动
-    if (e.button === 0 && !isConnecting && !selectedElement) {
-      setIsDragging(true);
-      setDragStart({
-        x: e.clientX - sandboxPosition.x,
-        y: e.clientY - sandboxPosition.y,
-      });
-    }
-  };
-
-  const handleSandboxMouseMove = (e) => {
-    if (isDragging) {
-      setSandboxPosition({
-        x: e.clientX - dragStart.x,
-        y: e.clientY - dragStart.y,
-      });
-    }
-  };
-
-  const handleSandboxMouseUp = () => {
-    setIsDragging(false);
-  };
-
-  const handleSandboxMouseLeave = () => {
-    setIsDragging(false);
-  };
-
-  // 触摸事件处理
-  const handleSandboxTouchStart = (e) => {
-    if (e.touches.length === 1 && !isConnecting && !selectedElement) {
-      setIsDragging(true);
-      setDragStart({
-        x: e.touches[0].clientX - sandboxPosition.x,
-        y: e.touches[0].clientY - sandboxPosition.y,
-      });
-    }
-  };
-
-  const handleSandboxTouchMove = (e) => {
-    if (isDragging && e.touches.length === 1) {
-      setSandboxPosition({
-        x: e.touches[0].clientX - dragStart.x,
-        y: e.touches[0].clientY - dragStart.y,
-      });
-    }
-  };
-
-  const handleSandboxTouchEnd = () => {
-    setIsDragging(false);
-  };
-
-  const handleElementClick = (id) => {
-    setSelectedElement(id === selectedElement ? null : id);
-  };
-
-  const handleFlipElement = (id) => {
-    setElements((prev) =>
-      prev.map((el) => (el.id === id ? { ...el, flipped: !el.flipped } : el)),
-    );
-  };
-
-  return (
-    <div className="sand-table-overlay open fade-in">
-      {/* 顶部磨砂栏 */}
-      <div className={`top-glass-nav ${navCollapsed ? "collapsed" : ""}`}>
-        <button className="morandi-glass-btn" onClick={onBack}>
-          撤离
-        </button>
-        <button className="morandi-glass-btn" onClick={() => setElements([])}>
-          清空
-        </button>
-        <button
-          className="morandi-glass-btn"
-          onClick={() => setShowConnections(!showConnections)}
-        >
-          {showConnections ? "隐藏连线" : "显示连线"}
-        </button>
-        <button
-          className="morandi-glass-btn"
-          onClick={() => setNavCollapsed(true)}
-        >
-          收起
-        </button>
-      </div>
-      {navCollapsed && (
-        <div
-          onClick={() => setNavCollapsed(false)}
-          style={{
-            position: "absolute",
-            top: 10,
-            left: "50%",
-            transform: "translateX(-50%)",
-            zIndex: 101,
-            background: "rgba(255,255,255,0.5)",
-            borderRadius: "50%",
-            padding: "5px",
-          }}
-        >
-          <i className="ph ph-caret-down"></i>
-        </div>
-      )}
-
-      {/* 功能按钮栏 */}
-      <div
-        style={{
-          position: "absolute",
-          top: "80px",
-          left: "50%",
-          transform: navCollapsed
-            ? "translate(-50%, -120px)"
-            : "translateX(-50%)",
-          width: "80%",
-          maxWidth: "300px",
-          padding: "12px",
-          background: "rgba(255, 255, 255, 0.4)",
-          backdropFilter: "blur(15px)",
-          WebkitBackdropFilter: "blur(15px)",
-          borderRadius: "30px",
-          display: "flex",
-          gap: "10px",
-          zIndex: 99,
-          opacity: navCollapsed ? 0 : 1,
-          transition: "all 0.4s cubic-bezier(0.23, 1, 0.32, 1)",
-        }}
-      >
-        <button
-          className="morandi-glass-btn"
-          onClick={() => setShowWriteModal(true)}
-        >
-          书写
-        </button>
-        <button
-          className="morandi-glass-btn"
-          onClick={() => alert("选择功能开发中")}
-        >
-          选择
-        </button>
-        <button className="morandi-glass-btn" onClick={handleSimulate}>
-          推演
-        </button>
-      </div>
-
-      {/* 大沙盘区域 */}
-      <div
-        className="sand-grid-container no-scrollbar"
-        onTouchStart={(e) => {
-          handleTouchStart(e);
-          handleSandboxTouchStart(e);
-        }}
-        onTouchMove={(e) => {
-          e.preventDefault();
-          handleTouchMove(e);
-          handleSandboxTouchMove(e);
-        }}
-        onTouchEnd={(e) => {
-          handleTouchEnd(e);
-          handleSandboxTouchEnd(e);
-        }}
-        onWheel={(e) => {
-          e.preventDefault();
-          handleWheel(e);
-        }}
-        onMouseDown={handleSandboxMouseDown}
-        onMouseMove={handleSandboxMouseMove}
-        onMouseUp={handleSandboxMouseUp}
-        onMouseLeave={handleSandboxMouseLeave}
-        style={{
-          position: "relative",
-          overflow: "hidden",
-          cursor: isDragging ? "grabbing" : "grab",
-          flex: 1,
-          background: "#f2ebe3",
-        }}
-      >
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "200%",
-            height: "200%",
-            backgroundImage: `radial-gradient(#e8ded6 2px, transparent 2px), radial-gradient(#e8ded6 2px, #f2ebe3 2px)`,
-            backgroundSize: `${40 * scale}px ${40 * scale}px`,
-            backgroundPosition: `${sandboxPosition.x % (40 * scale)}px ${sandboxPosition.y % (40 * scale)}px`,
-            backgroundRepeat: "repeat",
-            transform: `translate(${sandboxPosition.x}px, ${sandboxPosition.y}px) scale(${scale})`,
-            transformOrigin: "center center",
-          }}
-        >
-          {/* 渲染连接线 */}
-          {showConnections &&
-            connections.map((conn) => {
-              const sourceEl = elements.find((el) => el.id === conn.source);
-              const targetEl = elements.find((el) => el.id === conn.target);
-              if (sourceEl && targetEl) {
-                const sourceX = sourceEl.x / scale + 20;
-                const sourceY = sourceEl.y / scale + 20;
-                const targetX = targetEl.x / scale + 20;
-                const targetY = targetEl.y / scale + 20;
-
-                return (
-                  <svg
-                    key={conn.id}
-                    style={{
-                      position: "absolute",
-                      left: 0,
-                      top: 0,
-                      width: "100%",
-                      height: "100%",
-                      pointerEvents: "none",
-                      zIndex: 5,
-                    }}
-                  >
-                    <line
-                      x1={sourceX}
-                      y1={sourceY}
-                      x2={targetX}
-                      y2={targetY}
-                      stroke="rgba(138, 166, 193, 0.6)"
-                      strokeWidth="2"
-                      strokeDasharray="5,5"
-                    />
-                    <circle
-                      cx={targetX}
-                      cy={targetY}
-                      r="5"
-                      fill="rgba(138, 166, 193, 0.8)"
-                    />
-                    <circle
-                      cx={sourceX}
-                      cy={sourceY}
-                      r="5"
-                      fill="rgba(214, 114, 75, 0.8)"
-                    />
-                  </svg>
-                );
-              }
-              return null;
-            })}
-
-          {/* 渲染元素 */}
-          {simulatedElements.map((el) => (
-            <div
-              key={el.id}
-              className="placed-emoji"
-              style={{
-                left: el.x / scale,
-                top: el.y / scale,
-                fontSize: `${32 / scale}px`,
-                transform: el.flipped ? "scaleX(-1)" : "none",
-                border: isConnecting
-                  ? el.id === selectedElement
-                    ? "2px solid #D6724B"
-                    : "2px dashed #8AA6C1"
-                  : "none",
-              }}
-              onClick={() => {
-                if (isConnecting) {
-                  completeConnection(el.id);
-                } else {
-                  handleElementClick(el.id);
-                }
-              }}
-              onTouchMove={(e) => handleDrag(el.id, e)}
-              onMouseMove={(e) => e.buttons === 1 && handleDrag(el.id, e)}
-            >
-              {el.char}
-              {selectedElement === el.id && (
-                <div className="element-controls">
-                  <div
-                    className="control-btn flip-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleFlipElement(el.id);
-                    }}
-                  >
-                    翻转
-                  </div>
-                  <div
-                    className="control-btn delete-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleDeleteElement(el.id);
-                    }}
-                  >
-                    删除
-                  </div>
-                  <div
-                    className="control-btn detail-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleElementDetail(el.id);
-                    }}
-                  >
-                    详情
-                  </div>
-                  <div
-                    className="control-btn connect-btn"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleConnectElement(el.id);
-                    }}
-                  >
-                    连接
-                  </div>
-                </div>
-              )}
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 下方物品栏 */}
-      {/* 下方物品栏 */}
-      <div
-        className="item-bar-bottom no-scrollbar"
-        style={{ alignItems: "center" }}
-      >
-        {inventory.length === 0 ? (
-          <div style={{ color: "#999", fontSize: "13px", margin: "auto" }}>
-            沙盘空空如也，请点击上方“书写”生成推演组件。
-          </div>
-        ) : (
-          inventory.map((item) => (
-            <div
-              key={item.id}
-              className="emoji-item active-press"
-              style={{
-                position: "relative",
-                opacity: !item.isInfinite && item.quantity <= 0 ? 0.3 : 1,
-                border: item.isSpecial ? "2px solid #D6724B" : "none",
-                boxShadow: item.isSpecial
-                  ? "0 0 8px rgba(214,114,75,0.4)"
-                  : "none",
-                flexShrink: 0,
-              }}
-              onClick={() => handleAddInventoryItem(item)}
-            >
-              <span style={{ fontSize: "28px" }}>{item.emoji}</span>
-
-              {/* 数量角标 */}
-              {!item.isInfinite && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "-5px",
-                    right: "-5px",
-                    background: "#8AA6C1",
-                    color: "white",
-                    fontSize: "10px",
-                    fontWeight: "bold",
-                    borderRadius: "10px",
-                    padding: "2px 6px",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.2)",
-                  }}
-                >
-                  {item.quantity}
-                </div>
-              )}
-              {item.isInfinite && (
-                <div
-                  style={{
-                    position: "absolute",
-                    top: "-5px",
-                    right: "-5px",
-                    background: "#A8C8BA",
-                    color: "white",
-                    fontSize: "10px",
-                    fontWeight: "bold",
-                    borderRadius: "10px",
-                    padding: "2px 6px",
-                  }}
-                >
-                  ∞
-                </div>
-              )}
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* 书写弹窗 */}
-      {showWriteModal && (
-        <div
-          className="modal-overlay"
-          onClick={() => !isGenerating && setShowWriteModal(false)}
-        >
-          <div className="write-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ color: "#5A5F4D" }}>推演背景书写</h3>
-            <div className="write-input-container">
-              <textarea
-                className="write-input"
-                value={writeContent}
-                onChange={(e) => setWriteContent(e.target.value)}
-                placeholder="请输入当前局势背景，例如：曹操大军压境徐州，我方固守下邳城，需要粮草与水军支援..."
-                rows={6}
-                disabled={isGenerating}
-              />
-            </div>
-            <button
-              className="generate-btn"
-              onClick={handleGenerateItems}
-              disabled={isGenerating}
-              style={{
-                background: isGenerating
-                  ? "#ccc"
-                  : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
-                color: "white",
-                display: "flex",
-                justifyContent: "center",
-                alignItems: "center",
-                gap: "8px",
-              }}
-            >
-              {isGenerating ? (
-                <>
-                  <iconify-icon icon="line-md:loading-twotone-loop"></iconify-icon>
-                  推演中...
-                </>
-              ) : (
-                "开始推演"
-              )}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 物品详情弹窗（莫兰迪色温馨风格） */}
-      {detailItem && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: "#FDFCF8",
-            borderTopLeftRadius: "24px",
-            borderTopRightRadius: "24px",
-            padding: "24px",
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.1)",
-            zIndex: 1000,
-            animation:
-              "slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
-            borderTop: "1px solid #E8E5D9",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "16px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "12px",
-              }}
-            >
-              <div
-                style={{
-                  width: "50px",
-                  height: "50px",
-                  background: detailItem.isSpecial ? "#FADBD8" : "#E8F1ED",
-                  borderRadius: "14px",
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  fontSize: "28px",
-                  border: detailItem.isSpecial
-                    ? "2px solid #D6724B"
-                    : "1px solid #A8C8BA",
-                }}
-              >
-                {detailItem.emoji}
-              </div>
-              <div>
-                <h3
-                  style={{
-                    margin: 0,
-                    fontSize: "18px",
-                    color: "#5A5F4D",
-                    fontWeight: "bold",
-                  }}
-                >
-                  {detailItem.name}
-                </h3>
-                <span
-                  style={{
-                    fontSize: "12px",
-                    color: "#8C917B",
-                    background: "#F0F0F0",
-                    padding: "2px 8px",
-                    borderRadius: "10px",
-                  }}
-                >
-                  {detailItem.category}
-                </span>
-              </div>
-            </div>
-            <button
-              onClick={() => setDetailItem(null)}
-              style={{
-                background: "none",
-                border: "none",
-                fontSize: "24px",
-                color: "#8C917B",
-                cursor: "pointer",
-              }}
-            >
-              ×
-            </button>
-          </div>
-
-          <div
-            style={{
-              background: "#F9F7F5",
-              padding: "16px",
-              borderRadius: "12px",
-              marginBottom: "16px",
-              borderLeft: "4px solid #D6724B",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "12px",
-                color: "#8C917B",
-                fontWeight: "bold",
-                marginBottom: "4px",
-              }}
-            >
-              物品图鉴
-            </div>
-            <div
-              style={{
-                fontSize: "14px",
-                color: "#5A5F4D",
-                lineHeight: "1.6",
-                fontStyle: "italic",
-              }}
-            >
-              "{detailItem.description}"
-            </div>
-          </div>
-
-          <div
-            style={{
-              background: "#F9F7F5",
-              padding: "12px 16px",
-              borderRadius: "12px",
-              borderLeft: "4px solid #A8C8BA",
-              display: "flex",
-              alignItems: "center",
-              gap: "8px",
-            }}
-          >
-            <iconify-icon
-              icon="ph:scales-fill"
-              style={{ color: "#8FA99D", fontSize: "18px" }}
-            ></iconify-icon>
-            <span
-              style={{
-                fontSize: "13px",
-                color: "#5A5F4D",
-                fontWeight: "bold",
-              }}
-            >
-              实地推演：
-            </span>
-            <span style={{ fontSize: "13px", color: "#666" }}>
-              {detailItem.scale}
-            </span>
-          </div>
-        </div>
-      )}
-
-      {/* 模拟推演底部控制卡片 */}
-      {showSimulationModal && (
-        <div
-          style={{
-            position: "fixed",
-            bottom: 0,
-            left: 0,
-            right: 0,
-            background: "#FDFCF8",
-            borderTopLeftRadius: "24px",
-            borderTopRightRadius: "24px",
-            padding: "24px",
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
-            zIndex: 1100,
-            animation: "slideUp 0.3s ease-out forwards",
-            borderTop: "1px solid #E8E5D9",
-            transition: "all 0.3s ease",
-            minHeight: simulationModalCollapsed ? "100px" : "auto",
-          }}
-        >
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "16px",
-            }}
-          >
-            <h3
-              style={{
-                margin: 0,
-                fontSize: "18px",
-                color: "#5A5F4D",
-                fontWeight: "bold",
-              }}
-            >
-              沙盘定格推演
-            </h3>
-            <div
-              style={{
-                display: "flex",
-                gap: "10px",
-                alignItems: "center",
-              }}
-            >
-              <button
-                onClick={() =>
-                  setSimulationModalCollapsed(!simulationModalCollapsed)
-                }
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "18px",
-                  color: "#8C917B",
-                  cursor: "pointer",
-                }}
-              >
-                {simulationModalCollapsed ? "▲" : "▼"}
-              </button>
-              <button
-                onClick={() => {
-                  setShowSimulationModal(false);
-                  setCurrentStep(-1);
-                }}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#8C917B",
-                  cursor: "pointer",
-                }}
-              >
-                ×
-              </button>
-            </div>
-          </div>
-
-          {isSimulating ? (
-            <div
-              style={{
-                textAlign: "center",
-                padding: "20px",
-                color: "#8FA99D",
-                display: "flex",
-                flexDirection: "column",
-                gap: "10px",
-                alignItems: "center",
-              }}
-            >
-              <iconify-icon
-                icon="line-md:loading-twotone-loop"
-                style={{ fontSize: "36px" }}
-              ></iconify-icon>
-              <span style={{ fontWeight: "bold" }}>
-                正在夜观天象，排兵布阵...
-              </span>
-            </div>
-          ) : simulationSteps.length > 0 && currentStep >= 0 ? (
-            <div>
-              {/* 翻页控制栏 */}
-              <div
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "space-between",
-                  marginBottom: simulationModalCollapsed ? "0" : "16px",
-                }}
-              >
-                <button
-                  disabled={currentStep <= 0}
-                  onClick={() => setCurrentStep((prev) => prev - 1)}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "12px",
-                    border: "none",
-                    background:
-                      currentStep <= 0
-                        ? "#E0E0E0"
-                        : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
-                    color: "white",
-                    cursor: currentStep <= 0 ? "not-allowed" : "pointer",
-                    fontWeight: "bold",
-                  }}
-                >
-                  ◀ 上一步
-                </button>
-                <span
-                  style={{
-                    fontSize: "14px",
-                    color: "#8C917B",
-                    fontWeight: "bold",
-                  }}
-                >
-                  第 {currentStep + 1} / {simulationSteps.length} 步
-                </span>
-                <button
-                  disabled={currentStep >= simulationSteps.length - 1}
-                  onClick={() => setCurrentStep((prev) => prev + 1)}
-                  style={{
-                    padding: "8px 16px",
-                    borderRadius: "12px",
-                    border: "none",
-                    background:
-                      currentStep >= simulationSteps.length - 1
-                        ? "#E0E0E0"
-                        : "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
-                    color: "white",
-                    cursor:
-                      currentStep >= simulationSteps.length - 1
-                        ? "not-allowed"
-                        : "pointer",
-                    fontWeight: "bold",
-                  }}
-                >
-                  下一步 ▶
-                </button>
-              </div>
-
-              {!simulationModalCollapsed && (
-                <>
-                  {/* 兵情播报 */}
-                  <div
-                    style={{
-                      background: "#F9F7F5",
-                      padding: "16px",
-                      borderRadius: "12px",
-                      borderLeft: "4px solid #D6724B",
-                      marginBottom: "10px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "12px",
-                        color: "#8C917B",
-                        fontWeight: "bold",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      战况播报
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        color: "#5A5F4D",
-                        lineHeight: "1.6",
-                      }}
-                    >
-                      {simulationSteps[currentStep].description}
-                    </div>
-                  </div>
-
-                  {/* 军师点拨 */}
-                  <div
-                    style={{
-                      background: "#F9F7F5",
-                      padding: "12px 16px",
-                      borderRadius: "12px",
-                      borderLeft: "4px solid #A8C8BA",
-                      display: "flex",
-                      alignItems: "flex-start",
-                      gap: "8px",
-                    }}
-                  >
-                    <iconify-icon
-                      icon="ph:lightbulb-fill"
-                      style={{
-                        color: "#8FA99D",
-                        fontSize: "18px",
-                        marginTop: "2px",
-                      }}
-                    ></iconify-icon>
-                    <div>
-                      <div
-                        style={{
-                          fontSize: "12px",
-                          color: "#8C917B",
-                          fontWeight: "bold",
-                          marginBottom: "4px",
-                        }}
-                      >
-                        军师锐评
-                      </div>
-                      <div
-                        style={{
-                          fontSize: "13px",
-                          color: "#666",
-                          fontStyle: "italic",
-                          lineHeight: "1.5",
-                        }}
-                      >
-                        "{simulationSteps[currentStep].reason}"
-                      </div>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
-          ) : (
-            <div
-              style={{
-                textAlign: "center",
-                color: "#999",
-                padding: "20px",
-              }}
-            >
-              天机混沌，暂无推演结果
-            </div>
-          )}
-        </div>
-      )}
-    </div>
-  );
-};
-
-// T9 情侣空间页面组件
-
 class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
