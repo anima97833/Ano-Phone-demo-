@@ -20547,63 +20547,394 @@ const T11TabBar = ({ activeTab, setActiveTab }) => {
 };
 
 // T11 工作台页面主组件 (修改：接收 onBack 并在 Header 中使用)
-// ==================== T11 团建投票表单页 (新增) ====================
-const TeamBuildingVotePage = ({ onBack }) => {
-  const [formData, setFormData] = React.useState({
-    dept: "",
-    type: "",
-    location: "",
-    extraAnswer: "",
-    otherText: "",
-  });
-  const [randomLocations, setRandomLocations] = React.useState([]);
-  const [isSubmitted, setIsSubmitted] = React.useState(false);
-
-  // 地点池
-  const locationPool = [
-    "桃源温泉山庄",
-    "东海海滨浴场",
-    "青丘戏坊",
-    "南阳菌菇农场",
-    "泰山府",
-    "江东虎跳峡",
-    "汝南茶园",
-    "农家乐",
-    "幽州慨飒宫",
+// ==================== T11 团建地点投票问卷 (AI 动态生成 + 角色代答 + 历史记录版) ====================
+const TeamBuildingLocationSurveyPage = ({ onBack }) => {
+  const defaultQuestions = [
+    {
+      id: 1,
+      title: "1. 您最中意的绣衣楼团建避世目的地类型？",
+      colorTag: "#D6E4EA",
+      type: "grid",
+      options: [
+        "桃源温泉山庄（疗愈洗尘）",
+        "江东虎跳峡水寨（临江观澜）",
+        "青丘神秘戏坊（看戏听曲）",
+        "南阳隐秘茶园（品茗采茶）",
+        "泰山幽谷农庄（避暑吸氧）",
+        "幽州异域行宫（塞外风情）",
+      ],
+    },
+    {
+      id: 2,
+      title: "2. 期望的团建出行交通方式与路途偏好？",
+      colorTag: "#EAD6D6",
+      type: "column",
+      options: [
+        "乘坐江东豪华双层楼船，吹江风赏两岸景",
+        "各部暗探佩剑策马快马加鞭，帅气拉风",
+        "包下宽敞低调的四轮大马车，一路补觉",
+        "山野徒步负重拉练，强身健体（魔鬼提议）",
+        "其他",
+      ],
+      hasExtraCondition: true,
+      extraQuestion: {
+        triggerOption: "乘坐江东豪华双层楼船，吹江风赏两岸景",
+        title: "🛶 附加问：若乘楼船，是否晕船或要求副官提前备齐晕船药？",
+        options: ["水性极佳绝不晕船", "严重晕船！必须副官备药备酸梅"],
+      },
+    },
+    {
+      id: 3,
+      title: "3. 团建出游期间的安全防卫与值守安排？",
+      colorTag: "#E8DED6",
+      type: "column",
+      options: [
+        "各部暗探轮流值夜观星，暗哨布满方圆三里",
+        "全员换上平民便装隐藏行踪，不露半点蛛丝马迹",
+        "联络当地熟人势力提供接应，省心省力",
+        "既然是度假就彻底放松，享受楼主保护",
+        "其他",
+      ],
+    },
+    {
+      id: 4,
+      title: "4. 目的地住宿营地与就寝分房偏好？",
+      colorTag: "#D2E6EC",
+      type: "column",
+      options: [
+        "依山傍水独栋雅致木屋（清幽静谧）",
+        "扎营露宿野外帐篷看星空（野趣十足）",
+        "当地豪华客栈一人一间套房（保护隐私）",
+        "各部门同挤大通铺，彻夜长谈增进感情",
+        "其他",
+      ],
+    },
+    {
+      id: 5,
+      title: "5. 差旅经费报销与当地特产采买预算满意度？",
+      colorTag: "#DEEBE1",
+      type: "column",
+      options: [
+        "副官全额垫付公账实报实销，不花暗探一文钱",
+        "发放定额特产采买津贴，丰俭由人",
+        "做好被副官以各种理由拒绝报销自掏腰包的准备",
+        "其他",
+      ],
+      hasExtraCondition: true,
+      extraQuestion: {
+        triggerOption: "做好被副官以各种理由拒绝报销自掏腰包的准备",
+        title: "💰 附加问：买特产被副官以‘非公干物资’卡报销怎么办？",
+        options: ["当场抱楼主大腿哭诉", "把特产分给副官一份求放行"],
+      },
+    },
+    {
+      id: 6,
+      title: "6. 您心中私藏的宝藏踩点地点或对本次出行的特别建议？",
+      colorTag: "#F2E6D6",
+      type: "text",
+      placeholder: "推荐你私藏的绝美山水/小吃名胜，或写下想对楼主说的出行悄悄话...",
+    },
   ];
 
-  // 初始化：随机抽取3个地点
+  const [questions, setQuestions] = React.useState(defaultQuestions);
+  const [formData, setFormData] = React.useState({});
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [isRoleAnswering, setIsRoleAnswering] = React.useState(false);
+  const [isSubmitted, setIsSubmitted] = React.useState(false);
+  const [characters, setCharacters] = React.useState([]);
+  const [selectedRespondent, setSelectedRespondent] = React.useState("me");
+  const [characterRemark, setCharacterRemark] = React.useState("");
+  const [showHistoryModal, setShowHistoryModal] = React.useState(false);
+  const [historyList, setHistoryList] = React.useState([]);
+
   React.useEffect(() => {
-    generateRandomLocations();
+    loadInitialData();
   }, []);
 
-  const generateRandomLocations = () => {
-    // 洗牌算法
-    const shuffled = [...locationPool].sort(() => 0.5 - Math.random());
-    setRandomLocations(shuffled.slice(0, 3));
+  const loadInitialData = async () => {
+    try {
+      if (window.chatCharacterStore) {
+        const allChars = await window.chatCharacterStore.getAll();
+        if (allChars && allChars.length > 0) {
+          setCharacters(allChars.filter((c) => c && c.name && c.type !== "group"));
+        }
+      }
+    } catch (e) {
+      console.warn("加载传讯角色库失败:", e);
+    }
+
+    try {
+      const db = await openDB();
+      const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+      const store = transaction.objectStore(STORES.USER_SETTINGS);
+      const req = store.get("xiuyi_location_current_survey");
+      req.onsuccess = () => {
+        if (req.result && req.result.value && Array.isArray(req.result.value) && req.result.value.length >= 5) {
+          setQuestions(req.result.value);
+        }
+      };
+    } catch (e) {
+      console.warn("读取当前团建地点问卷失败:", e);
+    }
+
+    loadHistoryRecords();
   };
 
-  const handleReset = () => {
-    setFormData({
-      dept: "",
-      type: "",
-      location: "",
-      extraAnswer: "",
-      otherText: "",
-    });
-    setIsSubmitted(false);
-    generateRandomLocations(); // 重新随机
+  const loadHistoryRecords = async () => {
+    try {
+      const db = await openDB();
+      const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+      const store = transaction.objectStore(STORES.USER_SETTINGS);
+      const req = store.get("xiuyi_location_survey_history");
+      req.onsuccess = () => {
+        if (req.result && req.result.value && Array.isArray(req.result.value)) {
+          setHistoryList(req.result.value);
+        }
+      };
+    } catch (e) {
+      console.warn("读取历史团建地点问卷记录失败:", e);
+    }
   };
 
-  const handleSubmit = () => {
-    if (!formData.dept || !formData.type || !formData.location) {
-      return alert("请填写完整信息哦~");
+  // AI 结合世界书生成团建地点问卷
+  const generateSurveyWithAI = async () => {
+    if (!window.sendToLLM) {
+      alert("未检测到 AI 接口，请先在【设置 -> API设置】中配置大模型 API。");
+      return;
     }
-    if (formData.location === "其他" && !formData.otherText.trim()) {
-      return alert("请填写其他地点的具体名称");
+
+    setIsGenerating(true);
+
+    try {
+      let worldBookContext = "";
+      if (window.getWorldBookContext) {
+        worldBookContext = await window.getWorldBookContext();
+      }
+
+      const prompt = `你是一个熟悉《代号鸢》世界观与古代谍报机构（绣衣楼）的幽默出游向导官。
+请根据以下启用的世界书背景与设定，为绣衣楼策划一份【团建地点投票问卷】。
+
+【世界书设定与背景】：
+${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼楼主，掌管天下谍报。楼内有蛾部、雀部、蜂部、鸢部等情报暗探部门。出游团建需要考虑地理位置（如广陵近郊、江东水寨、青丘、南阳茶园、泰山幽谷）、交通隐蔽性、安全巡防与副官把控的差旅预算。"}
+
+【生成要求】：
+1. 必须生成 5 到 6 道题目。
+2. 题目要深度围绕绣衣楼的团建出游地点与行程展开（如避世胜地类型、楼船/骑马/马车交通与晕船药、野外暗探安保布防、住宿分房与大通铺、特产采买报销、私藏景点推荐等）。
+3. 题目类型包括：单选题（grid或column布局）、带条件追问的题目、以及最后一道开放性建议吐槽题。
+4. 必须输出严格的 JSON 格式数组，不要包含任何 markdown 代码块标记。
+
+【JSON 格式规范】：
+[
+  {
+    "id": 1,
+    "title": "1. 题目文本？",
+    "colorTag": "#D6E4EA",
+    "type": "grid",
+    "options": ["选项A", "选项B", "选项C", "选项D", "选项E", "选项F"]
+  },
+  {
+    "id": 2,
+    "title": "2. 题目文本？",
+    "colorTag": "#EAD6D6",
+    "type": "column",
+    "options": ["选项A", "选项B", "选项C", "其他"],
+    "hasExtraCondition": true,
+    "extraQuestion": {
+      "triggerOption": "选项A",
+      "title": "🔍 附加问：追问标题？",
+      "options": ["追问选项1", "追问选项2"]
     }
-    // 模拟提交延迟
-    setTimeout(() => setIsSubmitted(true), 300);
+  },
+  ...
+  {
+    "id": 6,
+    "title": "6. 您心中私藏的宝藏踩点地点或对本次出行的特别建议？",
+    "colorTag": "#F2E6D6",
+    "type": "text",
+    "placeholder": "推荐宝藏地点..."
+  }
+]`;
+
+      const apiMessages = [
+        {
+          role: "system",
+          content: "你是一个专业的古代谍报机构团建出游规划生成器。只输出合法的 JSON 数组，不输出任何其他解释或 Markdown 标记。",
+        },
+        { role: "user", content: prompt },
+      ];
+
+      window.sendToLLM(
+        apiMessages,
+        null,
+        async (reply) => {
+          setIsGenerating(false);
+          try {
+            let cleanJson = reply.trim();
+            cleanJson = cleanJson.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
+            const parsed = JSON.parse(cleanJson);
+            if (Array.isArray(parsed) && parsed.length >= 5) {
+              setQuestions(parsed);
+              setFormData({});
+              setCharacterRemark("");
+              const db = await openDB();
+              const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+              const store = transaction.objectStore(STORES.USER_SETTINGS);
+              await store.put({
+                key: "xiuyi_location_current_survey",
+                value: parsed,
+              });
+              alert("✨ 已结合世界书设定为您生成全新团建地点投票问卷！");
+            } else {
+              throw new Error("生成的问卷题目不足5道");
+            }
+          } catch (err) {
+            console.error("解析地点问卷 JSON 失败:", err, reply);
+            alert("AI 生成问卷解析异常，已为您保留默认精品地点问卷。");
+          }
+        },
+        (error) => {
+          setIsGenerating(false);
+          console.error("AI 生成地点问卷出错:", error);
+          alert("AI 地点问卷生成请求出错，请检查【设置 -> API设置】配置。");
+        },
+      );
+    } catch (e) {
+      setIsGenerating(false);
+      console.error("生成地点问卷异常:", e);
+    }
+  };
+
+  // 传讯角色代答
+  const handleRoleAutoAnswer = async (character) => {
+    if (!character || !character.name) return;
+    if (!window.sendToLLM) {
+      alert("未检测到 AI 接口，请先在【设置 -> API设置】中配置大模型 API。");
+      return;
+    }
+
+    setIsRoleAnswering(true);
+
+    try {
+      let worldBookContext = "";
+      if (window.getWorldBookContext) {
+        worldBookContext = await window.getWorldBookContext();
+      }
+
+      const prompt = `你现在是《代号鸢》中的角色【${character.name}】。
+【你的角色人设与设定】：
+- 设定描述：${character.profile?.description || character.name}
+- 性格特点：${character.profile?.personality || "保持原著性格与说话口吻"}
+- 出身背景：${character.profile?.background || "未知"}
+- 语言风格：${character.profile?.style || "符合原著口吻"}
+
+【世界书背景】：
+${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼楼主。"}
+
+【待填写的绣衣楼团建地点投票问卷】：
+${JSON.stringify(questions, null, 2)}
+
+【任务目标】：
+请以你【${character.name}】的真实心理、性格习惯与说话口吻，完成这份团建地点投票问卷的每一道题目！
+对于有选项的题目，请在题目提供的 options 中选择 1 个最符合你性格与旅行偏好的选项。
+如果选中的选项触发了附加追问（hasExtraCondition），请同时在 extraAnswer 中选一个追问选项。
+如果是文本题（type === 'text'），请写出符合你人设口吻的宝藏地点推荐或对楼主的出行悄悄话。
+最后附带一段 30~80 字的角色个性化总结寄语（characterRemark）。
+
+请严格输出 JSON 对象格式：
+{
+  "answers": {
+    "1": "选中的选项文本",
+    "2": "选中的选项文本",
+    "2_extra": "触发的附加问选项文本（若无则不填）",
+    "3": "选中的选项文本",
+    "4": "选中的选项文本",
+    "5": "选中的选项文本",
+    "6": "文本留言内容..."
+  },
+  "characterRemark": "角色在提交问卷时的出行寄语..."
+}`;
+
+      const apiMessages = [
+        {
+          role: "system",
+          content: `你正在完全代入扮演角色【${character.name}】填写团建地点问卷。只输出合法的 JSON 对象，不输出任何其他无关文字。`,
+        },
+        { role: "user", content: prompt },
+      ];
+
+      window.sendToLLM(
+        apiMessages,
+        null,
+        (reply) => {
+          setIsRoleAnswering(false);
+          try {
+            let cleanJson = reply.trim();
+            cleanJson = cleanJson.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
+            const result = JSON.parse(cleanJson);
+            if (result && result.answers) {
+              setFormData(result.answers);
+              if (result.characterRemark) {
+                setCharacterRemark(result.characterRemark);
+              }
+              alert(`🎉 【${character.name}】已按照其专属人设为您自动填写了团建地点投票！`);
+            }
+          } catch (err) {
+            console.error("解析角色代答 JSON 失败:", err, reply);
+            alert("角色代答解析失败，请重试。");
+          }
+        },
+        (error) => {
+          setIsRoleAnswering(false);
+          console.error("角色代答出错:", error);
+          alert("角色代答请求出错，请检查 API 配置。");
+        },
+      );
+    } catch (e) {
+      setIsRoleAnswering(false);
+      console.error("代答异常:", e);
+    }
+  };
+
+  // 提交问卷并存入 IndexedDB
+  const handleSubmit = async () => {
+    for (let q of questions) {
+      if (q.type !== "text" && !formData[q.id]) {
+        return alert(`请先完成第 ${q.id} 题再提交哦~`);
+      }
+    }
+
+    const respondentName =
+      selectedRespondent === "me"
+        ? "楼主本人"
+        : selectedRespondent?.name || "传讯角色";
+
+    const record = {
+      id: "location_survey_" + Date.now(),
+      createdAt: new Date().toLocaleString(),
+      answeredBy: respondentName,
+      characterAvatar:
+        selectedRespondent !== "me" ? selectedRespondent?.avatar : null,
+      characterRemark: characterRemark || null,
+      answers: { ...formData },
+      surveyQuestions: [...questions],
+    };
+
+    try {
+      const db = await openDB();
+      const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+      const store = transaction.objectStore(STORES.USER_SETTINGS);
+      
+      const newHistory = [record, ...historyList].slice(0, 10);
+      await store.put({
+        key: "xiuyi_location_survey_history",
+        value: newHistory,
+      });
+      setHistoryList(newHistory);
+      setIsSubmitted(true);
+    } catch (e) {
+      console.error("保存地点历史记录失败:", e);
+      setIsSubmitted(true);
+    }
   };
 
   // 样式辅助
@@ -20614,46 +20945,57 @@ const TeamBuildingVotePage = ({ onBack }) => {
     marginBottom: "12px",
     display: "flex",
     alignItems: "center",
-    gap: "6px",
+    gap: "8px",
   };
+
   const optionBtnStyle = (isSelected) => ({
-    padding: "10px 16px",
+    padding: "10px 14px",
     borderRadius: "12px",
     border: isSelected ? "1px solid #A8C8BA" : "1px solid transparent",
     background: isSelected ? "#E8F1ED" : "#fff",
     color: isSelected ? "#5a5f4d" : "#888",
     fontSize: "14px",
-    flex: 1,
-    textAlign: "center",
+    textAlign: "left",
+    cursor: "pointer",
     transition: "all 0.2s",
     boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
   });
 
+  // ==================== 提交完成视图 ====================
   if (isSubmitted) {
+    const respondentName =
+      selectedRespondent === "me"
+        ? "楼主本人"
+        : selectedRespondent?.name || "传讯角色";
+
     return (
       <div
         style={{
           position: "absolute",
-          top: 0,
-          left: 0,
-          width: "100%",
-          height: "100%",
+          inset: 0,
           background: "#f9f7f5",
           zIndex: 30,
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
           justifyContent: "center",
+          padding: "20px",
+          boxSizing: "border-box",
         }}
       >
         <div
           style={{
             background: "#fff",
-            padding: "40px",
+            padding: "32px 24px",
             borderRadius: "24px",
             boxShadow: "0 10px 30px rgba(0,0,0,0.05)",
             textAlign: "center",
-            width: "80%",
+            width: "100%",
+            maxWidth: "340px",
+            boxSizing: "border-box",
           }}
         >
           <div
@@ -20665,7 +21007,7 @@ const TeamBuildingVotePage = ({ onBack }) => {
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
-              margin: "0 auto 20px",
+              margin: "0 auto 16px",
             }}
           >
             <i
@@ -20675,77 +21017,114 @@ const TeamBuildingVotePage = ({ onBack }) => {
           </div>
           <h3
             style={{
-              fontSize: "20px",
+              fontSize: "19px",
               color: "#5a5f4d",
-              marginBottom: "10px",
-            }}
-          >
-            感谢填写
-          </h3>
-          <p style={{ fontSize: "14px", color: "#999", lineHeight: "1.6" }}>
-            您的意见对绣衣楼团建非常重要！
-            <br />
-            期待与大家共度美好时光。
-          </p>
-        </div>
-
-        {/* 重新填写按钮 */}
-        <div
-          onClick={handleReset}
-          style={{
-            marginTop: "40px",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            cursor: "pointer",
-            opacity: 0.8,
-          }}
-        >
-          <div
-            style={{
-              width: "48px",
-              height: "48px",
-              background: "#D6E4EA",
-              borderRadius: "50%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
               marginBottom: "8px",
-              boxShadow: "0 4px 12px rgba(0,0,0,0.05)",
+              fontWeight: "bold",
             }}
           >
-            <i
-              className="ph-bold ph-arrow-counter-clockwise"
-              style={{ fontSize: "24px", color: "#728DA8" }}
-            ></i>
+            地点选票已提交
+          </h3>
+          <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.5", marginBottom: "16px" }}>
+            投票人：<strong style={{ color: "#5a5f4d" }}>{respondentName}</strong>
+            <br />
+            您的意向目的地已进入绣衣楼出游路线终审！
+          </p>
+
+          {characterRemark && (
+            <div
+              style={{
+                background: "#fcf8f2",
+                border: "1px dashed #d8c2a8",
+                borderRadius: "12px",
+                padding: "12px",
+                fontSize: "13px",
+                color: "#6b563d",
+                lineHeight: "1.5",
+                textAlign: "left",
+                marginBottom: "16px",
+              }}
+            >
+              <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+                💬 【{respondentName}】的留言：
+              </div>
+              <div>"{characterRemark}"</div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+            <button
+              onClick={() => {
+                setFormData({});
+                setCharacterRemark("");
+                setIsSubmitted(false);
+              }}
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: "14px",
+                border: "1px solid #ddd",
+                background: "#fff",
+                color: "#666",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              再填一份
+            </button>
+            <button
+              onClick={() => setShowHistoryModal(true)}
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: "14px",
+                border: "none",
+                background: "#D6E4EA",
+                color: "#556b73",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              查看历史
+            </button>
           </div>
-          <span style={{ fontSize: "12px", color: "#728DA8" }}>重新填写</span>
         </div>
 
         <button
           onClick={onBack}
           style={{
-            position: "absolute",
-            bottom: "40px",
-            padding: "12px 30px",
+            marginTop: "24px",
+            padding: "10px 24px",
             borderRadius: "20px",
             border: "none",
             background: "transparent",
             color: "#999",
+            fontSize: "14px",
+            cursor: "pointer",
           }}
         >
-          返回列表
+          返回绣衣问卷列表
         </button>
+
+        {showHistoryModal && (
+          <HistoryRecordsModal
+            title="📋 历史团建地点投票"
+            historyList={historyList}
+            onClose={() => setShowHistoryModal(false)}
+          />
+        )}
       </div>
     );
   }
 
+  // ==================== 主表单视图 ====================
   return (
     <div
       style={{
         position: "absolute",
-        top: 0,
-        left: 0,
+        inset: 0,
         width: "100%",
         height: "100%",
         background: "#f9f7f5",
@@ -20755,260 +21134,375 @@ const TeamBuildingVotePage = ({ onBack }) => {
       }}
     >
       {/* 顶部导航 */}
-      <div className="t11-nav">
-        <div className="back-btn" onClick={onBack}>
-          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+      <div className="t11-nav" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <div className="back-btn" onClick={onBack}>
+            <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+          </div>
+          <div className="title">团建地点投票</div>
         </div>
-        <div className="title">团建地点投票</div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginRight: "12px" }}>
+          <div
+            onClick={() => setShowHistoryModal(true)}
+            style={{
+              padding: "4px 10px",
+              borderRadius: "12px",
+              background: "rgba(0,0,0,0.05)",
+              color: "#5a5f4d",
+              fontSize: "12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+            }}
+          >
+            <i className="ph ph-clock-counter-clockwise"></i>
+            <span>历史</span>
+          </div>
+
+          <div
+            onClick={generateSurveyWithAI}
+            style={{
+              padding: "4px 10px",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #e8d0be 0%, #d8b8a0 100%)",
+              color: "#5c3d28",
+              fontSize: "12px",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+            }}
+          >
+            <i className="ph-bold ph-sparkle"></i>
+            <span>换新题</span>
+          </div>
+        </div>
       </div>
 
+      {/* 答卷人选择栏 */}
+      <div
+        style={{
+          background: "#fff",
+          padding: "10px 16px",
+          borderBottom: "1px solid rgba(0,0,0,0.05)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ fontSize: "12px", color: "#888", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span>选择投票身份：</span>
+          {selectedRespondent !== "me" && (
+            <button
+              onClick={() => handleRoleAutoAnswer(selectedRespondent)}
+              disabled={isRoleAnswering}
+              style={{
+                background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                padding: "3px 8px",
+                fontSize: "11px",
+                fontWeight: "bold",
+                cursor: isRoleAnswering ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+              }}
+            >
+              <i className="ph-bold ph-magic-wand"></i>
+              <span>{isRoleAnswering ? "代答中..." : `让 ${selectedRespondent.name} 投票`}</span>
+            </button>
+          )}
+        </div>
+
+        {/* 角色横向滚动选择器 */}
+        <div
+          className="no-scrollbar"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            overflowX: "auto",
+            paddingBottom: "4px",
+          }}
+        >
+          <div
+            onClick={() => setSelectedRespondent("me")}
+            style={{
+              padding: "5px 12px",
+              borderRadius: "14px",
+              background: selectedRespondent === "me" ? "#5a5f4d" : "#f0eee9",
+              color: selectedRespondent === "me" ? "#fff" : "#666",
+              fontSize: "12px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              flexShrink: 0,
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>👑 楼主本人</span>
+          </div>
+
+          {characters.map((char) => {
+            const isSelected = selectedRespondent?.id === char.id;
+            return (
+              <div
+                key={char.id}
+                onClick={() => setSelectedRespondent(char)}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "14px",
+                  background: isSelected ? "#A8C8BA" : "#f0eee9",
+                  color: isSelected ? "#fff" : "#555",
+                  fontSize: "12px",
+                  fontWeight: isSelected ? "bold" : "normal",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  flexShrink: 0,
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <div
+                  style={{
+                    width: "18px",
+                    height: "18px",
+                    borderRadius: "50%",
+                    backgroundColor: char.avatarColor || "#ddd",
+                    overflow: "hidden",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "10px",
+                  }}
+                >
+                  {char.avatar ? (
+                    <img src={char.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    char.name[0]
+                  )}
+                </div>
+                <span>{char.name}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 问卷表单区域 */}
       <div
         className="no-scrollbar"
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "20px",
+          padding: "16px",
           paddingBottom: "100px",
+          boxSizing: "border-box",
         }}
       >
-        {/* Q1: 部门 */}
-        <div style={{ marginBottom: "24px" }}>
-          <div style={sectionTitleStyle}>
-            <span
-              style={{
-                background: "#D6E4EA",
-                width: "6px",
-                height: "16px",
-                borderRadius: "3px",
-              }}
-            ></span>
-            1. 您所属的部门？
-          </div>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(3, 1fr)",
-              gap: "10px",
-            }}
-          >
-            {["蛾部", "雀部", "蜂部", "鸢部", "蝶部", "闲人"].map((dept) => (
-              <div
-                key={dept}
-                onClick={() => setFormData({ ...formData, dept })}
-                style={optionBtnStyle(formData.dept === dept)}
-              >
-                {dept}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Q2: 形式 */}
-        <div style={{ marginBottom: "24px" }}>
-          <div style={sectionTitleStyle}>
-            <span
-              style={{
-                background: "#EAD6D6",
-                width: "6px",
-                height: "16px",
-                borderRadius: "3px",
-              }}
-            ></span>
-            2. 期望的活动形式？
-          </div>
-          <div style={{ display: "flex", gap: "12px" }}>
-            {["室内轰趴", "户外踏青"].map((type) => (
-              <div
-                key={type}
-                onClick={() => setFormData({ ...formData, type })}
-                style={optionBtnStyle(formData.type === type)}
-              >
-                <i
-                  className={`ph-fill ${type.includes("室内") ? "ph-armchair" : "ph-tree"}`}
-                  style={{ marginRight: "6px" }}
-                ></i>
-                {type}
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Q3: 地点 */}
-        <div style={{ marginBottom: "24px" }}>
-          <div style={sectionTitleStyle}>
-            <span
-              style={{
-                background: "#E8DED6",
-                width: "6px",
-                height: "16px",
-                borderRadius: "3px",
-              }}
-            ></span>
-            3. 您中意的团建地点？
-          </div>
-          <div
-            style={{
-              display: "flex",
-              flexDirection: "column",
-              gap: "10px",
-            }}
-          >
-            {[...randomLocations, "其他"].map((loc) => (
-              <div
-                key={loc}
-                onClick={() =>
-                  setFormData({
-                    ...formData,
-                    location: loc,
-                    extraAnswer: "",
-                  })
-                }
+        {questions.map((q) => (
+          <div key={q.id} style={{ marginBottom: "24px" }}>
+            <div style={sectionTitleStyle}>
+              <span
                 style={{
-                  ...optionBtnStyle(formData.location === loc),
-                  textAlign: "left",
+                  background: q.colorTag || "#D6E4EA",
+                  width: "6px",
+                  height: "16px",
+                  borderRadius: "3px",
+                  flexShrink: 0,
+                }}
+              ></span>
+              <span>{q.title}</span>
+            </div>
+
+            {q.type === "grid" && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                  gap: "10px",
+                }}
+              >
+                {q.options.map((opt) => (
+                  <div
+                    key={opt}
+                    onClick={() => setFormData({ ...formData, [q.id]: opt })}
+                    style={{
+                      ...optionBtnStyle(formData[q.id] === opt),
+                      justifyContent: "center",
+                      textAlign: "center",
+                    }}
+                  >
+                    {opt}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {q.type === "column" && (
+              <div
+                style={{
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
+                  flexDirection: "column",
+                  gap: "10px",
                 }}
               >
-                <span>{loc}</span>
-                {formData.location === loc && (
-                  <i
-                    className="ph-bold ph-check"
-                    style={{ color: "#A8C8BA" }}
-                  ></i>
-                )}
-              </div>
-            ))}
-          </div>
-
-          {/* 条件追问逻辑 */}
-          {formData.location === "江东虎跳峡" && (
-            <div
-              style={{
-                marginTop: "12px",
-                padding: "15px",
-                background: "#fff",
-                borderRadius: "16px",
-                animation: "fade-in 0.3s",
-              }}
-            >
-              <div
-                style={{
-                  fontSize: "13px",
-                  color: "#5a5f4d",
-                  marginBottom: "10px",
-                }}
-              >
-                🛶 附加问：是否乘坐江东楼船？
-              </div>
-              <div style={{ display: "flex", gap: "10px" }}>
-                {["乘坐", "晕船，不坐"].map((ans) => (
+                {q.options.map((opt) => (
                   <div
-                    key={ans}
-                    onClick={() =>
-                      setFormData({ ...formData, extraAnswer: ans })
-                    }
-                    style={{
-                      ...optionBtnStyle(formData.extraAnswer === ans),
-                      padding: "8px",
-                      fontSize: "12px",
-                    }}
+                    key={opt}
+                    onClick={() => setFormData({ ...formData, [q.id]: opt })}
+                    style={optionBtnStyle(formData[q.id] === opt)}
                   >
-                    {ans}
+                    <span>{opt}</span>
+                    {formData[q.id] === opt && (
+                      <i className="ph-bold ph-check" style={{ color: "#8fa99d" }}></i>
+                    )}
                   </div>
                 ))}
               </div>
-            </div>
-          )}
+            )}
 
-          {formData.location === "汝南茶园" && (
-            <div
-              style={{
-                marginTop: "12px",
-                padding: "15px",
-                background: "#fff",
-                borderRadius: "16px",
-                animation: "fade-in 0.3s",
-              }}
-            >
+            {q.type === "text" && (
+              <div>
+                <textarea
+                  value={formData[q.id] || ""}
+                  onChange={(e) => setFormData({ ...formData, [q.id]: e.target.value })}
+                  placeholder={q.placeholder || "在此留下您的地点推荐与建议..."}
+                  style={{
+                    width: "100%",
+                    minHeight: "80px",
+                    padding: "12px",
+                    borderRadius: "14px",
+                    border: "1px solid rgba(0,0,0,0.08)",
+                    outline: "none",
+                    background: "#fff",
+                    color: "#5a5f4d",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                    resize: "none",
+                    fontFamily: "inherit",
+                    lineHeight: "1.5",
+                  }}
+                />
+              </div>
+            )}
+
+            {q.hasExtraCondition && q.extraQuestion && formData[q.id] === q.extraQuestion.triggerOption && (
               <div
                 style={{
-                  fontSize: "13px",
-                  color: "#5a5f4d",
-                  marginBottom: "10px",
-                }}
-              >
-                🌙 附加问：是否乘坐夜航船？
-              </div>
-              <div style={{ display: "flex", gap: "10px" }}>
-                {["必须乘坐", "怕死，不了"].map((ans) => (
-                  <div
-                    key={ans}
-                    onClick={() =>
-                      setFormData({ ...formData, extraAnswer: ans })
-                    }
-                    style={{
-                      ...optionBtnStyle(formData.extraAnswer === ans),
-                      padding: "8px",
-                      fontSize: "12px",
-                    }}
-                  >
-                    {ans}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* 其他输入框 */}
-          {formData.location === "其他" && (
-            <div style={{ marginTop: "10px", animation: "fade-in 0.3s" }}>
-              <input
-                type="text"
-                placeholder="请输入您想去的地点..."
-                value={formData.otherText}
-                onChange={(e) =>
-                  setFormData({ ...formData, otherText: e.target.value })
-                }
-                style={{
-                  width: "100%",
-                  padding: "12px",
-                  borderRadius: "12px",
-                  border: "1px solid #ddd",
-                  outline: "none",
+                  marginTop: "10px",
+                  padding: "14px",
                   background: "#fff",
-                  color: "#5a5f4d",
-                  fontSize: "14px",
+                  borderRadius: "16px",
+                  border: "1px dashed rgba(168, 200, 186, 0.6)",
+                  animation: "fadeIn 0.3s ease",
                 }}
-              />
-            </div>
-          )}
-        </div>
+              >
+                <div
+                  style={{
+                    fontSize: "13px",
+                    color: "#5a5f4d",
+                    fontWeight: "bold",
+                    marginBottom: "10px",
+                  }}
+                >
+                  {q.extraQuestion.title}
+                </div>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  {q.extraQuestion.options.map((extraOpt) => (
+                    <div
+                      key={extraOpt}
+                      onClick={() => setFormData({ ...formData, [`${q.id}_extra`]: extraOpt })}
+                      style={{
+                        ...optionBtnStyle(formData[`${q.id}_extra`] === extraOpt),
+                        padding: "8px 12px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      {extraOpt}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
 
-        {/* 提交按钮 */}
         <button
           onClick={handleSubmit}
           style={{
             width: "100%",
-            padding: "16px",
+            padding: "15px",
             borderRadius: "24px",
             border: "none",
             background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
             color: "white",
             fontSize: "16px",
             fontWeight: "bold",
-            marginTop: "20px",
+            marginTop: "12px",
             boxShadow: "0 8px 20px rgba(168, 200, 186, 0.4)",
             cursor: "pointer",
+            letterSpacing: "1px",
           }}
         >
           确认提交
         </button>
       </div>
+
+      {(isGenerating || isRoleAnswering) && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(249, 247, 245, 0.85)",
+            backdropFilter: "blur(4px)",
+            zIndex: 100,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "12px",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "50%",
+              border: "3px solid rgba(168, 200, 186, 0.3)",
+              borderTopColor: "#8fa99d",
+              animation: "spin 1s linear infinite",
+            }}
+          ></div>
+          <div style={{ color: "#5a5f4d", fontSize: "14px", fontWeight: "bold" }}>
+            {isGenerating
+              ? "正在研读世界书设定，起草团建地点投票问卷..."
+              : `正在揣摩【${selectedRespondent?.name || "角色"}】人设，自动填写中...`}
+          </div>
+        </div>
+      )}
+
+      {showHistoryModal && (
+        <HistoryRecordsModal
+          title="📋 历史团建地点投票"
+          historyList={historyList}
+          onClose={() => setShowHistoryModal(false)}
+        />
+      )}
     </div>
   );
 };
+
 
 // ==================== T11 员工满意度调查问卷 (AI 动态生成 + 角色代答 + 历史记录版) ====================
 const SatisfactionSurveyPage = ({ onBack }) => {
@@ -25080,7 +25574,7 @@ const T11QuestionnaireSubPage = ({ onBack }) => {
 
       {/* 渲染子页面：团建地点投票 */}
       {activeVote === "location" && (
-        <TeamBuildingVotePage onBack={() => setActiveVote(null)} />
+        <TeamBuildingLocationSurveyPage onBack={() => setActiveVote(null)} />
       )}
 
       {/* 问卷列表主页面 */}
