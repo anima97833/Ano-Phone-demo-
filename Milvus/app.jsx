@@ -55952,6 +55952,1540 @@ const T13WaterMirrorPage = ({ onBack }) => {
 };
 
 
+// ==================== 太白杀阵 (沉浸式剧本杀) 组件 ====================
+const TaibaiMysteryPage = ({ onBack }) => {
+  // 阶段状态: "lobby" (选人与准备) | "generating" (AI生成中) | "reading" (阅读剧本) | "playing" (辩驳推演) | "voting" (投票揭凶) | "review" (结案复盘)
+  const [stage, setStage] = React.useState("lobby");
+  
+  // 选人状态
+  const [userPersona, setUserPersona] = React.useState({ name: "广陵王", role: "楼主", personality: "机警果决", avatar: "" });
+  const [characterPool, setCharacterPool] = React.useState([]);
+  const [selectedCharIds, setSelectedCharIds] = React.useState([]);
+  const [toastText, setToastText] = React.useState("");
+
+  // 剧本与游戏状态
+  const [mysteryData, setMysteryData] = React.useState(null);
+  const [chatLog, setChatLog] = React.useState([]);
+  const [isAiSpeaking, setIsAiSpeaking] = React.useState(false);
+  const [inputText, setInputText] = React.useState("");
+  const [showMyScript, setShowMyScript] = React.useState(false);
+  const [showClues, setShowClues] = React.useState(false);
+  const [selectedSuspect, setSelectedSuspect] = React.useState(null);
+  const [votes, setVotes] = React.useState({});
+
+  const chatEndRef = React.useRef(null);
+
+  const showToast = (txt) => {
+    setToastText(txt);
+    setTimeout(() => setToastText(""), 2600);
+  };
+
+  // 初始化加载用户面具与传讯密探角色
+  React.useEffect(() => {
+    const initData = async () => {
+      // 1. 用户面具
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (savedPersonas.length > 0) {
+          const found = activeId ? savedPersonas.find((p) => String(p.id) === String(activeId)) : savedPersonas[0];
+          if (found) {
+            setUserPersona({
+              name: found.name || "广陵王",
+              role: found.role || found.name || "广陵王",
+              personality: found.personality || "机敏睿智",
+              background: found.background || found.description || "绣衣楼之主",
+              avatar: found.avatar || ""
+            });
+          }
+        }
+      } catch (e) {}
+
+      // 2. 传讯密探列表
+      try {
+        let allChars = [];
+        if (window.chatCharacterStore) {
+          allChars = await window.chatCharacterStore.getAll();
+        } else {
+          allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+
+        const validChars = allChars.filter(
+          (c) => !String(c.id).startsWith("group") && c.type !== "decor" && c.name
+        );
+
+        let avatarMap = {};
+        try {
+          avatarMap = JSON.parse(localStorage.getItem("绣衣楼头像") || "{}");
+        } catch (e) {}
+
+        let biosMap = {};
+        try {
+          if (window.settingsStore?.getCharacterNotes) {
+            biosMap = (await window.settingsStore.getCharacterNotes()) || {};
+          }
+        } catch (e) {}
+
+        const mapped = validChars.map((c) => {
+          const charName = c.name;
+          const charAvatar = c.avatar || avatarMap[charName] || "";
+          const charProfile = c.profile || c.personality || biosMap[charName] || c.description || "";
+          return {
+            id: c.id,
+            name: charName,
+            avatar: charAvatar,
+            profile: typeof charProfile === "string" ? charProfile : JSON.stringify(charProfile),
+            raw: c,
+          };
+        });
+
+        setCharacterPool(mapped);
+        // 默认勾选前 3-4 名角色
+        if (mapped.length >= 3) {
+          setSelectedCharIds(mapped.slice(0, 3).map((m) => m.id));
+        }
+      } catch (e) {
+        console.error("加载密探失败:", e);
+      }
+    };
+
+    initData();
+  }, []);
+
+  // 滚动到底部
+  React.useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatLog, isAiSpeaking]);
+
+  // 切换选中密探
+  const toggleSelectChar = (id) => {
+    if (selectedCharIds.includes(id)) {
+      setSelectedCharIds(selectedCharIds.filter((item) => item !== id));
+    } else {
+      setSelectedCharIds([...selectedCharIds, id]);
+    }
+  };
+
+  // 生成剧本杀剧本 (调用用户配置的 API，自由生成，不读世界书)
+  const handleGenerateMystery = () => {
+    if (selectedCharIds.length < 3) {
+      showToast("请至少勾选 3 位密探一同入局！");
+      return;
+    }
+
+    setStage("generating");
+
+    const selectedChars = characterPool.filter((c) => selectedCharIds.includes(c.id));
+    const playerList = [
+      { name: userPersona.name, role: "玩家本人(楼主/首领)", personality: userPersona.personality, isUser: true },
+      ...selectedChars.map((c) => ({ name: c.name, role: "密探同僚", personality: c.profile, isUser: false })),
+    ];
+
+    const prompt = `
+【任务】
+请为以下 ${playerList.length} 位玩家创作一个精彩、烧脑、环环相扣的【古风密室剧本杀案件】。
+自由创作案件，无需依赖任何现存世界书。案发现场必须有离奇的受害死者、多条动机线、关键物证以及一位隐藏极深的真凶！
+
+【参与玩家列表】
+${playerList.map((p, idx) => `${idx + 1}. 【${p.name}】(${p.isUser ? "玩家本人" : "角色"}): 性格与设定：${p.personality}`).join("\n")}
+
+【必须严格返回纯 JSON 对象格式（不要包含任何 \`\`\`json 或额外说明）】:
+{
+  "title": "剧本杀案件名称（如：沉香阁雪夜断魂录 / 洛水古舫血案）",
+  "background": "案发发生的时间、地点与背景故事（100-150字）",
+  "victim": "死者身份与遇害死状（如：富商沈半城，心口中淬毒暗器，案发现场反锁为密室）",
+  "clues": [
+    "现场公用线索1（如：窗台上的半枚泥泞鹿皮足印）",
+    "现场公用线索2（如：茶案上倒扣的龙窑青瓷茶盏，杯沿有微量白粉）",
+    "现场公用线索3（如：死者手中紧攥的半截玄铁令佩）",
+    "现场公用线索4（如：偏厅被撕毁并烧焦的秘密契约残页）"
+  ],
+  "characterSheets": {
+    "${userPersona.name}": {
+      "roleTitle": "在本次剧本杀中所饰角色与身份",
+      "alibi": "你在案发当晚的时间线与公开口径",
+      "secret": "你不可告人的隐秘动机或暗中做过的事（即使不是凶手也有秘密）",
+      "goal": "你的胜利目标（如：掩盖私藏账本并找出真凶 / 洗清自身嫌疑）",
+      "isKiller": false
+    },
+    ${selectedChars
+      .map(
+        (c, idx) => `"${c.name}": {
+      "roleTitle": "在本次剧本杀中所饰角色与身份",
+      "alibi": "案发当晚的时间线与公开口径",
+      "secret": "不可告人的隐秘秘密与动机",
+      "goal": "本局核心策略与获胜目标",
+      "isKiller": ${idx === 0 ? "true" : "false"}
+    }`
+      )
+      .join(",\n    ")}
+  },
+  "solution": {
+    "killer": "${selectedChars[0].name}",
+    "motive": "真凶的真实作案动机",
+    "method": "真凶精妙的作案手法与密室机关破解",
+    "keyEvidence": "锁定真凶的决定性物证链条",
+    "truthSummary": "案件完整真相复盘（150字左右）"
+  }
+}
+`;
+
+    if (window.sendToLLM) {
+      window.sendToLLM(
+        [
+          { role: "system", content: "你是一个殿堂级剧本杀金牌作者。必须严格输出纯 JSON 对象，切勿在字符串中换行。" },
+          { role: "user", content: prompt },
+        ],
+        null,
+        (reply) => {
+          const parsed = safeParseLLMJson(reply);
+          if (parsed && parsed.title && parsed.characterSheets) {
+            // 确保角色表中包含所有角色
+            setMysteryData(parsed);
+            setStage("reading");
+            // 初始化公堂开场白
+            setChatLog([
+              {
+                id: Date.now(),
+                sender: "公堂主持",
+                isSystem: true,
+                text: `【剧本杀 · ${parsed.title}】正式开局！\n案发地点：${parsed.background}\n受害死者：${parsed.victim}\n各位入局者皆已领到专属剧本，请仔细研读并准备自述时间线。`,
+                time: "此刻",
+              },
+            ]);
+            showToast("剧本杀演武场已构筑完毕！");
+          } else {
+            fallbackDefaultMystery();
+          }
+        },
+        () => fallbackDefaultMystery()
+      );
+    } else {
+      fallbackDefaultMystery();
+    }
+  };
+
+  // 兜底剧本杀数据
+  const fallbackDefaultMystery = () => {
+    const selectedChars = characterPool.filter((c) => selectedCharIds.includes(c.id));
+    const killerChar = selectedChars[0] ? selectedChars[0].name : "傅融";
+
+    const defaultMystery = {
+      title: "太白古楼·雪夜金匮血案",
+      background: "大雪封山之夜，太白隐楼之内，珍藏重宝的'九窍玲珑金匮'失窃，藏珍阁总管暴毙于密室之中。",
+      victim: "藏珍总管·贾道全，胸口中透骨暗镖，毒发身亡，阁门由内反锁，钥匙遗落死者身旁。",
+      clues: [
+        "现场窗棂微有被细丝撬动的松动痕迹，窗台落有极淡的沉香灰。",
+        "死者衣襟内藏有一张被撕破的典当当票，上面记有一柄名贵龙泉匕首。",
+        "茶几上的茶壶尚温，倒有两只茶盏，其中一只茶盏边缘带有淡淡杏仁甜味。",
+        "后廊雪地里发现一串极浅的单向脚印，似乎凶手施展轻功踏雪无痕逃离。"
+      ],
+      characterSheets: {
+        [userPersona.name]: {
+          roleTitle: "观星楼主 (调查主使)",
+          alibi: "戌时初在东轩推演星盘，戌时三刻听见异响后赶往藏珍阁，发现门已反锁。",
+          secret: "你曾在申时暗中向死者索要过金匮账册，因账册涉密未果，曾与其发生争执。",
+          goal: "找出真凶，查清金匮去向，洗清自身争执嫌疑。",
+          isKiller: false
+        },
+        ...selectedChars.reduce((acc, c, idx) => {
+          const isK = c.name === killerChar;
+          acc[c.name] = {
+            roleTitle: isK ? "隐楼总账 / 机要使" : `特邀来宾·${c.name}`,
+            alibi: isK ? "戌时在西阁独自核对账簿，有书吏在门外作证（实则中途借密道溜出）。" : "戌时在暖阁温酒赏雪，未曾踏出一步。",
+            secret: isK ? "你正是真凶！因金匮账册记录了你挪用私银的证据，你借机关毒镖将其杀害并带走金匮！" : "你曾于酉时私下潜入藏珍阁试图偷看宝物，不小心遗留了一块贴身香帕。",
+            goal: isK ? "全力隐藏真凶身份！将杀人嫌疑巧妙引向持有暗器之人或有争执之人！" : "隐藏自己潜入过现场的尴尬秘密，协助大家盘出真凶！",
+            isKiller: isK
+          };
+          return acc;
+        }, {})
+      },
+      solution: {
+        killer: killerChar,
+        motive: "死者掌握了其私调公款的真账册，欲在金匮大典上公之于众。",
+        method: "利用浸有断肠草的无影飞镖自窗隙射杀，再用细蚕丝拉动机括在门内插上门闩，伪造密室。",
+        keyEvidence: "身上残留的极淡沉香灰，与窗台机关痕迹完全吻合，且怀中藏有金匮钥匙的蜡模。",
+        truthSummary: `${killerChar}为灭口并销毁账册，于戌时二刻借密道潜入，以细丝机关毒镖杀害死者并拿走金匮，随后返回伪造不在场证明。`
+      }
+    };
+
+    setMysteryData(defaultMystery);
+    setStage("reading");
+    setChatLog([
+      {
+        id: Date.now(),
+        sender: "公堂主持",
+        isSystem: true,
+        text: `【剧本杀 · ${defaultMystery.title}】正式开局！\n案发地点：${defaultMystery.background}\n受害死者：${defaultMystery.victim}\n各位入局者皆已领到专属剧本，请仔细研读并准备自述时间线。`,
+        time: "此刻",
+      },
+    ]);
+    showToast("剧本演武场已构筑！");
+  };
+
+  // 进入发言对质阶段
+  const handleStartPlaying = () => {
+    setStage("playing");
+    // 触发第一位 AI 角色进行自我介绍与不在场证明
+    setTimeout(() => {
+      triggerNextAiSpeaker();
+    }, 600);
+  };
+
+  // 触发某位 AI 角色发言
+  const triggerNextAiSpeaker = (targetCharName = null) => {
+    if (!mysteryData || isAiSpeaking) return;
+
+    const selectedChars = characterPool.filter((c) => selectedCharIds.includes(c.id));
+    let speaker = null;
+
+    if (targetCharName) {
+      speaker = selectedChars.find((c) => c.name === targetCharName);
+    } else {
+      // 随机选一位发言较少的 AI 角色
+      speaker = selectedChars[Math.floor(Math.random() * selectedChars.length)];
+    }
+
+    if (!speaker) return;
+
+    setIsAiSpeaking(true);
+
+    const charSheet = mysteryData.characterSheets[speaker.name] || {};
+    const recentChat = chatLog.slice(-12).map((m) => `${m.sender}: ${m.text}`).join("\n");
+
+    const prompt = `
+【剧本杀案件背景】
+案件名称：${mysteryData.title}
+案发现场与受害死者：${mysteryData.victim}
+公用现场线索：${JSON.stringify(mysteryData.clues)}
+
+【你的专属人设与说话风格】
+姓名：${speaker.name}
+原人设与口吻习惯：${speaker.profile}
+
+【你在本次剧本杀中的专属剧本卡（极度机密！）】
+身份头衔：${charSheet.roleTitle || "密探同僚"}
+你的公开时间线/不在场证明：${charSheet.alibi || "无"}
+你不可告人的隐秘秘密：${charSheet.secret || "无"}
+你是否是真凶：${charSheet.isKiller ? "【你是真凶！必须全力撒谎、误导他人、转移视线、找替罪羊！】" : "【你不是真凶！但必须隐藏你的不可告人秘密，并从发言中盘出破绽找出真凶！】"}
+你的获胜目标：${charSheet.goal || "隐藏秘密，找出凶手"}
+
+【当前公堂已有发言记录】
+${recentChat || "（公堂刚开始，请进行第一轮不在场证明与时间线自述）"}
+
+【发言任务与铁律】
+1. 以【${speaker.name}】的独特语气口吻，进行一次 40-80 字左右的剧本杀发言！
+2. 遵循剧本杀规则：你可以说谎骗人、可以反驳质问其他人、也可以虚构自己的细节！
+3. 纯角色口述，严禁包含任何括号动作旁白，严禁暴露你是 AI，直接输出发言内容。
+`;
+
+    if (window.sendToLLM) {
+      window.sendToLLM(
+        [
+          { role: "system", content: "你是一个精通剧本杀谎言欺瞒与逻辑推理的高手玩家。严格遵循角色剧本发言。" },
+          { role: "user", content: prompt },
+        ],
+        null,
+        (reply) => {
+          setIsAiSpeaking(false);
+          const cleanText = (reply || "").replace(/```json|```/g, "").replace(/[（\(].*?[）\)]/g, "").trim();
+          if (cleanText) {
+            setChatLog((prev) => [
+              ...prev,
+              {
+                id: Date.now() + Math.random(),
+                sender: speaker.name,
+                avatar: speaker.avatar,
+                text: cleanText,
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+              },
+            ]);
+          }
+        },
+        () => {
+          setIsAiSpeaking(false);
+          setChatLog((prev) => [
+            ...prev,
+            {
+              id: Date.now(),
+              sender: speaker.name,
+              avatar: speaker.avatar,
+              text: "我戌时确实在自己房中，至于窗台的痕迹，谁知道是不是有人刻意栽赃？",
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            },
+          ]);
+        }
+      );
+    } else {
+      setIsAiSpeaking(false);
+      setChatLog((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          sender: speaker.name,
+          avatar: speaker.avatar,
+          text: "我当时正独自在书房核账，根本不曾去过藏珍阁。倒是某些人神色慌张，颇为可疑！",
+          time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        },
+      ]);
+    }
+  };
+
+  // 用户发送发言
+  const handleUserSend = () => {
+    const trimmed = inputText.trim();
+    if (!trimmed || isAiSpeaking) return;
+
+    const newMsg = {
+      id: Date.now(),
+      sender: userPersona.name,
+      avatar: userPersona.avatar,
+      isUser: true,
+      text: trimmed,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+
+    setChatLog((prev) => [...prev, newMsg]);
+    setInputText("");
+
+    // 用户发言后，自动触发一位 AI 角色进行回应与辩驳
+    setTimeout(() => {
+      triggerNextAiSpeaker();
+    }, 800);
+  };
+
+  // 触发投票阶段
+  const handleGoVoting = () => {
+    setStage("voting");
+  };
+
+  // 提交投票并揭晓真凶
+  const handleSubmitVote = () => {
+    if (!selectedSuspect) {
+      showToast("请先选择您指认的真凶嫌疑人！");
+      return;
+    }
+
+    // 模拟其他 AI 角色投票
+    const selectedChars = characterPool.filter((c) => selectedCharIds.includes(c.id));
+    const allParticipants = [userPersona.name, ...selectedChars.map((c) => c.name)];
+    const simVotes = { [userPersona.name]: selectedSuspect };
+
+    selectedChars.forEach((c) => {
+      // AI 随机或按剧本投嫌疑人
+      const candidates = allParticipants.filter((p) => p !== c.name);
+      simVotes[c.name] = candidates[Math.floor(Math.random() * candidates.length)];
+    });
+
+    setVotes(simVotes);
+    setStage("review");
+  };
+
+  // 重置并重新选人
+  const handleRestart = () => {
+    setStage("lobby");
+    setMysteryData(null);
+    setChatLog([]);
+    setSelectedSuspect(null);
+    setVotes({});
+  };
+
+  const mySheet = mysteryData?.characterSheets?.[userPersona.name] || {};
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "linear-gradient(180deg, #F4EFEB 0%, #EAE4DD 100%)",
+        zIndex: 260,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        color: "#4A453E",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      }}
+    >
+      {/* 顶部莫兰迪导航栏 */}
+      <div
+        style={{
+          height: "54px",
+          background: "rgba(255, 255, 255, 0.85)",
+          backdropFilter: "blur(10px)",
+          borderBottom: "1px solid #E2D9CE",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 14px",
+          flexShrink: 0,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div
+            onClick={onBack}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#6D7983",
+              background: "#EBE5DC",
+            }}
+          >
+            <i className="ph ph-caret-left" style={{ fontSize: "22px" }}></i>
+          </div>
+          <div>
+            <div style={{ fontSize: "15px", fontWeight: "700", color: "#454D55" }}>
+              太白杀阵 · {stage === "lobby" ? "组局大厅" : mysteryData?.title || "剧本杀"}
+            </div>
+            <div style={{ fontSize: "10.5px", color: "#8E99A2" }}>
+              莫兰迪桌游演武 · 虚实辩驳
+            </div>
+          </div>
+        </div>
+
+        {/* 顶部快捷操作 */}
+        {mysteryData && stage !== "lobby" && stage !== "generating" && (
+          <div style={{ display: "flex", gap: "6px" }}>
+            <button
+              onClick={() => setShowMyScript(true)}
+              style={{
+                fontSize: "12px",
+                background: "#7D93A4",
+                color: "#FFF",
+                border: "none",
+                padding: "5px 10px",
+                borderRadius: "12px",
+                fontWeight: "600",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+              }}
+            >
+              <i className="ph ph-scroll"></i>
+              <span>我的剧本</span>
+            </button>
+            <button
+              onClick={() => setShowClues(true)}
+              style={{
+                fontSize: "12px",
+                background: "#C88E7D",
+                color: "#FFF",
+                border: "none",
+                padding: "5px 10px",
+                borderRadius: "12px",
+                fontWeight: "600",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+              }}
+            >
+              <i className="ph ph-magnifying-glass"></i>
+              <span>线索</span>
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ================= 阶段 1: 组局准备厅 (选人) ================= */}
+      {stage === "lobby" && (
+        <div
+          className="no-scrollbar"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "16px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: "16px",
+          }}
+        >
+          {/* 用户本人卡片 */}
+          <div
+            style={{
+              background: "linear-gradient(135deg, #FFFFFF 0%, #FAF6F0 100%)",
+              borderRadius: "20px",
+              padding: "16px",
+              border: "1.5px solid #DDD3C7",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
+              display: "flex",
+              alignItems: "center",
+              gap: "14px",
+            }}
+          >
+            <WaterMirrorAvatar avatar={userPersona.avatar} name={userPersona.name} size={54} />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "16px", fontWeight: "700", color: "#3B4235" }}>
+                  {userPersona.name}
+                </span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    background: "#869687",
+                    color: "#FFF",
+                    padding: "2px 8px",
+                    borderRadius: "8px",
+                    fontWeight: "600",
+                  }}
+                >
+                  发起人(你)
+                </span>
+              </div>
+              <div style={{ fontSize: "12px", color: "#7B8072", marginTop: "3px" }}>
+                身份：{userPersona.role} · 性格：{userPersona.personality}
+              </div>
+            </div>
+          </div>
+
+          {/* 密探选择提示 */}
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div>
+              <div style={{ fontSize: "15px", fontWeight: "700", color: "#4E5760" }}>
+                <i className="ph ph-users-three mr-1"></i> 选择入局密探 (至少选3位)
+              </div>
+              <div style={{ fontSize: "11.5px", color: "#8E99A2", marginTop: "2px" }}>
+                已选 {selectedCharIds.length} 位 · 来自传讯角色配置库
+              </div>
+            </div>
+            <span
+              style={{
+                fontSize: "12px",
+                color: selectedCharIds.length >= 3 ? "#5A8F76" : "#C88E7D",
+                fontWeight: "700",
+                background: "#EBE5DC",
+                padding: "3px 10px",
+                borderRadius: "12px",
+              }}
+            >
+              {selectedCharIds.length >= 3 ? "人数达标" : `还需 ${3 - selectedCharIds.length} 人`}
+            </span>
+          </div>
+
+          {/* 密探候选池 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {characterPool.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#8E99A2" }}>
+                <i className="ph ph-ghost" style={{ fontSize: "36px", marginBottom: "8px", display: "block" }}></i>
+                暂无传讯密探角色，请先在传讯中添加密探。
+              </div>
+            ) : (
+              characterPool.map((char) => {
+                const isSelected = selectedCharIds.includes(char.id);
+                return (
+                  <div
+                    key={char.id}
+                    onClick={() => toggleSelectChar(char.id)}
+                    style={{
+                      background: isSelected ? "#FAF7F2" : "#FFFFFF",
+                      borderRadius: "16px",
+                      padding: "12px 14px",
+                      border: isSelected ? "2px solid #7D93A4" : "1.5px solid #E5DDD2",
+                      boxShadow: isSelected ? "0 4px 12px rgba(125,147,164,0.18)" : "0 2px 6px rgba(0,0,0,0.02)",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      cursor: "pointer",
+                      transition: "all 0.18s ease",
+                    }}
+                  >
+                    <WaterMirrorAvatar avatar={char.avatar} name={char.name} size={44} />
+
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235" }}>
+                        {char.name}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "11.5px",
+                          color: "#7B8072",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis",
+                          marginTop: "2px",
+                        }}
+                      >
+                        {char.profile || "传讯密探同僚"}
+                      </div>
+                    </div>
+
+                    <div
+                      style={{
+                        width: "22px",
+                        height: "22px",
+                        borderRadius: "50%",
+                        border: isSelected ? "none" : "2px solid #C4B7A6",
+                        background: isSelected ? "#7D93A4" : "transparent",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#FFF",
+                        fontSize: "13px",
+                      }}
+                    >
+                      {isSelected && <i className="ph-bold ph-check"></i>}
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* 生成剧本按钮 */}
+          <div style={{ marginTop: "auto", paddingTop: "14px" }}>
+            <button
+              onClick={handleGenerateMystery}
+              disabled={selectedCharIds.length < 3}
+              style={{
+                width: "100%",
+                padding: "14px 0",
+                borderRadius: "20px",
+                border: "none",
+                background:
+                  selectedCharIds.length >= 3
+                    ? "linear-gradient(135deg, #7D93A4 0%, #5E778B 100%)"
+                    : "#C8C0B5",
+                color: "#FFFFFF",
+                fontSize: "15px",
+                fontWeight: "700",
+                letterSpacing: "1.5px",
+                boxShadow:
+                  selectedCharIds.length >= 3 ? "0 6px 20px rgba(94,119,139,0.35)" : "none",
+                cursor: selectedCharIds.length >= 3 ? "pointer" : "not-allowed",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "8px",
+              }}
+            >
+              <i className="ph ph-sparkle" style={{ fontSize: "18px" }}></i>
+              <span>生成剧本杀演武 ({selectedCharIds.length + 1}人局)</span>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 阶段 2: AI 剧本生成中 ================= */}
+      {stage === "generating" && (
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "72px",
+              height: "72px",
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #C88E7D 0%, #7D93A4 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#FFF",
+              fontSize: "32px",
+              boxShadow: "0 8px 24px rgba(200,142,125,0.35)",
+              animation: "mirrorPulse 2s infinite ease-in-out",
+              marginBottom: "20px",
+            }}
+          >
+            <i className="ph ph-scroll"></i>
+          </div>
+          <div style={{ fontSize: "17px", fontWeight: "700", color: "#454D55", marginBottom: "8px" }}>
+            太白推演 · 剧本构筑中...
+          </div>
+          <div style={{ fontSize: "13px", color: "#8E99A2", lineHeight: "1.6", maxWidth: "280px" }}>
+            正在为 {userPersona.name} 及各密探编排密室死局、不在场证明与私密动机...
+          </div>
+        </div>
+      )}
+
+      {/* ================= 阶段 3: 研读剧本阶段 ================= */}
+      {stage === "reading" && mysteryData && (
+        <div
+          className="no-scrollbar"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "16px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              background: "linear-gradient(135deg, #FAF7F2 0%, #F3ECE2 100%)",
+              borderRadius: "20px",
+              padding: "16px",
+              border: "1.5px solid #DDD3C7",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
+            }}
+          >
+            <div style={{ fontSize: "18px", fontWeight: "800", color: "#3B4235", marginBottom: "4px" }}>
+              📖 {mysteryData.title}
+            </div>
+            <div style={{ fontSize: "12px", color: "#7B8072", lineHeight: "1.5" }}>
+              {mysteryData.background}
+            </div>
+            <div
+              style={{
+                marginTop: "10px",
+                background: "#FCE4DC",
+                borderLeft: "4px solid #C88E7D",
+                padding: "8px 12px",
+                borderRadius: "8px",
+                fontSize: "12.5px",
+                color: "#8C4A3A",
+                fontWeight: "600",
+              }}
+            >
+              【受害死状】{mysteryData.victim}
+            </div>
+          </div>
+
+          {/* 我的私密剧本 */}
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderRadius: "20px",
+              padding: "16px",
+              border: "1.5px solid #7D93A4",
+              boxShadow: "0 4px 16px rgba(125,147,164,0.12)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <span style={{ fontSize: "15px", fontWeight: "700", color: "#3B4235" }}>
+                🔒 你的专属剧本卡 (机密)
+              </span>
+              <span
+                style={{
+                  fontSize: "11px",
+                  background: mySheet.isKiller ? "#F8D7DA" : "#E2F0D9",
+                  color: mySheet.isKiller ? "#721C24" : "#385723",
+                  padding: "2px 8px",
+                  borderRadius: "8px",
+                  fontWeight: "700",
+                }}
+              >
+                {mySheet.isKiller ? "真凶身份 (隐藏)" : "平民身份"}
+              </span>
+            </div>
+
+            <div style={{ fontSize: "12.5px", color: "#4E5760" }}>
+              <b>公开身份：</b>{mySheet.roleTitle || "调查主使"}
+            </div>
+            <div style={{ fontSize: "12.5px", color: "#4E5760" }}>
+              <b>公开口径与时间线：</b>{mySheet.alibi}
+            </div>
+            <div
+              style={{
+                fontSize: "12.5px",
+                color: "#8C4A3A",
+                background: "#FFF4EF",
+                padding: "8px 10px",
+                borderRadius: "10px",
+                lineHeight: "1.5",
+              }}
+            >
+              <b>不可告人的秘密：</b>{mySheet.secret}
+            </div>
+            <div style={{ fontSize: "12px", color: "#5A8F76", fontWeight: "600" }}>
+              🎯 获胜目标：{mySheet.goal}
+            </div>
+          </div>
+
+          {/* 入局参演全员列表 */}
+          <div style={{ fontSize: "13px", color: "#7B8072", fontWeight: "600", marginTop: "4px" }}>
+            👥 全员已就位：{userPersona.name} (你)、
+            {characterPool.filter((c) => selectedCharIds.includes(c.id)).map((c) => c.name).join("、")}
+          </div>
+
+          {/* 进入公堂发言按钮 */}
+          <button
+            onClick={handleStartPlaying}
+            style={{
+              marginTop: "auto",
+              padding: "14px 0",
+              borderRadius: "20px",
+              border: "none",
+              background: "linear-gradient(135deg, #869687 0%, #687969 100%)",
+              color: "#FFFFFF",
+              fontSize: "15px",
+              fontWeight: "700",
+              letterSpacing: "1.5px",
+              boxShadow: "0 6px 20px rgba(104,121,105,0.35)",
+              cursor: "pointer",
+            }}
+          >
+            研读完毕 · 进入公堂辩驳发言 &gt;
+          </button>
+        </div>
+      )}
+
+      {/* ================= 阶段 4: 公堂对质与自由推演 ================= */}
+      {stage === "playing" && mysteryData && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* 对话消息流 */}
+          <div
+            className="no-scrollbar"
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "14px",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+            }}
+          >
+            {chatLog.map((msg) => {
+              if (msg.isSystem) {
+                return (
+                  <div
+                    key={msg.id}
+                    style={{
+                      background: "rgba(226, 217, 206, 0.7)",
+                      borderRadius: "14px",
+                      padding: "10px 14px",
+                      fontSize: "12px",
+                      color: "#6D645A",
+                      lineHeight: "1.5",
+                      textAlign: "center",
+                      whiteSpace: "pre-line",
+                    }}
+                  >
+                    {msg.text}
+                  </div>
+                );
+              }
+
+              const isMe = msg.isUser;
+              return (
+                <div
+                  key={msg.id}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: isMe ? "flex-end" : "flex-start",
+                  }}
+                >
+                  <div style={{ fontSize: "11px", color: "#8E99A2", marginBottom: "3px", display: "flex", gap: "6px" }}>
+                    <span>{msg.sender}</span>
+                    <span>{msg.time}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", flexDirection: isMe ? "row-reverse" : "row", alignItems: "flex-start", maxWidth: "88%" }}>
+                    <WaterMirrorAvatar avatar={msg.avatar} name={msg.sender} size={36} />
+                    <div
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: isMe ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                        background: isMe
+                          ? "linear-gradient(135deg, #7D93A4 0%, #60798C 100%)"
+                          : "#FFFFFF",
+                        color: isMe ? "#FFFFFF" : "#3B4235",
+                        fontSize: "13.5px",
+                        lineHeight: "1.55",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                        border: isMe ? "none" : "1px solid #E5DDD2",
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {msg.text}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {isAiSpeaking && (
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "#8E99A2", fontSize: "12px", padding: "4px 0" }}>
+                <i className="ph ph-spinner animate-spin"></i>
+                <span>密探正在推演言辞辩解中...</span>
+              </div>
+            )}
+
+            <div ref={chatEndRef} />
+          </div>
+
+          {/* 快捷请人发言栏 */}
+          <div
+            className="no-scrollbar"
+            style={{
+              padding: "6px 12px",
+              background: "rgba(255, 255, 255, 0.7)",
+              borderTop: "1px solid #E5DDD2",
+              display: "flex",
+              gap: "8px",
+              overflowX: "auto",
+              flexShrink: 0,
+              alignItems: "center",
+            }}
+          >
+            <span style={{ fontSize: "11px", color: "#8E99A2", flexShrink: 0 }}>请 TA 发言:</span>
+            {characterPool
+              .filter((c) => selectedCharIds.includes(c.id))
+              .map((c) => (
+                <button
+                  key={c.id}
+                  onClick={() => triggerNextAiSpeaker(c.name)}
+                  disabled={isAiSpeaking}
+                  style={{
+                    fontSize: "11.5px",
+                    background: "#EBE5DC",
+                    color: "#4A453E",
+                    border: "none",
+                    padding: "4px 10px",
+                    borderRadius: "12px",
+                    cursor: "pointer",
+                    flexShrink: 0,
+                    fontWeight: "600",
+                  }}
+                >
+                  {c.name}
+                </button>
+              ))}
+
+            <button
+              onClick={handleGoVoting}
+              style={{
+                marginLeft: "auto",
+                fontSize: "12px",
+                background: "#C88E7D",
+                color: "#FFF",
+                border: "none",
+                padding: "5px 12px",
+                borderRadius: "12px",
+                fontWeight: "700",
+                cursor: "pointer",
+                flexShrink: 0,
+              }}
+            >
+              进入投票指认 &gt;
+            </button>
+          </div>
+
+          {/* 输入发送栏 */}
+          <div
+            style={{
+              padding: "10px 14px",
+              background: "#FFFFFF",
+              borderTop: "1px solid #E2D9CE",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              flexShrink: 0,
+            }}
+          >
+            <input
+              type="text"
+              value={inputText}
+              onChange={(e) => setInputText(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && handleUserSend()}
+              placeholder="陈述时间线、质问某人或辩解..."
+              disabled={isAiSpeaking}
+              style={{
+                flex: 1,
+                padding: "10px 14px",
+                borderRadius: "20px",
+                border: "1.5px solid #DDD3C7",
+                background: "#FAF7F2",
+                fontSize: "13.5px",
+                outline: "none",
+                color: "#3B4235",
+              }}
+            />
+            <button
+              onClick={handleUserSend}
+              disabled={!inputText.trim() || isAiSpeaking}
+              style={{
+                width: "40px",
+                height: "40px",
+                borderRadius: "50%",
+                border: "none",
+                background: inputText.trim() ? "#7D93A4" : "#C8C0B5",
+                color: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: inputText.trim() ? "pointer" : "default",
+                boxShadow: inputText.trim() ? "0 2px 8px rgba(125,147,164,0.3)" : "none",
+              }}
+            >
+              <i className="ph-bold ph-paper-plane-right" style={{ fontSize: "17px" }}></i>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 阶段 5: 投票指认真凶 ================= */}
+      {stage === "voting" && mysteryData && (
+        <div
+          className="no-scrollbar"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "16px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              background: "linear-gradient(135deg, #FAF7F2 0%, #F5EDE4 100%)",
+              borderRadius: "20px",
+              padding: "16px",
+              border: "1.5px solid #DDD3C7",
+              textAlign: "center",
+            }}
+          >
+            <div style={{ fontSize: "17px", fontWeight: "800", color: "#3B4235" }}>
+              ⚖️ 圆桌指认 · 谁是真凶？
+            </div>
+            <div style={{ fontSize: "12px", color: "#7B8072", marginTop: "4px" }}>
+              根据全员发言、时间线破绽与现场物证，选出你认定的凶手！
+            </div>
+          </div>
+
+          {/* 候选人列表 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            {characterPool
+              .filter((c) => selectedCharIds.includes(c.id))
+              .map((char) => {
+                const isSelected = selectedSuspect === char.name;
+                return (
+                  <div
+                    key={char.id}
+                    onClick={() => setSelectedSuspect(char.name)}
+                    style={{
+                      background: isSelected ? "#FCE4DC" : "#FFFFFF",
+                      borderRadius: "16px",
+                      padding: "14px",
+                      border: isSelected ? "2px solid #C88E7D" : "1.5px solid #E5DDD2",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      cursor: "pointer",
+                      boxShadow: isSelected ? "0 4px 14px rgba(200,142,125,0.2)" : "none",
+                    }}
+                  >
+                    <WaterMirrorAvatar avatar={char.avatar} name={char.name} size={46} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4235" }}>
+                        {char.name}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#7B8072" }}>
+                        剧本身份：{mysteryData.characterSheets[char.name]?.roleTitle || "入局密探"}
+                      </div>
+                    </div>
+                    {isSelected && (
+                      <span
+                        style={{
+                          fontSize: "12px",
+                          background: "#C88E7D",
+                          color: "#FFF",
+                          padding: "4px 10px",
+                          borderRadius: "10px",
+                          fontWeight: "700",
+                        }}
+                      >
+                        已锁定凶手
+                      </span>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
+
+          <div style={{ marginTop: "auto", display: "flex", gap: "10px", paddingTop: "12px" }}>
+            <button
+              onClick={() => setStage("playing")}
+              style={{
+                flex: 1,
+                padding: "13px 0",
+                borderRadius: "16px",
+                border: "1.5px solid #DDD3C7",
+                background: "#FAF7F2",
+                color: "#6D7983",
+                fontWeight: "700",
+                fontSize: "14px",
+                cursor: "pointer",
+              }}
+            >
+              返回继续辩驳
+            </button>
+            <button
+              onClick={handleSubmitVote}
+              disabled={!selectedSuspect}
+              style={{
+                flex: 1.5,
+                padding: "13px 0",
+                borderRadius: "16px",
+                border: "none",
+                background: selectedSuspect ? "#C88E7D" : "#C8C0B5",
+                color: "#FFFFFF",
+                fontWeight: "700",
+                fontSize: "14px",
+                boxShadow: selectedSuspect ? "0 4px 14px rgba(200,142,125,0.35)" : "none",
+                cursor: selectedSuspect ? "pointer" : "not-allowed",
+              }}
+            >
+              揭晓真凶与复盘 &gt;
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 阶段 6: 结案真相与全盘复盘 ================= */}
+      {stage === "review" && mysteryData && (
+        <div
+          className="no-scrollbar"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "16px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+          }}
+        >
+          {/* 胜负结果牌 */}
+          {(() => {
+            const isCorrect = selectedSuspect === mysteryData.solution.killer;
+            return (
+              <div
+                style={{
+                  background: isCorrect
+                    ? "linear-gradient(135deg, #E2F0D9 0%, #C8E6C9 100%)"
+                    : "linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%)",
+                  borderRadius: "20px",
+                  padding: "18px",
+                  border: isCorrect ? "2px solid #81C784" : "2px solid #E57373",
+                  textAlign: "center",
+                  boxShadow: "0 6px 20px rgba(0,0,0,0.06)",
+                }}
+              >
+                <div style={{ fontSize: "28px", marginBottom: "4px" }}>
+                  {isCorrect ? "🎉 绝妙破案！" : "❌ 真凶逃逸！"}
+                </div>
+                <div
+                  style={{
+                    fontSize: "15px",
+                    fontWeight: "800",
+                    color: isCorrect ? "#2E7D32" : "#C62828",
+                  }}
+                >
+                  {isCorrect
+                    ? `你成功揪出了真凶【${mysteryData.solution.killer}】！`
+                    : `你指认了【${selectedSuspect}】，但真正的真凶是【${mysteryData.solution.killer}】！`}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* 全员投票详情 */}
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderRadius: "18px",
+              padding: "14px",
+              border: "1.5px solid #E5DDD2",
+            }}
+          >
+            <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235", marginBottom: "8px" }}>
+              🗳️ 全员指认结果
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px", fontSize: "12.5px", color: "#5A6052" }}>
+              {Object.entries(votes).map(([voter, suspect]) => (
+                <div key={voter} style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span>{voter}</span>
+                  <span style={{ fontWeight: "700", color: suspect === mysteryData.solution.killer ? "#2E7D32" : "#C88E7D" }}>
+                    投给了 ➔ {suspect}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 真相与作案复盘 */}
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderRadius: "20px",
+              padding: "16px",
+              border: "1.5px solid #DDD3C7",
+              boxShadow: "0 4px 16px rgba(0,0,0,0.04)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            <div style={{ fontSize: "16px", fontWeight: "800", color: "#8C4A1E" }}>
+              🔍 案件真相与作案手法复盘
+            </div>
+            <div style={{ fontSize: "13px", color: "#4A453E", lineHeight: "1.6" }}>
+              <b>【作案动机】</b> {mysteryData.solution.motive}
+            </div>
+            <div style={{ fontSize: "13px", color: "#4A453E", lineHeight: "1.6" }}>
+              <b>【密室手法】</b> {mysteryData.solution.method}
+            </div>
+            <div style={{ fontSize: "13px", color: "#2E7D32", lineHeight: "1.6" }}>
+              <b>【关键锁凶线索】</b> {mysteryData.solution.keyEvidence}
+            </div>
+            <div
+              style={{
+                fontSize: "12.5px",
+                color: "#5A6052",
+                lineHeight: "1.6",
+                background: "#F9F6F0",
+                padding: "10px",
+                borderRadius: "10px",
+                fontStyle: "italic",
+              }}
+            >
+              "{mysteryData.solution.truthSummary}"
+            </div>
+          </div>
+
+          {/* 再来一局按钮 */}
+          <button
+            onClick={handleRestart}
+            style={{
+              marginTop: "auto",
+              padding: "14px 0",
+              borderRadius: "20px",
+              border: "none",
+              background: "linear-gradient(135deg, #7D93A4 0%, #5E778B 100%)",
+              color: "#FFFFFF",
+              fontSize: "15px",
+              fontWeight: "700",
+              letterSpacing: "1.5px",
+              boxShadow: "0 6px 20px rgba(94,119,139,0.35)",
+              cursor: "pointer",
+            }}
+          >
+            再开一局太白杀阵
+          </button>
+        </div>
+      )}
+
+      {/* 弹窗: 我的专属剧本卡 */}
+      {showMyScript && mysteryData && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0, 0, 0, 0.6)",
+            backdropFilter: "blur(6px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setShowMyScript(false)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "400px",
+              maxHeight: "80vh",
+              overflowY: "auto",
+              background: "#FAF7F2",
+              borderRadius: "24px",
+              padding: "20px",
+              boxSizing: "border-box",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.25)",
+              animation: "scaleUp 0.2s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#3B4235" }}>
+                📜 你的专属剧本卡
+              </div>
+              <button
+                onClick={() => setShowMyScript(false)}
+                style={{ background: "none", border: "none", fontSize: "20px", color: "#8E99A2", cursor: "pointer" }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", fontSize: "13px", color: "#4A453E" }}>
+              <div><b>身份：</b>{mySheet.roleTitle}</div>
+              <div><b>时间线：</b>{mySheet.alibi}</div>
+              <div style={{ background: "#FFF4EF", color: "#8C4A3A", padding: "8px 10px", borderRadius: "10px" }}>
+                <b>不可告人的秘密：</b><br />
+                {mySheet.secret}
+              </div>
+              <div style={{ color: "#2E7D32", fontWeight: "600" }}>
+                <b>获胜目标：</b>{mySheet.goal}
+              </div>
+            </div>
+
+            <button
+              onClick={() => setShowMyScript(false)}
+              style={{
+                width: "100%",
+                marginTop: "16px",
+                padding: "10px 0",
+                borderRadius: "14px",
+                border: "none",
+                background: "#7D93A4",
+                color: "#FFFFFF",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              关闭剧本
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 弹窗: 现场公用线索 */}
+      {showClues && mysteryData && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0, 0, 0, 0.6)",
+            backdropFilter: "blur(6px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setShowClues(false)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "400px",
+              maxHeight: "80vh",
+              overflowY: "auto",
+              background: "#FAF7F2",
+              borderRadius: "24px",
+              padding: "20px",
+              boxSizing: "border-box",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.25)",
+              animation: "scaleUp 0.2s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#8C4A1E" }}>
+                🔍 现场公验证据
+              </div>
+              <button
+                onClick={() => setShowClues(false)}
+                style={{ background: "none", border: "none", fontSize: "20px", color: "#8E99A2", cursor: "pointer" }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {mysteryData.clues?.map((clue, idx) => (
+                <div
+                  key={idx}
+                  style={{
+                    background: "#FFFFFF",
+                    padding: "10px 12px",
+                    borderRadius: "12px",
+                    border: "1px solid #E5DDD2",
+                    fontSize: "12.5px",
+                    color: "#4A453E",
+                    lineHeight: "1.5",
+                  }}
+                >
+                  <b style={{ color: "#C88E7D" }}>线索 {idx + 1}：</b>{clue}
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => setShowClues(false)}
+              style={{
+                width: "100%",
+                marginTop: "16px",
+                padding: "10px 0",
+                borderRadius: "14px",
+                border: "none",
+                background: "#C88E7D",
+                color: "#FFFFFF",
+                fontWeight: "700",
+                cursor: "pointer",
+              }}
+            >
+              关闭线索
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Toast 提示 */}
+      {toastText && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "80px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(50, 55, 60, 0.9)",
+            color: "#FFF",
+            padding: "10px 18px",
+            borderRadius: "20px",
+            fontSize: "13.5px",
+            fontWeight: "500",
+            backdropFilter: "blur(6px)",
+            zIndex: 9999,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
+            animation: "fadeIn 0.2s ease-out",
+          }}
+        >
+          {toastText}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const T13Page = ({
   setIsStarChartOpen,
   setIsButterflyEffectOpen,
@@ -55974,6 +57508,7 @@ const T13Page = ({
   const [showRelative, setShowRelative] = useState(false);
   const [showFarm, setShowFarm] = useState(false);
   const [showWaterMirror, setShowWaterMirror] = useState(false);
+  const [showTaibai, setShowTaibai] = useState(false);
 
   const getContentByTab = () => {
     switch (activeTab) {
@@ -56021,6 +57556,9 @@ const T13Page = ({
       {showWaterMirror && (
         <T13WaterMirrorPage onBack={() => setShowWaterMirror(false)} />
       )}
+      {showTaibai && (
+        <TaibaiMysteryPage onBack={() => setShowTaibai(false)} />
+      )}
       <div className="scroll-container hide-scrollbar">
         <T13Header />
 
@@ -56063,6 +57601,8 @@ const T13Page = ({
                     setShowLearning(true);
                   } else if (item.title === "方天水镜" || item.title.includes("水镜")) {
                     setShowWaterMirror(true);
+                  } else if (item.title === "太白杀阵" || item.title.includes("杀阵")) {
+                    setShowTaibai(true);
                   }
                 }}
               >
