@@ -37662,7 +37662,7 @@ const T13FortunePage = ({ onBack }) => {
 
 // T13 献帝晴雨表页面组件 (增强版：支持文字编辑、传信互动及AI状态推演)
 const T13EmperorPage = ({ onBack }) => {
-  const { useState, useEffect } = React;
+  const { useState, useEffect, useRef } = React;
 
   // 1. 状态管理
   const [stats, setStats] = useState({
@@ -37680,6 +37680,27 @@ const T13EmperorPage = ({ onBack }) => {
   const [characters, setCharacters] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [showFeedModal, setShowFeedModal] = useState(false);
+  const [emperorAvatar, setEmperorAvatar] = useState(() => {
+    return localStorage.getItem("t13_emperor_avatar") || "";
+  });
+  const fileInputRef = useRef(null);
+
+  const handleAvatarUpload = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onload = (uploadEvent) => {
+        const base64 = uploadEvent.target.result;
+        setEmperorAvatar(base64);
+        try {
+          localStorage.setItem("t13_emperor_avatar", base64);
+        } catch (err) {
+          console.error("保存头像失败", err);
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   // --- 新增：政局与饼图动态状态 ---
   const [politicalNews, setPoliticalNews] = useState([]);
@@ -38038,15 +38059,33 @@ const T13EmperorPage = ({ onBack }) => {
 
       {/* 顶部数值与头像区 */}
       <div className="emperor-header">
-        <div className="emperor-avatar-box">
-          <svg viewBox="0 0 24 24">
-            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-          </svg>
+        <input
+          type="file"
+          ref={fileInputRef}
+          accept="image/*"
+          style={{ display: "none" }}
+          onChange={handleAvatarUpload}
+        />
+        <div
+          className="emperor-avatar-box active-press"
+          onClick={() => fileInputRef.current && fileInputRef.current.click()}
+          title="点击更换献帝头像"
+        >
+          {emperorAvatar ? (
+            <img src={emperorAvatar} className="emperor-avatar-img" alt="献帝头像" />
+          ) : (
+            <svg
+              viewBox="0 0 24 24"
+              style={{ width: "50px", height: "50px", fill: "#ffffff", display: "block" }}
+            >
+              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+            </svg>
+          )}
         </div>
         <div className="emperor-stats">
           {statLabels.map(({ label, key }) => (
             <div className="stat-item" key={label}>
-              <span>{label}</span>
+              <span style={{ minWidth: "48px" }}>{label}</span>
               <div className="stat-bar-container">
                 <div
                   className="stat-bar-fill"
