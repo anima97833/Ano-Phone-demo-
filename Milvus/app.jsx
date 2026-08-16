@@ -26169,13 +26169,17 @@ const T11AppointmentSubPage = ({ onBack }) => {
   );
 };
 
-// ==================== T11 假勤子页面组件 (新增) ====================
-const T11AttendanceSubPage = ({ onBack }) => {
+// ==================== T11 假勤子页面组件 (支持配置角色点击问责/鼓励 + 打包卡片传送到 Telegram 密谈) ====================
+const T11AttendanceSubPage = ({ onBack, onOpenChat }) => {
   // 状态管理
   const [attendanceRecords, setAttendanceRecords] = React.useState([]);
   const [leaveRecords, setLeaveRecords] = React.useState([]);
+  const [characterBios, setCharacterBios] = React.useState({});
+  const [avatars, setAvatars] = React.useState({});
+  const [selectedRecordModal, setSelectedRecordModal] = React.useState(null); // 当前选中的考勤弹窗数据
+  const [customRemark, setCustomRemark] = React.useState(""); // 自定义问责/鼓励谕旨
   const timerRef = React.useRef(null);
-  const recordTypeRef = React.useRef("attendance"); // 用于交替生成记录类型
+  const recordTypeRef = React.useRef("attendance");
 
   // 角色列表
   const CHARACTERS = [
@@ -26268,7 +26272,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
 
   // 生成随机时间（6:00-17:00）
   const generateRandomTime = () => {
-    const hour = Math.floor(Math.random() * 12) + 6; // 6-17
+    const hour = Math.floor(Math.random() * 12) + 6;
     const minute = Math.floor(Math.random() * 60);
     return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
   };
@@ -26300,9 +26304,30 @@ const T11AttendanceSubPage = ({ onBack }) => {
     };
   };
 
-  // 初始化数据
+  // 初始化数据与加载已配置密探
   React.useEffect(() => {
-    // 初始生成 3-5 条出勤记录
+    // 1. 加载头像
+    try {
+      const savedAvatars = localStorage.getItem("绣衣楼头像");
+      if (savedAvatars) setAvatars(JSON.parse(savedAvatars));
+    } catch (e) {}
+
+    // 2. 从 IndexedDB 加载人物介绍
+    const loadBios = async () => {
+      try {
+        if (window.settingsStore?.getCharacterNotes) {
+          const loadedBios = await window.settingsStore.getCharacterNotes();
+          if (loadedBios && typeof loadedBios === "object") {
+            setCharacterBios(loadedBios);
+          }
+        }
+      } catch (e) {
+        console.warn("读取人物介绍失败", e);
+      }
+    };
+    loadBios();
+
+    // 3. 初始生成记录
     const initialAttendanceCount = Math.floor(Math.random() * 3) + 3;
     const initialAttendance = [];
     for (let i = 0; i < initialAttendanceCount; i++) {
@@ -26310,7 +26335,6 @@ const T11AttendanceSubPage = ({ onBack }) => {
     }
     setAttendanceRecords(initialAttendance);
 
-    // 初始生成 3-5 条请假记录
     const initialLeaveCount = Math.floor(Math.random() * 3) + 3;
     const initialLeave = [];
     for (let i = 0; i < initialLeaveCount; i++) {
@@ -26318,29 +26342,92 @@ const T11AttendanceSubPage = ({ onBack }) => {
     }
     setLeaveRecords(initialLeave);
 
-    // 设置定时器，每 3 秒左右新增一条记录
-    timerRef.current = setInterval(
-      () => {
-        if (recordTypeRef.current === "attendance") {
-          const newRecord = generateAttendanceRecord();
-          setAttendanceRecords((prev) => [newRecord, ...prev]);
-          recordTypeRef.current = "leave";
-        } else {
-          const newRecord = generateLeaveRecord();
-          setLeaveRecords((prev) => [newRecord, ...prev]);
-          recordTypeRef.current = "attendance";
-        }
-      },
-      3000 + Math.random() * 1000,
-    ); // 3-4 秒随机间隔
-
-    // 清理定时器
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current);
+    // 4. 定时新增记录
+    timerRef.current = setInterval(() => {
+      if (recordTypeRef.current === "attendance") {
+        const newRecord = generateAttendanceRecord();
+        setAttendanceRecords((prev) => [newRecord, ...prev]);
+        recordTypeRef.current = "leave";
+      } else {
+        const newRecord = generateLeaveRecord();
+        setLeaveRecords((prev) => [newRecord, ...prev]);
+        recordTypeRef.current = "attendance";
       }
+    }, 3000 + Math.random() * 1000);
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
     };
   }, []);
+
+  // 检查角色是否已配置楼内联系人
+  const isCharConfigured = (charName) => {
+    return !!(characterBios[charName] && characterBios[charName].trim().length > 0);
+  };
+
+  // 点击考勤记录中的角色
+  const handleCharClick = (record) => {
+    if (!isCharConfigured(record.char)) return;
+
+    const isFail = record.result === "失败";
+    setSelectedRecordModal(record);
+
+    if (isFail) {
+      setCustomRemark(`${record.char}！今日${record.time}点卯显示打卡失败。依楼规当严惩扣禄，速速如实陈述缘由！`);
+    } else {
+      setCustomRemark(`${record.char}今日点卯甚早（${record.time}），勤勉恪尽职守，特此嘉赏！望继续精进，共护广陵。`);
+    }
+  };
+
+  // 发送问责/嘉奖令卡片并跳转至 Telegram 密谈
+  const handleSendAttendanceCard = async () => {
+    if (!selectedRecordModal) return;
+
+    const record = selectedRecordModal;
+    const isFail = record.result === "失败";
+    const cardTitle = isFail ? "【考勤问责令】" : "【考勤嘉奖令】";
+
+    const cardText = `${cardTitle}
+密探：${record.char}
+点卯时间：${record.time}
+考勤状态：打卡${record.result}
+楼主谕旨：${customRemark.trim()}`;
+
+    const now = new Date();
+    const timeStr = `${now.getHours().toString().padStart(2, "0")}:${now.getMinutes().toString().padStart(2, "0")}`;
+
+    const cardMessage = {
+      id: Date.now() + Math.random(),
+      sender: "user",
+      text: cardText,
+      time: timeStr,
+      timestamp: Date.now(),
+      isAttendanceCard: true,
+      attendanceType: isFail ? "reprimand" : "commendation",
+    };
+
+    try {
+      let history = [];
+      if (window.settingsStore?.getXiuyiChatHistory) {
+        history = await window.settingsStore.getXiuyiChatHistory(record.char);
+      }
+      const updatedHistory = Array.isArray(history) ? [...history, cardMessage] : [cardMessage];
+
+      if (window.settingsStore?.saveXiuyiChatHistory) {
+        await window.settingsStore.saveXiuyiChatHistory(record.char, updatedHistory);
+      }
+
+      setSelectedRecordModal(null);
+
+      // 调用父级导航进入 Telegram 密谈
+      if (onOpenChat) {
+        onOpenChat(record.char);
+      }
+    } catch (e) {
+      console.error("保存考勤卡片并传讯失败", e);
+      alert("传讯失败，请重试");
+    }
+  };
 
   return (
     <div
@@ -26352,6 +26439,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
         height: "100%",
         background: "#f9f7f5",
         zIndex: 20,
+        overflow: "hidden",
       }}
     >
       {/* 子页面导航栏 */}
@@ -26363,7 +26451,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
       </div>
 
       {/* 主要内容区域 */}
-      <div className="t11-subpage-container" style={{ padding: "20px" }}>
+      <div className="t11-subpage-container" style={{ padding: "20px", height: "calc(100% - 60px)", overflowY: "auto", boxSizing: "border-box" }}>
         {/* 左右两栏布局 */}
         <div style={{ display: "flex", gap: "15px", marginBottom: "20px" }}>
           {/* 左侧：出勤 */}
@@ -26381,8 +26469,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
                   width: "60px",
                   height: "60px",
                   borderRadius: "16px",
-                  background:
-                    "linear-gradient(180deg, #E8C3A8 0%, #D4AB90 100%)",
+                  background: "linear-gradient(180deg, #E8C3A8 0%, #D4AB90 100%)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -26390,10 +26477,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
                   boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                 }}
               >
-                <i
-                  className="ph ph-clock"
-                  style={{ fontSize: "28px", color: "#fff" }}
-                ></i>
+                <i className="ph ph-clock" style={{ fontSize: "28px", color: "#fff" }}></i>
               </div>
               <div
                 style={{
@@ -26412,23 +26496,74 @@ const T11AttendanceSubPage = ({ onBack }) => {
               style={{
                 maxHeight: "60vh",
                 overflowY: "auto",
-                paddingRight: "10px",
+                paddingRight: "6px",
               }}
             >
-              {attendanceRecords.map((record, index) => (
-                <div
-                  key={record.id}
-                  className="t11-q-card bg-morandi-1"
-                  style={{
-                    animationDelay: `${index * 0.1}s`,
-                    marginBottom: "10px",
-                  }}
-                >
-                  <div style={{ fontSize: "14px", color: "#5a5f4d" }}>
-                    {record.char} 于 {record.time} 打卡{record.result}
+              {attendanceRecords.map((record, index) => {
+                const configured = isCharConfigured(record.char);
+                const isFail = record.result === "失败";
+                return (
+                  <div
+                    key={record.id}
+                    className="t11-q-card bg-morandi-1"
+                    onClick={() => handleCharClick(record)}
+                    style={{
+                      animationDelay: `${index * 0.08}s`,
+                      marginBottom: "10px",
+                      cursor: configured ? "pointer" : "default",
+                      border: configured
+                        ? isFail
+                          ? "1.5px solid rgba(232, 180, 184, 0.7)"
+                          : "1.5px solid rgba(168, 200, 186, 0.7)"
+                        : "1px solid transparent",
+                      transition: "all 0.2s ease",
+                      position: "relative",
+                    }}
+                    onMouseDown={(e) => configured && (e.currentTarget.style.transform = "scale(0.97)")}
+                    onMouseUp={(e) => configured && (e.currentTarget.style.transform = "scale(1)")}
+                  >
+                    <div style={{ fontSize: "13.5px", color: "#5a5f4d", lineHeight: "1.5" }}>
+                      <span
+                        style={{
+                          fontWeight: configured ? "bold" : "normal",
+                          color: configured ? (isFail ? "#B85D65" : "#3B7A5E") : "#5a5f4d",
+                          textDecoration: configured ? "underline" : "none",
+                        }}
+                      >
+                        {record.char}
+                      </span>{" "}
+                      于 {record.time} 打卡
+                      <span
+                        style={{
+                          fontWeight: "bold",
+                          color: isFail ? "#D9777F" : "#4EBA6F",
+                          marginLeft: "4px",
+                        }}
+                      >
+                        {record.result}
+                      </span>
+                    </div>
+
+                    {/* 已配置密探互动提示徽章 */}
+                    {configured && (
+                      <div
+                        style={{
+                          marginTop: "6px",
+                          fontSize: "11px",
+                          color: isFail ? "#C46870" : "#5B8D76",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "3px",
+                          fontWeight: "500",
+                        }}
+                      >
+                        <i className={isFail ? "ph-bold ph-warning-circle" : "ph-bold ph-sparkle"}></i>
+                        <span>{isFail ? "点击问责密令" : "点击嘉奖谕旨"}</span>
+                      </div>
+                    )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 
@@ -26447,8 +26582,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
                   width: "60px",
                   height: "60px",
                   borderRadius: "16px",
-                  background:
-                    "linear-gradient(180deg, #A8C8BA 0%, #8FA99D 100%)",
+                  background: "linear-gradient(180deg, #A8C8BA 0%, #8FA99D 100%)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -26456,10 +26590,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
                   boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
                 }}
               >
-                <i
-                  className="ph ph-user-x"
-                  style={{ fontSize: "28px", color: "#fff" }}
-                ></i>
+                <i className="ph ph-user-x" style={{ fontSize: "28px", color: "#fff" }}></i>
               </div>
               <div
                 style={{
@@ -26478,7 +26609,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
               style={{
                 maxHeight: "60vh",
                 overflowY: "auto",
-                paddingRight: "10px",
+                paddingRight: "6px",
               }}
             >
               {leaveRecords.map((record, index) => (
@@ -26486,12 +26617,15 @@ const T11AttendanceSubPage = ({ onBack }) => {
                   key={record.id}
                   className="t11-q-card bg-morandi-2"
                   style={{
-                    animationDelay: `${index * 0.1}s`,
+                    animationDelay: `${index * 0.08}s`,
                     marginBottom: "10px",
                   }}
                 >
-                  <div style={{ fontSize: "14px", color: "#5a5f4d" }}>
-                    {record.char} 请假{record.result}
+                  <div style={{ fontSize: "13.5px", color: "#5a5f4d" }}>
+                    {record.char} 请假
+                    <span style={{ fontWeight: "bold", color: record.result === "成功" ? "#4EBA6F" : "#D9777F", marginLeft: "4px" }}>
+                      {record.result}
+                    </span>
                   </div>
                 </div>
               ))}
@@ -26499,6 +26633,179 @@ const T11AttendanceSubPage = ({ onBack }) => {
           </div>
         </div>
       </div>
+
+      {/* 问责 / 鼓励 弹窗 */}
+      {selectedRecordModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(35, 38, 35, 0.6)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            boxSizing: "border-box",
+            animation: "fadeIn 0.2s ease-out",
+          }}
+          onClick={() => setSelectedRecordModal(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "380px",
+              background: "#FDFCF9",
+              borderRadius: "26px",
+              padding: "26px 22px 24px 22px",
+              boxShadow: "0 20px 50px rgba(0, 0, 0, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.8)",
+              textAlign: "center",
+              animation: "regModalPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.25)",
+              position: "relative",
+              overflow: "hidden",
+              boxSizing: "border-box",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 顶部状态标识图徽 */}
+            <div
+              style={{
+                width: "60px",
+                height: "60px",
+                borderRadius: "20px",
+                background: selectedRecordModal.result === "失败"
+                  ? "linear-gradient(135deg, #E8B4B8 0%, #D88990 100%)"
+                  : "linear-gradient(135deg, #A8C8BA 0%, #7DA493 100%)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "28px",
+                margin: "0 auto 14px auto",
+                boxShadow: selectedRecordModal.result === "失败"
+                  ? "0 6px 18px rgba(232, 180, 184, 0.5)"
+                  : "0 6px 18px rgba(168, 200, 186, 0.5)",
+              }}
+            >
+              <i className={selectedRecordModal.result === "失败" ? "ph-fill ph-gavel" : "ph-fill ph-medal"}></i>
+            </div>
+
+            {/* 弹窗标题 */}
+            <h2
+              style={{
+                fontSize: "19px",
+                fontWeight: "700",
+                color: "#4A4F44",
+                margin: "0 0 4px 0",
+              }}
+            >
+              {selectedRecordModal.result === "失败" ? "【考勤问责令】" : "【考勤嘉奖令】"}
+            </h2>
+
+            {/* 考勤密探档案简述 */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "#F4EFEA",
+                padding: "4px 12px",
+                borderRadius: "14px",
+                margin: "8px auto 16px auto",
+                fontSize: "12.5px",
+                color: "#6B7062",
+              }}
+            >
+              <span>密探：<b>{selectedRecordModal.char}</b></span>
+              <span>·</span>
+              <span>时间：{selectedRecordModal.time}</span>
+              <span>·</span>
+              <span
+                style={{
+                  fontWeight: "bold",
+                  color: selectedRecordModal.result === "失败" ? "#D9777F" : "#4EBA6F",
+                }}
+              >
+                打卡{selectedRecordModal.result}
+              </span>
+            </div>
+
+            {/* 谕旨输入编辑框 */}
+            <div style={{ marginBottom: "18px", textAlign: "left" }}>
+              <label style={{ fontSize: "12px", color: "#8C9183", fontWeight: "600", marginBottom: "6px", display: "block" }}>
+                楼主手谕批示（可编辑）：
+              </label>
+              <textarea
+                value={customRemark}
+                onChange={(e) => setCustomRemark(e.target.value)}
+                style={{
+                  width: "100%",
+                  boxSizing: "border-box",
+                  minHeight: "95px",
+                  padding: "10px 12px",
+                  borderRadius: "14px",
+                  border: "1.5px solid #E2DED4",
+                  background: "#FFF",
+                  fontSize: "13.5px",
+                  color: "#4A4F44",
+                  lineHeight: "1.55",
+                  outline: "none",
+                  resize: "none",
+                  fontFamily: "inherit",
+                }}
+                onFocus={(e) => (e.target.style.borderColor = selectedRecordModal.result === "失败" ? "#E8B4B8" : "#A8C8BA")}
+                onBlur={(e) => (e.target.style.borderColor = "#E2DED4")}
+              />
+            </div>
+
+            {/* 操作按钮组 */}
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => setSelectedRecordModal(null)}
+                style={{
+                  flex: 1,
+                  padding: "11px 0",
+                  borderRadius: "14px",
+                  border: "1px solid #DCD8CD",
+                  background: "#F9F8F5",
+                  color: "#777C6E",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSendAttendanceCard}
+                style={{
+                  flex: 2,
+                  padding: "11px 0",
+                  borderRadius: "14px",
+                  border: "none",
+                  background: selectedRecordModal.result === "失败"
+                    ? "linear-gradient(135deg, #E8B4B8 0%, #D88990 100%)"
+                    : "linear-gradient(135deg, #A8C8BA 0%, #7DA493 100%)",
+                  color: "#FFF",
+                  fontSize: "14px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  boxShadow: selectedRecordModal.result === "失败"
+                    ? "0 4px 14px rgba(232, 180, 184, 0.45)"
+                    : "0 4px 14px rgba(168, 200, 186, 0.45)",
+                }}
+              >
+                {selectedRecordModal.result === "失败" ? "发送问责令并传讯" : "发送嘉奖令并传讯"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -30368,7 +30675,8 @@ const T11Page = ({ onBack }) => {
   // 新增状态：控制是否显示子页面
   const [subPage, setSubPage] = React.useState(null); // null | 'questionnaire' | 'approval'
   // 底部导航栏状态
-  const [activeTab, setActiveTab] = React.useState("workbench"); // workbench | message | contacts | profile
+  const [activeTab, setActiveTab] = React.useState("workbench");
+  const [directChatChar, setDirectChatChar] = React.useState(null); // workbench | message | contacts | profile
   // 公告数据状态
   const [notices, setNotices] = React.useState([]); // 公告数据
 
@@ -30716,7 +31024,14 @@ const T11Page = ({ onBack }) => {
 
       {/* 4. 假勤子页面 (覆盖层) */}
       {subPage === "attendance" && (
-        <T11AttendanceSubPage onBack={() => setSubPage(null)} />
+        <T11AttendanceSubPage
+          onBack={() => setSubPage(null)}
+          onOpenChat={(char) => {
+            setSubPage(null);
+            setDirectChatChar(char);
+            setActiveTab("message");
+          }}
+        />
       )}
 
       {/* 5. 楼主预约子页面 (覆盖层) */}
@@ -30755,7 +31070,11 @@ const T11Page = ({ onBack }) => {
 
       {/* 10.5 消息页面 (覆盖层) */}
       {activeTab === "message" && (
-        <T11MessageListPage onBack={() => setActiveTab("workbench")} />
+        <T11MessageListPage
+          onBack={() => setActiveTab("workbench")}
+          directChatChar={directChatChar}
+          onClearDirectChatChar={() => setDirectChatChar(null)}
+        />
       )}
 
       {/* 11. 通讯录页面 (覆盖层) */}
@@ -32074,6 +32393,7 @@ const T11TelegramChatPage = ({ character, characterBio, avatar, onBack }) => {
   const [isTyping, setIsTyping] = React.useState(false);
   const messagesEndRef = React.useRef(null);
   const inputRef = React.useRef(null);
+  const isGeneratingRef = React.useRef(false);
 
   // 格式化时间
   const formatTime = (timestamp) => {
@@ -32090,67 +32410,12 @@ const T11TelegramChatPage = ({ character, characterBio, avatar, onBack }) => {
     }
   };
 
-  // 挂载时从 IndexedDB 加载聊天记录
-  React.useEffect(() => {
-    const loadHistory = async () => {
-      try {
-        if (window.settingsStore?.getXiuyiChatHistory) {
-          const history = await window.settingsStore.getXiuyiChatHistory(character);
-          if (Array.isArray(history) && history.length > 0) {
-            setMessages(history);
-            setTimeout(() => scrollToBottom(false), 50);
-            return;
-          }
-        }
-      } catch (e) {
-        console.warn("加载历史消息失败:", e);
-      }
-
-      // 如果没有历史消息，创建一条来自该密探的初始问候
-      const initialGreeting = {
-        id: Date.now() + Math.random(),
-        sender: "character",
-        text: `殿下，属下${character}在此候命。不知殿下有何机要密令吩咐？`,
-        time: formatTime(),
-        timestamp: Date.now(),
-      };
-      setMessages([initialGreeting]);
-      if (window.settingsStore?.saveXiuyiChatHistory) {
-        window.settingsStore.saveXiuyiChatHistory(character, [initialGreeting]);
-      }
-      setTimeout(() => scrollToBottom(false), 50);
-    };
-
-    loadHistory();
-  }, [character]);
-
-  React.useEffect(() => {
-    scrollToBottom(true);
-  }, [messages, isTyping]);
-
-  // 发送消息
-  const handleSendMessage = async () => {
-    const trimmed = inputText.trim();
-    if (!trimmed || isTyping) return;
-
-    const userMsg = {
-      id: Date.now() + Math.random(),
-      sender: "user",
-      text: trimmed,
-      time: formatTime(),
-      timestamp: Date.now(),
-    };
-
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
-    setInputText("");
+  // 触发 AI 执笔回复
+  const triggerAIReply = async (currentMessages) => {
+    if (isGeneratingRef.current) return;
+    isGeneratingRef.current = true;
     setIsTyping(true);
 
-    if (window.settingsStore?.saveXiuyiChatHistory) {
-      window.settingsStore.saveXiuyiChatHistory(character, newMessages);
-    }
-
-    // 组装多维上下文 Prompt
     try {
       // 1. 世界书上下文
       let worldBookContext = "";
@@ -32189,13 +32454,15 @@ ${userPersonaContext ? userPersonaContext + "\n" : ""}
 ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣衣楼楼主。楼内有蛾部、雀部、蜂部、鸢部等密探部门。"}
 
 【回复与行为准则】：
-1. 语言风格：严格符合《代号鸢》古风谍报与文风，体现角色独特的言谈口吻（如傅融的算账毒舌与暗中护佑、郭嘉的风流玩味与一针见血、荀彧的温雅端方与心怀天下、阿蝉的冷冽寡言与忠心护主等）。
-2. 人际关系：正确称呼对方为"殿下"、"楼主"或符合人设的专属称谓，对楼主的指令、调侃或交谈做出符合你们关系的真实自然反应。
-3. 严禁出戏：绝对不要输出任何 AI、助手或现代分析性质的语言，不要以旁白括号解释动作（除非必要神态），直接输出角色说出的话或密信正文。保持沉浸式体验。
-4. 篇幅：适度自然，既不一两句敷衍，也不大篇累牍，如同 Telegram 即时密信一般生动鲜活。`;
+1. 语言风格：严格符合《代号鸢》古风谍报与文风，体现角色独特的言谈口吻（如傅融的算账毒舌、省钱自辩与暗中关切；郭嘉的风流玩味、酒意潇洒与一针见血；荀彧的温雅端方、克制深情与心怀天下；阿蝉的冷冽寡言、利落认罚与誓死相随等）。
+2. 若收到【考勤问责令】（打卡失败），请根据人设生动辩解、认罚或幽默反应（例如傅融会辩解通宵对公账或提议用利息抵扣，郭嘉会借酒意调侃，阿蝉会自请领罚领双倍巡逻等）；
+3. 若收到【考勤嘉奖令】（打卡成功），请根据人设感谢、傲娇或索要实物补贴（例如傅融会打听是否有额外赏银或包子，荀彧会躬身谢恩并叮嘱楼主亦需保重，阿蝉会表示愿为主公继续斩尽险阻等）；
+4. 人际关系：正确称呼对方为"殿下"、"楼主"或符合人设的专属称谓。
+5. 严禁出戏：绝对不要输出任何 AI、助手或现代分析性质的语言，不要以旁白括号解释动作（除非必要神态），直接输出角色说出的话或密信正文。保持沉浸式体验。
+6. 篇幅：适度自然，如同 Telegram 即时密信一般生动鲜活。`;
 
       // 4. 构建历史消息上下文 (最近 10 条)
-      const recentHistory = newMessages.slice(-10).map((m) => ({
+      const recentHistory = currentMessages.slice(-10).map((m) => ({
         role: m.sender === "user" ? "user" : "assistant",
         content: m.text,
       }));
@@ -32213,6 +32480,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         apiMessages,
         null,
         async (reply) => {
+          isGeneratingRef.current = false;
           setIsTyping(false);
           const cleanReply = (reply || "").trim();
           const aiMsg = {
@@ -32223,13 +32491,14 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
             timestamp: Date.now(),
           };
 
-          const finalMessages = [...newMessages, aiMsg];
+          const finalMessages = [...currentMessages, aiMsg];
           setMessages(finalMessages);
           if (window.settingsStore?.saveXiuyiChatHistory) {
             await window.settingsStore.saveXiuyiChatHistory(character, finalMessages);
           }
         },
         (err) => {
+          isGeneratingRef.current = false;
           setIsTyping(false);
           console.error("AI 回复失败:", err);
           const errMsg = {
@@ -32243,9 +32512,78 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         }
       );
     } catch (err) {
+      isGeneratingRef.current = false;
       setIsTyping(false);
       console.error("发起聊天异常:", err);
     }
+  };
+
+  // 挂载时从 IndexedDB 加载聊天记录，并自动检查未回复的消息
+  React.useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        if (window.settingsStore?.getXiuyiChatHistory) {
+          const history = await window.settingsStore.getXiuyiChatHistory(character);
+          if (Array.isArray(history) && history.length > 0) {
+            setMessages(history);
+            setTimeout(() => scrollToBottom(false), 50);
+
+            // 检查如果最新一条是用户的消息（如考勤卡片），自动触发 AI 回复
+            const lastMsg = history[history.length - 1];
+            if (lastMsg && lastMsg.sender === "user") {
+              setTimeout(() => triggerAIReply(history), 300);
+            }
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("加载历史消息失败:", e);
+      }
+
+      // 如果没有任何历史消息，创建一条来自该密探的初始问候
+      const initialGreeting = {
+        id: Date.now() + Math.random(),
+        sender: "character",
+        text: `殿下，属下${character}在此候命。不知殿下有何机要密令吩咐？`,
+        time: formatTime(),
+        timestamp: Date.now(),
+      };
+      setMessages([initialGreeting]);
+      if (window.settingsStore?.saveXiuyiChatHistory) {
+        window.settingsStore.saveXiuyiChatHistory(character, [initialGreeting]);
+      }
+      setTimeout(() => scrollToBottom(false), 50);
+    };
+
+    loadHistory();
+  }, [character]);
+
+  React.useEffect(() => {
+    scrollToBottom(true);
+  }, [messages, isTyping]);
+
+  // 手动发送消息
+  const handleSendMessage = () => {
+    const trimmed = inputText.trim();
+    if (!trimmed || isTyping) return;
+
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      sender: "user",
+      text: trimmed,
+      time: formatTime(),
+      timestamp: Date.now(),
+    };
+
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInputText("");
+
+    if (window.settingsStore?.saveXiuyiChatHistory) {
+      window.settingsStore.saveXiuyiChatHistory(character, newMessages);
+    }
+
+    triggerAIReply(newMessages);
   };
 
   // 清空聊天记录
@@ -32419,6 +32757,9 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         {/* 消息列表 */}
         {messages.map((msg) => {
           const isUser = msg.sender === "user";
+          const isAttCard = msg.text && (msg.text.startsWith("【考勤问责令】") || msg.text.startsWith("【考勤嘉奖令】"));
+          const isFailCard = isAttCard && msg.text.startsWith("【考勤问责令】");
+
           return (
             <div
               key={msg.id}
@@ -32456,19 +32797,56 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
               {/* 气泡 */}
               <div
                 style={{
-                  maxWidth: "75%",
-                  background: isUser ? "#D8ECE1" : "#FFFFFF",
+                  maxWidth: isAttCard ? "85%" : "75%",
+                  background: isAttCard
+                    ? isFailCard
+                      ? "#FFF7F7"
+                      : "#F7FCF9"
+                    : isUser
+                      ? "#D8ECE1"
+                      : "#FFFFFF",
                   color: "#2C3127",
-                  padding: "10px 14px 8px 14px",
+                  padding: isAttCard ? "12px 14px" : "10px 14px 8px 14px",
                   borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
-                  boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
+                  boxShadow: "0 2px 8px rgba(0, 0, 0, 0.07)",
+                  border: isAttCard
+                    ? isFailCard
+                      ? "1.5px solid #F0C4C8"
+                      : "1.5px solid #C2E2D3"
+                    : "none",
                   position: "relative",
                   wordBreak: "break-word",
-                  lineHeight: "1.5",
+                  lineHeight: "1.55",
                   fontSize: "14.5px",
                 }}
               >
-                <div>{msg.text}</div>
+                {/* 独立考勤卡片特别渲染 */}
+                {isAttCard ? (
+                  <div>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        fontWeight: "700",
+                        fontSize: "14px",
+                        color: isFailCard ? "#B8535C" : "#2E7554",
+                        marginBottom: "6px",
+                        borderBottom: "1px dashed rgba(0,0,0,0.1)",
+                        paddingBottom: "4px",
+                      }}
+                    >
+                      <i className={isFailCard ? "ph-fill ph-gavel" : "ph-fill ph-medal"}></i>
+                      <span>{isFailCard ? "考勤问责令" : "考勤嘉奖令"}</span>
+                    </div>
+                    <div style={{ fontSize: "13px", whiteSpace: "pre-line", color: "#4A4F44", lineHeight: "1.6" }}>
+                      {msg.text.split("\n").slice(1).join("\n")}
+                    </div>
+                  </div>
+                ) : (
+                  <div>{msg.text}</div>
+                )}
+
                 {/* 底部时间戳与状态 */}
                 <div
                   style={{
@@ -32645,7 +33023,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
 };
 
 // ==================== T11 消息列表页面组件 (展示已填写人物介绍的密探) ====================
-const T11MessageListPage = ({ onBack }) => {
+const T11MessageListPage = ({ onBack, directChatChar, onClearDirectChatChar }) => {
   const [avatars, setAvatars] = React.useState({});
   const [characterBios, setCharacterBios] = React.useState({});
   const [activeChatChar, setActiveChatChar] = React.useState(null);
@@ -32738,6 +33116,13 @@ const T11MessageListPage = ({ onBack }) => {
     "简雍",
     "曹丕",
   ];
+
+  // 监听从假勤等外部页面直接进入聊天
+  React.useEffect(() => {
+    if (directChatChar) {
+      setActiveChatChar(directChatChar);
+    }
+  }, [directChatChar]);
 
   // 初始化加载头像、人物介绍和各角色最新聊天
   React.useEffect(() => {
@@ -32859,7 +33244,12 @@ const T11MessageListPage = ({ onBack }) => {
             const charAvatar = avatars[char];
             const bio = characterBios[char] || "";
             const latestMsg = latestMessages[char];
-            const displayText = latestMsg ? (latestMsg.sender === "user" ? `我: ${latestMsg.text}` : latestMsg.text) : bio;
+            let displayText = bio;
+            if (latestMsg) {
+              if (latestMsg.text.startsWith("【考勤问责令】")) displayText = "【考勤问责令】已发送";
+              else if (latestMsg.text.startsWith("【考勤嘉奖令】")) displayText = "【考勤嘉奖令】已发送";
+              else displayText = latestMsg.sender === "user" ? `我: ${latestMsg.text}` : latestMsg.text;
+            }
             const displayTime = latestMsg?.time || "密谈开启";
 
             return (
@@ -32954,13 +33344,15 @@ const T11MessageListPage = ({ onBack }) => {
           character={activeChatChar}
           characterBio={characterBios[activeChatChar]}
           avatar={avatars[activeChatChar]}
-          onBack={() => setActiveChatChar(null)}
+          onBack={() => {
+            setActiveChatChar(null);
+            if (onClearDirectChatChar) onClearDirectChatChar();
+          }}
         />
       )}
     </div>
   );
 };
-
 
 // ==================== T11 楼内联系人页面组件 (支持点击底部弹出人物介绍填写卡片 + IndexedDB 持久化) ====================
 const T11InsideContactsPage = ({ onBack }) => {
