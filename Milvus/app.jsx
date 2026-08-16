@@ -57509,6 +57509,1536 @@ ${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说�
 };
 
 
+// ==================== 谁在说谎 · 东汉规则怪谈大逃杀组件 ====================
+const LyingRulesGhostPage = ({ onBack }) => {
+  // 游戏阶段: "lobby" (初始配置与选人) | "generating" (AI生成开局) | "playing" (回合制推演) | "dead" (死亡复活判定) | "ended" (结局通关或终局)
+  const [stage, setStage] = React.useState("lobby");
+
+  // 1. 玩家自定义与选人
+  const [playerName, setPlayerName] = React.useState("广陵王");
+  const [playerGender, setPlayerGender] = React.useState("女");
+  const [playerPersona, setPlayerPersona] = React.useState("机警果决，洞察秋毫");
+  const [userAvatar, setUserAvatar] = React.useState("");
+
+  const [characterPool, setCharacterPool] = React.useState([]);
+  const [selectedCharIds, setSelectedCharIds] = React.useState([]);
+
+  // 2. 难度与复活币
+  const DIFFICULTY_MAP = {
+    easy: { name: "简单模式", color: "#869687", coins: 20, desc: "规则漏洞明显，同伴多予真实指引" },
+    normal: { name: "普通模式", color: "#C4A482", coins: 10, desc: "真假规则交织，逻辑与观察并重" },
+    hard: { name: "困难模式", color: "#C88E7D", coins: 5, desc: "异象加剧，密探可能被规则污染说谎" },
+    nightmare: { name: "噩梦模式", color: "#A87C8A", coins: 3, desc: "SAN值易骤降，古怪BOSS极具压迫感" },
+    epic: { name: "史诗模式", color: "#7D8CA4", coins: 1, desc: "步步杀机，一命悬殊，极高推理要求" },
+  };
+  const [difficulty, setDifficulty] = React.useState("normal");
+  const [revivalCoins, setRevivalCoins] = React.useState(10);
+
+  // 3. 6大属性系统 (初始均 100)
+  const [attributes, setAttributes] = React.useState({
+    health: 100, // ❤️ 健康
+    stamina: 100, // ⚡ 体力
+    calm: 100, // 🧘 冷静
+    intellect: 100, // 🧠 智力
+    luck: 100, // 🍀 运气
+    sanity: 100, // 👁️ SAN值
+  });
+
+  // 4. 好感度系统 (密探 + NPC + BOSS)
+  const [affections, setAffections] = React.useState({});
+  const [currentBoss, setCurrentBoss] = React.useState(null);
+
+  // 5. 背包系统
+  const [inventory, setInventory] = React.useState([
+    { id: "torch", name: "辟邪沉香折枝", icon: "🌿", desc: "可稍许安抚躁动邪祟并提升冷静", count: 2 },
+    { id: "pill", name: "九转定心丹", icon: "💊", desc: "恢复 20 点 SAN 值与冷静", count: 1 },
+  ]);
+
+  // 6. 成就系统
+  const [achievements, setAchievements] = React.useState([]);
+
+  // 7. 回合核心状态
+  const [turnCount, setTurnCount] = React.useState(1);
+  const [currentRules, setCurrentRules] = React.useState([]);
+  const [currentStory, setCurrentStory] = React.useState("");
+  const [currentDialogues, setCurrentDialogues] = React.useState([]);
+  const [currentOptions, setCurrentOptions] = React.useState([]);
+  const [historyLogs, setHistoryLogs] = React.useState([]);
+  const [deathReason, setDeathReason] = React.useState("");
+  const [finalEnding, setFinalEnding] = React.useState(null);
+
+  // 弹窗状态
+  const [showInventoryModal, setShowInventoryModal] = React.useState(false);
+  const [showAffectionModal, setShowAffectionModal] = React.useState(false);
+  const [showAchievementModal, setShowAchievementModal] = React.useState(false);
+  const [toastText, setToastText] = React.useState("");
+  const [isAiProcessing, setIsAiProcessing] = React.useState(false);
+
+  const scrollRef = React.useRef(null);
+
+  const showToast = (txt) => {
+    setToastText(txt);
+    setTimeout(() => setToastText(""), 2600);
+  };
+
+  // 初始化加载传讯密探与用户面具
+  React.useEffect(() => {
+    const initData = async () => {
+      // 1. 读取用户面具
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (savedPersonas.length > 0) {
+          const found = activeId ? savedPersonas.find((p) => String(p.id) === String(activeId)) : savedPersonas[0];
+          if (found) {
+            setPlayerName(found.name || "广陵王");
+            setPlayerGender(found.gender || "女");
+            setPlayerPersona(found.personality || found.description || "机警果决");
+            setUserAvatar(found.avatar || "");
+          }
+        }
+      } catch (e) {}
+
+      // 2. 读取传讯密探
+      try {
+        let allChars = [];
+        if (window.chatCharacterStore) {
+          allChars = await window.chatCharacterStore.getAll();
+        } else {
+          allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+
+        const validChars = allChars.filter(
+          (c) => !String(c.id).startsWith("group") && c.type !== "decor" && c.name
+        );
+
+        let avatarMap = {};
+        try {
+          avatarMap = JSON.parse(localStorage.getItem("绣衣楼头像") || "{}");
+        } catch (e) {}
+
+        let biosMap = {};
+        try {
+          if (window.settingsStore?.getCharacterNotes) {
+            biosMap = (await window.settingsStore.getCharacterNotes()) || {};
+          }
+        } catch (e) {}
+
+        const mapped = validChars.map((c) => {
+          const charName = c.name;
+          const charAvatar = c.avatar || avatarMap[charName] || "";
+          const charProfile = c.profile || c.personality || biosMap[charName] || c.description || "";
+          return {
+            id: c.id,
+            name: charName,
+            avatar: charAvatar,
+            profile: typeof charProfile === "string" ? charProfile : JSON.stringify(charProfile),
+            raw: c,
+          };
+        });
+
+        setCharacterPool(mapped);
+        if (mapped.length >= 3) {
+          setSelectedCharIds(mapped.slice(0, 3).map((m) => m.id));
+        }
+      } catch (e) {
+        console.error("加载密探失败:", e);
+      }
+    };
+
+    initData();
+  }, []);
+
+  // 滚动到底部
+  React.useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [currentStory, isAiProcessing]);
+
+  // 切换选中密探
+  const toggleSelectChar = (id) => {
+    if (selectedCharIds.includes(id)) {
+      setSelectedCharIds(selectedCharIds.filter((item) => item !== id));
+    } else {
+      setSelectedCharIds([...selectedCharIds, id]);
+    }
+  };
+
+  // 检查属性是否致死 (任一属性 <= 0)
+  const checkAttributeDeath = (newAttrs, reason = "属性耗尽，陷入绝境") => {
+    if (
+      newAttrs.health <= 0 ||
+      newAttrs.stamina <= 0 ||
+      newAttrs.calm <= 0 ||
+      newAttrs.intellect <= 0 ||
+      newAttrs.luck <= 0 ||
+      newAttrs.sanity <= 0
+    ) {
+      let detail = reason;
+      if (newAttrs.health <= 0) detail = "❤️ 健康归零：身受重创，不治身亡！";
+      else if (newAttrs.stamina <= 0) detail = "⚡ 体力耗竭：力竭倒地，被黑暗吞噬！";
+      else if (newAttrs.calm <= 0) detail = "🧘 冷静崩溃：极度恐慌之下触犯致命禁忌！";
+      else if (newAttrs.intellect <= 0) detail = "🧠 智力泯灭：意识混沌，彻底沦为怪谈傀儡！";
+      else if (newAttrs.luck <= 0) detail = "🍀 气运散尽：厄运缠身，被突发机关绝杀！";
+      else if (newAttrs.sanity <= 0) detail = "👁️ SAN值归零：精神彻底异化疯狂，自绝于怪谈！";
+
+      setDeathReason(detail);
+      setStage("dead");
+      return true;
+    }
+    return false;
+  };
+
+  // 开局生成第 1 回合 (AI 自由创作怪谈世界)
+  const handleStartGame = () => {
+    if (selectedCharIds.length < 3) {
+      showToast("请至少选择 3 位密探一同入局大逃杀！");
+      return;
+    }
+
+    const selectedChars = characterPool.filter((c) => selectedCharIds.includes(c.id));
+    const initAffection = {};
+    selectedChars.forEach((c) => {
+      initAffection[c.name] = 60; // 初始好感 60
+    });
+    setAffections(initAffection);
+
+    const initialCoins = DIFFICULTY_MAP[difficulty].coins;
+    setRevivalCoins(initialCoins);
+    setAttributes({ health: 100, stamina: 100, calm: 100, intellect: 100, luck: 100, sanity: 100 });
+    setTurnCount(1);
+    setHistoryLogs([]);
+    setAchievements([{ id: "entry", title: "踏入幽都", icon: "🚪", desc: "正式开启东汉怪谈世界逃生" }]);
+    setStage("generating");
+
+    const prompt = `
+【任务】
+你是一个顶尖的【东汉古风·规则怪谈大逃杀】游戏总导演。请为玩家构筑第一幕怪谈世界的入局关卡。
+自由创作，无需依赖任何世界书。场景必须具有浓郁的东汉诡异氛围（如：废弃千年的古栈道黑驿、洛阳地宫白骨回廊、枯井古寺铜殿、或荒丘义庄百鬼祭）。
+
+【玩家信息】
+姓名：${playerName}，性别：${playerGender}，性格：${playerPersona}
+游戏难度：${DIFFICULTY_MAP[difficulty].name}
+
+【在场入局密探同伴】
+${selectedChars.map((c, idx) => `${idx + 1}. 【${c.name}】: 性格与说话口吻：${c.profile}`).join("\n")}
+
+【生成第一回合内容规范】
+1. 📜【怪谈规则清单 (rules)】(3-5条)：每条必须简短、怪异、真假混杂（如："规则一：红烛熄灭时，切勿回头数身后同伴人数"、"规则二：凡自称是某某者，若左手少一指，立刻向其跪拜"）。
+2. 📖【开篇剧情 (story)】(120-180字)：讲述全员醒来时的诡异场景、四周弥漫的异象与迫在眉睫的危机。
+3. 💬【密探即时对话 (dialogues)】(2-3位密探发言)：符合各自人设，有的神情紧绷给出推论，有的可能暗含说谎或误导！
+4. 🔀【抉择选项 (options)】(3-4个单选抉择)：逻辑清晰，蕴含不同风险与推理路线。
+
+必须严格返回纯 JSON 对象格式（不要包含任何 \`\`\`json 标记）：
+{
+  "sceneTitle": "关卡场景名称（如：宛北荒驿·引魂古堂）",
+  "rules": [
+    "规则一：进入古堂后，若闻茶香，切莫饮茶；若闻腐臭，方可前行。",
+    "规则二：同伴说话若带有'回见'二字，屏住呼吸三息方可答话。",
+    "规则三：堂前青铜镜中若未照出你的倒影，请立即咬破指尖涂于眉心。"
+  ],
+  "story": "夜雨倾盆，雷电骤亮。你与众密探推开尘封百年的荒驿大门，堂内烛火幽绿，正中央摆放着四具未封漆的朱红古棺...",
+  "dialogues": [
+    { "speaker": "${selectedChars[0].name}", "text": "此处煞气极重，千万小心地上的符纸，刚才我似乎看到棺木动了一下..." },
+    { "speaker": "${selectedChars[1].name}", "text": "莫慌，我看这第三条规则颇有古怪，镜中照不出人影多半是光线错觉，别自己吓自己。" }
+  ],
+  "boss": null,
+  "options": [
+    { "id": 1, "text": "① 点燃辟邪沉香，按照规则一屏息走向后堂偏门", "hint": "稳妥试探" },
+    { "id": 2, "text": "② 拔刀走向朱红古棺，试图查验棺内是否有生门暗格", "hint": "激进探查" },
+    { "id": 3, "text": "③ 走到青铜镜前，仔细端详镜中所有人的倒影与面容", "hint": "规则核验" }
+  ]
+}
+`;
+
+    if (window.sendToLLM) {
+      window.sendToLLM(
+        [
+          { role: "system", content: "你是精通东汉怪谈规则与大逃杀的叙事大师。严格输出纯 JSON 对象，切勿在字符串中换行。" },
+          { role: "user", content: prompt },
+        ],
+        null,
+        (reply) => {
+          const parsed = safeParseLLMJson(reply);
+          if (parsed && parsed.rules && parsed.story && parsed.options) {
+            applyNewTurn(parsed);
+          } else {
+            fallbackFirstTurn(selectedChars);
+          }
+        },
+        () => fallbackFirstTurn(selectedChars)
+      );
+    } else {
+      fallbackFirstTurn(selectedChars);
+    }
+  };
+
+  // 兜底第 1 回合
+  const fallbackFirstTurn = (selectedChars) => {
+    const defaultTurn = {
+      sceneTitle: "宛北荒驿 · 幽火灵堂",
+      rules: [
+        "守则一：夜半更鼓响起三声前，切勿熄灭手中烛火。",
+        "守则二：若发现同伴颈后有双生血印，切勿与其单独对视超过三息。",
+        "守则三：堂前供桌上的三牲供品不可触碰，但供案下的生锈铜铃可取之防身。"
+      ],
+      story: "暴雨如注，狂风推开荒废百年的古驿大门。你与众密探避入堂内，供案上残烛幽绿，四壁挂满了无面仕女画像。空气中弥漫着刺鼻的朱砂味与陈腐气息。",
+      dialogues: [
+        { speaker: selectedChars[0].name, text: "此地阴气森森，大家聚在一起，千万不可擅自走散。" },
+        { speaker: selectedChars[1].name, text: "供案下的铜铃似乎在微微震颤，说不定正是克制怪谈的关键法器。" }
+      ],
+      boss: null,
+      options: [
+        { id: 1, text: "① 谨守第一条规则，护住烛火，与众密探背靠背警惕四周", hint: "稳妥守势" },
+        { id: 2, text: "② 俯身探向供案下方，冒险尝试取下那枚生锈铜铃", hint: "搜寻道具" },
+        { id: 3, text: "③ 拔出佩刃割破掌心，以纯阳血涂抹在无面仕女画像上", hint: "破除异象" }
+      ]
+    };
+    applyNewTurn(defaultTurn);
+  };
+
+  // 应用新回合数据
+  const applyNewTurn = (turnData) => {
+    setCurrentRules(turnData.rules || []);
+    setCurrentStory(turnData.story || "");
+    setCurrentDialogues(turnData.dialogues || []);
+    setCurrentOptions(turnData.options || []);
+    if (turnData.boss) setCurrentBoss(turnData.boss);
+    setStage("playing");
+    setIsAiProcessing(false);
+  };
+
+  // 玩家做出选项抉择 -> 驱动 AI 状态与剧情结算
+  const handleSelectOption = (selectedOption) => {
+    if (isAiProcessing) return;
+    setIsAiProcessing(true);
+
+    const selectedChars = characterPool.filter((c) => selectedCharIds.includes(c.id));
+    const nextTurnNum = turnCount + 1;
+    setTurnCount(nextTurnNum);
+
+    const prompt = `
+【东汉规则怪谈大逃杀 · 第 ${turnCount} 回合结算与第 ${nextTurnNum} 回合生成】
+玩家信息：${playerName}（${playerGender}），性格：${playerPersona}
+当前游戏难度：${DIFFICULTY_MAP[difficulty].name}（复活币剩余：${revivalCoins}枚）
+
+【当前属性数值】
+❤️健康:${attributes.health}, ⚡体力:${attributes.stamina}, 🧘冷静:${attributes.calm}, 🧠智力:${attributes.intellect}, 🍀运气:${attributes.luck}, 👁️SAN值:${attributes.sanity}
+
+【在场密探同伴】
+${selectedChars.map((c) => `【${c.name}】(当前好感度:${affections[c.name] || 60}): 性格：${c.profile}`).join("\n")}
+
+【上一回合规则与情境】
+规则：${JSON.stringify(currentRules)}
+剧情：${currentStory}
+玩家刚刚做出的抉择：【${selectedOption.text}】
+
+【结算与生成要求】
+1. 结算玩家选择带来的后果与异象：
+   - 科学合理的属性增减 delta（数值在 -20 到 +15 之间，平稳合理，不要断崖暴跌）；
+   - 道具变动（若有拾取或损耗道具，注明 itemGained 或 itemUsed）；
+   - 密探同伴好感度变动 delta（-10 到 +15）；
+   - 如果玩家做出了必死致命违规或属性耗尽，设定 isDead: true 及 deathReason。
+   - 如果游戏达到第 6-8 回合且玩家成功破局，可判定 isWin: true 并给出结局总结。
+2. 推进生成第 ${nextTurnNum} 回合内容：
+   - 📜【新场景怪谈规则 (rules)】(3-4条)；
+   - 📖【承接剧情 (story)】(120-180字)；
+   - 💬【密探发言 (dialogues)】(2-3条，密探可能说谎掩盖、恐慌、或识破真相)；
+   - 🔀【新抉择选项 (options)】(3-4个)。
+
+必须严格返回纯 JSON 对象格式（不要包含任何 \`\`\`json 标记）：
+{
+  "attributeDelta": { "health": -5, "stamina": -10, "calm": 5, "intellect": 5, "luck": 0, "sanity": -8 },
+  "itemGained": { "id": "copper_key", "name": "地宫生门铜匙", "icon": "🗝️", "desc": "可开启偏殿封印暗门", "count": 1 },
+  "itemUsed": null,
+  "affectionDelta": { "${selectedChars[0].name}": 5 },
+  "isDead": false,
+  "deathReason": "",
+  "isWin": false,
+  "winTitle": "",
+  "sceneTitle": "新关卡场景名",
+  "rules": [
+    "新规则一：...",
+    "新规则二：..."
+  ],
+  "story": "你执行了该抉择后，四周雾气骤散，但新的诡异异象再次显现...",
+  "dialogues": [
+    { "speaker": "${selectedChars[0].name}", "text": "刚才多亏了你的决断，不过你看前面偏殿的石柱..." }
+  ],
+  "boss": null,
+  "options": [
+    { "id": 1, "text": "选项一内容...", "hint": "提示" },
+    { "id": 2, "text": "选项二内容...", "hint": "提示" },
+    { "id": 3, "text": "选项三内容...", "hint": "提示" }
+  ]
+}
+`;
+
+    if (window.sendToLLM) {
+      window.sendToLLM(
+        [
+          { role: "system", content: "你是东汉规则怪谈的绝对仲裁者与高能叙事官。严格输出纯 JSON 对象，切勿在字符串中换行。" },
+          { role: "user", content: prompt },
+        ],
+        null,
+        (reply) => {
+          const res = safeParseLLMJson(reply);
+          if (res) {
+            handleTurnResolution(res, selectedOption);
+          } else {
+            fallbackTurnResolution(selectedOption, selectedChars);
+          }
+        },
+        () => fallbackTurnResolution(selectedOption, selectedChars)
+      );
+    } else {
+      fallbackTurnResolution(selectedOption, selectedChars);
+    }
+  };
+
+  // 结算回合后果
+  const handleTurnResolution = (res, selectedOption) => {
+    // 1. 属性变更计算
+    const delta = res.attributeDelta || {};
+    const nextAttrs = {
+      health: Math.min(100, Math.max(0, attributes.health + (delta.health || 0))),
+      stamina: Math.min(100, Math.max(0, attributes.stamina + (delta.stamina || 0))),
+      calm: Math.min(100, Math.max(0, attributes.calm + (delta.calm || 0))),
+      intellect: Math.min(100, Math.max(0, attributes.intellect + (delta.intellect || 0))),
+      luck: Math.min(100, Math.max(0, attributes.luck + (delta.luck || 0))),
+      sanity: Math.min(100, Math.max(0, attributes.sanity + (delta.sanity || 0))),
+    };
+    setAttributes(nextAttrs);
+
+    // 2. 道具增减
+    if (res.itemGained) {
+      setInventory((prev) => {
+        const exist = prev.find((item) => item.id === res.itemGained.id);
+        if (exist) {
+          return prev.map((item) => (item.id === res.itemGained.id ? { ...item, count: item.count + (res.itemGained.count || 1) } : item));
+        }
+        return [...prev, res.itemGained];
+      });
+      showToast(`🎒 获得道具：${res.itemGained.name}`);
+    }
+
+    // 3. 好感度更新
+    if (res.affectionDelta) {
+      setAffections((prev) => {
+        const updated = { ...prev };
+        Object.entries(res.affectionDelta).forEach(([name, val]) => {
+          updated[name] = Math.min(100, Math.max(0, (updated[name] || 60) + val));
+        });
+        return updated;
+      });
+    }
+
+    // 4. 判定死亡
+    if (res.isDead || checkAttributeDeath(nextAttrs, res.deathReason || "触犯规则致命禁忌")) {
+      setIsAiProcessing(false);
+      return;
+    }
+
+    // 5. 判定通关胜利
+    if (res.isWin || turnCount >= 8) {
+      setFinalEnding({
+        isWin: true,
+        title: res.winTitle || "破除万障 · 逃出怪谈",
+        desc: res.story || "你凭借过人的胆识与密探同伴们的合力推理，终于寻得生门阵眼，安然返回东汉人间！",
+      });
+      setAchievements((prev) => [...prev, { id: "escape_master", title: "幽都生还者", icon: "🏆", desc: "成功逃离东汉规则怪谈大逃杀" }]);
+      setStage("ended");
+      setIsAiProcessing(false);
+      return;
+    }
+
+    // 6. 正常推进下一回合
+    applyNewTurn(res);
+  };
+
+  // 兜底回合结算
+  const fallbackTurnResolution = (selectedOption, selectedChars) => {
+    const nextAttrs = {
+      health: Math.max(0, attributes.health - 5),
+      stamina: Math.max(0, attributes.stamina - 8),
+      calm: Math.min(100, attributes.calm + 4),
+      intellect: Math.min(100, attributes.intellect + 5),
+      luck: attributes.luck,
+      sanity: Math.max(0, attributes.sanity - 6),
+    };
+    setAttributes(nextAttrs);
+
+    if (checkAttributeDeath(nextAttrs)) {
+      setIsAiProcessing(false);
+      return;
+    }
+
+    const nextTurn = {
+      sceneTitle: "幽冥回廊 · 阵眼暗门",
+      rules: [
+        "守则一：若在回廊听见水滴声，每隔七步需闭目默念一句太上清心诀。",
+        "守则二：任何向你索要金银的同伴皆为幻影，切勿交付财物。"
+      ],
+      story: "你按照所选方案化解了方才的危机，回廊尽头浮现出一座刻有饕餮纹的玄铁古门，门锁上隐隐有灵光流转。",
+      dialogues: [
+        { speaker: selectedChars[0].name, text: "机关已经解开了一半，大家稳住心神！" }
+      ],
+      boss: null,
+      options: [
+        { id: 1, text: "① 默诵清心口诀，步步为营推开玄铁古门", hint: "遵循守则" },
+        { id: 2, text: "② 仔细查验门上饕餮纹，尝试用智力破解阵眼", hint: "深度解谜" }
+      ]
+    };
+    applyNewTurn(nextTurn);
+  };
+
+  // 复活机制 (消耗 1 枚复活币)
+  const handleRevive = () => {
+    if (revivalCoins <= 0) {
+      showToast("复活币已耗尽，无法复活！");
+      setStage("ended");
+      return;
+    }
+
+    const nextCoins = revivalCoins - 1;
+    setRevivalCoins(nextCoins);
+    // 恢复属性至安全基准线
+    setAttributes({
+      health: 80,
+      stamina: 80,
+      calm: 80,
+      intellect: 80,
+      luck: 80,
+      sanity: 80,
+    });
+    setStage("playing");
+    showToast(`🪙 消耗 1 枚复活币，成功涅槃还魂！(剩余:${nextCoins}枚)`);
+  };
+
+  // 放弃复活，确认终局
+  const handleGiveUpRevive = () => {
+    setFinalEnding({
+      isWin: false,
+      title: "长眠幽都 · 魂归怪谈",
+      desc: deathReason || "你在此次东汉怪谈大逃杀中力竭阵亡，意识永远留在了这片禁忌之地...",
+    });
+    setStage("ended");
+  };
+
+  // 使用背包物品
+  const handleUseItem = (item) => {
+    if (item.count <= 0) return;
+    if (item.id === "pill") {
+      setAttributes((prev) => ({
+        ...prev,
+        sanity: Math.min(100, prev.sanity + 20),
+        calm: Math.min(100, prev.calm + 20),
+      }));
+      showToast("使用了九转定心丹，SAN值与冷静大幅恢复！");
+    } else if (item.id === "torch") {
+      setAttributes((prev) => ({
+        ...prev,
+        calm: Math.min(100, prev.calm + 15),
+      }));
+      showToast("点燃了辟邪沉香，四周邪祟稍许退散！");
+    }
+
+    setInventory((prev) =>
+      prev.map((i) => (i.id === item.id ? { ...i, count: i.count - 1 } : i)).filter((i) => i.count > 0)
+    );
+  };
+
+  const selectedChars = characterPool.filter((c) => selectedCharIds.includes(c.id));
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "linear-gradient(180deg, #F4EFEB 0%, #EAE3DA 100%)",
+        zIndex: 260,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        color: "#4A453E",
+        fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
+      }}
+    >
+      {/* 顶部莫兰迪导航 */}
+      <div
+        style={{
+          height: "54px",
+          background: "rgba(255, 255, 255, 0.88)",
+          backdropFilter: "blur(10px)",
+          borderBottom: "1px solid #E2D8CC",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 14px",
+          flexShrink: 0,
+          boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <div
+            onClick={onBack}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#6D7983",
+              background: "#EBE5DC",
+            }}
+          >
+            <i className="ph ph-caret-left" style={{ fontSize: "22px" }}></i>
+          </div>
+          <div>
+            <div style={{ fontSize: "15px", fontWeight: "700", color: "#454D55" }}>
+              谁在说谎 · 东汉规则怪谈
+            </div>
+            <div style={{ fontSize: "10.5px", color: "#8E99A2" }}>
+              {stage === "lobby" ? "入局选人与难度设定" : `第 ${turnCount} 回合 · 密室大逃杀`}
+            </div>
+          </div>
+        </div>
+
+        {/* 顶部快捷功能栏 (背包 / 好感度 / 复活币) */}
+        {stage === "playing" && (
+          <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+            <div
+              style={{
+                fontSize: "11.5px",
+                background: "#FAF7F2",
+                border: "1px solid #E5DDD2",
+                padding: "3px 8px",
+                borderRadius: "10px",
+                fontWeight: "700",
+                color: "#C88E7D",
+              }}
+            >
+              🪙 {revivalCoins}
+            </div>
+            <button
+              onClick={() => setShowInventoryModal(true)}
+              style={{
+                fontSize: "12px",
+                background: "#7D93A4",
+                color: "#FFF",
+                border: "none",
+                padding: "4px 8px",
+                borderRadius: "10px",
+                fontWeight: "600",
+                cursor: "pointer",
+              }}
+            >
+              🎒 背包
+            </button>
+            <button
+              onClick={() => setShowAffectionModal(true)}
+              style={{
+                fontSize: "12px",
+                background: "#869687",
+                color: "#FFF",
+                border: "none",
+                padding: "4px 8px",
+                borderRadius: "10px",
+                fontWeight: "600",
+                cursor: "pointer",
+              }}
+            >
+              💖 好感
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* ================= 阶段 1: 准备大厅 (自定义身份 + 选密探 + 选难度) ================= */}
+      {stage === "lobby" && (
+        <div
+          className="no-scrollbar"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "16px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+          }}
+        >
+          {/* 游戏简介卡 */}
+          <div
+            style={{
+              background: "linear-gradient(135deg, #FFFFFF 0%, #FAF7F2 100%)",
+              borderRadius: "18px",
+              padding: "14px 16px",
+              border: "1.5px solid #E2D8CC",
+              boxShadow: "0 4px 14px rgba(0,0,0,0.03)",
+            }}
+          >
+            <div style={{ fontSize: "16px", fontWeight: "800", color: "#454D55", marginBottom: "4px" }}>
+              📜 欢迎来到东汉规则怪谈大逃杀
+            </div>
+            <div style={{ fontSize: "12.5px", color: "#7B8072", lineHeight: "1.5" }}>
+              你与同僚误入被诡异法则封锁的禁忌幽冥之地。每踏入一处死局，必须牢记当庭守则。但请铭记：<b>同伴之中有人可能在说谎！</b> 唯有缜密推理方能逃离生天。
+            </div>
+          </div>
+
+          {/* 玩家自定义身份 */}
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderRadius: "18px",
+              padding: "14px",
+              border: "1.5px solid #E2D8CC",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+            }}
+          >
+            <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>
+              👤 自定义玩家面具 (你)
+            </div>
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <WaterMirrorAvatar avatar={userAvatar} name={playerName} size={46} />
+              <div style={{ flex: 1, display: "flex", gap: "8px" }}>
+                <input
+                  type="text"
+                  value={playerName}
+                  onChange={(e) => setPlayerName(e.target.value)}
+                  placeholder="玩家姓名"
+                  style={{
+                    flex: 1,
+                    padding: "8px 12px",
+                    borderRadius: "12px",
+                    border: "1px solid #DDD3C7",
+                    fontSize: "13px",
+                    outline: "none",
+                  }}
+                />
+                <select
+                  value={playerGender}
+                  onChange={(e) => setPlayerGender(e.target.value)}
+                  style={{
+                    padding: "8px 10px",
+                    borderRadius: "12px",
+                    border: "1px solid #DDD3C7",
+                    fontSize: "13px",
+                    background: "#FAF7F2",
+                    outline: "none",
+                  }}
+                >
+                  <option value="女">女</option>
+                  <option value="男">男</option>
+                  <option value="未知">保密</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          {/* 难度与复活币选择 */}
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderRadius: "18px",
+              padding: "14px",
+              border: "1.5px solid #E2D8CC",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>
+              ⚖️ 选择怪谈难度 (对应复活币)
+            </div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+              {Object.entries(DIFFICULTY_MAP).map(([key, diff]) => {
+                const isAct = difficulty === key;
+                return (
+                  <div
+                    key={key}
+                    onClick={() => setDifficulty(key)}
+                    style={{
+                      padding: "10px 12px",
+                      borderRadius: "14px",
+                      background: isAct ? "#FAF7F2" : "#FFFFFF",
+                      border: isAct ? `2px solid ${diff.color}` : "1px solid #EAE3DA",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#3B4235" }}>
+                        {diff.name} · <span style={{ color: diff.color }}>🪙 {diff.coins}枚复活币</span>
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#8E99A2", marginTop: "2px" }}>
+                        {diff.desc}
+                      </div>
+                    </div>
+                    {isAct && <i className="ph-bold ph-check-circle" style={{ fontSize: "18px", color: diff.color }}></i>}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 密探同伴选择 (>= 3人) */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>
+                👥 选择入局密探 (至少选3人)
+              </div>
+              <span style={{ fontSize: "11.5px", fontWeight: "700", color: selectedCharIds.length >= 3 ? "#5A8F76" : "#C88E7D" }}>
+                已选 {selectedCharIds.length} 人
+              </span>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {characterPool.map((char) => {
+                const isSelected = selectedCharIds.includes(char.id);
+                return (
+                  <div
+                    key={char.id}
+                    onClick={() => toggleSelectChar(char.id)}
+                    style={{
+                      background: isSelected ? "#FAF7F2" : "#FFFFFF",
+                      borderRadius: "14px",
+                      padding: "10px 12px",
+                      border: isSelected ? "2px solid #7D93A4" : "1px solid #EAE3DA",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <WaterMirrorAvatar avatar={char.avatar} name={char.name} size={40} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>{char.name}</div>
+                      <div style={{ fontSize: "11px", color: "#7B8072", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                        {char.profile}
+                      </div>
+                    </div>
+                    <div
+                      style={{
+                        width: "20px",
+                        height: "20px",
+                        borderRadius: "50%",
+                        border: isSelected ? "none" : "2px solid #C4B7A6",
+                        background: isSelected ? "#7D93A4" : "transparent",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        color: "#FFF",
+                        fontSize: "12px",
+                      }}
+                    >
+                      {isSelected && <i className="ph-bold ph-check"></i>}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 开局按钮 */}
+          <button
+            onClick={handleStartGame}
+            disabled={selectedCharIds.length < 3}
+            style={{
+              marginTop: "auto",
+              padding: "14px 0",
+              borderRadius: "18px",
+              border: "none",
+              background:
+                selectedCharIds.length >= 3
+                  ? "linear-gradient(135deg, #7D93A4 0%, #5E778B 100%)"
+                  : "#C8C0B5",
+              color: "#FFFFFF",
+              fontSize: "15px",
+              fontWeight: "700",
+              letterSpacing: "1.5px",
+              boxShadow: selectedCharIds.length >= 3 ? "0 6px 20px rgba(94,119,139,0.35)" : "none",
+              cursor: selectedCharIds.length >= 3 ? "pointer" : "not-allowed",
+            }}
+          >
+            开启东汉规则怪谈大逃杀 ➔
+          </button>
+        </div>
+      )}
+
+      {/* ================= 阶段 2: AI 开局生成中 ================= */}
+      {stage === "generating" && (
+        <div
+          style={{
+            flex: 1,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "24px",
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "68px",
+              height: "68px",
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #C88E7D 0%, #7D93A4 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#FFF",
+              fontSize: "30px",
+              boxShadow: "0 8px 24px rgba(200,142,125,0.35)",
+              animation: "mirrorPulse 2s infinite ease-in-out",
+              marginBottom: "18px",
+            }}
+          >
+            <i className="ph ph-skull"></i>
+          </div>
+          <div style={{ fontSize: "16px", fontWeight: "700", color: "#454D55", marginBottom: "6px" }}>
+            幽冥大门正在开启...
+          </div>
+          <div style={{ fontSize: "12.5px", color: "#8E99A2", lineHeight: "1.5", maxWidth: "260px" }}>
+            正在为【{playerName}】及众密探构筑东汉怪谈迷局与生死规则...
+          </div>
+        </div>
+      )}
+
+      {/* ================= 阶段 3: 回合制推演主界面 ================= */}
+      {stage === "playing" && (
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
+          {/* 顶部6大属性概览条 */}
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderBottom: "1px solid #EAE3DA",
+              padding: "8px 12px",
+              display: "grid",
+              gridTemplateColumns: "repeat(6, 1fr)",
+              gap: "4px",
+              textAlign: "center",
+              flexShrink: 0,
+            }}
+          >
+            {[
+              { key: "health", label: "❤️健康", val: attributes.health, color: "#E57373" },
+              { key: "stamina", label: "⚡体力", val: attributes.stamina, color: "#FFB74D" },
+              { key: "calm", label: "🧘冷静", val: attributes.calm, color: "#81C784" },
+              { key: "intellect", label: "🧠智力", val: attributes.intellect, color: "#64B5F6" },
+              { key: "luck", label: "🍀运气", val: attributes.luck, color: "#BA68C8" },
+              { key: "sanity", label: "👁️SAN", val: attributes.sanity, color: "#4DB6AC" },
+            ].map((attr) => (
+              <div key={attr.key} style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+                <span style={{ fontSize: "10px", color: "#7B8072" }}>{attr.label}</span>
+                <span style={{ fontSize: "12px", fontWeight: "800", color: attr.val <= 25 ? "#C62828" : attr.color }}>
+                  {attr.val}
+                </span>
+                <div style={{ width: "100%", height: "3px", background: "#EAE3DA", borderRadius: "2px", marginTop: "2px", overflow: "hidden" }}>
+                  <div style={{ width: `${attr.val}%`, height: "100%", background: attr.val <= 25 ? "#C62828" : attr.color }} />
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 剧情与怪谈内容区 */}
+          <div
+            className="no-scrollbar"
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "14px",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+            }}
+          >
+            {/* 📜 核心怪谈守则卡 */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, #FFF9F2 0%, #FEEDDC 100%)",
+                borderRadius: "18px",
+                padding: "14px",
+                border: "1.5px dashed #F5C6A5",
+                boxShadow: "0 4px 14px rgba(245,198,165,0.25)",
+              }}
+            >
+              <div style={{ fontSize: "14.5px", fontWeight: "800", color: "#8C4A1E", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
+                <span>📜 当前禁忌守则</span>
+                <span style={{ fontSize: "11px", background: "#D6724B", color: "#FFF", padding: "1px 6px", borderRadius: "6px" }}>第 {turnCount} 关</span>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                {currentRules.map((rule, idx) => (
+                  <div key={idx} style={{ fontSize: "12.5px", color: "#5A3825", lineHeight: "1.5", paddingLeft: "4px" }}>
+                    • {rule}
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 📖 剧情描述卡 */}
+            <div
+              style={{
+                background: "#FFFFFF",
+                borderRadius: "18px",
+                padding: "14px",
+                border: "1.5px solid #E2D8CC",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                fontSize: "13.5px",
+                color: "#3B4235",
+                lineHeight: "1.65",
+              }}
+            >
+              {currentStory}
+            </div>
+
+            {/* 💬 密探与NPC发言 */}
+            {currentDialogues.length > 0 && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {currentDialogues.map((dlg, idx) => {
+                  const spkChar = characterPool.find((c) => c.name === dlg.speaker);
+                  return (
+                    <div
+                      key={idx}
+                      style={{
+                        background: "rgba(255, 255, 255, 0.9)",
+                        borderRadius: "14px",
+                        padding: "10px 12px",
+                        border: "1px solid #EAE3DA",
+                        display: "flex",
+                        gap: "10px",
+                        alignItems: "flex-start",
+                      }}
+                    >
+                      <WaterMirrorAvatar avatar={spkChar?.avatar} name={dlg.speaker} size={36} />
+                      <div style={{ flex: 1 }}>
+                        <div style={{ fontSize: "12px", fontWeight: "700", color: "#4E5760", marginBottom: "2px" }}>
+                          {dlg.speaker}
+                        </div>
+                        <div style={{ fontSize: "13px", color: "#4A453E", lineHeight: "1.5" }}>
+                          “{dlg.text}”
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
+            {isAiProcessing && (
+              <div style={{ textAlign: "center", padding: "12px", color: "#8E99A2", fontSize: "12.5px" }}>
+                <i className="ph ph-spinner animate-spin mr-1"></i> 幽冥法则正在推演判定你的抉择后果...
+              </div>
+            )}
+
+            <div ref={scrollRef} />
+          </div>
+
+          {/* 🔀 底部单选决策栏 */}
+          <div
+            style={{
+              padding: "12px 14px",
+              background: "#FFFFFF",
+              borderTop: "1px solid #E2D8CC",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+              flexShrink: 0,
+            }}
+          >
+            <div style={{ fontSize: "12px", color: "#8E99A2", fontWeight: "600" }}>
+              👉 请做出本回合的生死抉择 (单选):
+            </div>
+            {currentOptions.map((opt) => (
+              <button
+                key={opt.id}
+                onClick={() => handleSelectOption(opt)}
+                disabled={isAiProcessing}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "14px",
+                  border: "1.5px solid #DDD3C7",
+                  background: isAiProcessing ? "#F5F2EC" : "#FAF7F2",
+                  color: isAiProcessing ? "#9E998F" : "#3B4235",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  textAlign: "left",
+                  lineHeight: "1.45",
+                  cursor: isAiProcessing ? "not-allowed" : "pointer",
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }}
+              >
+                <span>{opt.text}</span>
+                {opt.hint && (
+                  <span style={{ fontSize: "11px", color: "#869687", marginLeft: "6px", flexShrink: 0 }}>
+                    [{opt.hint}]
+                  </span>
+                )}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* ================= 阶段 4: 死亡与复活弹窗 ================= */}
+      {stage === "dead" && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(8px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            boxSizing: "border-box",
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "380px",
+              background: "#FAF7F2",
+              borderRadius: "24px",
+              padding: "22px",
+              boxSizing: "border-box",
+              textAlign: "center",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.4)",
+              animation: "scaleUp 0.2s ease-out",
+            }}
+          >
+            <div style={{ fontSize: "36px", marginBottom: "8px" }}>⚠️</div>
+            <div style={{ fontSize: "18px", fontWeight: "800", color: "#C62828", marginBottom: "6px" }}>
+              你已在游戏中死亡！
+            </div>
+            <div style={{ fontSize: "13px", color: "#6A6052", lineHeight: "1.6", background: "#FFEBEE", padding: "10px", borderRadius: "12px", marginBottom: "16px" }}>
+              {deathReason}
+            </div>
+
+            <div style={{ fontSize: "13.5px", color: "#4E5760", marginBottom: "18px" }}>
+              当前持有复活币：<b style={{ color: "#D6724B" }}>{revivalCoins} 枚</b>
+              <br />
+              是否消耗 <b>1 枚复活币</b> 满血复活？
+            </div>
+
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={handleGiveUpRevive}
+                style={{
+                  flex: 1,
+                  padding: "11px 0",
+                  borderRadius: "14px",
+                  border: "1.5px solid #DDD3C7",
+                  background: "#FFFFFF",
+                  color: "#7B8072",
+                  fontWeight: "700",
+                  fontSize: "13.5px",
+                  cursor: "pointer",
+                }}
+              >
+                放弃复活
+              </button>
+              <button
+                onClick={handleRevive}
+                disabled={revivalCoins <= 0}
+                style={{
+                  flex: 1.5,
+                  padding: "11px 0",
+                  borderRadius: "14px",
+                  border: "none",
+                  background: revivalCoins > 0 ? "linear-gradient(135deg, #C88E7D 0%, #A86D5C 100%)" : "#C8C0B5",
+                  color: "#FFFFFF",
+                  fontWeight: "700",
+                  fontSize: "13.5px",
+                  boxShadow: revivalCoins > 0 ? "0 4px 14px rgba(200,142,125,0.4)" : "none",
+                  cursor: revivalCoins > 0 ? "pointer" : "not-allowed",
+                }}
+              >
+                消耗1币复活
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= 阶段 5: 最终结局结算界面 ================= */}
+      {stage === "ended" && finalEnding && (
+        <div
+          className="no-scrollbar"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "16px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+          }}
+        >
+          <div
+            style={{
+              background: finalEnding.isWin
+                ? "linear-gradient(135deg, #E2F0D9 0%, #C8E6C9 100%)"
+                : "linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%)",
+              borderRadius: "22px",
+              padding: "20px",
+              border: finalEnding.isWin ? "2px solid #81C784" : "2px solid #E57373",
+              textAlign: "center",
+              boxShadow: "0 6px 20px rgba(0,0,0,0.06)",
+            }}
+          >
+            <div style={{ fontSize: "36px", marginBottom: "4px" }}>
+              {finalEnding.isWin ? "🏆" : "🪦"}
+            </div>
+            <div style={{ fontSize: "18px", fontWeight: "800", color: finalEnding.isWin ? "#2E7D32" : "#C62828", marginBottom: "6px" }}>
+              {finalEnding.title}
+            </div>
+            <div style={{ fontSize: "13px", color: "#4A453E", lineHeight: "1.6" }}>
+              {finalEnding.desc}
+            </div>
+          </div>
+
+          {/* 存活状态与成就 */}
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderRadius: "18px",
+              padding: "14px",
+              border: "1.5px solid #E2D8CC",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>
+              🎖️ 结算档案与成就勋章
+            </div>
+            <div style={{ fontSize: "12.5px", color: "#7B8072" }}>
+              • 最终通关回合数：第 {turnCount} 回合
+              <br />
+              • 剩余复活币：{revivalCoins} 枚
+              <br />
+              • 所选游戏难度：{DIFFICULTY_MAP[difficulty].name}
+            </div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginTop: "4px" }}>
+              {achievements.map((ach) => (
+                <span
+                  key={ach.id}
+                  style={{
+                    fontSize: "11.5px",
+                    background: "#FAF7F2",
+                    border: "1px solid #DDD3C7",
+                    padding: "4px 8px",
+                    borderRadius: "8px",
+                    color: "#5A6052",
+                    fontWeight: "600",
+                  }}
+                >
+                  {ach.icon} {ach.title}
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={() => {
+              setStage("lobby");
+              setAttributes({ health: 100, stamina: 100, calm: 100, intellect: 100, luck: 100, sanity: 100 });
+              setTurnCount(1);
+            }}
+            style={{
+              marginTop: "auto",
+              padding: "14px 0",
+              borderRadius: "18px",
+              border: "none",
+              background: "linear-gradient(135deg, #7D93A4 0%, #5E778B 100%)",
+              color: "#FFFFFF",
+              fontSize: "15px",
+              fontWeight: "700",
+              letterSpacing: "1.5px",
+              boxShadow: "0 6px 20px rgba(94,119,139,0.35)",
+              cursor: "pointer",
+            }}
+          >
+            重新开启东汉怪谈大逃杀
+          </button>
+        </div>
+      )}
+
+      {/* 🎒 背包道具弹窗 Modal */}
+      {showInventoryModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0, 0, 0, 0.6)",
+            backdropFilter: "blur(6px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setShowInventoryModal(false)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "380px",
+              background: "#FAF7F2",
+              borderRadius: "24px",
+              padding: "20px",
+              boxSizing: "border-box",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+              animation: "scaleUp 0.2s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#3B4235" }}>
+                🎒 随身辟邪锦囊与道具
+              </div>
+              <button
+                onClick={() => setShowInventoryModal(false)}
+                style={{ background: "none", border: "none", fontSize: "20px", color: "#8E99A2", cursor: "pointer" }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px", maxHeight: "60vh", overflowY: "auto" }}>
+              {inventory.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "20px", color: "#8E99A2", fontSize: "13px" }}>
+                  背包空空如也，请在怪谈中寻找生机道具。
+                </div>
+              ) : (
+                inventory.map((item) => (
+                  <div
+                    key={item.id}
+                    style={{
+                      background: "#FFFFFF",
+                      borderRadius: "14px",
+                      padding: "10px 12px",
+                      border: "1px solid #EAE3DA",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                    }}
+                  >
+                    <div>
+                      <div style={{ fontSize: "13.5px", fontWeight: "700", color: "#3B4235" }}>
+                        {item.icon} {item.name} ×{item.count}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#7B8072", marginTop: "2px" }}>
+                        {item.desc}
+                      </div>
+                    </div>
+                    {item.count > 0 && (
+                      <button
+                        onClick={() => handleUseItem(item)}
+                        style={{
+                          fontSize: "11.5px",
+                          background: "#7D93A4",
+                          color: "#FFF",
+                          border: "none",
+                          padding: "4px 10px",
+                          borderRadius: "10px",
+                          fontWeight: "600",
+                          cursor: "pointer",
+                          flexShrink: 0,
+                        }}
+                      >
+                        使用
+                      </button>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowInventoryModal(false)}
+              style={{
+                width: "100%",
+                marginTop: "14px",
+                padding: "10px 0",
+                borderRadius: "12px",
+                border: "none",
+                background: "#7D93A4",
+                color: "#FFFFFF",
+                fontWeight: "700",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              收起锦囊
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 💖 好感度弹窗 Modal */}
+      {showAffectionModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0, 0, 0, 0.6)",
+            backdropFilter: "blur(6px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setShowAffectionModal(false)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "380px",
+              background: "#FAF7F2",
+              borderRadius: "24px",
+              padding: "20px",
+              boxSizing: "border-box",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+              animation: "scaleUp 0.2s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "#3B4235" }}>
+                💖 同伴与怪谈好感度
+              </div>
+              <button
+                onClick={() => setShowAffectionModal(false)}
+                style={{ background: "none", border: "none", fontSize: "20px", color: "#8E99A2", cursor: "pointer" }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {Object.entries(affections).map(([charName, affValue]) => {
+                const charObj = characterPool.find((c) => c.name === charName);
+                return (
+                  <div
+                    key={charName}
+                    style={{
+                      background: "#FFFFFF",
+                      borderRadius: "14px",
+                      padding: "10px 12px",
+                      border: "1px solid #EAE3DA",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "10px",
+                    }}
+                  >
+                    <WaterMirrorAvatar avatar={charObj?.avatar} name={charName} size={36} />
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: "700", color: "#3B4235" }}>
+                        <span>{charName}</span>
+                        <span style={{ color: affValue >= 70 ? "#5A8F76" : affValue <= 30 ? "#C88E7D" : "#C4A482" }}>
+                          {affValue} 点
+                        </span>
+                      </div>
+                      <div style={{ width: "100%", height: "4px", background: "#EAE3DA", borderRadius: "2px", marginTop: "4px", overflow: "hidden" }}>
+                        <div style={{ width: `${affValue}%`, height: "100%", background: affValue >= 70 ? "#5A8F76" : affValue <= 30 ? "#C88E7D" : "#C4A482" }} />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {currentBoss && (
+                <div style={{ background: "#FCE4DC", borderRadius: "14px", padding: "10px 12px", border: "1px solid #C88E7D" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#8C4A1E" }}>
+                    👹 当前遭遇邪祟/BOSS：{currentBoss.name}
+                  </div>
+                  <div style={{ fontSize: "11.5px", color: "#A86D5C", marginTop: "2px" }}>
+                    好感/仇恨度：{currentBoss.affection || 10} 点 · 友好度极高时可免除致命一击
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowAffectionModal(false)}
+              style={{
+                width: "100%",
+                marginTop: "14px",
+                padding: "10px 0",
+                borderRadius: "12px",
+                border: "none",
+                background: "#869687",
+                color: "#FFFFFF",
+                fontWeight: "700",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              关闭
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 提示 Toast */}
+      {toastText && (
+        <div
+          style={{
+            position: "fixed",
+            bottom: "80px",
+            left: "50%",
+            transform: "translateX(-50%)",
+            background: "rgba(50, 55, 60, 0.9)",
+            color: "#FFF",
+            padding: "10px 18px",
+            borderRadius: "20px",
+            fontSize: "13.5px",
+            fontWeight: "500",
+            backdropFilter: "blur(6px)",
+            zIndex: 9999,
+            boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
+            animation: "fadeIn 0.2s ease-out",
+          }}
+        >
+          {toastText}
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const T13Page = ({
   setIsStarChartOpen,
   setIsButterflyEffectOpen,
@@ -57532,6 +59062,7 @@ const T13Page = ({
   const [showFarm, setShowFarm] = useState(false);
   const [showWaterMirror, setShowWaterMirror] = useState(false);
   const [showTaibai, setShowTaibai] = useState(false);
+  const [showLyingGhost, setShowLyingGhost] = useState(false);
 
   const getContentByTab = () => {
     switch (activeTab) {
@@ -57582,6 +59113,9 @@ const T13Page = ({
       {showTaibai && (
         <TaibaiMysteryPage onBack={() => setShowTaibai(false)} />
       )}
+      {showLyingGhost && (
+        <LyingRulesGhostPage onBack={() => setShowLyingGhost(false)} />
+      )}
       <div className="scroll-container hide-scrollbar">
         <T13Header />
 
@@ -57626,6 +59160,8 @@ const T13Page = ({
                     setShowWaterMirror(true);
                   } else if (item.title === "太白杀阵" || item.title.includes("杀阵")) {
                     setShowTaibai(true);
+                  } else if (item.title === "谁在说谎" || item.title.includes("说谎")) {
+                    setShowLyingGhost(true);
                   }
                 }}
               >
