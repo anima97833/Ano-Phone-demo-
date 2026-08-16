@@ -54430,8 +54430,10 @@ const VoiceCallPage = ({
   onReject,
   callType = "role",
 }) => {
+  const [avatarUrl, setAvatarUrl] = React.useState(null);
+
   React.useEffect(() => {
-    // 加载保存的头像
+    // 从IndexedDB加载保存的头像
     const loadSavedAvatar = async () => {
       try {
         const db = await openDB();
@@ -54442,14 +54444,7 @@ const VoiceCallPage = ({
         request.onsuccess = () => {
           const savedAvatar = request.result?.value;
           if (savedAvatar) {
-            const placeholder = document.querySelector(".vc-user-placeholder");
-            if (placeholder) {
-              placeholder.style.backgroundImage = `url(${savedAvatar})`;
-              placeholder.style.backgroundSize = "contain";
-              placeholder.style.backgroundPosition = "center";
-              placeholder.style.backgroundRepeat = "no-repeat";
-              placeholder.style.border = "none";
-            }
+            setAvatarUrl(savedAvatar);
           }
         };
       } catch (error) {
@@ -54460,6 +54455,33 @@ const VoiceCallPage = ({
     loadSavedAvatar();
   }, [characterName]);
 
+  const handleAvatarUpload = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const imageUrl = event.target.result;
+      setAvatarUrl(imageUrl);
+
+      try {
+        const db = await openDB();
+        const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = transaction.objectStore(STORES.USER_SETTINGS);
+        await store.put({
+          key: `voice_call_avatar_${characterName}`,
+          value: imageUrl,
+        });
+        console.log("语音通话头像保存成功");
+      } catch (error) {
+        console.error("保存头像到IndexedDB失败:", error);
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const fileInputRef = React.useRef(null);
+
   return (
     <div
       className="voice-call-overlay"
@@ -54468,207 +54490,285 @@ const VoiceCallPage = ({
         inset: 0,
         width: "100%",
         height: "100%",
-        backgroundColor: "#000000",
-        zIndex: 1200,
+        backgroundColor: "#0d0d0f",
+        backgroundImage: "radial-gradient(circle at 50% 30%, #1e1b18 0%, #0d0d0f 75%)",
+        zIndex: 1300,
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
-        justifyContent: "center",
+        justifyContent: "space-between",
+        padding: "calc(30px + var(--safe-top, 0px)) 24px calc(40px + var(--safe-bottom, 0px)) 24px",
+        boxSizing: "border-box",
         overflow: "hidden",
+        fontFamily: '"PingFang SC", "Noto Sans SC", sans-serif',
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <div className="vc-container">
-        {/* 顶部装饰弧线 */}
-        <svg className="vc-top-arc" viewBox="0 0 300 100">
-          <path
-            d="M20,80 Q150,20 280,80"
-            fill="none"
-            stroke="#6b5e4d"
-            strokeWidth="3"
-            strokeLinecap="round"
-          />
-          <path
-            d="M40,75 Q150,25 260,75"
-            fill="none"
-            stroke="#6b5e4d"
-            strokeWidth="1"
-            strokeDasharray="2,4"
-            opacity="0.5"
-          />
-        </svg>
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*,video/mp4,video/webm"
+        style={{ display: "none" }}
+        onChange={handleAvatarUpload}
+      />
 
-        {/* 中央虚线人像区 */}
-        <div
-          className="vc-user-placeholder"
-          style={{ cursor: "pointer" }}
-          onClick={() => {
-            // 创建文件输入框
-            const fileInput = document.createElement("input");
-            fileInput.type = "file";
-            fileInput.accept = "image/*,video/mp4,video/webm";
-            fileInput.style.display = "none";
-
-            // 处理文件选择
-            fileInput.onchange = async (e) => {
-              const file = e.target.files[0];
-              if (file) {
-                try {
-                  const reader = new FileReader();
-                  reader.onload = async (event) => {
-                    const imageUrl = event.target.result;
-
-                    // 保存到IndexedDB
-                    try {
-                      const db = await openDB();
-                      const transaction = db.transaction(
-                        STORES.USER_SETTINGS,
-                        "readwrite",
-                      );
-                      const store = transaction.objectStore(
-                        STORES.USER_SETTINGS,
-                      );
-                      await store.put({
-                        key: `voice_call_avatar_${characterName}`,
-                        value: imageUrl,
-                      });
-                      console.log("语音通话头像保存成功");
-
-                      // 创建预览
-                      const placeholder = document.querySelector(
-                        ".vc-user-placeholder",
-                      );
-                      if (placeholder) {
-                        placeholder.style.backgroundImage = `url(${imageUrl})`;
-                        placeholder.style.backgroundSize = "contain";
-                        placeholder.style.backgroundPosition = "center";
-                        placeholder.style.backgroundRepeat = "no-repeat";
-                        placeholder.style.border = "none";
-                      }
-                    } catch (error) {
-                      console.error("保存头像到IndexedDB失败:", error);
-                    }
-                  };
-                  reader.readAsDataURL(file);
-                } catch (error) {
-                  console.error("处理文件失败:", error);
-                }
-              }
-            };
-
-            document.body.appendChild(fileInput);
-            fileInput.click();
-            document.body.removeChild(fileInput);
-          }}
-        ></div>
-
-        {/* 核心操作区 */}
-        <div
-          className="vc-actions"
-          style={{
-            justifyContent: callType === "user" ? "center" : "space-between",
-          }}
-        >
-          {/* 拒绝/挂断/取消 */}
-          <div className="vc-btn-group">
-            <div
-              className="vc-circle-btn vc-btn-reject"
-              onClick={() => {
-                onBack();
-                if (onReject) onReject();
-              }}
-            >
-              <svg
-                width="40"
-                height="40"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="white"
-                strokeWidth="1.5"
-              >
-                <path d="M18 8L10 16" strokeLinecap="round" />
-                <path
-                  d="M6 10 C6 10 7 6 12 6 C17 6 18 10 18 10 L16 16 L8 16 Z"
-                  fill="rgba(255,255,255,0.2)"
-                />
-              </svg>
-            </div>
-            {/* 如果是用户拨打，只显示"取消"，否则显示"拒绝" */}
-            <span className="vc-btn-label">
-              {callType === "user" ? "取消" : "拒绝"}
-            </span>
-            {/* 挂载的小铃铛 */}
-            <div
-              className="vc-hanging-bell"
-              style={{ left: "40px", transformOrigin: "top right" }}
-            >
-              <svg viewBox="0 0 100 100">
-                <path d="M40,20 L60,80" stroke="#b0967a" strokeWidth="4" />
-                <circle cx="60" cy="80" r="10" fill="#b0967a" />
-              </svg>
-            </div>
-          </div>
-
-          {/* 接通 (仅在角色呼入时显示) */}
-          {callType !== "user" && (
-            <div className="vc-btn-group">
-              <div
-                className="vc-circle-btn vc-btn-accept"
-                onClick={() => {
-                  if (onAccept) onAccept();
-                }}
-              >
-                <svg
-                  width="40"
-                  height="40"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#4a5f4d"
-                  strokeWidth="1.5"
-                >
-                  <path
-                    d="M6 10 C6 10 7 6 12 6 C17 6 18 10 18 10 L16 16 L8 16 Z"
-                    fill="rgba(255,255,255,0.4)"
-                  />
-                  <circle cx="12" cy="11" r="1" fill="#4a5f4d" />
-                  <circle cx="12" cy="13" r="1" fill="#4a5f4d" />
-                  <circle cx="12" cy="15" r="1" fill="#4a5f4d" />
-                </svg>
-              </div>
-              <span className="vc-btn-label">接通</span>
-              {/* 挂载的小铃铛 */}
-              <div
-                className="vc-hanging-bell"
-                style={{ right: "40px", transformOrigin: "top left" }}
-              >
-                <svg viewBox="0 0 100 100">
-                  <path d="M60,20 L40,80" stroke="#b0967a" strokeWidth="4" />
-                  <circle cx="40" cy="80" r="10" fill="#b0967a" />
-                </svg>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* 顶部提示词 */}
+      {/* 顶部提示与装饰 */}
+      <div
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          width: "100%",
+          zIndex: 10,
+        }}
+      >
         <div
           style={{
-            position: "absolute",
-            top: "60px",
-            color: "rgba(255,255,255,0.4)",
-            fontSize: "14px",
+            color: "rgba(255, 255, 255, 0.7)",
+            fontSize: "15px",
             letterSpacing: "2px",
+            marginBottom: "8px",
+            fontFamily: '"STKaiti", "KaiTi", serif',
           }}
         >
           {callType === "user"
-            ? `你向 ${characterName} 发起心纸来电...`
-            : `${characterName} 发起心纸来电...`}
+            ? `你向 ${characterName || "对方"} 发起心纸来电...`
+            : `${characterName || "对方"} 发起心纸来电...`}
         </div>
+
+        {/* 顶部古风装饰弧线 */}
+        <svg
+          viewBox="0 0 300 60"
+          style={{ width: "240px", height: "48px", opacity: 0.7 }}
+        >
+          <path
+            d="M20,50 Q150,10 280,50"
+            fill="none"
+            stroke="#a89278"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+          />
+          <path
+            d="M40,46 Q150,16 260,46"
+            fill="none"
+            stroke="#a89278"
+            strokeWidth="1"
+            strokeDasharray="2,4"
+            opacity="0.6"
+          />
+        </svg>
+      </div>
+
+      {/* 中央人像卡片区域 */}
+      <div
+        onClick={() => fileInputRef.current && fileInputRef.current.click()}
+        style={{
+          width: "220px",
+          height: "360px",
+          borderRadius: "12px",
+          border: avatarUrl ? "1.5px solid rgba(168, 146, 120, 0.5)" : "2px dashed rgba(255, 255, 255, 0.35)",
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          cursor: "pointer",
+          backgroundImage: avatarUrl ? `url(${avatarUrl})` : "none",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundColor: avatarUrl ? "transparent" : "rgba(255, 255, 255, 0.03)",
+          boxShadow: avatarUrl ? "0 10px 30px rgba(0,0,0,0.5)" : "none",
+          transition: "all 0.3s ease",
+          position: "relative",
+          margin: "auto 0",
+        }}
+      >
+        {!avatarUrl && (
+          <div
+            style={{
+              color: "rgba(255, 255, 255, 0.35)",
+              fontSize: "13px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "8px",
+              userSelect: "none",
+            }}
+          >
+            <i className="ph ph-image-square" style={{ fontSize: "32px" }}></i>
+            <span>点击设置通话立绘</span>
+          </div>
+        )}
+      </div>
+
+      {/* 底部动作按钮栏 */}
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "320px",
+          display: "flex",
+          justifyContent: callType === "user" ? "center" : "space-between",
+          alignItems: "center",
+          zIndex: 10,
+        }}
+      >
+        {/* 拒绝 / 挂断 / 取消 */}
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            gap: "10px",
+            position: "relative",
+          }}
+        >
+          <div
+            className="vc-circle-btn"
+            style={{
+              width: "74px",
+              height: "74px",
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #f2a2a2 0%, #e88c8c 100%)",
+              border: "2.5px solid #fffdfa",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              boxShadow: "0 4px 20px rgba(232, 140, 140, 0.35)",
+              transition: "transform 0.2s",
+            }}
+            onClick={() => {
+              onBack();
+              if (onReject) onReject();
+            }}
+          >
+            <svg
+              width="36"
+              height="36"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="white"
+              strokeWidth="2"
+            >
+              <path d="M18 8L10 16" strokeLinecap="round" />
+              <path
+                d="M6 10 C6 10 7 6 12 6 C17 6 18 10 18 10 L16 16 L8 16 Z"
+                fill="rgba(255,255,255,0.25)"
+              />
+            </svg>
+          </div>
+          <span
+            style={{
+              color: "#fff",
+              fontSize: "15px",
+              fontWeight: 500,
+              letterSpacing: "2px",
+            }}
+          >
+            {callType === "user" ? "取消" : "拒绝"}
+          </span>
+
+          {/* 挂载小风铃 */}
+          <div
+            className="vc-hanging-bell"
+            style={{
+              position: "absolute",
+              width: "40px",
+              height: "40px",
+              top: "65px",
+              left: "-12px",
+              animation: "bellSwing 3s infinite ease-in-out",
+              pointerEvents: "none",
+            }}
+          >
+            <svg viewBox="0 0 100 100">
+              <path d="M40,20 L60,80" stroke="#b0967a" strokeWidth="4" />
+              <circle cx="60" cy="80" r="10" fill="#b0967a" />
+            </svg>
+          </div>
+        </div>
+
+        {/* 接通 (仅在角色呼入时显示) */}
+        {callType !== "user" && (
+          <div
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "10px",
+              position: "relative",
+            }}
+          >
+            <div
+              className="vc-circle-btn"
+              style={{
+                width: "74px",
+                height: "74px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #c9e8d5 0%, #a8d8b8 100%)",
+                border: "2.5px solid #fffdfa",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                boxShadow: "0 4px 20px rgba(168, 216, 184, 0.35)",
+                transition: "transform 0.2s",
+              }}
+              onClick={() => {
+                if (onAccept) onAccept();
+              }}
+            >
+              <svg
+                width="36"
+                height="36"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="#3e5241"
+                strokeWidth="2"
+              >
+                <path
+                  d="M6 10 C6 10 7 6 12 6 C17 6 18 10 18 10 L16 16 L8 16 Z"
+                  fill="rgba(255,255,255,0.4)"
+                />
+                <circle cx="12" cy="11" r="1.5" fill="#3e5241" />
+                <circle cx="12" cy="13.5" r="1.5" fill="#3e5241" />
+                <circle cx="12" cy="16" r="1.5" fill="#3e5241" />
+              </svg>
+            </div>
+            <span
+              style={{
+                color: "#fff",
+                fontSize: "15px",
+                fontWeight: 500,
+                letterSpacing: "2px",
+              }}
+            >
+              接通
+            </span>
+
+            {/* 挂载小风铃 */}
+            <div
+              className="vc-hanging-bell"
+              style={{
+                position: "absolute",
+                width: "40px",
+                height: "40px",
+                top: "65px",
+                right: "-12px",
+                animation: "bellSwing 3s infinite ease-in-out",
+                pointerEvents: "none",
+              }}
+            >
+              <svg viewBox="0 0 100 100">
+                <path d="M60,20 L40,80" stroke="#b0967a" strokeWidth="4" />
+                <circle cx="40" cy="80" r="10" fill="#b0967a" />
+              </svg>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
 };
-
 // ==================== [修改开始] T8ChatDetail 组件 ====================
 // T8 聊天详情页组件 (包含高级设置、心声功能、及新增的表情包功能)
 // ==================== [新增] 可折叠同行记录卡片 ====================
