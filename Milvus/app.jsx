@@ -29907,34 +29907,34 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
 
       {/* 请假申请弹窗 */}
       {showLeaveModal && (
-        <div className="t11-modal-overlay">
-          <div className="t11-modal-content">
-            <div className="t11-modal-header">
-              <div className="t11-modal-title">请假申请</div>
+        <div className="t11-modal-mask">
+          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>请假申请</div>
               <div
-                className="t11-modal-close"
+                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
                 onClick={() => setShowLeaveModal(false)}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
             <div
-              className="t11-modal-body no-scrollbar"
+              className="no-scrollbar"
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentLeaveRequests.map((req) => (
-                <div key={req.id} className="t11-req-card">
-                  <div className="t11-req-char">{req.char}</div>
-                  <div className="t11-req-desc">{req.desc}</div>
-                  <div className="t11-req-actions">
+                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
+                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
+                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
                     <button
-                      className="t11-req-btn reject"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleLeaveAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      className="t11-req-btn approve"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleLeaveAction(req.id, "approve")}
                     >
                       准了
@@ -29949,34 +29949,34 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
 
       {/* 经费申请弹窗 */}
       {showFundModal && (
-        <div className="t11-modal-overlay">
-          <div className="t11-modal-content">
-            <div className="t11-modal-header">
-              <div className="t11-modal-title">经费申请</div>
+        <div className="t11-modal-mask">
+          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>经费申请</div>
               <div
-                className="t11-modal-close"
+                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
                 onClick={() => setShowFundModal(false)}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
             <div
-              className="t11-modal-body no-scrollbar"
+              className="no-scrollbar"
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentFundRequests.map((req) => (
-                <div key={req.id} className="t11-req-card">
-                  <div className="t11-req-char">{req.char}</div>
-                  <div className="t11-req-desc">{req.desc}</div>
-                  <div className="t11-req-actions">
+                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
+                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
+                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
                     <button
-                      className="t11-req-btn reject"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleFundAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      className="t11-req-btn approve"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleFundAction(req.id, "approve")}
                     >
                       准了
@@ -29991,34 +29991,34 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
 
       {/* 外出申请弹窗 */}
       {showOutingModal && (
-        <div className="t11-modal-overlay">
-          <div className="t11-modal-content">
-            <div className="t11-modal-header">
-              <div className="t11-modal-title">外出申请</div>
+        <div className="t11-modal-mask">
+          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>外出申请</div>
               <div
-                className="t11-modal-close"
+                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
                 onClick={() => setShowOutingModal(false)}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
             <div
-              className="t11-modal-body no-scrollbar"
+              className="no-scrollbar"
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentOutingRequests.map((req) => (
-                <div key={req.id} className="t11-req-card">
-                  <div className="t11-req-char">{req.char}</div>
-                  <div className="t11-req-desc">{req.desc}</div>
-                  <div className="t11-req-actions">
+                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
+                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
+                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
                     <button
-                      className="t11-req-btn reject"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleOutingAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      className="t11-req-btn approve"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleOutingAction(req.id, "approve")}
                     >
                       准了
@@ -30033,34 +30033,34 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
 
       {/* 费用报销弹窗 */}
       {showExpenseModal && (
-        <div className="t11-modal-overlay">
-          <div className="t11-modal-content">
-            <div className="t11-modal-header">
-              <div className="t11-modal-title">费用报销</div>
+        <div className="t11-modal-mask">
+          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>费用报销</div>
               <div
-                className="t11-modal-close"
+                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
                 onClick={() => setShowExpenseModal(false)}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
             <div
-              className="t11-modal-body no-scrollbar"
+              className="no-scrollbar"
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentExpenseRequests.map((req) => (
-                <div key={req.id} className="t11-req-card">
-                  <div className="t11-req-char">{req.char}</div>
-                  <div className="t11-req-desc">{req.desc}</div>
-                  <div className="t11-req-actions">
+                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
+                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
+                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
                     <button
-                      className="t11-req-btn reject"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleExpenseAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      className="t11-req-btn approve"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleExpenseAction(req.id, "approve")}
                     >
                       准了
@@ -30075,34 +30075,34 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
 
       {/* 采购申请弹窗 */}
       {showPurchaseModal && (
-        <div className="t11-modal-overlay">
-          <div className="t11-modal-content">
-            <div className="t11-modal-header">
-              <div className="t11-modal-title">采购申请</div>
+        <div className="t11-modal-mask">
+          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>采购申请</div>
               <div
-                className="t11-modal-close"
+                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
                 onClick={() => setShowPurchaseModal(false)}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
             <div
-              className="t11-modal-body no-scrollbar"
+              className="no-scrollbar"
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentPurchaseRequests.map((req) => (
-                <div key={req.id} className="t11-req-card">
-                  <div className="t11-req-char">{req.char}</div>
-                  <div className="t11-req-desc">{req.desc}</div>
-                  <div className="t11-req-actions">
+                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
+                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
+                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
                     <button
-                      className="t11-req-btn reject"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handlePurchaseAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      className="t11-req-btn approve"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handlePurchaseAction(req.id, "approve")}
                     >
                       准了
@@ -30117,34 +30117,34 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
 
       {/* 入职申请弹窗 */}
       {showHireModal && (
-        <div className="t11-modal-overlay">
-          <div className="t11-modal-content">
-            <div className="t11-modal-header">
-              <div className="t11-modal-title">入职申请</div>
+        <div className="t11-modal-mask">
+          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>入职申请</div>
               <div
-                className="t11-modal-close"
+                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
                 onClick={() => setShowHireModal(false)}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
             <div
-              className="t11-modal-body no-scrollbar"
+              className="no-scrollbar"
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentHireRequests.map((req) => (
-                <div key={req.id} className="t11-req-card">
-                  <div className="t11-req-char">{req.char}</div>
-                  <div className="t11-req-desc">{req.desc}</div>
-                  <div className="t11-req-actions">
+                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
+                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
+                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
                     <button
-                      className="t11-req-btn reject"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleHireAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      className="t11-req-btn approve"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleHireAction(req.id, "approve")}
                     >
                       准了
@@ -30159,34 +30159,34 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
 
       {/* 物品领用弹窗 */}
       {showItemModal && (
-        <div className="t11-modal-overlay">
-          <div className="t11-modal-content">
-            <div className="t11-modal-header">
-              <div className="t11-modal-title">物品领用</div>
+        <div className="t11-modal-mask">
+          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>物品领用</div>
               <div
-                className="t11-modal-close"
+                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
                 onClick={() => setShowItemModal(false)}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
             <div
-              className="t11-modal-body no-scrollbar"
+              className="no-scrollbar"
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentItemRequests.map((req) => (
-                <div key={req.id} className="t11-req-card">
-                  <div className="t11-req-char">{req.char}</div>
-                  <div className="t11-req-desc">{req.desc}</div>
-                  <div className="t11-req-actions">
+                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
+                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
+                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
                     <button
-                      className="t11-req-btn reject"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleItemAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      className="t11-req-btn approve"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleItemAction(req.id, "approve")}
                     >
                       准了
@@ -30201,34 +30201,34 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
 
       {/* 培训申请弹窗 */}
       {showTrainingModal && (
-        <div className="t11-modal-overlay">
-          <div className="t11-modal-content">
-            <div className="t11-modal-header">
-              <div className="t11-modal-title">培训申请</div>
+        <div className="t11-modal-mask">
+          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
+              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>培训申请</div>
               <div
-                className="t11-modal-close"
+                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
                 onClick={() => setShowTrainingModal(false)}
               >
                 <i className="ph ph-x"></i>
               </div>
             </div>
             <div
-              className="t11-modal-body no-scrollbar"
+              className="no-scrollbar"
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentTrainingRequests.map((req) => (
-                <div key={req.id} className="t11-req-card">
-                  <div className="t11-req-char">{req.char}</div>
-                  <div className="t11-req-desc">{req.desc}</div>
-                  <div className="t11-req-actions">
+                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
+                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
+                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
+                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
                     <button
-                      className="t11-req-btn reject"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleTrainingAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      className="t11-req-btn approve"
+                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
                       onClick={() => handleTrainingAction(req.id, "approve")}
                     >
                       准了
