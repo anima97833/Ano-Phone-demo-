@@ -36202,7 +36202,7 @@ const T9Icons = {
   ),
 };
 
-// T9 顶部头像区 (支持伴侣数据全隔离)
+// ==================== T9 顶部头像区 (支持伴侣数据全隔离) ====================
 const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaCharacter } = {}) => {
   const { useState, useEffect } = React;
   const [days, setDays] = useState(1);
@@ -36897,10 +36897,17 @@ const T9Page = () => {
   const [isGuessGenerating, setIsGuessGenerating] = useState(false);
   const [showScoreBoard, setShowScoreBoard] = useState(false);
 
-  // 5. 愿望清单功能状态
+  // 5. 愿望清单功能状态 (参考共同记账布局与双重视角)
   const [showWishlistModal, setShowWishlistModal] = useState(false);
+  const [wishlistViewTab, setWishlistViewTab] = useState("all"); // "all", "user", "ta"
   const [wishlist, setWishlist] = useState([]);
-  const [newWishInput, setNewWishInput] = useState("");
+  const [showAddWishModal, setShowAddWishModal] = useState(false);
+  const [newWish, setNewWish] = useState({
+    title: "",
+    category: "浪漫出游",
+    targetDate: "",
+    creator: "user", // "user" 或 "ta"
+  });
   const [isGeneratingWish, setIsGeneratingWish] = useState(false);
 
   // ================== 初始化伴侣 TA 角色 ==================
@@ -36945,6 +36952,41 @@ const T9Page = () => {
       }
     }
   }, []);
+
+  // 读取与该密探在传讯中的聊天记录辅助函数
+  const getMessagingChatHistory = async (characterName, characterId) => {
+    try {
+      if (window.settingsStore?.getXiuyiChatHistory) {
+        const hist = await window.settingsStore.getXiuyiChatHistory(characterName);
+        if (hist && hist.length > 0) {
+          return hist
+            .slice(-20)
+            .map((m) => `${m.sender || (m.isMe ? "用户" : characterName)}: ${m.text || m.content}`)
+            .join("\n");
+        }
+      }
+      if (window.chatHistoryStore?.getRecentMessages && characterId) {
+        const hist = await window.chatHistoryStore.getRecentMessages(characterId, 20);
+        if (hist && hist.length > 0) {
+          return hist.map((m) => `${m.isMe ? "用户" : characterName}: ${m.text || m.content}`).join("\n");
+        }
+      }
+      const localKey = `t8_chat_history_${characterId}` || `t8_messages_${characterId}`;
+      const saved = localStorage.getItem(localKey);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          return parsed
+            .slice(-20)
+            .map((m) => `${m.isMe ? "用户" : characterName}: ${m.text || m.content}`)
+            .join("\n");
+        }
+      }
+    } catch (e) {
+      console.warn("读取传讯聊天历史异常:", e);
+    }
+    return "";
+  };
 
   // ================== 核心：所有子功能数据在伴侣 taCharacter 切换时全面隔离重载 ==================
 
@@ -37065,14 +37107,28 @@ const T9Page = () => {
         setWishlist(JSON.parse(savedWishes));
       } else {
         setWishlist([
-          { id: 1, text: `与 ${taCharacter.name} 一起去洛阳城楼看上元灯会`, done: false, date: "待完成" },
-          { id: 2, text: `让 ${taCharacter.name} 亲手煮一壶蒙顶甘露`, done: false, date: "待完成" }
+          {
+            id: 1,
+            title: `与 ${taCharacter.name} 一起去洛阳城楼看上元灯会`,
+            category: "浪漫出游",
+            creator: "user",
+            done: false,
+            date: new Date().toISOString().split("T")[0],
+          },
+          {
+            id: 2,
+            title: `让 ${taCharacter.name} 亲手煮一壶蒙顶甘露`,
+            category: "闲暇品茗",
+            creator: "ta",
+            done: false,
+            date: new Date().toISOString().split("T")[0],
+          },
         ]);
       }
     }
   }, [taCharacter?.id]);
 
-  // 愿望清单保存
+  // 愿望清单保存 (按伴侣 ID)
   useEffect(() => {
     if (taCharacter?.id && wishlist.length > 0) {
       localStorage.setItem(`t9_wishlist_${taCharacter.id}`, JSON.stringify(wishlist));
@@ -37508,17 +37564,28 @@ const T9Page = () => {
     });
   };
 
-  // ================== 愿望清单功能逻辑 ==================
-  const handleAddWish = () => {
-    if (!newWishInput.trim()) return;
-    const newWish = {
+  // ================== 愿望清单功能逻辑 (参考共同记账布局与全维度AI深度联动) ==================
+  const handleSaveWish = () => {
+    if (!newWish.title.trim()) {
+      alert("请填写愿望内容！");
+      return;
+    }
+    const item = {
       id: Date.now(),
-      text: newWishInput.trim(),
+      title: newWish.title.trim(),
+      category: newWish.category || "心之所向",
+      creator: newWish.creator || "user",
       done: false,
-      date: new Date().toLocaleDateString(),
+      date: newWish.targetDate || new Date().toISOString().split("T")[0],
     };
-    setWishlist((prev) => [newWish, ...prev]);
-    setNewWishInput("");
+    setWishlist((prev) => [item, ...prev]);
+    setShowAddWishModal(false);
+    setNewWish({
+      title: "",
+      category: "浪漫出游",
+      targetDate: "",
+      creator: "user",
+    });
   };
 
   const handleToggleWish = (id) => {
@@ -37531,38 +37598,132 @@ const T9Page = () => {
     setWishlist((prev) => prev.filter((w) => w.id !== id));
   };
 
-  const handleGenerateAiWish = async () => {
+  // AI 深度读取世界书、用户面具、传讯聊天记录、角色人设，一次生成 3 条以上愿望
+  const handleGenerateAiWishes = async () => {
+    setWishlistViewTab("ta");
     if (!taCharacter || isGeneratingWish) return;
     setIsGeneratingWish(true);
+
     try {
-      const sysPrompt = "你是一个深情而具有独特人设的古代角色。";
+      // 1. 世界书设定
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
+
+      // 2. 用户身份设定
+      let userContext = "";
+      if (mePersona) {
+        userContext = `【用户身份】姓名:${mePersona.name}, 性格:${mePersona.personality || "未知"}, 背景:${mePersona.background || mePersona.description || "绣衣楼楼主"}`;
+      }
+
+      // 3. 传讯真实近期聊天记录 (20轮)
+      const chatHistory = await getMessagingChatHistory(taCharacter.name, taCharacter.id);
+
+      // 4. 角色配置库设定
+      let biosMap = {};
+      try {
+        if (window.settingsStore?.getCharacterNotes) {
+          biosMap = (await window.settingsStore.getCharacterNotes()) || {};
+        }
+      } catch (e) {}
+      const charProfile = taCharacter.profile?.personality || biosMap[taCharacter.name] || taCharacter.profile || "";
+      const charContext = `【角色设定】\n姓名:${taCharacter.name}\n人设口吻与背景:${typeof charProfile === "string" ? charProfile : JSON.stringify(charProfile)}`;
+
+      const sysPrompt = "你是一个沉浸式古风角色扮演AI兼情侣心愿构想官。";
       const userPrompt = `
-        【你的角色】姓名：${taCharacter.name}，性格：${taCharacter.profile?.personality}
-        请为你和楼主（用户）构想一个符合你性格与心意的浪漫或日常愿望（例如：一起夜游、共赏初雪、微服出巡等）。
-        一句话概括，不要任何前缀。
-      `;
+${worldContext ? `【世界书设定】\n${worldContext}\n` : ""}
+${userContext ? `${userContext}\n` : ""}
+${charContext}
+${chatHistory ? `【你与用户在传讯中的近期聊天记录】\n${chatHistory}\n` : ""}
+
+【任务】
+请完全以【${taCharacter.name}】的第一人称口吻与性格习惯，构思你想与用户（楼主）共同完成的【3 到 5 条浪漫/日常/契合心意的愿望】。
+要求：
+1. 深度结合你们在传讯中聊过的话题、你的性格喜好以及东汉古风背景（例如：某次聊到的点心、想一同探查的某处密境、想为对方做的某件贴心小事、私下立下的约定）。
+2. 用【${taCharacter.name}】极具辨识度的语气来描述每个愿望（可以傲娇、温润、霸气或深情）。
+3. 必须严格返回纯 JSON 数组格式（不要包裹任何 \`\`\`json 标记，直接以 [ 开头，] 结尾）。
+
+JSON 格式示例：
+[
+  {
+    "title": "等下个月发了俸禄，本官勉为其难陪你去一趟西市买那对你看中许久的青玉步摇。",
+    "category": "市井闲游",
+    "date": "约定今秋"
+  },
+  {
+    "title": "在广陵夜巡归来后，你必须按时歇息，由我亲自为你煮一碗安神羹。",
+    "category": "贴心相照",
+    "date": "随时履行"
+  },
+  {
+    "title": "待战局稍定，随我回一次隐楼别院，带你看那满山盛放的红叶。",
+    "category": "微服游历",
+    "date": "天下安定时"
+  }
+]
+`;
+
       if (window.sendToLLM) {
         window.sendToLLM(
           [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
           null,
           (reply) => {
-            const cleanWish = reply.replace(/[“"”]/g, "").trim();
-            if (cleanWish) {
-              setWishlist((prev) => [
-                { id: Date.now(), text: cleanWish, done: false, date: "TA的心愿" },
-                ...prev,
-              ]);
+            try {
+              const cleanJson = reply.replace(/```json|```/g, "").trim();
+              const parsed = JSON.parse(cleanJson);
+              if (Array.isArray(parsed) && parsed.length >= 3) {
+                const formattedWishes = parsed.map((item, idx) => ({
+                  id: Date.now() + idx,
+                  title: item.title,
+                  category: item.category || "心之所向",
+                  creator: "ta",
+                  done: false,
+                  date: item.date || new Date().toISOString().split("T")[0],
+                }));
+                // 追加到愿望清单顶部
+                setWishlist((prev) => [...formattedWishes, ...prev]);
+              } else if (Array.isArray(parsed) && parsed.length > 0) {
+                const formattedWishes = parsed.map((item, idx) => ({
+                  id: Date.now() + idx,
+                  title: item.title,
+                  category: item.category || "心之所向",
+                  creator: "ta",
+                  done: false,
+                  date: item.date || new Date().toISOString().split("T")[0],
+                }));
+                setWishlist((prev) => [...formattedWishes, ...prev]);
+              }
+            } catch (e) {
+              console.error("解析愿望失败:", e, reply);
+              alert("TA 的心愿信笺被风吹乱了，请重新触发！");
+            } finally {
+              setIsGeneratingWish(false);
             }
+          },
+          (err) => {
+            console.error(err);
+            alert("网络连接受阻，请检查 API 配置。");
             setIsGeneratingWish(false);
           },
-          () => setIsGeneratingWish(false),
         );
+      } else {
+        alert("未配置 API！");
+        setIsGeneratingWish(false);
       }
     } catch (e) {
       console.error(e);
       setIsGeneratingWish(false);
     }
   };
+
+  // 愿望过滤与统计
+  const filteredWishes = wishlist.filter((w) => {
+    if (wishlistViewTab === "user") return w.creator === "user";
+    if (wishlistViewTab === "ta") return w.creator === "ta";
+    return true;
+  });
+
+  const totalWishesCount = wishlist.length;
+  const completedWishesCount = wishlist.filter((w) => w.done).length;
+  const pendingWishesCount = totalWishesCount - completedWishesCount;
 
   const features = [
     { title: "与你相伴", icon: "heart-straight", colorClass: "bg-morandi-1" },
@@ -39505,19 +39666,12 @@ const T9Page = () => {
         </>
       )}
 
-      {/* ================== 愿望清单弹窗 ================== */}
+      {/* ================== 愿望清单弹窗 (参考共同记账布局风格，双视角与深度AI联动) ================== */}
       {showWishlistModal && (
         <>
           <div
             className="t9-companion-mask"
             onClick={() => setShowWishlistModal(false)}
-            style={{
-              position: "fixed",
-              inset: 0,
-              background: "rgba(0,0,0,0.5)",
-              zIndex: 1000,
-              backdropFilter: "blur(2px)",
-            }}
           ></div>
           <div
             className="t9-companion-modal no-scrollbar"
@@ -39526,15 +39680,18 @@ const T9Page = () => {
               bottom: 0,
               left: 0,
               right: 0,
+              height: "85vh",
               maxHeight: "85vh",
-              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
               borderTopLeftRadius: "24px",
               borderTopRightRadius: "24px",
-              padding: "24px",
+              padding: "20px 20px 16px",
               zIndex: 1001,
               boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
               animation: "slideUp 0.3s ease-out",
-              background: "#FDFCF8",
+              background: "#F7EFE8",
+              overflow: "hidden",
             }}
           >
             <div
@@ -39542,7 +39699,8 @@ const T9Page = () => {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "16px",
+                marginBottom: "12px",
+                flexShrink: 0,
               }}
             >
               <h2
@@ -39556,8 +39714,8 @@ const T9Page = () => {
                   margin: 0,
                 }}
               >
-                <i className="ph-fill ph-star" style={{ color: "#E8C3A8" }}></i>
-                与 {taCharacter?.name} 的愿望清单 ({wishlist.length}条)
+                <i className="ph-fill ph-star" style={{ color: "#E8A37E" }}></i>
+                愿望清单 ({taCharacter?.name || "TA"})
               </h2>
               <button
                 onClick={() => setShowWishlistModal(false)}
@@ -39567,154 +39725,541 @@ const T9Page = () => {
                   fontSize: "24px",
                   color: "#999",
                   cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                 }}
               >
                 ×
               </button>
             </div>
 
-            {/* 新增愿望输入栏 */}
-            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
-              <input
-                type="text"
-                value={newWishInput}
-                onChange={(e) => setNewWishInput(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleAddWish()}
-                placeholder={`写下想与 ${taCharacter?.name} 一起做的事...`}
-                style={{
-                  flex: 1,
-                  padding: "10px 14px",
-                  borderRadius: "14px",
-                  border: "1px solid #EAE6D6",
-                  background: "#F9F7F5",
-                  fontSize: "13.5px",
-                  outline: "none",
-                }}
-              />
+            {/* 左右切换导航栏 (全部 / 我的愿望 / TA的愿望) */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "8px",
+                marginBottom: "12px",
+                background: "rgba(255, 255, 255, 0.65)",
+                padding: "4px 6px",
+                borderRadius: "18px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                flexShrink: 0,
+              }}
+            >
               <button
-                onClick={handleAddWish}
-                disabled={!newWishInput.trim()}
+                onClick={() => setWishlistViewTab(wishlistViewTab === "ta" ? "all" : "user")}
                 style={{
-                  padding: "10px 16px",
-                  borderRadius: "14px",
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "50%",
                   border: "none",
-                  background: newWishInput.trim() ? "#8FA99D" : "#CCC",
-                  color: "#FFF",
+                  background: "#FFF",
+                  color: "#D6724B",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
                   fontWeight: "bold",
-                  fontSize: "13px",
-                  cursor: newWishInput.trim() ? "pointer" : "default",
                 }}
+                title="切换视角"
               >
-                许愿
+                <i className="ph ph-caret-left" style={{ fontSize: "16px" }}></i>
+              </button>
+
+              <div style={{ display: "flex", gap: "6px", flex: 1 }}>
+                <button
+                  onClick={() => setWishlistViewTab("all")}
+                  style={{
+                    flex: 1,
+                    padding: "7px 6px",
+                    borderRadius: "14px",
+                    border: "none",
+                    background: wishlistViewTab === "all" ? "#D6724B" : "transparent",
+                    color: wishlistViewTab === "all" ? "#FFF" : "#8c917b",
+                    fontWeight: "bold",
+                    fontSize: "12.5px",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "3px",
+                    boxShadow: wishlistViewTab === "all" ? "0 3px 10px rgba(214,114,75,0.3)" : "none",
+                  }}
+                >
+                  <i className="ph-fill ph-sparkle"></i> 全部
+                </button>
+                <button
+                  onClick={() => setWishlistViewTab("user")}
+                  style={{
+                    flex: 1,
+                    padding: "7px 6px",
+                    borderRadius: "14px",
+                    border: "none",
+                    background: wishlistViewTab === "user" ? "#D6724B" : "transparent",
+                    color: wishlistViewTab === "user" ? "#FFF" : "#8c917b",
+                    fontWeight: "bold",
+                    fontSize: "12.5px",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "3px",
+                    boxShadow: wishlistViewTab === "user" ? "0 3px 10px rgba(214,114,75,0.3)" : "none",
+                  }}
+                >
+                  <i className="ph-fill ph-user"></i> 我的愿望
+                </button>
+                <button
+                  onClick={() => setWishlistViewTab("ta")}
+                  style={{
+                    flex: 1.1,
+                    padding: "7px 6px",
+                    borderRadius: "14px",
+                    border: "none",
+                    background: wishlistViewTab === "ta" ? "#8FA99D" : "transparent",
+                    color: wishlistViewTab === "ta" ? "#FFF" : "#8c917b",
+                    fontWeight: "bold",
+                    fontSize: "12.5px",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    gap: "3px",
+                    boxShadow: wishlistViewTab === "ta" ? "0 3px 10px rgba(143,169,157,0.3)" : "none",
+                  }}
+                >
+                  <i className="ph-fill ph-heart"></i> {taCharacter?.name || "TA"}的愿望
+                </button>
+              </div>
+
+              <button
+                onClick={() => setWishlistViewTab(wishlistViewTab === "all" ? "ta" : "user")}
+                style={{
+                  width: "30px",
+                  height: "30px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background: "#FFF",
+                  color: "#8FA99D",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontWeight: "bold",
+                }}
+                title="切换视角"
+              >
+                <i className="ph ph-caret-right" style={{ fontSize: "16px" }}></i>
               </button>
             </div>
 
-            {/* AI 灵感生成按钮 */}
-            <button
-              onClick={handleGenerateAiWish}
-              disabled={isGeneratingWish}
+            {/* 白底卡片容器 */}
+            <div
               style={{
-                width: "100%",
-                padding: "10px",
-                borderRadius: "14px",
-                border: "1px dashed #E8C3A8",
-                background: "#FFF9F5",
-                color: "#D6724B",
-                fontSize: "13px",
-                fontWeight: "bold",
-                cursor: isGeneratingWish ? "not-allowed" : "pointer",
-                marginBottom: "16px",
+                flex: 1,
+                minHeight: 0,
                 display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                gap: "6px",
+                flexDirection: "column",
+                background: "#FFF",
+                borderRadius: "20px",
+                padding: "16px",
+                boxShadow: "0 4px 16px rgba(0,0,0,0.06)",
+                border: "1px solid rgba(255,255,255,0.8)",
+                overflow: "hidden",
               }}
             >
-              <i className={isGeneratingWish ? "ph ph-spinner animate-spin" : "ph-fill ph-sparkle"}></i>
-              {isGeneratingWish ? "正在倾听TA的心愿..." : `让 ${taCharacter?.name} 提一个心愿`}
-            </button>
-
-            {/* 愿望列表 */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "300px", overflowY: "auto" }}>
-              {wishlist.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "30px", color: "#BBB", fontSize: "13px" }}>
-                  暂无愿望，快写下你们的第一个浪漫约定吧～
+              {/* 顶部统计小卡片 */}
+              <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexShrink: 0 }}>
+                <div
+                  style={{
+                    flex: 1,
+                    background: "#FDF0E6",
+                    borderRadius: "12px",
+                    padding: "8px 10px",
+                    textAlign: "center",
+                    border: "1px solid rgba(214,114,75,0.15)",
+                  }}
+                >
+                  <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>🌸 待完成心愿</div>
+                  <div style={{ fontSize: "17px", fontWeight: "bold", color: "#D6724B" }}>{pendingWishesCount} 件</div>
                 </div>
-              ) : (
-                wishlist.map((wish) => (
+                <div
+                  style={{
+                    flex: 1,
+                    background: "#E8F1ED",
+                    borderRadius: "12px",
+                    padding: "8px 10px",
+                    textAlign: "center",
+                    border: "1px solid rgba(90,143,109,0.15)",
+                  }}
+                >
+                  <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>✨ 已实现圆满</div>
+                  <div style={{ fontSize: "17px", fontWeight: "bold", color: "#5A8F6D" }}>{completedWishesCount} 件</div>
+                </div>
+              </div>
+
+              {/* 愿望列表 (内部平滑滚动) */}
+              <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "4px" }}>
+                {filteredWishes.length === 0 ? (
                   <div
-                    key={wish.id}
                     style={{
-                      background: wish.done ? "#F2F7F4" : "#FFFFFF",
-                      borderRadius: "14px",
-                      padding: "12px 14px",
-                      border: wish.done ? "1px solid #A8C8BA" : "1px solid #EAE6D6",
+                      textAlign: "center",
+                      color: "#bbb",
+                      fontSize: "13px",
+                      padding: "40px 0",
                       display: "flex",
+                      flexDirection: "column",
                       alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "10px",
+                      gap: "8px",
                     }}
                   >
+                    <i className="ph ph-sparkle" style={{ fontSize: "36px", color: "#ddd" }}></i>
+                    {isGeneratingWish
+                      ? `正在结合传讯回忆聆听 ${taCharacter?.name || "TA"} 的心愿...`
+                      : "暂无此类愿望记录，点击下方许愿或让 TA 提愿望吧～"}
+                  </div>
+                ) : (
+                  filteredWishes.map((wish) => (
                     <div
-                      onClick={() => handleToggleWish(wish.id)}
+                      key={wish.id}
                       style={{
+                        background: wish.done ? "#F9FAF8" : "#FFFFFF",
+                        borderRadius: "14px",
+                        padding: "12px 10px",
+                        borderBottom: "1px solid #F0ECE6",
                         display: "flex",
-                        alignItems: "center",
+                        alignItems: "flex-start",
+                        justifyContent: "space-between",
                         gap: "10px",
-                        flex: 1,
-                        cursor: "pointer",
                       }}
                     >
                       <div
+                        onClick={() => handleToggleWish(wish.id)}
                         style={{
-                          width: "22px",
-                          height: "22px",
-                          borderRadius: "50%",
-                          border: wish.done ? "none" : "2px solid #C4B7A6",
-                          background: wish.done ? "#5A8F6D" : "transparent",
                           display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#FFF",
-                          fontSize: "12px",
-                          flexShrink: 0,
+                          alignItems: "flex-start",
+                          gap: "10px",
+                          flex: 1,
+                          cursor: "pointer",
                         }}
                       >
-                        {wish.done && <i className="ph-bold ph-check"></i>}
-                      </div>
-                      <div>
                         <div
                           style={{
-                            fontSize: "13.5px",
-                            fontWeight: "600",
-                            color: wish.done ? "#8FA99D" : "#5a5f4d",
-                            textDecoration: wish.done ? "line-through" : "none",
+                            width: "22px",
+                            height: "22px",
+                            borderRadius: "50%",
+                            border: wish.done ? "none" : "2px solid #C4B7A6",
+                            background: wish.done ? "#5A8F6D" : "transparent",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#FFF",
+                            fontSize: "12px",
+                            flexShrink: 0,
+                            marginTop: "2px",
                           }}
                         >
-                          {wish.text}
+                          {wish.done && <i className="ph-bold ph-check"></i>}
                         </div>
-                        <div style={{ fontSize: "11px", color: "#AAA", marginTop: "2px" }}>
-                          {wish.date}
+                        <div style={{ flex: 1 }}>
+                          <div
+                            style={{
+                              fontSize: "13.5px",
+                              fontWeight: "600",
+                              color: wish.done ? "#8FA99D" : "#4A453E",
+                              textDecoration: wish.done ? "line-through" : "none",
+                              lineHeight: "1.5",
+                            }}
+                          >
+                            {wish.title}
+                          </div>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", marginTop: "4px" }}>
+                            <span
+                              style={{
+                                fontSize: "10.5px",
+                                background: wish.creator === "ta" ? "#E8F1ED" : "#FDF0E6",
+                                color: wish.creator === "ta" ? "#5A8F6D" : "#D6724B",
+                                padding: "2px 6px",
+                                borderRadius: "6px",
+                                fontWeight: "700",
+                              }}
+                            >
+                              {wish.creator === "ta" ? `${taCharacter?.name || "TA"}的心愿` : "我的心愿"}
+                            </span>
+                            <span style={{ fontSize: "11px", color: "#AAA" }}>
+                              {wish.category} · {wish.date}
+                            </span>
+                          </div>
                         </div>
                       </div>
-                    </div>
 
-                    <button
-                      onClick={() => handleDeleteWish(wish.id)}
-                      style={{
-                        background: "none",
-                        border: "none",
-                        color: "#CCC",
-                        fontSize: "16px",
-                        cursor: "pointer",
-                        padding: "4px",
-                      }}
-                    >
-                      <i className="ph ph-trash"></i>
-                    </button>
-                  </div>
-                ))
-              )}
+                      <button
+                        onClick={() => handleDeleteWish(wish.id)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#CCC",
+                          fontSize: "16px",
+                          cursor: "pointer",
+                          padding: "4px",
+                        }}
+                      >
+                        <i className="ph ph-trash"></i>
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+
+            {/* 底部固定操作按钮 (参考共同记账并排大按钮) */}
+            <div style={{ display: "flex", gap: "12px", marginTop: "14px", flexShrink: 0 }}>
+              <button
+                onClick={() => setShowAddWishModal(true)}
+                style={{
+                  flex: 1,
+                  padding: "13px",
+                  borderRadius: "16px",
+                  background: "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
+                  color: "white",
+                  fontSize: "15px",
+                  fontWeight: "bold",
+                  border: "none",
+                  boxShadow: "0 4px 12px rgba(214,114,75,0.3)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                }}
+                className="active-press"
+              >
+                <i className="ph-fill ph-plus-circle" style={{ fontSize: "18px" }}></i>
+                许一个愿
+              </button>
+              <button
+                onClick={handleGenerateAiWishes}
+                disabled={isGeneratingWish}
+                style={{
+                  flex: 1.2,
+                  padding: "13px",
+                  borderRadius: "16px",
+                  background: isGeneratingWish
+                    ? "#ccc"
+                    : "linear-gradient(135deg, #8FA99D 0%, #769689 100%)",
+                  color: "white",
+                  fontSize: "14.5px",
+                  fontWeight: "bold",
+                  border: "none",
+                  boxShadow: isGeneratingWish
+                    ? "none"
+                    : "0 4px 12px rgba(143,169,157,0.3)",
+                  cursor: isGeneratingWish ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                }}
+                className="active-press"
+              >
+                <i
+                  className={
+                    isGeneratingWish
+                      ? "ph ph-spinner animate-spin"
+                      : "ph-fill ph-sparkle"
+                  }
+                  style={{ fontSize: "18px" }}
+                ></i>
+                {isGeneratingWish ? "生成中..." : `让 ${taCharacter?.name || "TA"} 提心愿 (AI)`}
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* 许愿表单弹窗 */}
+      {showAddWishModal && (
+        <>
+          <div
+            className="t9-companion-mask"
+            style={{ zIndex: 1002 }}
+            onClick={() => setShowAddWishModal(false)}
+          ></div>
+          <div
+            className="t9-companion-modal no-scrollbar"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "80vh",
+              overflowY: "auto",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              padding: "20px 24px 28px",
+              zIndex: 1003,
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.2)",
+              animation: "slideUp 0.3s ease-out",
+              background: "#FDFCF8",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <h3
+                style={{
+                  fontSize: "18px",
+                  fontWeight: "bold",
+                  color: "#5a5f4d",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  margin: 0,
+                }}
+              >
+                <i className="ph-fill ph-star" style={{ color: "#D6724B" }}></i>
+                许下你的心愿
+              </h3>
+              <button
+                onClick={() => setShowAddWishModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  color: "#999",
+                  cursor: "pointer",
+                  padding: "4px",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* 常用分类快捷标签 */}
+            <div style={{ marginBottom: "16px" }}>
+              <div style={{ fontSize: "12px", color: "#8c917b", marginBottom: "8px" }}>心愿类别</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
+                {["浪漫出游", "品尝美食", "共度闲暇", "互换赠礼", "携手微服", "约定将来", "其他心意"].map((cat) => (
+                  <button
+                    key={cat}
+                    onClick={() => setNewWish({ ...newWish, category: cat })}
+                    style={{
+                      padding: "6px 12px",
+                      borderRadius: "12px",
+                      border: "1px solid",
+                      borderColor: newWish.category === cat ? "#D6724B" : "#e6e2da",
+                      background: newWish.category === cat ? "#FDF0E6" : "#fff",
+                      color: newWish.category === cat ? "#D6724B" : "#666",
+                      fontSize: "13px",
+                      fontWeight: newWish.category === cat ? "bold" : "normal",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {cat}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 愿望内容输入 */}
+            <div style={{ marginBottom: "14px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>
+                心愿内容描述
+              </label>
+              <textarea
+                value={newWish.title}
+                onChange={(e) => setNewWish({ ...newWish, title: e.target.value })}
+                placeholder={`写下你想与 ${taCharacter?.name || "TA"} 一起完成的事情...`}
+                style={{
+                  width: "100%",
+                  height: "80px",
+                  padding: "10px 14px",
+                  borderRadius: "12px",
+                  border: "1px solid #e0dbd1",
+                  background: "#fff",
+                  fontSize: "14px",
+                  color: "#333",
+                  outline: "none",
+                  resize: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 约定日期 */}
+            <div style={{ marginBottom: "20px" }}>
+              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>
+                约定达成日期 / 契机
+              </label>
+              <input
+                type="text"
+                value={newWish.targetDate}
+                onChange={(e) => setNewWish({ ...newWish, targetDate: e.target.value })}
+                placeholder="例如：今冬初雪时、下月休沐日、或选择日期"
+                style={{
+                  width: "100%",
+                  padding: "10px 14px",
+                  borderRadius: "12px",
+                  border: "1px solid #e0dbd1",
+                  background: "#fff",
+                  fontSize: "14px",
+                  color: "#333",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 保存按钮 */}
+            <div style={{ display: "flex", gap: "10px" }}>
+              <button
+                onClick={() => setShowAddWishModal(false)}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  borderRadius: "14px",
+                  background: "#f0ede6",
+                  color: "#777",
+                  border: "none",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSaveWish}
+                style={{
+                  flex: 2,
+                  padding: "12px",
+                  borderRadius: "14px",
+                  background: "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
+                  color: "#fff",
+                  border: "none",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  boxShadow: "0 4px 12px rgba(214,114,75,0.3)",
+                }}
+                className="active-press"
+              >
+                收纳心愿
+              </button>
             </div>
           </div>
         </>
@@ -39724,6 +40269,7 @@ const T9Page = () => {
 };
 
 // ==================== T9 组件群结束 ====================
+
 
 
 // ==================== T13 休闲一刻/游戏组件群 (移至 MasterApp 外部以修复重置问题) ====================
