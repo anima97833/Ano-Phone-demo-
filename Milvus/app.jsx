@@ -1568,9 +1568,16 @@ const CalendarPage = () => {
   const handleUpdateTask = (updatedTask) => {
     const category = updatedTask.category || "进行之事";
     const { category: _cat, ...taskData } = updatedTask;
+    const currentTaskYear = selectedYear || currentYear || new Date().getFullYear();
+    const currentTaskMonth = (selectedMonth !== undefined ? selectedMonth : currentMonth) !== undefined
+      ? (selectedMonth !== undefined ? selectedMonth : currentMonth) + 1
+      : new Date().getMonth() + 1;
     const taskToSave = {
       ...taskData,
+      year: taskData.year || currentTaskYear,
+      month: taskData.month || currentTaskMonth,
       day: selectedDay ? String(selectedDay) : (taskData.day || ""),
+      characterId: taskData.characterId !== undefined ? taskData.characterId : (selectedCharacter?.id || null),
     };
 
     setTasks((prev) => {
@@ -1878,10 +1885,17 @@ const CalendarPage = () => {
     return grid;
   };
 
-  // 保存任务数据到IndexedDB
+  // 保存任务数据到IndexedDB，并广播更新事件
   React.useEffect(() => {
     const saveTasks = async () => {
       try {
+        try {
+          localStorage.setItem("cached_calendar_tasks", JSON.stringify(tasks));
+          window.dispatchEvent(
+            new CustomEvent("calendar_tasks_updated", { detail: tasks }),
+          );
+        } catch (e) {}
+
         const calendarStore = window.calendarStore;
         if (calendarStore) {
           try {
@@ -4278,7 +4292,7 @@ const T10Page = ({ onPrescribe }) => {
     <div id="t10-container">
       {/* 冲突对话框层 */}
       {activeConflict && (
-        <div className="t10-conflict-overlay">
+        <div className="t10-conflict-overlay open">
           <div className="t10-conflict-modal">
             <div className="t10-conflict-text">{activeConflict.title}</div>
             <div className="t10-conflict-btns">
@@ -4928,7 +4942,7 @@ const T10Page = ({ onPrescribe }) => {
 
       {/* 号脉弹窗 */}
       {pulseModalVisible && (
-        <div className="t10-conflict-overlay">
+        <div className="t10-conflict-overlay open">
           <div
             className="t10-conflict-modal"
             style={{ maxWidth: "400px", padding: "30px" }}
@@ -5135,7 +5149,7 @@ const T10Page = ({ onPrescribe }) => {
 
       {/* 观舌弹窗 */}
       {tongueModalVisible && (
-        <div className="t10-conflict-overlay">
+        <div className="t10-conflict-overlay open">
           <div
             className="t10-conflict-modal"
             style={{ maxWidth: "400px", padding: "30px" }}
@@ -5368,7 +5382,7 @@ const T10Page = ({ onPrescribe }) => {
 
       {/* 记忆力测试弹窗 */}
       {memoryTestModalVisible && (
-        <div className="t10-conflict-overlay">
+        <div className="t10-conflict-overlay open">
           <div
             className="t10-conflict-modal"
             style={{ maxWidth: "400px", padding: "30px" }}
@@ -49782,7 +49796,7 @@ const T13FlashcardPage = ({
   if (!currentCard) return null;
 
   return (
-    <div className="learning-overlay notebook-bg font-body text-on-surface">
+    <div className="learning-overlay open notebook-bg font-body text-on-surface">
       <header className="bg-[#fffcf7]/90 dark:bg-stone-900/90 backdrop-blur-md sticky top-0 w-full z-50 flex justify-between items-center px-6 py-4 border-b border-outline-variant/10">
         <div
           className="flex items-center gap-3 cursor-pointer active:scale-95 transition-transform"
@@ -51002,7 +51016,7 @@ const T13LearningPage = ({ onBack }) => {
 
       {/* --- 新增：排行榜页面 --- */}
       {showLeaderboard && (
-        <div className="learning-overlay animate-slideUp">
+        <div className="learning-overlay open animate-slideUp">
           {/* Main Canvas */}
           <main className="min-h-screen pb-12 pt-8 px-4 w-full max-w-md mx-auto space-y-8 overflow-x-hidden">
             {/* Header Section */}
@@ -62448,6 +62462,23 @@ const T8Icons = {
       <polyline points="20 6 9 17 4 12"></polyline>
     </svg>
   ),
+  Group: () => (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="white"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+      <circle cx="9" cy="7" r="4"></circle>
+      <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+      <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+    </svg>
+  ),
 };
 
 // T8 头像加载组件
@@ -66599,7 +66630,7 @@ const VoiceCallPage = ({
 
   return (
     <div
-      className="voice-call-overlay"
+      className="voice-call-overlay open"
       style={{
         position: "absolute",
         inset: 0,
@@ -73641,7 +73672,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
   if (!currentLine) {
     return (
       <div
-        className="vn-overlay"
+        className="vn-overlay open"
         style={{
           display: "flex",
           alignItems: "center",
@@ -73659,7 +73690,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
   }
 
   return (
-    <div className="vn-overlay" onClick={handleNextLine}>
+    <div className="vn-overlay open" onClick={handleNextLine}>
       {/* 动态背景图 */}
       <div
         className="vn-background"
@@ -74820,7 +74851,7 @@ const BellsPage = ({ onBack, chatData }) => {
   }
 
   return (
-    <div className="bells-overlay" onClick={onBack}>
+    <div className="bells-overlay open" onClick={onBack}>
       {/* 1. 星空背景 */}
       {stars.map((s, i) => (
         <div
@@ -75324,7 +75355,7 @@ const ActivitySelectionPage = ({ onBack, chatData }) => {
   }
 
   return (
-    <div className="activity-overlay" onClick={onBack}>
+    <div className="activity-overlay open" onClick={onBack}>
       {/* 动态星空 */}
       {stars.map((s, i) => (
         <div
@@ -75334,7 +75365,7 @@ const ActivitySelectionPage = ({ onBack, chatData }) => {
         ></div>
       ))}
 
-      <div className="activity-header">三千宇宙</div>
+      <div className="activity-header">三千世界</div>
 
       {/* 可滑动的卡片容器 */}
       <div className="cards-stage-container" onScroll={handleScroll}>
@@ -78354,12 +78385,10 @@ const T8Page = () => {
         </div>
         <div
           onClick={() => setShowGroupMemberModal(true)}
-          style={{ opacity: 0.9, cursor: "pointer" }}
+          style={{ opacity: 0.9, cursor: "pointer", display: "flex", alignItems: "center" }}
+          title="群聊 / 发起群组"
         >
-          <iconify-icon
-            icon="tdesign:awkward"
-            style={{ width: 24, height: 24, color: "white" }}
-          ></iconify-icon>
+          <T8Icons.Group />
         </div>
       </header>
 

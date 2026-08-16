@@ -1416,6 +1416,13 @@
       const calendarStore = {
         // 保存日历任务
         saveTasks: async (tasks) => {
+          try {
+            localStorage.setItem("cached_calendar_tasks", JSON.stringify(tasks));
+            window.dispatchEvent(
+              new CustomEvent("calendar_tasks_updated", { detail: tasks }),
+            );
+          } catch (e) {}
+
           const db = await openDB();
           return new Promise((resolve, reject) => {
             const transaction = db.transaction(STORES.CALENDAR, "readwrite");
@@ -1435,7 +1442,17 @@
             const store = transaction.objectStore(STORES.CALENDAR);
             const request = store.get("calendar_tasks");
 
-            request.onsuccess = () => resolve(request.result?.tasks || {});
+            request.onsuccess = () => {
+              const res = request.result?.tasks;
+              if (res) {
+                try {
+                  localStorage.setItem("cached_calendar_tasks", JSON.stringify(res));
+                } catch (e) {}
+                resolve(res);
+              } else {
+                resolve({});
+              }
+            };
             request.onerror = () => reject("获取日历任务失败");
           });
         },
