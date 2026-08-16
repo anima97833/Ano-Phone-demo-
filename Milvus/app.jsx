@@ -45418,7 +45418,20 @@ const StarChartPage = ({ onBack }) => {
   };
 
   return (
-    <div className="starchart-overlay open fade-in">
+    <div
+      className="starchart-overlay open fade-in"
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 900,
+        background: "radial-gradient(circle at center, #1a1b3a 0%, #0a0b16 100%)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        width: "100%",
+        height: "100%",
+      }}
+    >
       <div className="flex justify-between p-6 items-center z-10">
         <div className="flex items-center gap-4 flex-1">
           <input
@@ -45450,27 +45463,45 @@ const StarChartPage = ({ onBack }) => {
         </div>
       )}
 
-      <div className="flex-1 relative">
-        <svg viewBox="0 0 400 600" width="100%" height="100%">
+      <div className="flex-1 relative w-full h-full min-h-[300px]">
+        <svg viewBox="0 0 400 600" className="w-full h-full" style={{ width: "100%", height: "100%" }}>
+          <defs>
+            <filter id="starGlowFilter" x="-20%" y="-20%" width="140%" height="140%">
+              <feGaussianBlur stdDeviation="3" result="blur" />
+              <feComposite in="SourceGraphic" in2="blur" operator="over" />
+            </filter>
+          </defs>
           {/* 连线层 */}
-          {constellation.links.map((link, i) => (
-            <g key={`link-${i}`}>
-              <line
-                className="star-glow"
-                x1={constellation.nodes[link[0]][0]}
-                y1={constellation.nodes[link[0]][1]}
-                x2={constellation.nodes[link[1]][0]}
-                y2={constellation.nodes[link[1]][1]}
-              />
-              <line
-                className="star-line"
-                x1={constellation.nodes[link[0]][0]}
-                y1={constellation.nodes[link[0]][1]}
-                x2={constellation.nodes[link[1]][0]}
-                y2={constellation.nodes[link[1]][1]}
-              />
-            </g>
-          ))}
+          {constellation.links.map((link, i) => {
+            const n1 = constellation.nodes[link[0]];
+            const n2 = constellation.nodes[link[1]];
+            if (!n1 || !n2) return null;
+            return (
+              <g key={`link-${i}`}>
+                <line
+                  className="star-glow"
+                  x1={n1[0]}
+                  y1={n1[1]}
+                  x2={n2[0]}
+                  y2={n2[1]}
+                  stroke="rgba(255, 255, 255, 0.4)"
+                  strokeWidth="4"
+                  strokeLinecap="round"
+                  filter="url(#starGlowFilter)"
+                />
+                <line
+                  className="star-line"
+                  x1={n1[0]}
+                  y1={n1[1]}
+                  x2={n2[0]}
+                  y2={n2[1]}
+                  stroke="rgba(255, 255, 255, 0.85)"
+                  strokeWidth="1.5"
+                  strokeLinecap="round"
+                />
+              </g>
+            );
+          })}
           {/* 节点层 (可点击查看逝者信息) */}
           {constellation.nodes.map((node, i) => (
             <circle
@@ -45478,8 +45509,10 @@ const StarChartPage = ({ onBack }) => {
               className="star-node pulse-anim"
               cx={node[0]}
               cy={node[1]}
-              r={node[2] / 1.5}
+              r={Math.max(node[2] || 3, 3.5)}
+              fill="#ffffff"
               style={{
+                filter: "drop-shadow(0 0 6px rgba(255, 255, 255, 0.95))",
                 animationDelay: `${i * 0.5}s`,
                 cursor: deceasedList.length > 0 ? "pointer" : "default",
               }}
@@ -45871,32 +45904,75 @@ const ButterflyEffectPage = ({ onBack }) => {
   };
 
   return (
-    <div className="butterfly-effect-overlay open">
+    <div
+      className="butterfly-effect-overlay open"
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 900,
+        backgroundColor: "#000000",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        width: "100%",
+        height: "100%",
+        overflow: "hidden",
+      }}
+    >
       {/* 顶部返回按钮 */}
-      <div className="be-back-btn" onClick={onBack}>
+      <div
+        className="be-back-btn"
+        onClick={onBack}
+        style={{
+          position: "absolute",
+          top: "40px",
+          right: "25px",
+          color: "#ffffff",
+          fontSize: "24px",
+          cursor: "pointer",
+          opacity: 0.8,
+          zIndex: 20,
+        }}
+      >
         ✕
       </div>
 
       {/* 圆点排列舞台 */}
-      <div className="be-infinity-container" style={{ marginTop: "-60px" }}>
+      <div
+        className="be-infinity-container"
+        style={{
+          position: "relative",
+          width: "320px",
+          height: "160px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          marginTop: "-60px",
+        }}
+      >
         {dots.map((dot, i) => (
           <div
             key={i}
             className="be-dot"
             onClick={() => handleDotClick(dot)}
             style={{
+              position: "absolute",
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
               backgroundColor: dot.color,
               transform: `translate(${dot.x}px, ${dot.y}px) ${effectData.length > 0 && selectedDot?.id === dot.id ? "scale(1.3)" : "scale(1)"}`,
               boxShadow: dot.isCenter
-                ? "0 0 15px rgba(255,155,155,0.6)"
+                ? "0 0 18px rgba(255,155,155,0.95)"
                 : effectData.length > 0
-                  ? "0 0 10px rgba(255,255,255,0.4)"
-                  : "none",
+                  ? "0 0 12px rgba(255,255,255,0.8)"
+                  : "0 0 6px rgba(255,255,255,0.4)",
               zIndex: dot.isCenter ? 10 : 1,
               cursor: effectData.length > 0 ? "pointer" : "default",
               border:
                 effectData.length > 0
-                  ? "2px solid rgba(255,255,255,0.8)"
+                  ? "2px solid rgba(255,255,255,0.9)"
                   : "none",
               transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
             }}
@@ -46715,7 +46791,20 @@ const SandTablePage = ({ onBack }) => {
   };
 
   return (
-    <div className="sand-table-overlay open fade-in">
+    <div
+      className="sand-table-overlay open fade-in"
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 900,
+        backgroundColor: "#f2ebe3",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        width: "100%",
+        height: "100%",
+      }}
+    >
       {/* 顶部磨砂栏 */}
       <div className={`top-glass-nav ${navCollapsed ? "collapsed" : ""}`}>
         <button className="morandi-glass-btn" onClick={onBack}>
