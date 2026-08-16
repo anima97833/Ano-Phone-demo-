@@ -30753,6 +30753,11 @@ const T11Page = ({ onBack }) => {
         />
       )}
 
+      {/* 10.5 消息页面 (覆盖层) */}
+      {activeTab === "message" && (
+        <T11MessageListPage onBack={() => setActiveTab("workbench")} />
+      )}
+
       {/* 11. 通讯录页面 (覆盖层) */}
       {activeTab === "contacts" && (
         <T11ContactsPage onBack={() => setActiveTab("workbench")} />
@@ -32061,6 +32066,901 @@ const NoticeEditPage = ({
     </div>
   );
 };
+
+// ==================== T11 Telegram 风格密谈聊天页面组件 ====================
+const T11TelegramChatPage = ({ character, characterBio, avatar, onBack }) => {
+  const [messages, setMessages] = React.useState([]);
+  const [inputText, setInputText] = React.useState("");
+  const [isTyping, setIsTyping] = React.useState(false);
+  const messagesEndRef = React.useRef(null);
+  const inputRef = React.useRef(null);
+
+  // 格式化时间
+  const formatTime = (timestamp) => {
+    const d = timestamp ? new Date(timestamp) : new Date();
+    const hours = d.getHours().toString().padStart(2, "0");
+    const minutes = d.getMinutes().toString().padStart(2, "0");
+    return `${hours}:${minutes}`;
+  };
+
+  // 滚动到底部
+  const scrollToBottom = (smooth = true) => {
+    if (messagesEndRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
+    }
+  };
+
+  // 挂载时从 IndexedDB 加载聊天记录
+  React.useEffect(() => {
+    const loadHistory = async () => {
+      try {
+        if (window.settingsStore?.getXiuyiChatHistory) {
+          const history = await window.settingsStore.getXiuyiChatHistory(character);
+          if (Array.isArray(history) && history.length > 0) {
+            setMessages(history);
+            setTimeout(() => scrollToBottom(false), 50);
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("加载历史消息失败:", e);
+      }
+
+      // 如果没有历史消息，创建一条来自该密探的初始问候
+      const initialGreeting = {
+        id: Date.now() + Math.random(),
+        sender: "character",
+        text: `殿下，属下${character}在此候命。不知殿下有何机要密令吩咐？`,
+        time: formatTime(),
+        timestamp: Date.now(),
+      };
+      setMessages([initialGreeting]);
+      if (window.settingsStore?.saveXiuyiChatHistory) {
+        window.settingsStore.saveXiuyiChatHistory(character, [initialGreeting]);
+      }
+      setTimeout(() => scrollToBottom(false), 50);
+    };
+
+    loadHistory();
+  }, [character]);
+
+  React.useEffect(() => {
+    scrollToBottom(true);
+  }, [messages, isTyping]);
+
+  // 发送消息
+  const handleSendMessage = async () => {
+    const trimmed = inputText.trim();
+    if (!trimmed || isTyping) return;
+
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      sender: "user",
+      text: trimmed,
+      time: formatTime(),
+      timestamp: Date.now(),
+    };
+
+    const newMessages = [...messages, userMsg];
+    setMessages(newMessages);
+    setInputText("");
+    setIsTyping(true);
+
+    if (window.settingsStore?.saveXiuyiChatHistory) {
+      window.settingsStore.saveXiuyiChatHistory(character, newMessages);
+    }
+
+    // 组装多维上下文 Prompt
+    try {
+      // 1. 世界书上下文
+      let worldBookContext = "";
+      if (window.getWorldBookContext) {
+        worldBookContext = await window.getWorldBookContext();
+      }
+
+      // 2. 身份配置库 (楼主/用户人设)
+      let userPersonaContext = "";
+      try {
+        const personas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        let activeUser = personas.find((p) => String(p.id) === String(activeId));
+        if (!activeUser && personas.length > 0) {
+          activeUser = personas[0];
+        }
+        if (activeUser) {
+          userPersonaContext = `【与你对话的楼主（殿下/用户）身份设定】：
+- 姓名/称呼：${activeUser.name || "广陵王"}
+- 称号/身份：${activeUser.title || "广陵王 / 绣衣楼主"}
+- 性别/年龄：${activeUser.gender || "女"}, ${activeUser.age ? activeUser.age + "岁" : "年轻"}
+- 性格特征：${activeUser.personality || "果敢睿智，心思缜密，统领谍报"}
+- 身份背景描述：${activeUser.description || activeUser.background || "汉室宗亲，执掌绣衣楼大权，也是你誓死效忠/打交道的楼主"}`;
+        }
+      } catch (e) {}
+
+      // 3. 角色系统 Prompt
+      const systemPrompt = `你正在《代号鸢》与绣衣楼古代谍报世界中，扮演角色【${character}】。
+你必须完全代入该角色的身份、口吻、性格与行为模式，与你的楼主/上级（广陵王殿下）进行一对一密谈。
+
+【你的专属人物设定与介绍（重要！）】：
+${characterBio || "绣衣楼核心密探，遵从楼主号令。"}
+
+${userPersonaContext ? userPersonaContext + "\n" : ""}
+【世界观与当前背景设定（已启用的世界书）】：
+${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣衣楼楼主。楼内有蛾部、雀部、蜂部、鸢部等密探部门。"}
+
+【回复与行为准则】：
+1. 语言风格：严格符合《代号鸢》古风谍报与文风，体现角色独特的言谈口吻（如傅融的算账毒舌与暗中护佑、郭嘉的风流玩味与一针见血、荀彧的温雅端方与心怀天下、阿蝉的冷冽寡言与忠心护主等）。
+2. 人际关系：正确称呼对方为"殿下"、"楼主"或符合人设的专属称谓，对楼主的指令、调侃或交谈做出符合你们关系的真实自然反应。
+3. 严禁出戏：绝对不要输出任何 AI、助手或现代分析性质的语言，不要以旁白括号解释动作（除非必要神态），直接输出角色说出的话或密信正文。保持沉浸式体验。
+4. 篇幅：适度自然，既不一两句敷衍，也不大篇累牍，如同 Telegram 即时密信一般生动鲜活。`;
+
+      // 4. 构建历史消息上下文 (最近 10 条)
+      const recentHistory = newMessages.slice(-10).map((m) => ({
+        role: m.sender === "user" ? "user" : "assistant",
+        content: m.text,
+      }));
+
+      const apiMessages = [
+        { role: "system", content: systemPrompt },
+        ...recentHistory,
+      ];
+
+      if (!window.sendToLLM) {
+        throw new Error("未配置 AI 接口");
+      }
+
+      window.sendToLLM(
+        apiMessages,
+        null,
+        async (reply) => {
+          setIsTyping(false);
+          const cleanReply = (reply || "").trim();
+          const aiMsg = {
+            id: Date.now() + Math.random(),
+            sender: "character",
+            text: cleanReply || "（密信已被阅毕，但未留只字）",
+            time: formatTime(),
+            timestamp: Date.now(),
+          };
+
+          const finalMessages = [...newMessages, aiMsg];
+          setMessages(finalMessages);
+          if (window.settingsStore?.saveXiuyiChatHistory) {
+            await window.settingsStore.saveXiuyiChatHistory(character, finalMessages);
+          }
+        },
+        (err) => {
+          setIsTyping(false);
+          console.error("AI 回复失败:", err);
+          const errMsg = {
+            id: Date.now() + Math.random(),
+            sender: "character",
+            text: "【密信传讯受到干扰，请检查设置中的 API 配置】",
+            time: formatTime(),
+            timestamp: Date.now(),
+          };
+          setMessages((prev) => [...prev, errMsg]);
+        }
+      );
+    } catch (err) {
+      setIsTyping(false);
+      console.error("发起聊天异常:", err);
+    }
+  };
+
+  // 清空聊天记录
+  const handleClearHistory = async () => {
+    if (window.confirm(`确定要清空与 ${character} 的所有密谈记录吗？`)) {
+      setMessages([]);
+      if (window.settingsStore?.saveXiuyiChatHistory) {
+        await window.settingsStore.saveXiuyiChatHistory(character, []);
+      }
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "#EBE5DF",
+        zIndex: 30,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      {/* 1. Telegram 风格顶部导航栏 */}
+      <div
+        style={{
+          height: "60px",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #E5E0D8",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 14px",
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.04)",
+          zIndex: 10,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
+          {/* 返回按钮 */}
+          <div
+            onClick={onBack}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#5A5F4D",
+              transition: "background 0.2s ease",
+            }}
+          >
+            <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+          </div>
+
+          {/* 角色头像 (带在线小绿点) */}
+          <div style={{ position: "relative", flexShrink: 0 }}>
+            <div
+              style={{
+                width: "42px",
+                height: "42px",
+                borderRadius: "50%",
+                overflow: "hidden",
+                border: "2px solid #A8C8BA",
+                background: "#E8C3A8",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontWeight: "bold",
+                fontSize: "17px",
+              }}
+            >
+              {avatar ? (
+                <img src={avatar} alt={character} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                character.charAt(0)
+              )}
+            </div>
+            {/* 在线指示小绿点 */}
+            <div
+              style={{
+                position: "absolute",
+                bottom: 1,
+                right: 1,
+                width: "10px",
+                height: "10px",
+                borderRadius: "50%",
+                background: "#4EBA6F",
+                border: "2px solid #FFF",
+              }}
+            />
+          </div>
+
+          {/* 角色名与状态 */}
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div
+              style={{
+                fontSize: "16px",
+                fontWeight: "700",
+                color: "#383D31",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
+              }}
+            >
+              {character}
+            </div>
+            <div style={{ fontSize: "12px", color: isTyping ? "#4EBA6F" : "#999DA0", display: "flex", alignItems: "center", gap: "4px" }}>
+              {isTyping ? "正在执笔密信..." : "在线 · 密探专线"}
+            </div>
+          </div>
+        </div>
+
+        {/* 顶部右侧菜单 */}
+        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          <div
+            onClick={handleClearHistory}
+            title="清空记录"
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#9A9E96",
+            }}
+          >
+            <i className="ph ph-trash" style={{ fontSize: "18px" }}></i>
+          </div>
+        </div>
+      </div>
+
+      {/* 2. 聊天消息区 (Telegram 风格背景底纹) */}
+      <div
+        className="no-scrollbar"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "16px 14px 20px 14px",
+          background: "linear-gradient(180deg, #F0EAE1 0%, #E8E2D8 100%)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px",
+        }}
+      >
+        {/* Telegram 风格日期徽章 */}
+        <div style={{ textAlign: "center", margin: "4px 0 10px 0" }}>
+          <span
+            style={{
+              background: "rgba(0, 0, 0, 0.12)",
+              color: "rgba(0, 0, 0, 0.6)",
+              fontSize: "11px",
+              fontWeight: "500",
+              padding: "3px 10px",
+              borderRadius: "12px",
+              backdropFilter: "blur(4px)",
+            }}
+          >
+            绣衣密信 · 加密传讯
+          </span>
+        </div>
+
+        {/* 消息列表 */}
+        {messages.map((msg) => {
+          const isUser = msg.sender === "user";
+          return (
+            <div
+              key={msg.id}
+              style={{
+                display: "flex",
+                flexDirection: isUser ? "row-reverse" : "row",
+                alignItems: "flex-end",
+                gap: "8px",
+                animation: "tgMsgFadeIn 0.2s ease-out",
+              }}
+            >
+              {/* 对面头像 */}
+              {!isUser && (
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    background: "#E8C3A8",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#fff",
+                    fontSize: "13px",
+                    fontWeight: "bold",
+                    flexShrink: 0,
+                    marginBottom: "2px",
+                  }}
+                >
+                  {avatar ? <img src={avatar} alt={character} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : character.charAt(0)}
+                </div>
+              )}
+
+              {/* 气泡 */}
+              <div
+                style={{
+                  maxWidth: "75%",
+                  background: isUser ? "#D8ECE1" : "#FFFFFF",
+                  color: "#2C3127",
+                  padding: "10px 14px 8px 14px",
+                  borderRadius: isUser ? "18px 18px 4px 18px" : "18px 18px 18px 4px",
+                  boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
+                  position: "relative",
+                  wordBreak: "break-word",
+                  lineHeight: "1.5",
+                  fontSize: "14.5px",
+                }}
+              >
+                <div>{msg.text}</div>
+                {/* 底部时间戳与状态 */}
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "flex-end",
+                    gap: "4px",
+                    marginTop: "4px",
+                    fontSize: "10px",
+                    color: isUser ? "#6F8E7E" : "#A1A4A8",
+                  }}
+                >
+                  <span>{msg.time}</span>
+                  {isUser && (
+                    <i className="ph-bold ph-checks" style={{ fontSize: "13px", color: "#5EA37E" }}></i>
+                  )}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+
+        {/* 正在输入动态指示器 */}
+        {isTyping && (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-end",
+              gap: "8px",
+              animation: "tgMsgFadeIn 0.2s ease-out",
+            }}
+          >
+            <div
+              style={{
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                overflow: "hidden",
+                background: "#E8C3A8",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontSize: "13px",
+                fontWeight: "bold",
+                flexShrink: 0,
+              }}
+            >
+              {avatar ? <img src={avatar} alt={character} style={{ width: "100%", height: "100%", objectFit: "cover" }} /> : character.charAt(0)}
+            </div>
+            <div
+              style={{
+                background: "#FFFFFF",
+                padding: "10px 16px",
+                borderRadius: "18px 18px 18px 4px",
+                boxShadow: "0 2px 6px rgba(0, 0, 0, 0.06)",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+              }}
+            >
+              <div className="tg-typing-dot" style={{ animationDelay: "0s" }}></div>
+              <div className="tg-typing-dot" style={{ animationDelay: "0.2s" }}></div>
+              <div className="tg-typing-dot" style={{ animationDelay: "0.4s" }}></div>
+            </div>
+          </div>
+        )}
+
+        <div ref={messagesEndRef} />
+      </div>
+
+      {/* 3. Telegram 风格底部输入栏 */}
+      <div
+        style={{
+          background: "#FFFFFF",
+          padding: "8px 12px",
+          borderTop: "1px solid #E5E0D8",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }}
+      >
+        {/* 附件夹按钮 */}
+        <div
+          style={{
+            width: "36px",
+            height: "36px",
+            borderRadius: "50%",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            color: "#8FA499",
+            cursor: "pointer",
+          }}
+        >
+          <i className="ph ph-paperclip" style={{ fontSize: "20px" }}></i>
+        </div>
+
+        {/* 文本输入框 */}
+        <div style={{ flex: 1, position: "relative" }}>
+          <input
+            ref={inputRef}
+            type="text"
+            value={inputText}
+            onChange={(e) => setInputText(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSendMessage();
+              }
+            }}
+            placeholder="输入密信内容..."
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              padding: "10px 14px",
+              borderRadius: "20px",
+              border: "1.5px solid #E2DDD5",
+              background: "#F9F8F6",
+              fontSize: "14.5px",
+              color: "#383D31",
+              outline: "none",
+              transition: "border-color 0.2s ease",
+            }}
+            onFocus={(e) => (e.target.style.borderColor = "#A8C8BA")}
+            onBlur={(e) => (e.target.style.borderColor = "#E2DDD5")}
+          />
+        </div>
+
+        {/* 纸飞机发送按钮 */}
+        <div
+          onClick={handleSendMessage}
+          style={{
+            width: "40px",
+            height: "40px",
+            borderRadius: "50%",
+            background: inputText.trim()
+              ? "linear-gradient(135deg, #A8C8BA 0%, #7DA493 100%)"
+              : "#E5E1D8",
+            color: "#FFFFFF",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: inputText.trim() ? "pointer" : "default",
+            boxShadow: inputText.trim() ? "0 4px 10px rgba(168, 200, 186, 0.45)" : "none",
+            transition: "all 0.2s ease",
+            transform: inputText.trim() ? "scale(1.03)" : "scale(1)",
+          }}
+        >
+          <i className="ph-fill ph-paper-plane-right" style={{ fontSize: "18px", marginLeft: "2px" }}></i>
+        </div>
+      </div>
+
+      {/* 动画样式 */}
+      <style>{`
+        @keyframes tgMsgFadeIn {
+          from { opacity: 0; transform: translateY(6px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        .tg-typing-dot {
+          width: 6px;
+          height: 6px;
+          border-radius: 50%;
+          background: #A8C8BA;
+          animation: tgDotBounce 1.2s infinite ease-in-out;
+        }
+        @keyframes tgDotBounce {
+          0%, 60%, 100% { transform: translateY(0); }
+          30% { transform: translateY(-4px); }
+        }
+      `}</style>
+    </div>
+  );
+};
+
+// ==================== T11 消息列表页面组件 (展示已填写人物介绍的密探) ====================
+const T11MessageListPage = ({ onBack }) => {
+  const [avatars, setAvatars] = React.useState({});
+  const [characterBios, setCharacterBios] = React.useState({});
+  const [activeChatChar, setActiveChatChar] = React.useState(null);
+  const [latestMessages, setLatestMessages] = React.useState({});
+
+  const CHARACTERS = [
+    "傅融",
+    "吕蒙",
+    "孙尚香",
+    "郭解",
+    "孙权",
+    "张修",
+    "郭嘉",
+    "荀彧",
+    "华佗",
+    "杨修",
+    "庞统",
+    "贾诩",
+    "张角",
+    "葛洪",
+    "蔡琰",
+    "张邈",
+    "夏侯惇",
+    "马超",
+    "程昱",
+    "太史慈",
+    "张闿",
+    "徐庶",
+    "甘宁",
+    "甄宓",
+    "张鲁",
+    "孔融",
+    "黄月英",
+    "张郃",
+    "董奉",
+    "曹植",
+    "诸葛瑾",
+    "诸葛诞",
+    "满宠",
+    "荀攸",
+    "凌统",
+    "安期",
+    "刘繇",
+    "戏学",
+    "马腾",
+    "令狐茂",
+    "朱然",
+    "黄盖",
+    "祢衡",
+    "蒯越",
+    "刘豹",
+    "张绣",
+    "鲁肃",
+    "张辽",
+    "干吉",
+    "张仲景",
+    "周瑜",
+    "王粲",
+    "陆逊",
+    "董白",
+    "张昭",
+    "程普",
+    "士燮",
+    "虞翻",
+    "张燕",
+    "钟繇",
+    "夏侯渊",
+    "颜良",
+    "小乔",
+    "史子眇",
+    "陈登",
+    "公孙珊",
+    "文丑",
+    "许曼",
+    "严白虎",
+    "周忠",
+    "张飞",
+    "阿蝉",
+    "许攸",
+    "飞云",
+    "周群",
+    "吕布",
+    "绣球",
+    "庞羲",
+    "刘璋",
+    "陈群",
+    "法正",
+    "蒯良",
+    "郭女王",
+    "简雍",
+    "曹丕",
+  ];
+
+  // 初始化加载头像、人物介绍和各角色最新聊天
+  React.useEffect(() => {
+    // 1. 头像
+    try {
+      const savedAvatars = localStorage.getItem("绣衣楼头像");
+      if (savedAvatars) setAvatars(JSON.parse(savedAvatars));
+    } catch (e) {}
+
+    // 2. 人物介绍
+    const loadBiosAndChats = async () => {
+      try {
+        if (window.settingsStore?.getCharacterNotes) {
+          const loadedBios = await window.settingsStore.getCharacterNotes();
+          if (loadedBios && typeof loadedBios === "object") {
+            setCharacterBios(loadedBios);
+
+            // 读取每个已配置角色的最新消息
+            const validChars = Object.keys(loadedBios).filter((k) => loadedBios[k] && loadedBios[k].trim().length > 0);
+            const msgMap = {};
+            for (const char of validChars) {
+              if (window.settingsStore?.getXiuyiChatHistory) {
+                const history = await window.settingsStore.getXiuyiChatHistory(char);
+                if (Array.isArray(history) && history.length > 0) {
+                  msgMap[char] = history[history.length - 1];
+                }
+              }
+            }
+            setLatestMessages(msgMap);
+          }
+        }
+      } catch (e) {
+        console.warn("读取消息列表数据失败:", e);
+      }
+    };
+
+    loadBiosAndChats();
+  }, [activeChatChar]);
+
+  // 筛选出已填写人物介绍的角色
+  const activeContacts = CHARACTERS.filter((char) => {
+    return characterBios[char] && characterBios[char].trim().length > 0;
+  });
+
+  return (
+    <div
+      style={{
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "#F9F7F5",
+        zIndex: 20,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+      }}
+    >
+      {/* 导航栏 */}
+      <div className="t11-nav" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <div className="back-btn" onClick={onBack}>
+            <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+          </div>
+          <div className="title">消息</div>
+        </div>
+        <div style={{ fontSize: "12px", color: "#8FA99D", fontWeight: "500", marginRight: "14px" }}>
+          {activeContacts.length} 位密探就位
+        </div>
+      </div>
+
+      {/* 列表容器 */}
+      <div
+        className="t11-subpage-container no-scrollbar"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "16px 18px 40px 18px",
+          boxSizing: "border-box",
+        }}
+      >
+        {activeContacts.length === 0 ? (
+          /* 空状态引导 */
+          <div
+            style={{
+              padding: "60px 20px",
+              textAlign: "center",
+              color: "#9A9E96",
+              animation: "fadeIn 0.4s ease-out",
+            }}
+          >
+            <div
+              style={{
+                width: "72px",
+                height: "72px",
+                borderRadius: "24px",
+                background: "rgba(168, 200, 186, 0.2)",
+                color: "#A8C8BA",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "36px",
+                margin: "0 auto 16px auto",
+              }}
+            >
+              <i className="ph ph-chat-teardrop-dots"></i>
+            </div>
+            <h3 style={{ fontSize: "17px", color: "#5A5F4D", margin: "0 0 8px 0" }}>暂无密探传讯</h3>
+            <p style={{ fontSize: "13.5px", lineHeight: "1.6", margin: 0, color: "#8C9183" }}>
+              请前往【通讯录 → 楼内联系人】
+              <br />
+              为心仪角色填写<b>人物介绍</b>后，即可在此开启 1v1 专属密谈！
+            </p>
+          </div>
+        ) : (
+          /* 已配置人物列表 (依次排列) */
+          activeContacts.map((char, index) => {
+            const charAvatar = avatars[char];
+            const bio = characterBios[char] || "";
+            const latestMsg = latestMessages[char];
+            const displayText = latestMsg ? (latestMsg.sender === "user" ? `我: ${latestMsg.text}` : latestMsg.text) : bio;
+            const displayTime = latestMsg?.time || "密谈开启";
+
+            return (
+              <div
+                key={char}
+                onClick={() => setActiveChatChar(char)}
+                style={{
+                  background: "#FFFFFF",
+                  borderRadius: "18px",
+                  padding: "14px 16px",
+                  marginBottom: "12px",
+                  boxShadow: "0 4px 14px rgba(140, 145, 123, 0.08)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "14px",
+                  cursor: "pointer",
+                  animation: "fadeIn 0.35s ease-out",
+                  animationDelay: `${index * 0.05}s`,
+                  transition: "all 0.2s ease",
+                }}
+                onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.98)")}
+                onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+              >
+                {/* 角色头像 */}
+                <div style={{ position: "relative", flexShrink: 0 }}>
+                  <div
+                    style={{
+                      width: "52px",
+                      height: "52px",
+                      borderRadius: "50%",
+                      overflow: "hidden",
+                      border: "2px solid #A8C8BA",
+                      background: "linear-gradient(135deg, #E8C3A8 0%, #D4B298 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#fff",
+                      fontSize: "19px",
+                      fontWeight: "bold",
+                    }}
+                  >
+                    {charAvatar ? (
+                      <img src={charAvatar} alt={char} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                    ) : (
+                      char.charAt(0)
+                    )}
+                  </div>
+                  {/* 在线绿点 */}
+                  <div
+                    style={{
+                      position: "absolute",
+                      bottom: 1,
+                      right: 1,
+                      width: "11px",
+                      height: "11px",
+                      borderRadius: "50%",
+                      background: "#4EBA6F",
+                      border: "2px solid #FFF",
+                    }}
+                  />
+                </div>
+
+                {/* 角色名与信息预览 */}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "4px" }}>
+                    <h3 style={{ fontSize: "16px", fontWeight: "700", color: "#4A4F44", margin: 0 }}>
+                      {char}
+                    </h3>
+                    <span style={{ fontSize: "11px", color: "#A8ACB0" }}>{displayTime}</span>
+                  </div>
+                  <div
+                    style={{
+                      fontSize: "13px",
+                      color: latestMsg ? "#5A5F4D" : "#8C9183",
+                      whiteSpace: "nowrap",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                    }}
+                  >
+                    {displayText}
+                  </div>
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      {/* 嵌套 Telegram 聊天页面 */}
+      {activeChatChar && (
+        <T11TelegramChatPage
+          character={activeChatChar}
+          characterBio={characterBios[activeChatChar]}
+          avatar={avatars[activeChatChar]}
+          onBack={() => setActiveChatChar(null)}
+        />
+      )}
+    </div>
+  );
+};
+
 
 // ==================== T11 楼内联系人页面组件 (支持点击底部弹出人物介绍填写卡片 + IndexedDB 持久化) ====================
 const T11InsideContactsPage = ({ onBack }) => {

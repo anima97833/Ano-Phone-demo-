@@ -867,6 +867,30 @@
             }
           });
         },
+
+        // 获取某个角色的绣衣楼聊天记录
+        getXiuyiChatHistory: async (character) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("xiuyi_chat_" + character);
+            request.onsuccess = () => resolve(request.result?.value || []);
+            request.onerror = () => reject("获取聊天记录失败");
+          });
+        },
+
+        // 保存某个角色的绣衣楼聊天记录
+        saveXiuyiChatHistory: async (character, messages) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "xiuyi_chat_" + character, value: messages });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存聊天记录失败");
+          });
+        },
       };
 
       // 迁移用户数据从 localStorage 到 IndexedDB（新增）
