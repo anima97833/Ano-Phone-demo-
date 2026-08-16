@@ -9,7 +9,17 @@
     <!-- ✅ 新增（插入到第 10 行之前）-->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <title>Breathe UI - 终极整合</title>
+    <title>鸢小手机</title>
+    <!-- PWA 配置 -->
+    <link rel="manifest" href="manifest.json" />
+    <meta name="theme-color" content="#766d78" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="鸢小手机" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="icons/icon.svg" />
+    <link rel="icon" type="image/png" href="icons/icon-192.png" />
     <!-- 基础库 -->
     <link
       href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500&family=Noto+Sans+SC:wght@400;500;700&family=Quicksand:wght@500;600&family=Zhi+Mang+Xing&display=swap"
@@ -117,7 +127,7 @@
     <!-- D3.js 库 -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <link rel="stylesheet" href="Milvus/style.css?v=1786865306415" />
+    <link rel="stylesheet" href="Milvus/style.css?v=1786866774518" />
 
     <!-- IndexedDB 存储模块 -->
     <script src="Milvus/db.js?v=1786779100"></script>
@@ -131,6 +141,21 @@
       style="display: none"
     />
 
-    <script src="Milvus/app.min.js?v=1786865306415"></script>
+    <script src="Milvus/app.min.js?v=1786866774518"></script>
+
+    <!-- PWA Service Worker 注册 -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then((registration) => {
+              console.log('[PWA] Service Worker 注册成功，Scope:', registration.scope);
+            })
+            .catch((error) => {
+              console.warn('[PWA] Service Worker 注册失败:', error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>
