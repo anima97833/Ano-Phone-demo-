@@ -57506,6 +57506,7 @@ const T8ChatDetail = ({
       {/* [新增] 竹简日记页面 */}
       {showDiaryPage && (
         <BambooDiaryPage
+          characterName={chatData.name}
           onBack={() => setShowDiaryPage(false)}
           onGenerateDiary={() => {
             // 生成日记逻辑
@@ -57640,9 +57641,217 @@ const T8ChatDetail = ({
             );
           }}
           diaryContent={diaryContent}
-          characterName={chatData.name}
         />
       )}
+
+      {/* [新增] 轨迹页面 */}
+      {showTrajectoryPage && (
+        <TrajectoryPage
+          characterName={chatData.name}
+          onBack={() => {
+            setShowTrajectoryPage(false);
+            // 重置轨迹数据
+            setTrajectoryData(null);
+          }}
+          onGenerateTrajectory={async () => {
+            // AI生成轨迹逻辑
+            console.log("生成轨迹");
+
+            return new Promise((resolve, reject) => {
+              // 获取当前选中的身份信息
+              const getUserPersonaInfo = () => {
+                try {
+                  const personas = JSON.parse(
+                    localStorage.getItem("user_personas") || "[]",
+                  );
+                  const activeId = localStorage.getItem("active_persona_id");
+                  if (activeId) {
+                    const activePersona = personas.find(
+                      (p) => String(p.id) === String(activeId),
+                    );
+                    if (activePersona) {
+                      return `姓名：${activePersona.name}\n性别：${activePersona.gender || "未知"}\n年龄：${activePersona.age || "未知"}\n身份：${activePersona.occupation || "未知"}\n性格：${activePersona.personality || "未知"}\n背景：${activePersona.background || "未知"}`;
+                    }
+                  }
+                  return "未知";
+                } catch (error) {
+                  console.error("获取身份信息失败:", error);
+                  return "未知";
+                }
+              };
+
+              // 创建轨迹生成提示
+              const recentMessages = Array.isArray(messages) ? messages : [];
+              const userPersonaInfo = getUserPersonaInfo();
+              const trajectoryPrompt = `请为${chatData.name}生成一天的完整轨迹，基于以下信息：\n\n1. 角色设定：${chatData.profile?.description || chatData.name}\n\n2. 详细信息：\n性别：${chatData.profile?.gender || "未知"}\n性格：${chatData.profile?.personality || "未知"}\n背景：${chatData.profile?.background || "未知"}\nMBTI：${chatData.profile?.mbti || "未知"}\n星座：${chatData.profile?.constellation || "未知"}\n语言风格：${chatData.profile?.style || "默认风格"}\n\n3. 用户身份信息：\n${userPersonaInfo}\n\n4. 最近的聊天内容：\n${recentMessages
+                .slice(-50)
+                .map((msg) => `${msg.isMe ? "我" : chatData.name}: ${msg.text}`)
+                .join(
+                  "\n",
+                )}\n\n5. 世界背景：${chatData.worldInfo || "默认世界"}\n\n【必须遵守的规则】：\n1. 生成内容必须严格参考角色设定、世界书设置、用户身份配置和30-50条上下文。\n2. 事件按照「上午（辰时、巳时、午初）、中午（午正、未初、未正）、下午（申时、酉初、酉正）、晚间（戌时、亥初、亥正）」的时辰划分。\n3. 每个事件用莫兰迪浅色卡片展示，对应「外出 / 访客 / 私人 / 军务」分类。\n4. 生成一天内的完整日程，包含公务、社交、私人活动等，事件之间有逻辑关联。\n5. 卡片内包含：事件标题、简短描述。\n6. 确保一天内的事件数量合理，覆盖主要时段，避免过于密集或稀疏。\n\n请直接输出最终的轨迹表，无需额外解释。\n\n输出格式要求：\n以JSON格式输出，包含以下结构：\n{\n  \"events\": [\n    {\n      \"time\": \"上午-辰时\",\n      \"category\": \"军务\",\n      \"title\": \"处理军务\",\n      \"description\": \"处理日常军务文件\",\n      \"position\": { \"top\": \"10px\", \"left\": \"10px\" },\n      \"style\": \"orange\"\n    }\n  ]\n}`;
+
+              // 调用AI生成轨迹
+              const apiMessages = [
+                {
+                  role: "system",
+                  content: `你是一个AI助手，擅长为角色生成详细的一天轨迹。请根据提供的信息，为${chatData.name}生成真实、合理的一天轨迹。`,
+                },
+                { role: "user", content: trajectoryPrompt },
+              ];
+
+              window.sendToLLM(
+                apiMessages,
+                null, // onChunk
+                (reply) => {
+                  try {
+                    // 处理AI返回的Markdown代码块格式
+                    let jsonContent = reply;
+                    console.log("原始回复:", reply);
+
+                    // 提取```json代码块中的内容
+                    const codeBlockMatch = reply.match(/```json[\s\S]*?```/);
+                    if (codeBlockMatch) {
+                      jsonContent = codeBlockMatch[0]
+                        .replace(/```json|```/g, "")
+                        .trim();
+                      console.log("提取的JSON内容:", jsonContent);
+                    }
+                    // 提取```代码块中的内容
+                    else {
+                      const plainCodeBlockMatch = reply.match(/```[\s\S]*?```/);
+                      if (plainCodeBlockMatch) {
+                        jsonContent = plainCodeBlockMatch[0]
+                          .replace(/```/g, "")
+                          .trim();
+                        console.log("提取的代码块内容:", jsonContent);
+                      }
+                    }
+
+                    // 解析JSON
+                    const parsedData = JSON.parse(jsonContent);
+                    console.log("轨迹数据:", parsedData);
+
+                    // 为每个事件生成合理的位置
+                    if (parsedData.events && Array.isArray(parsedData.events)) {
+                      const positionedEvents = parsedData.events.map(
+                        (event, index) => {
+                          // 根据时辰生成位置
+                          let position = { top: "10px", left: "10px" };
+                          const timeSlot = event.time;
+
+                          // 支持多种时间格式：上午-辰时、上午，辰时、上午辰时等
+                          if (
+                            timeSlot.includes("上午") &&
+                            timeSlot.includes("辰时")
+                          ) {
+                            position = { top: "10px", left: "10px" };
+                          } else if (
+                            timeSlot.includes("上午") &&
+                            timeSlot.includes("巳时")
+                          ) {
+                            position = { top: "85px", left: "110px" };
+                          } else if (
+                            timeSlot.includes("上午") &&
+                            timeSlot.includes("午初")
+                          ) {
+                            position = { top: "140px", left: "70px" };
+                          } else if (
+                            timeSlot.includes("中午") &&
+                            timeSlot.includes("午正")
+                          ) {
+                            position = { top: "180px", left: "150px" };
+                          } else if (
+                            timeSlot.includes("中午") &&
+                            timeSlot.includes("未初")
+                          ) {
+                            position = { top: "190px", left: "200px" };
+                          } else if (
+                            timeSlot.includes("中午") &&
+                            timeSlot.includes("未正")
+                          ) {
+                            position = { top: "200px", left: "100px" };
+                          } else if (
+                            timeSlot.includes("下午") &&
+                            timeSlot.includes("申时")
+                          ) {
+                            position = { top: "220px", left: "160px" };
+                          } else if (
+                            timeSlot.includes("下午") &&
+                            timeSlot.includes("酉初")
+                          ) {
+                            position = { top: "230px", left: "110px" };
+                          } else if (
+                            timeSlot.includes("下午") &&
+                            timeSlot.includes("酉正")
+                          ) {
+                            position = { top: "240px", left: "210px" };
+                          } else if (
+                            timeSlot.includes("晚间") &&
+                            timeSlot.includes("戌时")
+                          ) {
+                            position = { bottom: "110px", left: "10px" };
+                          } else if (
+                            timeSlot.includes("晚间") &&
+                            timeSlot.includes("亥初")
+                          ) {
+                            position = { bottom: "40px", left: "130px" };
+                          } else if (
+                            timeSlot.includes("晚间") &&
+                            timeSlot.includes("亥正")
+                          ) {
+                            position = { bottom: "40px", left: "250px" };
+                          } else {
+                            // 默认位置
+                            position = {
+                              top: `${50 + index * 30}px`,
+                              left: `${50 + (index % 3) * 100}px`,
+                            };
+                          }
+
+                          // 根据分类生成样式
+                          let style = event.style;
+                          if (!style) {
+                            if (event.category === "军务") {
+                              style = "orange";
+                            } else if (event.category === "私人") {
+                              style = "gray";
+                            } else if (
+                              event.category === "外出" ||
+                              event.category === "访客"
+                            ) {
+                              style = "blue";
+                            }
+                          }
+
+                          return {
+                            ...event,
+                            position,
+                            style,
+                          };
+                        },
+                      );
+
+                      // 更新轨迹数据状态
+                      setTrajectoryData({ events: positionedEvents });
+                      resolve();
+                    }
+                  } catch (error) {
+                    console.error("解析轨迹数据失败:", error);
+                    console.log("原始回复:", reply);
+                    reject(error);
+                  }
+                },
+                (error) => {
+                  console.error("生成轨迹失败:", error);
+                  reject(error);
+                },
+              );
+            });
+          }}
+          trajectoryData={trajectoryData}
+        />
+      )}
+
 
       {/* ================= [新增] 语音输入莫兰迪粉弹窗 ================= */}
       {showVoiceModal && (
@@ -58923,11 +59132,15 @@ const T8ChatDetail = ({
                 {/* 可以在这里添加更多工具图标，如图片、文件等 */}
                 {/* 图片按钮 */}
                 <div
+                  title="发送图片"
                   style={{
                     cursor: "pointer",
                     padding: "4px",
                     borderRadius: "8px",
                     position: "relative",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     backgroundColor: showImagePanel
                       ? "rgba(255, 255, 255, 0.9)"
                       : "transparent",
@@ -58954,23 +59167,26 @@ const T8ChatDetail = ({
                     }
                   }}
                 >
-                  <iconify-icon
-                    icon="line-md:image"
+                  <i
+                    className="ph-bold ph-image"
                     style={{
-                      width: 24,
-                      height: 24,
+                      fontSize: "24px",
                       color: showImagePanel ? "#d6724b" : "#666",
                       transition: "all 0.2s ease",
                     }}
-                  ></iconify-icon>
+                  ></i>
                 </div>
                 {/* 表情包按钮 (重构为输入栏底部呼出面板) */}
                 <div
+                  title="表情包"
                   style={{
                     cursor: "pointer",
                     padding: "4px",
                     borderRadius: "8px",
                     position: "relative",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
                     backgroundColor: showEmojiPanel
                       ? "rgba(255, 255, 255, 0.9)"
                       : "transparent",
@@ -58999,24 +59215,27 @@ const T8ChatDetail = ({
                     }
                   }}
                 >
-                  <iconify-icon
-                    icon="line-md:iconify1"
+                  <i
+                    className="ph-bold ph-smiley"
                     style={{
-                      width: 24,
-                      height: 24,
+                      fontSize: "24px",
                       color: showEmojiPanel ? "#d6724b" : "#666",
                       transition: "all 0.2s ease",
                     }}
-                  ></iconify-icon>
+                  ></i>
                 </div>
                 {/* ====== 【新增：群聊工具面板按钮】 ====== */}
                 {isGroupChat && (
                   <div
+                    title="群功能"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
                       borderRadius: "8px",
                       position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                       backgroundColor: showToolPanel
                         ? "rgba(255, 255, 255, 0.9)"
                         : "transparent",
@@ -59043,25 +59262,28 @@ const T8ChatDetail = ({
                       }
                     }}
                   >
-                    <iconify-icon
-                      icon="line-md:plus-circle"
+                    <i
+                      className="ph-bold ph-plus-circle"
                       style={{
-                        width: 24,
-                        height: 24,
+                        fontSize: "24px",
                         color: showToolPanel ? "#d6724b" : "#666",
                         transition: "all 0.2s ease",
                       }}
-                    ></iconify-icon>
+                    ></i>
                   </div>
                 )}
                 {/* 语音通话按钮 */}
                 {!isGroupChat && (
                   <div
+                    title="语音通话"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
                       borderRadius: "8px",
                       position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.backgroundColor =
@@ -59095,26 +59317,29 @@ const T8ChatDetail = ({
                       });
                     }}
                   >
-                    <iconify-icon
-                      icon="line-md:phone-call-twotone-loop"
+                    <i
+                      className="ph-bold ph-phone-call"
                       style={{
-                        width: 24,
-                        height: 24,
+                        fontSize: "24px",
                         color: "#666",
                         transition: "all 0.2s ease",
                       }}
-                    ></iconify-icon>
+                    ></i>
                   </div>
                 )}
 
                 {/* 新增按钮 (日记) */}
                 {!isGroupChat && (
                   <div
+                    title="日记"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
                       borderRadius: "8px",
                       position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.backgroundColor =
@@ -59127,26 +59352,29 @@ const T8ChatDetail = ({
                       setShowDiaryPage(true);
                     }}
                   >
-                    <iconify-icon
-                      icon="line-md:bluesky-twotone"
+                    <i
+                      className="ph-bold ph-book-bookmark"
                       style={{
-                        width: 24,
-                        height: 24,
+                        fontSize: "24px",
                         color: "#666",
                         transition: "all 0.2s ease",
                       }}
-                    ></iconify-icon>
+                    ></i>
                   </div>
                 )}
 
                 {/* 轨迹图标按钮 */}
                 {!isGroupChat && (
                   <div
+                    title="轨迹"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
                       borderRadius: "8px",
                       position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
                     }}
                     onMouseEnter={(e) =>
                       (e.currentTarget.style.backgroundColor =
@@ -59160,15 +59388,14 @@ const T8ChatDetail = ({
                       setShowTrajectoryPage(true);
                     }}
                   >
-                    <iconify-icon
-                      icon="line-md:github-twotone-loop"
+                    <i
+                      className="ph-bold ph-footprints"
                       style={{
-                        width: 24,
-                        height: 24,
+                        fontSize: "24px",
                         color: "#666",
                         transition: "all 0.2s ease",
                       }}
-                    ></iconify-icon>
+                    ></i>
                   </div>
                 )}
               </div>
@@ -59957,32 +60184,32 @@ const T8ChatDetail = ({
                     {[
                       {
                         name: "接龙",
-                        icon: "ph:link-bold",
+                        icon: "ph-bold ph-link",
                         color: "#A8C8BA",
                       },
                       {
                         name: "打卡",
-                        icon: "ph:check-square-offset-bold",
+                        icon: "ph-bold ph-check-square",
                         color: "#D6724B",
                       },
                       {
                         name: "作业",
-                        icon: "ph:book-open-text-bold",
+                        icon: "ph-bold ph-book-open-text",
                         color: "#85C9D9",
                       },
                       {
                         name: "收藏",
-                        icon: "ph:star-bold",
+                        icon: "ph-bold ph-star",
                         color: "#E3C862",
                       },
                       {
                         name: "收款",
-                        icon: "ph:currency-cny-bold",
+                        icon: "ph-bold ph-currency-cny",
                         color: "#DFA9A9",
                       },
                       {
                         name: "投票",
-                        icon: "ph:chart-bar-bold",
+                        icon: "ph-bold ph-chart-bar",
                         color: "#9FBcd0",
                       },
                     ].map((tool, index) => (
@@ -60017,13 +60244,13 @@ const T8ChatDetail = ({
                             border: "1px solid rgba(0,0,0,0.02)",
                           }}
                         >
-                          <iconify-icon
-                            icon={tool.icon}
+                          <i
+                            className={tool.icon}
                             style={{
                               fontSize: "26px",
                               color: tool.color,
                             }}
-                          ></iconify-icon>
+                          ></i>
                         </div>
                         <span
                           style={{
@@ -60276,213 +60503,7 @@ const T8ChatDetail = ({
         )}
       </div>
 
-      {/* [新增] 轨迹页面 */}
-      {showTrajectoryPage && (
-        <TrajectoryPage
-          characterName={chatData.name}
-          onBack={() => {
-            setShowTrajectoryPage(false);
-            // 重置轨迹数据
-            setTrajectoryData(null);
-          }}
-          onGenerateTrajectory={async () => {
-            // AI生成轨迹逻辑
-            console.log("生成轨迹");
-
-            return new Promise((resolve, reject) => {
-              // 获取当前选中的身份信息
-              const getUserPersonaInfo = () => {
-                try {
-                  const personas = JSON.parse(
-                    localStorage.getItem("user_personas") || "[]",
-                  );
-                  const activeId = localStorage.getItem("active_persona_id");
-                  if (activeId) {
-                    const activePersona = personas.find(
-                      (p) => String(p.id) === String(activeId),
-                    );
-                    if (activePersona) {
-                      return `姓名：${activePersona.name}\n性别：${activePersona.gender || "未知"}\n年龄：${activePersona.age || "未知"}\n身份：${activePersona.occupation || "未知"}\n性格：${activePersona.personality || "未知"}\n背景：${activePersona.background || "未知"}`;
-                    }
-                  }
-                  return "未知";
-                } catch (error) {
-                  console.error("获取身份信息失败:", error);
-                  return "未知";
-                }
-              };
-
-              // 创建轨迹生成提示
-              const recentMessages = Array.isArray(messages) ? messages : [];
-              const userPersonaInfo = getUserPersonaInfo();
-              const trajectoryPrompt = `请为${chatData.name}生成一天的完整轨迹，基于以下信息：\n\n1. 角色设定：${chatData.profile?.description || chatData.name}\n\n2. 详细信息：\n性别：${chatData.profile?.gender || "未知"}\n性格：${chatData.profile?.personality || "未知"}\n背景：${chatData.profile?.background || "未知"}\nMBTI：${chatData.profile?.mbti || "未知"}\n星座：${chatData.profile?.constellation || "未知"}\n语言风格：${chatData.profile?.style || "默认风格"}\n\n3. 用户身份信息：\n${userPersonaInfo}\n\n4. 最近的聊天内容：\n${recentMessages
-                .slice(-50)
-                .map((msg) => `${msg.isMe ? "我" : chatData.name}: ${msg.text}`)
-                .join(
-                  "\n",
-                )}\n\n5. 世界背景：${chatData.worldInfo || "默认世界"}\n\n【必须遵守的规则】：\n1. 生成内容必须严格参考角色设定、世界书设置、用户身份配置和30-50条上下文。\n2. 事件按照「上午（辰时、巳时、午初）、中午（午正、未初、未正）、下午（申时、酉初、酉正）、晚间（戌时、亥初、亥正）」的时辰划分。\n3. 每个事件用莫兰迪浅色卡片展示，对应「外出 / 访客 / 私人 / 军务」分类。\n4. 生成一天内的完整日程，包含公务、社交、私人活动等，事件之间有逻辑关联。\n5. 卡片内包含：事件标题、简短描述。\n6. 确保一天内的事件数量合理，覆盖主要时段，避免过于密集或稀疏。\n\n请直接输出最终的轨迹表，无需额外解释。\n\n输出格式要求：\n以JSON格式输出，包含以下结构：\n{\n  \"events\": [\n    {\n      \"time\": \"上午-辰时\",\n      \"category\": \"军务\",\n      \"title\": \"处理军务\",\n      \"description\": \"处理日常军务文件\",\n      \"position\": { \"top\": \"10px\", \"left\": \"10px\" },\n      \"style\": \"orange\"\n    }\n  ]\n}`;
-
-              // 调用AI生成轨迹
-              const apiMessages = [
-                {
-                  role: "system",
-                  content: `你是一个AI助手，擅长为角色生成详细的一天轨迹。请根据提供的信息，为${chatData.name}生成真实、合理的一天轨迹。`,
-                },
-                { role: "user", content: trajectoryPrompt },
-              ];
-
-              window.sendToLLM(
-                apiMessages,
-                null, // onChunk
-                (reply) => {
-                  try {
-                    // 处理AI返回的Markdown代码块格式
-                    let jsonContent = reply;
-                    console.log("原始回复:", reply);
-
-                    // 提取```json代码块中的内容
-                    const codeBlockMatch = reply.match(/```json[\s\S]*?```/);
-                    if (codeBlockMatch) {
-                      jsonContent = codeBlockMatch[0]
-                        .replace(/```json|```/g, "")
-                        .trim();
-                      console.log("提取的JSON内容:", jsonContent);
-                    }
-                    // 提取```代码块中的内容
-                    else {
-                      const plainCodeBlockMatch = reply.match(/```[\s\S]*?```/);
-                      if (plainCodeBlockMatch) {
-                        jsonContent = plainCodeBlockMatch[0]
-                          .replace(/```/g, "")
-                          .trim();
-                        console.log("提取的代码块内容:", jsonContent);
-                      }
-                    }
-
-                    // 解析JSON
-                    const parsedData = JSON.parse(jsonContent);
-                    console.log("轨迹数据:", parsedData);
-
-                    // 为每个事件生成合理的位置
-                    if (parsedData.events && Array.isArray(parsedData.events)) {
-                      const positionedEvents = parsedData.events.map(
-                        (event, index) => {
-                          // 根据时辰生成位置
-                          let position = { top: "10px", left: "10px" };
-                          const timeSlot = event.time;
-
-                          // 支持多种时间格式：上午-辰时、上午，辰时、上午辰时等
-                          if (
-                            timeSlot.includes("上午") &&
-                            timeSlot.includes("辰时")
-                          ) {
-                            position = { top: "10px", left: "10px" };
-                          } else if (
-                            timeSlot.includes("上午") &&
-                            timeSlot.includes("巳时")
-                          ) {
-                            position = { top: "85px", left: "110px" };
-                          } else if (
-                            timeSlot.includes("上午") &&
-                            timeSlot.includes("午初")
-                          ) {
-                            position = { top: "140px", left: "70px" };
-                          } else if (
-                            timeSlot.includes("中午") &&
-                            timeSlot.includes("午正")
-                          ) {
-                            position = { top: "180px", left: "150px" };
-                          } else if (
-                            timeSlot.includes("中午") &&
-                            timeSlot.includes("未初")
-                          ) {
-                            position = { top: "190px", left: "200px" };
-                          } else if (
-                            timeSlot.includes("中午") &&
-                            timeSlot.includes("未正")
-                          ) {
-                            position = { top: "200px", left: "100px" };
-                          } else if (
-                            timeSlot.includes("下午") &&
-                            timeSlot.includes("申时")
-                          ) {
-                            position = { top: "220px", left: "160px" };
-                          } else if (
-                            timeSlot.includes("下午") &&
-                            timeSlot.includes("酉初")
-                          ) {
-                            position = { top: "230px", left: "110px" };
-                          } else if (
-                            timeSlot.includes("下午") &&
-                            timeSlot.includes("酉正")
-                          ) {
-                            position = { top: "240px", left: "210px" };
-                          } else if (
-                            timeSlot.includes("晚间") &&
-                            timeSlot.includes("戌时")
-                          ) {
-                            position = { bottom: "110px", left: "10px" };
-                          } else if (
-                            timeSlot.includes("晚间") &&
-                            timeSlot.includes("亥初")
-                          ) {
-                            position = { bottom: "40px", left: "130px" };
-                          } else if (
-                            timeSlot.includes("晚间") &&
-                            timeSlot.includes("亥正")
-                          ) {
-                            position = { bottom: "40px", left: "250px" };
-                          } else {
-                            // 默认位置
-                            position = {
-                              top: `${50 + index * 30}px`,
-                              left: `${50 + (index % 3) * 100}px`,
-                            };
-                          }
-
-                          // 根据分类生成样式
-                          let style = event.style;
-                          if (!style) {
-                            if (event.category === "军务") {
-                              style = "orange";
-                            } else if (event.category === "私人") {
-                              style = "gray";
-                            } else if (
-                              event.category === "外出" ||
-                              event.category === "访客"
-                            ) {
-                              style = "blue";
-                            }
-                          }
-
-                          return {
-                            ...event,
-                            position,
-                            style,
-                          };
-                        },
-                      );
-
-                      // 更新轨迹数据状态
-                      setTrajectoryData({ events: positionedEvents });
-                      resolve();
-                    }
-                  } catch (error) {
-                    console.error("解析轨迹数据失败:", error);
-                    console.log("原始回复:", reply);
-                    reject(error);
-                  }
-                },
-                (error) => {
-                  console.error("生成轨迹失败:", error);
-                  reject(error);
-                },
-              );
-            });
-          }}
-          trajectoryData={trajectoryData}
-        />
-      )}
+      
 
       {showSettings &&
         (chatData?.type === "group" ? (
@@ -63607,20 +63628,17 @@ const BambooDiaryPage = ({
 }) => {
   const [content, setContent] = React.useState(
     diaryContent || {
-      title: "将进酒",
+      title: "丁未年 2月 23日",
       paragraphs: [
-        "君不见黄河之水天上来，奔流到海不复回。",
-        "君不见高堂明镜悲白发，朝如青丝暮成雪。",
-        "人生得意须尽欢，莫使金樽空对月。",
-        "天生我材必有用，千金散尽还复来。",
-        "烹羊宰牛且为乐，会须一饮三百杯。",
+        "她又算账到很晚。副官给的活太多。我让她去睡。她不听。非要算。我把账本拿走了。她才肯躺下。",
+        "&她自己。她说我的被子短。其实不短。够盖。就算露一点脚，也我们不是朋友吗。其实我不想收钱。收钱就见外了。但大哥那边要用钱。没办法。朋友也要算钱。这就是规矩。",
       ],
     },
   );
 
   // 分页状态
   const [currentPage, setCurrentPage] = React.useState(0);
-  const [pageSize] = React.useState(220); // 每页显示220个字
+  const [pageSize] = React.useState(180); // 每页约180字
 
   // 从IndexedDB读取日记
   React.useEffect(() => {
@@ -63703,16 +63721,13 @@ const BambooDiaryPage = ({
     paragraphs.forEach((paragraph) => {
       const paragraphLength = paragraph.length;
 
-      // 如果当前段落本身就超过180字，需要分段
       if (paragraphLength > pageSize) {
-        // 先将当前页面的内容添加到pages
         if (currentPageContent.length > 0) {
           pages.push(currentPageContent);
           currentPageContent = [];
           currentCharCount = 0;
         }
 
-        // 将长段落分成多个部分
         let start = 0;
         while (start < paragraphLength) {
           const end = Math.min(start + pageSize, paragraphLength);
@@ -63720,230 +63735,404 @@ const BambooDiaryPage = ({
           start = end;
         }
       } else if (currentCharCount + paragraphLength > pageSize) {
-        // 如果加上当前段落后超过180字，开始新的一页
         pages.push(currentPageContent);
         currentPageContent = [paragraph];
         currentCharCount = paragraphLength;
       } else {
-        // 否则添加到当前页面
         currentPageContent.push(paragraph);
         currentCharCount += paragraphLength;
       }
     });
 
-    // 添加最后一页
     if (currentPageContent.length > 0) {
       pages.push(currentPageContent);
     }
 
-    return pages;
+    return pages.length > 0 ? pages : [[]];
   };
 
-  // 计算总页数
   const totalPages = getPageContent().length;
 
-  // 获取当前页的内容
   const getCurrentPageContent = () => {
     const pages = getPageContent();
     return pages[currentPage] || [];
   };
 
-  // 翻页处理
-  const handlePrevPage = () => {
-    if (currentPage > 0) {
-      setCurrentPage(currentPage - 1);
-    }
-  };
-
-  const handleNextPage = () => {
-    if (currentPage < totalPages - 1) {
-      setCurrentPage(currentPage + 1);
-    }
-  };
-
-  React.useEffect(() => {
-    const flatArea = document.getElementById("bambooFlatArea");
-    const ropes = document.querySelector(".bamboo-page-container .ropes");
-
-    if (!flatArea || !ropes) return;
-
-    // 清空可能存在的旧条目，保留绳子
-    // 动态计算需要多少片竹简
-    const numStrips = 30;
-
-    // 移除旧的 strips (保留 ropes)
-    const existingStrips = flatArea.querySelectorAll(".strip");
-    existingStrips.forEach((el) => el.remove());
-
-    for (let i = 0; i < numStrips; i++) {
-      const strip = document.createElement("div");
-      strip.className = "strip";
-
-      // 核心细节：还原原图的参差不齐感
-      const heightPercent = 95 + Math.random() * 5;
-      strip.style.height = `${heightPercent}%`;
-
-      const translateY = Math.random() * 4 - 2;
-      strip.style.transform = `translateY(${translateY}px)`;
-
-      if (Math.random() > 0.7) {
-        strip.style.filter = `brightness(${0.95 + Math.random() * 0.1})`;
-      }
-
-      flatArea.insertBefore(strip, ropes);
-    }
-
-    const adjustRopeMask = () => {
-      const stripEl = document.querySelector(".bamboo-page-container .strip");
-      if (!stripEl) return;
-      const stripWidth = stripEl.offsetWidth;
-      const ropeEls = document.querySelectorAll(".bamboo-page-container .rope");
-      const maskCSS = `repeating-linear-gradient(to right, black 0%, black ${stripWidth - 4}px, rgba(0,0,0,0.3) ${stripWidth - 2}px, black ${stripWidth}px)`;
-
-      ropeEls.forEach((rope) => {
-        rope.style.maskImage = maskCSS;
-        rope.style.webkitMaskImage = maskCSS;
-      });
-    };
-
-    // 延迟执行以确保DOM渲染完毕获取正确宽度
-    setTimeout(adjustRopeMask, 100);
-    window.addEventListener("resize", adjustRopeMask);
-
-    return () => window.removeEventListener("resize", adjustRopeMask);
+  // 生成固定16片具有天然参差错落质感的竹简参数
+  const stripsData = React.useMemo(() => {
+    return Array.from({ length: 16 }).map((_, i) => ({
+      height: 94 + (Math.sin(i * 1.5) * 3 + 3), // 94% ~ 100%
+      translateY: ((i % 3) - 1) * 2, // -2px ~ 2px
+      brightness: 0.96 + ((i * 7) % 10) * 0.008,
+    }));
   }, []);
 
   return (
-    <div className="bamboo-page-container">
-      {/* 左上角：生成日记按钮 */}
+    <div
+      className="bamboo-page-container open"
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 1200,
+        background: "radial-gradient(circle at 30% 30%, #f9f5e8 0%, #f1ebd8 70%, #dcd4bc 100%)",
+        display: "flex",
+        flexDirection: "column",
+        justifyContent: "flex-start",
+        alignItems: "stretch",
+        overflow: "hidden",
+        fontFamily: '"Zhi Mang Xing", "STKaiti", "Kaiti TC", "KaiTi", serif',
+        padding: "calc(16px + var(--safe-top, 0px)) 16px 20px 16px",
+        boxSizing: "border-box",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* 顶部工具栏 */}
       <div
-        className="watermark"
         style={{
-          position: "absolute",
-          top: "40px",
-          left: "20px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "4px 4px 12px 4px",
+          width: "100%",
+          boxSizing: "border-box",
           zIndex: 100,
-          cursor: "pointer",
         }}
-        onClick={onGenerateDiary}
       >
-        <iconify-icon
-          icon="line-md:marker"
-          style={{ width: 16, height: 16, marginRight: "4px" }}
-        ></iconify-icon>
-        生成日记
-      </div>
-
-      {/* 右上角：返回按钮（图标样式） */}
-      <div
-        style={{
-          position: "absolute",
-          top: "40px",
-          right: "5px",
-          zIndex: 100,
-          cursor: "pointer",
-          padding: "8px",
-          borderRadius: "8px",
-          transition: "background-color 0.2s ease",
-        }}
-        onMouseEnter={(e) =>
-          (e.currentTarget.style.backgroundColor = "rgba(255, 255, 255, 0.3)")
-        }
-        onMouseLeave={(e) =>
-          (e.currentTarget.style.backgroundColor = "transparent")
-        }
-        onClick={onBack}
-      >
-        <iconify-icon
-          icon="line-md:menu-to-close-alt-transition"
-          style={{ width: 24, height: 24, color: "#5a4f3f" }}
-        ></iconify-icon>
-      </div>
-
-      <div className="bamboo-scroll-wrapper">
-        <div className="flat-area" id="bambooFlatArea">
-          <div className="ropes">
-            <div className="rope rope-top">
-              <div className="knot"></div>
-            </div>
-            <div className="rope rope-bottom">
-              <div className="knot"></div>
-            </div>
-          </div>
+        {/* 左上角：生成日记按钮 */}
+        <div
+          className="watermark"
+          onClick={onGenerateDiary}
+          style={{
+            padding: "6px 14px",
+            border: "1px solid rgba(138, 114, 80, 0.35)",
+            borderRadius: "18px",
+            color: "#5a4f3f",
+            fontSize: "14px",
+            letterSpacing: "1px",
+            backgroundColor: "rgba(255, 255, 255, 0.45)",
+            backdropFilter: "blur(4px)",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+            userSelect: "none",
+          }}
+        >
+          <i
+            className="ph-bold ph-pencil-simple-line"
+            style={{ fontSize: "16px", color: "#8a5a30" }}
+          ></i>
+          <span>生成日记</span>
         </div>
 
-        <div className="roll-area"></div>
-
-        <div className="content-layer">
-          <h1 style={{ color: "#ff6b6b" }}>{content.title}</h1>
-          {getCurrentPageContent().map((paragraph, index) => (
-            <p key={index} dangerouslySetInnerHTML={{ __html: paragraph }}></p>
-          ))}
+        {/* 右上角：返回关闭按钮 */}
+        <div
+          style={{
+            cursor: "pointer",
+            width: "34px",
+            height: "34px",
+            borderRadius: "50%",
+            backgroundColor: "rgba(255, 255, 255, 0.45)",
+            border: "1px solid rgba(138, 114, 80, 0.25)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "all 0.2s ease",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+          }}
+          onClick={onBack}
+        >
+          <i className="ph-bold ph-x" style={{ fontSize: "18px", color: "#5a4f3f" }}></i>
         </div>
+      </div>
 
-        {/* 分页按钮 */}
-        {totalPages > 1 && (
+      {/* 竹简主体展开展示区 */}
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          position: "relative",
+          width: "100%",
+          overflow: "hidden",
+          padding: "6px 4px 16px",
+          boxSizing: "border-box",
+        }}
+      >
+        {/* 竹简卷轴 Wrapper */}
+        <div
+          className="bamboo-scroll-wrapper"
+          style={{
+            position: "relative",
+            height: "88%",
+            maxHeight: "620px",
+            minHeight: "420px",
+            width: "95%",
+            maxWidth: "390px",
+            margin: "0 auto",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "flex-end",
+          }}
+        >
+          {/* 竹简展开平铺区域 (Flat Area) */}
           <div
+            className="flat-area"
             style={{
-              position: "absolute",
-              bottom: "20px",
-              left: "50%",
-              transform: "translateX(-50%)",
               display: "flex",
-              gap: "20px",
-              zIndex: 20,
+              flex: 1,
+              height: "100%",
+              overflow: "hidden",
+              position: "relative",
+              alignItems: "center",
+              justifyContent: "flex-end",
             }}
           >
-            <button
-              onClick={handlePrevPage}
-              disabled={currentPage === 0}
+            {/* 16 片竹简 Slats */}
+            {stripsData.map((strip, i) => (
+              <div
+                key={i}
+                className="strip"
+                style={{
+                  flex: 1,
+                  height: `${strip.height}%`,
+                  transform: `translateY(${strip.translateY}px)`,
+                  filter: `brightness(${strip.brightness})`,
+                  marginRight: "-1px",
+                  borderRadius: "3px 3px 2px 2px",
+                  background:
+                    "linear-gradient(to right, #b88d55 0%, #e1c48e 15%, #fdf5d6 40%, #fdf5d6 60%, #e1c48e 90%, #7a5a30 100%)",
+                  boxShadow:
+                    "2px 2px 6px rgba(0, 0, 0, 0.15), inset 1px 0px 2px rgba(255, 255, 255, 0.6)",
+                  position: "relative",
+                  zIndex: 1,
+                }}
+              />
+            ))}
+
+            {/* 麻绳绑定 (Ropes) */}
+            <div
+              className="ropes"
               style={{
-                padding: "6px 12px",
-                background:
-                  currentPage === 0
-                    ? "rgba(255, 255, 255, 0.3)"
-                    : "rgba(255, 255, 255, 0.8)",
-                border: "1px solid rgba(255, 255, 255, 0.5)",
-                borderRadius: "4px",
-                color: "#3b2e21",
-                cursor: currentPage === 0 ? "not-allowed" : "pointer",
-                fontFamily: "STKaiti, KaiTi, serif",
-                fontSize: "14px",
+                position: "absolute",
+                top: 0,
+                bottom: 0,
+                left: 0,
+                right: 0,
+                pointerEvents: "none",
+                zIndex: 10,
               }}
             >
-              上一页
-            </button>
-            <span
-              style={{
-                padding: "8px 0",
-                color: "#3b2e21",
-                fontFamily: "STKaiti, KaiTi, serif",
-              }}
-            >
-              {currentPage + 1} / {totalPages}
-            </span>
-            <button
-              onClick={handleNextPage}
-              disabled={currentPage === totalPages - 1}
-              style={{
-                padding: "6px 12px",
-                background:
-                  currentPage === totalPages - 1
-                    ? "rgba(255, 255, 255, 0.3)"
-                    : "rgba(255, 255, 255, 0.8)",
-                border: "1px solid rgba(255, 255, 255, 0.5)",
-                borderRadius: "4px",
-                color: "#3b2e21",
-                cursor:
-                  currentPage === totalPages - 1 ? "not-allowed" : "pointer",
-                fontFamily: "STKaiti, KaiTi, serif",
-                fontSize: "14px",
-              }}
-            >
-              下一页
-            </button>
+              {/* 上绳 */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: "-10px",
+                  top: "24%",
+                  height: "6px",
+                  background:
+                    "repeating-linear-gradient(45deg, #eaddbd 0%, #eaddbd 2px, #a88a5c 3px, #a88a5c 4px)",
+                  borderRadius: "3px",
+                  boxShadow:
+                    "0 3px 4px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.4)",
+                }}
+              >
+                {/* 结头 */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "-3px",
+                    width: "12px",
+                    height: "12px",
+                    background: "radial-gradient(circle, #eaddbd, #a88a5c)",
+                    borderRadius: "50%",
+                    boxShadow: "2px 2px 3px rgba(0, 0, 0, 0.4)",
+                    transform: "translateY(-3px)",
+                  }}
+                />
+              </div>
+
+              {/* 下绳 */}
+              <div
+                style={{
+                  position: "absolute",
+                  left: 0,
+                  right: "-10px",
+                  bottom: "24%",
+                  height: "6px",
+                  background:
+                    "repeating-linear-gradient(45deg, #eaddbd 0%, #eaddbd 2px, #a88a5c 3px, #a88a5c 4px)",
+                  borderRadius: "3px",
+                  boxShadow:
+                    "0 3px 4px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.4)",
+                }}
+              >
+                {/* 结头 */}
+                <div
+                  style={{
+                    position: "absolute",
+                    left: "-3px",
+                    width: "12px",
+                    height: "12px",
+                    background: "radial-gradient(circle, #eaddbd, #a88a5c)",
+                    borderRadius: "50%",
+                    boxShadow: "2px 2px 3px rgba(0, 0, 0, 0.4)",
+                    transform: "translateY(-3px)",
+                  }}
+                />
+              </div>
+            </div>
           </div>
-        )}
+
+          {/* 右侧立体卷起卷轴 (Roll Area) */}
+          <div
+            className="roll-area"
+            style={{
+              width: "50px",
+              height: "102%",
+              background:
+                "linear-gradient(to right, #7a5a30 0%, #e1c48e 20%, #fdf5d6 50%, #e1c48e 85%, #4a3318 100%)",
+              borderRadius: "12px",
+              boxShadow:
+                "-8px 0 15px rgba(0, 0, 0, 0.4), 12px 12px 22px rgba(0, 0, 0, 0.25), inset -3px 0 10px rgba(0, 0, 0, 0.6)",
+              position: "relative",
+              zIndex: 20,
+              flexShrink: 0,
+            }}
+          />
+
+          {/* 纵向书法正文排版层 (Content Layer) */}
+          <div
+            className="content-layer"
+            style={{
+              position: "absolute",
+              top: "8%",
+              bottom: "16%",
+              left: "12px",
+              right: "60px",
+              zIndex: 25,
+              writingMode: "vertical-rl",
+              textOrientation: "upright",
+              color: "#3b2e21",
+              fontSize: "15px",
+              lineHeight: "26px",
+              pointerEvents: "auto",
+              overflowX: "auto",
+              overflowY: "hidden",
+              fontFamily: '"Zhi Mang Xing", "STKaiti", "KaiTi", serif',
+            }}
+          >
+            {/* 红色日期/标题 */}
+            <h1
+              style={{
+                color: "#c84b31",
+                margin: "0 14px 0 0",
+                fontSize: "1.35em",
+                letterSpacing: "4px",
+                fontWeight: "bold",
+                writingMode: "vertical-rl",
+                textOrientation: "upright",
+                userSelect: "none",
+              }}
+            >
+              {content.title}
+            </h1>
+
+            {/* 段落正文 */}
+            {getCurrentPageContent().map((paragraph, index) => (
+              <p
+                key={index}
+                style={{
+                  margin: "0 10px 0 0",
+                  letterSpacing: "2px",
+                  writingMode: "vertical-rl",
+                  textOrientation: "upright",
+                  textShadow: "1px 1px 0px rgba(255, 255, 255, 0.5)",
+                }}
+                dangerouslySetInnerHTML={{ __html: paragraph }}
+              ></p>
+            ))}
+          </div>
+
+          {/* 底部翻页控制器 (完全还原图1设计) */}
+          {totalPages > 1 && (
+            <div
+              style={{
+                position: "absolute",
+                bottom: "18px",
+                left: "20px",
+                right: "70px",
+                zIndex: 30,
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                padding: "0 10px",
+              }}
+            >
+              <button
+                onClick={handlePrevPage}
+                disabled={currentPage === 0}
+                style={{
+                  background: "rgba(255, 255, 255, 0.75)",
+                  border: "1px solid rgba(138, 114, 80, 0.3)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  cursor: currentPage === 0 ? "not-allowed" : "pointer",
+                  opacity: currentPage === 0 ? 0.35 : 0.95,
+                  color: "#3b2e21",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  fontFamily: '"STKaiti", "KaiTi", serif',
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                  backdropFilter: "blur(4px)",
+                }}
+              >
+                上一页
+              </button>
+
+              <span
+                style={{
+                  fontFamily: '"STKaiti", "KaiTi", serif',
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                  color: "#3b2e21",
+                  background: "rgba(255, 255, 255, 0.6)",
+                  padding: "4px 10px",
+                  borderRadius: "10px",
+                  letterSpacing: "1px",
+                }}
+              >
+                {currentPage + 1} / {totalPages}
+              </span>
+
+              <button
+                onClick={handleNextPage}
+                disabled={currentPage === totalPages - 1}
+                style={{
+                  background: "rgba(255, 255, 255, 0.75)",
+                  border: "1px solid rgba(138, 114, 80, 0.3)",
+                  borderRadius: "8px",
+                  padding: "6px 12px",
+                  cursor: currentPage === totalPages - 1 ? "not-allowed" : "pointer",
+                  opacity: currentPage === totalPages - 1 ? 0.35 : 0.95,
+                  color: "#3b2e21",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  fontFamily: '"STKaiti", "KaiTi", serif',
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                  backdropFilter: "blur(4px)",
+                }}
+              >
+                下一页
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -70460,71 +70649,62 @@ const TrajectoryPage = ({
   const [selectedEvent, setSelectedEvent] = React.useState(null);
   const [showEventModal, setShowEventModal] = React.useState(false);
 
-  // 生成默认轨迹数据
+  // 生成默认轨迹数据 (1:1 还原设计稿布局与坐标)
   React.useEffect(() => {
-    // 默认轨迹事件
     const defaultEvents = [
       {
         time: "上午-辰时",
         category: "军务",
         title: "参加雅集",
-        description: "与士大夫们交流",
-        position: { top: "10px", left: "10px" },
-        style: "orange",
+        description: "与士大夫们交流，探讨当前时局。",
+        position: { top: "12px", left: "10px" },
+        style: "peach",
       },
       {
         time: "上午-巳时",
         category: "访客",
         title: "与程昱交谈",
-        description: "讨论政务",
-        position: { top: "85px", left: "110px" },
-        style: "",
+        description: "商讨军需供应与屯田之策。",
+        position: { top: "132px", left: "110px" },
+        style: "peach",
       },
       {
         time: "上午-午初",
         category: "私人",
         title: "族中子弟来访",
-        description: "接待族中子弟",
-        position: { top: "140px", left: "70px" },
-        style: "gray",
+        description: "接待族中晚辈，考校学业。",
+        position: { top: "192px", left: "68px" },
+        style: "peach",
       },
       {
         time: "下午-申时",
         category: "军务",
         title: "处理军务纷争",
-        description: "处理本初和公路的军务纷争",
-        position: { top: "220px", left: "160px" },
-        style: "big-orange",
+        description: "调解各营纷争，部署城防哨戒。",
+        position: { top: "272px", left: "160px" },
+        style: "dark-peach",
       },
       {
         time: "晚间-戌时",
         category: "外出",
         title: "与殿下同游洛水",
-        description: "与殿下一同游览洛水",
-        position: { bottom: "110px", left: "10px" },
+        description: "与殿下一同漫步洛水之畔，夜风清爽。",
+        position: { top: "330px", left: "8px" },
         style: "blue",
       },
       {
         time: "晚间-亥初",
         category: "私人",
         title: "看书饮茶",
-        description: "看书，饮茶，研究偃甲机关",
-        position: { bottom: "80px", left: "130px" },
-        style: "blue",
-      },
-      {
-        time: "晚间-亥正",
-        category: "军务",
-        title: "处理剩余军务",
-        description: "处理今日剩余的军务",
-        position: { bottom: "40px", left: "350px" },
+        description: "研读兵法残卷，烹煮新茶，钻研偃甲机关术。",
+        position: { top: "360px", left: "135px" },
         style: "blue",
       },
     ];
     setEvents(defaultEvents);
   }, []);
 
-  // 当trajectoryData变化时更新事件
+  // 当 trajectoryData 变化时更新事件
   React.useEffect(() => {
     if (trajectoryData && trajectoryData.events) {
       setEvents(trajectoryData.events);
@@ -70532,15 +70712,77 @@ const TrajectoryPage = ({
   }, [trajectoryData]);
 
   return (
-    <div className="traj-overlay" style={{ overflow: "hidden" }}>
-      <div className="traj-header">
+    <div
+      className="traj-overlay open"
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        backgroundColor: "#F4EFE6",
+        zIndex: 1200,
+        display: "flex",
+        flexDirection: "column",
+        padding: "calc(16px + var(--safe-top, 0px)) 16px 20px 16px",
+        fontFamily: '"SimSun", "STKaiti", "Kaiti TC", "KaiTi", serif',
+        overflowY: "auto",
+        overflowX: "hidden",
+        boxSizing: "border-box",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
+      {/* 顶部标题区 */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "flex-start",
+          marginBottom: "16px",
+          width: "100%",
+          boxSizing: "border-box",
+        }}
+      >
         <div>
-          <div className="traj-date">乙未年 贰月 二十四日</div>
-          <div className="traj-title">
-            {characterName}今日轨迹{" "}
+          <div
+            style={{
+              color: "#8C917B",
+              fontSize: "13px",
+              letterSpacing: "1px",
+              marginBottom: "4px",
+              fontFamily: '"SimSun", "STKaiti", serif',
+            }}
+          >
+            乙未年 贰月 二十四日
+          </div>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+            }}
+          >
+            <span
+              style={{
+                fontSize: "22px",
+                fontWeight: "900",
+                color: "#505643",
+                letterSpacing: "1px",
+                fontFamily: '"SimSun", "STKaiti", serif',
+              }}
+            >
+              {characterName || "角色"}今日轨迹
+            </span>
+            {/* 搜索/AI重新生成图标 */}
             <i
-              className="ph ph-magnifying-glass"
-              style={{ cursor: "pointer" }}
+              className="ph-bold ph-magnifying-glass"
+              style={{
+                cursor: "pointer",
+                color: "#505643",
+                fontSize: "20px",
+                padding: "2px",
+                transition: "transform 0.2s ease",
+              }}
+              title="AI生成新轨迹"
               onClick={async () => {
                 setIsLoading(true);
                 try {
@@ -70555,176 +70797,374 @@ const TrajectoryPage = ({
             {isLoading && (
               <span
                 style={{
-                  fontSize: "14px",
-                  marginLeft: "10px",
+                  fontSize: "12px",
                   color: "#D6724B",
-                  display: "flex",
+                  display: "inline-flex",
                   alignItems: "center",
-                  gap: "5px",
+                  gap: "4px",
                 }}
               >
-                <iconify-icon
-                  icon="line-md:hazard-lights-twotone-loop"
-                  style={{
-                    width: 16,
-                    height: 16,
-                    animation: "spin 1s linear infinite",
-                  }}
-                ></iconify-icon>
+                <i
+                  className="ph-bold ph-spinner ph-spin"
+                  style={{ fontSize: "13px" }}
+                ></i>
                 生成中...
               </span>
             )}
           </div>
         </div>
-        <div style={{ display: "flex", alignItems: "center" }}>
-          <div className="traj-back-icon" onClick={onBack}>
-            <svg viewBox="0 0 100 100" width="40" height="40">
-              <path
-                d="M80,50 Q80,20 50,20 T20,50 M20,50 L35,40 M20,50 L35,60"
-                fill="none"
-                stroke="#000"
-                strokeWidth="6"
-                strokeLinecap="round"
-              />
-            </svg>
-          </div>
+
+        {/* 右上角返回/刷新弧形箭头 (完全还原图1) */}
+        <div
+          onClick={onBack}
+          style={{
+            width: "36px",
+            height: "36px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            cursor: "pointer",
+            color: "#333",
+            transition: "transform 0.2s",
+          }}
+          title="返回"
+        >
+          <svg
+            width="28"
+            height="28"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#2B2D26"
+            strokeWidth="2.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+            <path d="M3 3v5h5" />
+          </svg>
         </div>
       </div>
 
-      <div className="traj-categories">
+      {/* 分类标签栏 */}
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "flex-end",
+          gap: "10px",
+          marginBottom: "16px",
+          width: "100%",
+          boxSizing: "border-box",
+        }}
+      >
         {["外出", "访客", "私人", "军务"].map((cat) => (
-          <div key={cat} className="traj-cat-box">
+          <div
+            key={cat}
+            style={{
+              border: "1px solid #7C826E",
+              borderRadius: "2px",
+              padding: "3px 12px",
+              fontSize: "13px",
+              color: "#505643",
+              backgroundColor: "rgba(255, 255, 255, 0.4)",
+              letterSpacing: "1px",
+              userSelect: "none",
+            }}
+          >
             {cat}
           </div>
         ))}
       </div>
 
+      {/* 主体：时间轴 + 事件内容画布 */}
       <div
-        className="traj-main-grid"
         style={{
-          overflow: "visible",
+          display: "flex",
+          flex: 1,
+          minHeight: "460px",
+          position: "relative",
+          width: "100%",
+          boxSizing: "border-box",
         }}
       >
-        <div className="traj-time-axis">
+        {/* 左侧时间轴 (固定 76px 宽) */}
+        <div
+          style={{
+            width: "76px",
+            flexShrink: 0,
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+          }}
+        >
           {/* 上午 */}
-          <div className="traj-period-group">
-            <div className="traj-period-label">上午</div>
-            <div className="traj-slots">
-              <div className="traj-slot-cell">辰时</div>
-              <div className="traj-slot-cell">巳时</div>
-              <div className="traj-slot-cell">午初</div>
+          <div style={{ display: "flex", flex: 1, minHeight: "106px" }}>
+            <div
+              style={{
+                width: "22px",
+                backgroundColor: "#E2B899",
+                color: "#fff",
+                writingMode: "vertical-rl",
+                textOrientation: "upright",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "12px",
+                letterSpacing: "4px",
+                borderRadius: "2px 0 0 2px",
+                userSelect: "none",
+              }}
+            >
+              上午
+            </div>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: "2px",
+                marginLeft: "2px",
+              }}
+            >
+              {["辰时", "巳时", "午初"].map((slot) => (
+                <div
+                  key={slot}
+                  style={{
+                    flex: 1,
+                    backgroundColor: "#DED6C5",
+                    color: "#fff",
+                    fontSize: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "0 2px 2px 0",
+                    letterSpacing: "1px",
+                  }}
+                >
+                  {slot}
+                </div>
+              ))}
             </div>
           </div>
+
           {/* 中午 */}
-          <div className="traj-period-group">
-            <div className="traj-period-label" style={{ background: "#999" }}>
+          <div style={{ display: "flex", flex: 1, minHeight: "106px" }}>
+            <div
+              style={{
+                width: "22px",
+                backgroundColor: "#8C9197",
+                color: "#fff",
+                writingMode: "vertical-rl",
+                textOrientation: "upright",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "12px",
+                letterSpacing: "4px",
+                borderRadius: "2px 0 0 2px",
+                userSelect: "none",
+              }}
+            >
               中午
             </div>
-            <div className="traj-slots">
-              <div className="traj-slot-cell" style={{ background: "#BBB" }}>
-                午正
-              </div>
-              <div className="traj-slot-cell" style={{ background: "#BBB" }}>
-                未初
-              </div>
-              <div className="traj-slot-cell" style={{ background: "#BBB" }}>
-                未正
-              </div>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: "2px",
+                marginLeft: "2px",
+              }}
+            >
+              {["午正", "未初", "未正"].map((slot) => (
+                <div
+                  key={slot}
+                  style={{
+                    flex: 1,
+                    backgroundColor: "#B8BEC4",
+                    color: "#fff",
+                    fontSize: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "0 2px 2px 0",
+                    letterSpacing: "1px",
+                  }}
+                >
+                  {slot}
+                </div>
+              ))}
             </div>
           </div>
+
           {/* 下午 */}
-          <div className="traj-period-group">
+          <div style={{ display: "flex", flex: 1, minHeight: "106px" }}>
             <div
-              className="traj-period-label"
-              style={{ background: "#D4AB90" }}
+              style={{
+                width: "22px",
+                backgroundColor: "#CFA286",
+                color: "#fff",
+                writingMode: "vertical-rl",
+                textOrientation: "upright",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "12px",
+                letterSpacing: "4px",
+                borderRadius: "2px 0 0 2px",
+                userSelect: "none",
+              }}
             >
               下午
             </div>
-            <div className="traj-slots">
-              <div className="traj-slot-cell" style={{ background: "#DBC2B1" }}>
-                申时
-              </div>
-              <div className="traj-slot-cell" style={{ background: "#DBC2B1" }}>
-                酉初
-              </div>
-              <div className="traj-slot-cell" style={{ background: "#DBC2B1" }}>
-                酉正
-              </div>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: "2px",
+                marginLeft: "2px",
+              }}
+            >
+              {["申时", "酉初", "酉正"].map((slot) => (
+                <div
+                  key={slot}
+                  style={{
+                    flex: 1,
+                    backgroundColor: "#DFC3B0",
+                    color: "#fff",
+                    fontSize: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "0 2px 2px 0",
+                    letterSpacing: "1px",
+                  }}
+                >
+                  {slot}
+                </div>
+              ))}
             </div>
           </div>
+
           {/* 晚间 */}
-          <div className="traj-period-group">
+          <div style={{ display: "flex", flex: 1, minHeight: "106px" }}>
             <div
-              className="traj-period-label"
-              style={{ background: "#8AA6C1" }}
+              style={{
+                width: "22px",
+                backgroundColor: "#7B96B2",
+                color: "#fff",
+                writingMode: "vertical-rl",
+                textOrientation: "upright",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "12px",
+                letterSpacing: "4px",
+                borderRadius: "2px 0 0 2px",
+                userSelect: "none",
+              }}
             >
               晚间
             </div>
-            <div className="traj-slots">
-              <div className="traj-slot-cell" style={{ background: "#B8C8E8" }}>
-                戌时
-              </div>
-              <div className="traj-slot-cell" style={{ background: "#B8C8E8" }}>
-                亥初
-              </div>
-              <div className="traj-slot-cell" style={{ background: "#B8C8E8" }}>
-                亥正
-              </div>
+            <div
+              style={{
+                flex: 1,
+                display: "flex",
+                flexDirection: "column",
+                gap: "2px",
+                marginLeft: "2px",
+              }}
+            >
+              {["戌时", "亥初", "亥正"].map((slot) => (
+                <div
+                  key={slot}
+                  style={{
+                    flex: 1,
+                    backgroundColor: "#B2C5DA",
+                    color: "#fff",
+                    fontSize: "12px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    borderRadius: "0 2px 2px 0",
+                    letterSpacing: "1px",
+                  }}
+                >
+                  {slot}
+                </div>
+              ))}
             </div>
           </div>
         </div>
 
-        <div className="traj-content-area">
-          {/* 动态渲染轨迹事件 */}
-          {events.map((event, index) => (
-            <div
-              key={index}
-              className={`traj-card ${event.style}`}
-              style={{
-                ...event.position,
-                width: "80px",
-                height: "30px",
-                color: event.style === "" ? "#D6724B" : "white",
-                boxShadow:
-                  event.style === "" ? "none" : "2px 2px 5px rgba(0,0,0,0.1)",
-                textAlign: "left",
-                padding: "4px 8px",
-                // 移除滚动条相关属性
-                textOverflow: "clip",
-                wordWrap: "break-word",
-                // 标准圆角长方形
-                borderRadius: "8px",
-                // 根据时辰设置颜色
-                backgroundColor: event.time.includes("上午")
-                  ? "#E8C3A8"
-                  : event.time.includes("中午")
-                    ? "#999"
-                    : event.time.includes("下午")
-                      ? "#D4AB90"
-                      : event.time.includes("晚间")
-                        ? "#8AA6C1"
-                        : "#D6724B",
-                // 添加点击效果
-                cursor: "pointer",
-                transition: "transform 0.2s ease",
-              }}
-              onClick={() => {
-                setSelectedEvent(event);
-                setShowEventModal(true);
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.transform = "scale(1.05)";
-              }}
-              onMouseLeave={(e) => {
-                e.currentTarget.style.transform = "scale(1)";
-              }}
-            >
-              <div style={{ fontWeight: "bold", fontSize: "12px" }}>
+        {/* 右侧事件内容画布 (Canvas) */}
+        <div
+          style={{
+            flex: 1,
+            position: "relative",
+            minHeight: "460px",
+            marginLeft: "10px",
+            overflow: "visible",
+          }}
+        >
+          {events.map((event, index) => {
+            // 精准匹配图1的气泡颜色
+            let bg = "#E5B697"; // 浅暖杏色 (默认/上午)
+            if (
+              event.time?.includes("晚间") ||
+              event.category === "外出" ||
+              event.style === "blue"
+            ) {
+              bg = "#85A3C3"; // 雾霾蓝
+            } else if (
+              event.category === "军务" ||
+              event.style === "dark-peach" ||
+              event.style === "big-orange"
+            ) {
+              bg = "#D09E7B"; // 暖焦糖咖色
+            }
+
+            return (
+              <div
+                key={index}
+                style={{
+                  position: "absolute",
+                  ...event.position,
+                  padding: "8px 14px",
+                  borderRadius: "10px",
+                  backgroundColor: bg,
+                  color: "#ffffff",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  lineHeight: "1.4",
+                  boxShadow: "0 4px 12px rgba(180, 150, 130, 0.28)",
+                  cursor: "pointer",
+                  maxWidth: "150px",
+                  userSelect: "none",
+                  transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                  zIndex: 10,
+                  whiteSpace: "nowrap",
+                  textAlign: "center",
+                }}
+                onClick={() => {
+                  setSelectedEvent(event);
+                  setShowEventModal(true);
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.transform = "scale(1.05)";
+                  e.currentTarget.style.boxShadow =
+                    "0 6px 16px rgba(180, 150, 130, 0.38)";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.transform = "scale(1)";
+                  e.currentTarget.style.boxShadow =
+                    "0 4px 12px rgba(180, 150, 130, 0.28)";
+                }}
+              >
                 {event.title}
               </div>
-              {/* 默认状态下只显示标题，描述在弹窗中显示 */}
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
 
@@ -70732,86 +71172,78 @@ const TrajectoryPage = ({
       {showEventModal && selectedEvent && (
         <div
           style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
+            position: "absolute",
+            inset: 0,
             width: "100%",
             height: "100%",
-            backgroundColor: "rgba(0,0,0,0.5)",
+            backgroundColor: "rgba(0, 0, 0, 0.45)",
+            backdropFilter: "blur(3px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            zIndex: 1000,
+            zIndex: 1300,
+            padding: "20px",
+            boxSizing: "border-box",
           }}
+          onClick={() => setShowEventModal(false)}
         >
           <div
             style={{
-              width: "80%",
-              maxWidth: "500px",
-              maxHeight: "80vh",
-              backgroundColor: selectedEvent.time.includes("上午")
-                ? "#E8C3A8"
-                : selectedEvent.time.includes("中午")
-                  ? "#999"
-                  : selectedEvent.time.includes("下午")
-                    ? "#D4AB90"
-                    : selectedEvent.time.includes("晚间")
-                      ? "#8AA6C1"
-                      : "#D6724B",
-              color: selectedEvent.style === "" ? "#D6724B" : "white",
-              borderRadius: "8px",
+              width: "100%",
+              maxWidth: "320px",
+              backgroundColor: "#FDFCF8",
+              color: "#383833",
+              borderRadius: "16px",
               padding: "20px",
-              boxShadow: "2px 2px 10px rgba(0,0,0,0.2)",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.2)",
               textAlign: "left",
-              overflowY: "auto",
-              overflowX: "hidden",
+              fontFamily: '"SimSun", "STKaiti", serif',
             }}
+            onClick={(e) => e.stopPropagation()}
           >
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "20px",
+                marginBottom: "12px",
               }}
             >
-              <h3
-                style={{
-                  margin: 0,
-                  fontSize: "18px",
-                  fontWeight: "bold",
-                }}
-              >
-                {selectedEvent.title}
-              </h3>
-              <button
+              <span style={{ fontSize: "13px", color: "#8C917B" }}>
+                {selectedEvent.time} · {selectedEvent.category}
+              </span>
+              <div
                 onClick={() => setShowEventModal(false)}
                 style={{
-                  padding: "8px 16px",
-                  backgroundColor: "rgba(255,255,255,0.3)",
-                  color: selectedEvent.style === "" ? "#D6724B" : "white",
-                  border: "none",
-                  borderRadius: "4px",
                   cursor: "pointer",
+                  color: "#999",
+                  fontSize: "18px",
+                  padding: "4px",
                 }}
               >
-                关闭
-              </button>
-            </div>
-            <div style={{ marginBottom: "12px" }}>
-              <strong>时间：</strong>
-              {selectedEvent.time}
-            </div>
-            <div style={{ marginBottom: "12px" }}>
-              <strong>分类：</strong>
-              {selectedEvent.category}
-            </div>
-            <div style={{ marginBottom: "12px" }}>
-              <strong>描述：</strong>
-              <div style={{ marginTop: "8px", lineHeight: "1.4" }}>
-                {selectedEvent.description}
+                <i className="ph-bold ph-x"></i>
               </div>
             </div>
+            <h3
+              style={{
+                margin: "0 0 10px 0",
+                fontSize: "17px",
+                color: "#505643",
+                fontWeight: "bold",
+              }}
+            >
+              {selectedEvent.title}
+            </h3>
+            <p
+              style={{
+                margin: 0,
+                fontSize: "14px",
+                color: "#555",
+                lineHeight: "1.6",
+              }}
+            >
+              {selectedEvent.description || "暂无详细描述"}
+            </p>
           </div>
         </div>
       )}

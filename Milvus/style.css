@@ -6069,10 +6069,12 @@
       }
       
       .voice-call-overlay {
-        position: fixed;
+        position: absolute;
         inset: 0;
+        width: 100%;
+        height: 100%;
         background: #000; 
-        z-index: 2000;
+        z-index: 1200;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -9116,12 +9118,11 @@
 
       
       .bamboo-page-container {
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100vw;
-        height: 100vh;
-        z-index: 3000; 
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 1200;
         background: radial-gradient(
           circle at 30% 30%,
           #f9f5e8 0%,
@@ -9129,8 +9130,9 @@
           #dcd4bc 100%
         );
         display: flex;
-        justify-content: center;
-        align-items: center;
+        flex-direction: column;
+        justify-content: flex-start;
+        align-items: stretch;
         overflow: hidden;
         font-family: "Zhi Mang Xing", "STKaiti", "Kaiti TC", "KaiTi", serif;
         --bamboo-light: #fdf5d6;
@@ -9140,46 +9142,47 @@
         --rope-light: #eaddbd;
         --rope-dark: #a88a5c;
         --text-color: #3b2e21;
+        box-sizing: border-box;
       }
 
       .bamboo-page-container .watermark {
-        position: absolute;
-        top: 40px; 
-        left: 20px;
-        padding: 4px 8px;
-        border: 1px solid rgba(255, 255, 255, 0.6);
-        border-radius: 4px;
+        padding: 5px 10px;
+        border: 1px solid rgba(138, 114, 80, 0.3);
+        border-radius: 16px;
         color: #5a4f3f;
-        font-size: 14px;
+        font-size: 13px;
         letter-spacing: 1px;
-        background: rgba(255, 255, 255, 0.2);
-        backdrop-filter: blur(2px);
+        background: rgba(255, 255, 255, 0.35);
+        backdrop-filter: blur(4px);
         z-index: 100;
         cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 4px;
       }
 
       .bamboo-page-container .bamboo-scroll-wrapper {
         position: relative;
-        height: 70vh;
-        max-height: 600px;
-        min-height: 400px;
-        width: 90vw;
-        max-width: 800px;
+        height: 80%;
+        max-height: 580px;
+        min-height: 380px;
+        width: 94%;
+        max-width: 390px;
+        margin: 0 auto;
         display: flex;
         align-items: center;
-        width: 0;
         opacity: 0;
-        animation: bambooUnroll 2.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
-        animation-delay: 0.2s;
+        animation: bambooUnroll 1.5s cubic-bezier(0.2, 0.8, 0.2, 1) forwards;
+        animation-delay: 0.1s;
       }
 
       @keyframes bambooUnroll {
         0% {
-          width: 80px;
+          width: 50px;
           opacity: 1;
         }
         100% {
-          width: 90vw;
+          width: 94%;
           opacity: 1;
         }
       }
@@ -9208,7 +9211,7 @@
 
       .bamboo-page-container .strip {
         flex-shrink: 0;
-        width: clamp(20px, 4vw, 35px);
+        width: 20px;
         height: 100%;
         margin-right: -1px;
         border-radius: 3px 3px 2px 2px;
@@ -9288,7 +9291,7 @@
       }
 
       .bamboo-page-container .rope-top {
-        top: 35%;
+        top: 25%;
       }
       .bamboo-page-container .rope-bottom {
         bottom: 25%;
@@ -9310,7 +9313,7 @@
       }
 
       .bamboo-page-container .roll-area {
-        width: clamp(60px, 12vw, 100px);
+        width: 60px;
         height: 102%;
         background: linear-gradient(
           to right,
@@ -9327,6 +9330,7 @@
           inset -3px 0 10px rgba(0, 0, 0, 0.6);
         position: relative;
         z-index: 20;
+        flex-shrink: 0;
       }
 
       .bamboo-page-container .roll-area::after {
@@ -9348,42 +9352,41 @@
 
       .bamboo-page-container .content-layer {
         position: absolute;
-        top: 10%;
-        bottom: 10%;
-        left: clamp(5px, 1vw, 15px);
-        right: clamp(
-          120px,
-          20vw,
-          180px
-        ); 
-        z-index: 5;
+        top: 8%;
+        bottom: 8%;
+        left: 10px;
+        right: 68px;
+        z-index: 25;
         writing-mode: vertical-rl;
         color: var(--text-color);
-        font-size: clamp(14px, 2.5vw, 20px); 
-        line-height: clamp(18px, 2.5vw, 26px);
+        font-size: 15px;
+        line-height: 24px;
         opacity: 0;
-        animation: bambooTextFadeIn 1s ease forwards;
-        animation-delay: 2.2s;
-        pointer-events: none;
-        max-width: calc(100% - 120px); 
+        animation: bambooTextFadeIn 0.8s ease forwards;
+        animation-delay: 1.2s;
+        pointer-events: auto;
+        overflow-x: auto;
+        overflow-y: hidden;
+        max-width: calc(100% - 75px);
+        max-height: 84%;
       }
 
       .bamboo-page-container .content-layer h1 {
-        margin: 0 20px 0 0;
-        font-size: 1.5em;
-        letter-spacing: 5px;
-        font-weight: normal;
+        margin: 0 12px 0 0;
+        font-size: 1.4em;
+        letter-spacing: 4px;
+        font-weight: bold;
       }
 
       .bamboo-page-container .content-layer p {
-        margin: 0 20px 0 0;
+        margin: 0 10px 0 0;
         letter-spacing: 2px;
         text-shadow: 1px 1px 0px rgba(255, 255, 255, 0.4);
       }
 
       @keyframes bambooTextFadeIn {
         to {
-          opacity: 0.85;
+          opacity: 0.95;
         }
       }
 
@@ -9391,65 +9394,82 @@
       .traj-overlay {
         position: absolute;
         inset: 0;
+        width: 100%;
+        height: 100%;
         background: #f2ebd9; 
-        z-index: 700;
+        z-index: 1200;
         display: flex;
         flex-direction: column;
-        padding: 20px 15px;
+        padding: 16px 14px;
         font-family: "SimSun", "STKaiti", serif;
         overflow-y: auto;
+        overflow-x: hidden;
+        box-sizing: border-box;
       }
 
       .traj-header {
         display: flex;
         justify-content: space-between;
-        align-items: flex-start;
-        margin-bottom: 20px;
+        align-items: center;
+        margin-bottom: 14px;
       }
 
       .traj-date {
         color: #8c917b;
-        font-size: 14px;
+        font-size: 13px;
         letter-spacing: 1px;
       }
 
       .traj-title {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: bold;
         color: #5a5f4d;
-        margin-top: 10px;
+        margin-top: 4px;
         display: flex;
         align-items: center;
         gap: 8px;
       }
 
-      .traj-back-icon {
-        width: 40px;
-        height: 40px;
+      .traj-back-btn {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(90, 95, 77, 0.1);
+        display: flex;
+        align-items: center;
+        justify-content: center;
         cursor: pointer;
-        transform: scaleX(-1); 
+        color: #5a5f4d;
+        font-size: 18px;
+        transition: background 0.2s ease;
+      }
+
+      .traj-back-btn:hover {
+        background: rgba(90, 95, 77, 0.2);
       }
 
       .traj-categories {
         display: flex;
         justify-content: flex-end;
-        gap: 15px;
-        margin-right: 60px;
-        margin-bottom: 20px;
+        gap: 8px;
+        margin-bottom: 12px;
       }
 
       .traj-cat-box {
-        border: 1px solid #5a5f4d;
-        padding: 2px 10px;
-        font-size: 14px;
+        border: 1px solid #8c917b;
+        border-radius: 4px;
+        padding: 2px 8px;
+        font-size: 12px;
         color: #5a5f4d;
-        background: transparent;
+        background: rgba(255, 255, 255, 0.4);
       }
 
       .traj-main-grid {
         display: grid;
         grid-template-columns: 80px 1fr;
         flex: 1;
+        min-height: 440px;
+        position: relative;
       }
 
       .traj-time-axis {
@@ -9459,11 +9479,12 @@
 
       .traj-period-group {
         display: flex;
-        margin-bottom: 2px;
+        margin-bottom: 4px;
+        min-height: 96px;
       }
 
       .traj-period-label {
-        width: 25px;
+        width: 24px;
         background: #e8c3a8; 
         color: white;
         writing-mode: vertical-rl;
@@ -9471,7 +9492,8 @@
         align-items: center;
         justify-content: center;
         font-size: 12px;
-        padding: 5px 0;
+        padding: 4px 0;
+        border-radius: 4px 0 0 4px;
       }
 
       .traj-slots {
@@ -9484,54 +9506,44 @@
       .traj-slot-cell {
         background: #ded6c5;
         color: white;
-        font-size: 13px;
-        padding: 4px 8px;
+        font-size: 12px;
+        padding: 6px 4px;
         text-align: center;
+        border-radius: 0 4px 4px 0;
+        flex: 1;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
 
       .traj-content-area {
         position: relative;
-        padding-left: 10px;
+        padding-left: 8px;
+        min-height: 440px;
       }
 
       .traj-card {
         position: absolute;
-        padding: 4px 8px;
-        font-size: 13px;
-        line-height: 1.4;
+        padding: 6px 8px;
+        font-size: 12px;
+        line-height: 1.3;
         color: white;
-        
         border-radius: 8px;
-        box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
+        box-shadow: 2px 2px 6px rgba(0, 0, 0, 0.12);
         display: flex;
         flex-direction: column;
         align-items: flex-start;
         justify-content: center;
         text-align: left;
         overflow: hidden;
+        cursor: pointer;
+        box-sizing: border-box;
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
       }
 
-      .traj-card {
-        width: 80px;
-        height: 30px;
-      }
-      .traj-card.orange {
-        width: 80px;
-        height: 30px;
-      }
-      .traj-card.gray {
-        width: 80px;
-        height: 30px;
-      }
-      .traj-card.blue {
-        width: 80px;
-        height: 30px;
-      }
-      .traj-card.big-orange {
-        width: 80px;
-        height: 30px;
-        text-align: left;
-        padding: 4px 8px;
+      .traj-card:hover {
+        transform: scale(1.04);
+        box-shadow: 2px 4px 10px rgba(0, 0, 0, 0.18);
       }
 
       @keyframes spin {
