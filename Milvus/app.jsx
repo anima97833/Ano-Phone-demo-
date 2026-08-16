@@ -83150,6 +83150,70 @@ const BookstoreCustomLibrary = ({
 
 
 
+// ==================== 微信读书专用头像组件 (WeChatReadingAvatar) ====================
+// 使用与传讯联系人列表完全相同的头像渲染逻辑（T8AvatarLoader）
+const WeChatReadingAvatar = ({ avatar, name, avatarColor, size = 48, className = "" }) => {
+  const displayName = String(name || "友").trim();
+  const firstChar = displayName ? displayName.slice(0, 1) : "友";
+  const isDirectUrl =
+    typeof avatar === "string" &&
+    avatar.trim().length > 0 &&
+    (avatar.startsWith("data:image") ||
+      avatar.startsWith("http://") ||
+      avatar.startsWith("https://") ||
+      avatar.startsWith("blob:") ||
+      avatar.startsWith("/") ||
+      avatar.startsWith("./"));
+
+  const containerStyle = {
+    width: `${size}px`,
+    height: `${size}px`,
+    borderRadius: "50%",
+    overflow: "hidden",
+    backgroundColor: avatarColor || "#695c51",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    color: "#fff",
+    fontWeight: "bold",
+    fontSize: `${Math.max(12, Math.round(size * 0.42))}px`,
+    flexShrink: 0,
+    position: "relative",
+  };
+
+  if (avatar && isDirectUrl) {
+    return (
+      <div style={containerStyle}>
+        <img
+          src={avatar}
+          alt={displayName}
+          onError={(e) => { e.currentTarget.style.display = "none"; }}
+          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
+        />
+      </div>
+    );
+  }
+
+  if (avatar && typeof avatar === "string" && avatar.trim().length > 0) {
+    // avatarId —— 交给 T8AvatarLoader 从 IndexedDB 异步加载
+    return (
+      <div style={containerStyle}>
+        <T8AvatarLoader avatarId={avatar} fallbackColor={avatarColor || "#695c51"} />
+      </div>
+    );
+  }
+
+  // 无头像时显示首字符
+  return (
+    <div style={containerStyle}>
+      {firstChar}
+    </div>
+  );
+};
+
+
+
+
 // ==================== 微信读书风格 · 角色个人主页组件 (WeChatReadingProfileModal) ====================
 const WeChatReadingProfileModal = ({
   isOpen,
@@ -83163,10 +83227,60 @@ const WeChatReadingProfileModal = ({
   const [isFollowed, setIsFollowed] = useState(true);
   const [likesCount, setLikesCount] = useState(0);
   const [hasLiked, setHasLiked] = useState(false);
+  const [resolvedAvatar, setResolvedAvatar] = useState(null);
 
-  // 加载并按需生成角色的微信读书专属主页数据
+  // 1. 同步加载完整角色头像与配置信息
   useEffect(() => {
     if (!isOpen || !character) return;
+
+    const syncCharAvatar = async () => {
+      try {
+        // 如果是用户自己
+        if (character.isUser || character.name?.includes("楼主") || character.name?.includes("我")) {
+          let userAv = null;
+          if (window.settingsStore) {
+            try {
+              userAv = await window.settingsStore.getUserAvatar();
+            } catch (e) {}
+          }
+          if (!userAv) {
+            userAv = localStorage.getItem("user_avatar");
+          }
+          if (userAv) {
+            setResolvedAvatar(userAv);
+            return;
+          }
+        }
+
+        // 从传讯角色库匹配最新真实头像
+        let allChars = [];
+        if (window.chatCharacterStore) {
+          try {
+            allChars = await window.chatCharacterStore.getAll();
+          } catch (e) {}
+        }
+        if (!allChars || allChars.length === 0) {
+          try {
+            allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+          } catch (e) {}
+        }
+
+        const match = (allChars || []).find(
+          (c) => c && (c.id === character.id || c.name === character.name || c.nickname === character.name)
+        );
+
+        if (match) {
+          const av = match.avatar || match.avatarUrl || match.avatarData || match.profile?.avatar || character.avatar;
+          setResolvedAvatar(av);
+        } else {
+          setResolvedAvatar(character.avatar || null);
+        }
+      } catch (e) {
+        setResolvedAvatar(character.avatar || null);
+      }
+    };
+
+    syncCharAvatar();
 
     const cacheKey = `wechat_reading_profile_${character.id || character.name}`;
     const cached = localStorage.getItem(cacheKey);
@@ -83318,17 +83432,15 @@ ${recentChatSnippet}
           null,
           (reply) => {
             try {
-              let clean = reply.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-              const firstBrace = clean.indexOf("{");
-              const lastBrace = clean.lastIndexOf("}");
-              if (firstBrace !== -1 && lastBrace !== -1) {
-                clean = clean.slice(firstBrace, lastBrace + 1);
-              }
               const data = robustParseLLMJSON(reply);
-              setProfileData(data);
-              setLikesCount(data.receivedLikes || 0);
-              const cacheKey = `wechat_reading_profile_${character.id || character.name}`;
-              localStorage.setItem(cacheKey, JSON.stringify(data));
+              if (data && data.name) {
+                setProfileData(data);
+                setLikesCount(data.receivedLikes || 0);
+                const cacheKey = `wechat_reading_profile_${character.id || character.name}`;
+                localStorage.setItem(cacheKey, JSON.stringify(data));
+              } else {
+                useFallbackProfileData();
+              }
             } catch (err) {
               console.error("解析角色读书主页数据失败，使用默认拟真模板:", err, reply);
               useFallbackProfileData();
@@ -83409,8 +83521,7 @@ ${recentChatSnippet}
 
   const charName = profileData?.name || character.name || "好友";
   const charGender = profileData?.gender || "女";
-  const charAvatar = character.avatar || character.profile?.avatar;
-  const avatarBg = character.avatarColor || "#695c51";
+  const avatarBg = character.avatarColor || character.avatarBg || "#695c51";
 
   return (
     <div
@@ -83462,19 +83573,15 @@ ${recentChatSnippet}
             </div>
           ) : (
             <div className="flex flex-col items-center pt-2">
-              {/* 1. 大圆形头像 */}
+              {/* 1. 大圆形头像 (使用全兼容安全加载器) */}
               <div className="relative group">
                 <div className="w-24 h-24 rounded-full overflow-hidden shadow-lg border-4 border-white dark:border-stone-800 flex items-center justify-center bg-[#E5E7EB] dark:bg-stone-800">
-                  {charAvatar ? (
-                    <img src={charAvatar} alt={charName} className="w-full h-full object-cover" />
-                  ) : (
-                    <div
-                      className="w-full h-full flex items-center justify-center text-3xl font-bold text-white font-serif"
-                      style={{ backgroundColor: avatarBg }}
-                    >
-                      {(charName || "友").slice(0, 1)}
-                    </div>
-                  )}
+                  <WeChatReadingAvatar
+                    avatar={resolvedAvatar}
+                    name={charName}
+                    avatarColor={avatarBg}
+                    size={96}
+                  />
                 </div>
               </div>
 
@@ -83704,13 +83811,16 @@ const WeChatReadingLeaderboardModal = ({
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        if (Array.isArray(parsed) && parsed.length > 0) {
+        // 检查缓存是否含有有效的角色对象引用（有无 characterObj）；否则清空旧缓存
+        if (Array.isArray(parsed) && parsed.length > 0 && parsed[0].characterObj) {
           setRankingList(parsed);
           calculateUserRank(parsed);
           return;
         }
       } catch (e) {}
     }
+    // 缓存无效或不含 characterObj，清除并重新生成
+    localStorage.removeItem("reader_wechat_ranking_cache");
 
     generateLeaderboard();
   }, [isOpen]);
@@ -83740,35 +83850,54 @@ const WeChatReadingLeaderboardModal = ({
       // 1. 读取传讯角色库
       let contactChars = [];
       if (window.chatCharacterStore) {
-        const allChars = await window.chatCharacterStore.getAll();
-        if (allChars && Array.isArray(allChars)) {
-          contactChars = allChars
-            .filter((c) => c && (c.name || c.nickname))
-            .map((c) => ({
-              id: c.id || c.name,
-              name: String(c.name || c.nickname).trim(),
-              personality: String(c.profile?.personality || c.personality || "个性鲜明"),
-              gender: c.gender || (c.name === "傅融" || c.name === "刘辩" || c.name === "袁基" || c.name === "左慈" || c.name === "孙策" ? "男" : "女"),
-              avatar: c.avatar || c.profile?.avatar,
-              avatarColor: c.avatarColor || "#695c51",
-            }));
-        }
+        try {
+          const allChars = await window.chatCharacterStore.getAll();
+          if (allChars && Array.isArray(allChars)) {
+            contactChars = allChars;
+          }
+        } catch (e) {}
       }
 
-      // 如果传讯角色为空，注入默认密探
       if (contactChars.length === 0) {
-        contactChars = [
+        try {
+          const saved = localStorage.getItem("t8_chat_list");
+          if (saved) contactChars = JSON.parse(saved);
+        } catch (e) {}
+      }
+
+      const formattedChars = contactChars
+        .filter((c) => c && (c.name || c.nickname))
+        .map((c) => ({
+          id: c.id || c.name,
+          name: String(c.name || c.nickname).trim(),
+          personality: String(c.profile?.personality || c.personality || "个性鲜明"),
+          gender: c.gender || (c.name === "傅融" || c.name === "刘辩" || c.name === "袁基" || c.name === "左慈" || c.name === "孙策" ? "男" : "女"),
+          avatar: c.avatar || c.avatarUrl || c.avatarData || c.profile?.avatar || c.profile?.avatarUrl,
+          avatarColor: c.avatarColor || c.avatarBg || c.profile?.avatarColor || "#695c51",
+          rawChar: c,
+        }));
+
+      // 如果传讯角色为空，注入默认密探
+      if (formattedChars.length === 0) {
+        formattedChars.push(
           { id: "furong", name: "傅融", personality: "精打细算，口是心非", gender: "男", avatarColor: "#4A6B62" },
           { id: "liubian", name: "刘辩", personality: "天真热烈，依赖楼主", gender: "男", avatarColor: "#B86B43" },
           { id: "yuanji", name: "袁基", personality: "温润如玉，算无遗策", gender: "男", avatarColor: "#3D5A80" },
           { id: "zuoci", name: "左慈", personality: "清冷出尘，仙风道骨", gender: "男", avatarColor: "#7B5B75" },
           { id: "sunce", name: "孙策", personality: "张扬阳光，意气风发", gender: "男", avatarColor: "#D6724B" },
-        ];
+        );
       }
 
-      // 2. 读取用户身份
+      // 2. 读取用户身份与头像
       let userName = "楼主(你)";
+      let userAvatar = null;
       try {
+        if (window.settingsStore) {
+          userAvatar = await window.settingsStore.getUserAvatar();
+        }
+        if (!userAvatar) {
+          userAvatar = localStorage.getItem("user_avatar");
+        }
         const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
         const activeId = localStorage.getItem("active_persona_id");
         if (activeId && savedPersonas.length > 0) {
@@ -83777,7 +83906,7 @@ const WeChatReadingLeaderboardModal = ({
         }
       } catch (e) {}
 
-      const charsNames = contactChars.map((c) => c.name).join("、");
+      const charsNames = formattedChars.map((c) => c.name).join("、");
 
       const sysPrompt = `你是一个深谙微信读书好友排行榜与古风日常的AI助手。请为用户【${userName}】与传讯好友们生成一份极具真实感与生活趣味的【微信读书本周读书排行榜】。
 严格返回纯 JSON 数组，直接以 [ 开头，以 ] 结尾，不要输出任何 Markdown 代码块标记。`;
@@ -83825,22 +83954,16 @@ const WeChatReadingLeaderboardModal = ({
           null,
           (reply) => {
             try {
-              let clean = reply.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
-              const firstBracket = clean.indexOf("[");
-              const lastBracket = clean.lastIndexOf("]");
-              if (firstBracket !== -1 && lastBracket !== -1) {
-                clean = clean.slice(firstBracket, lastBracket + 1);
-              }
               const listData = robustParseLLMJSON(reply);
               if (Array.isArray(listData) && listData.length > 0) {
-                // 合并角色档案详细信息
+                // 合并角色档案详细信息与头像
                 const merged = listData.map((item, idx) => {
-                  const matchChar = contactChars.find((c) => c.name === item.name || item.name.includes(c.name));
+                  const matchChar = formattedChars.find((c) => c.name === item.name || item.name.includes(c.name));
                   return {
                     ...item,
                     id: matchChar?.id || (item.isUser ? "user" : `char_${idx}`),
-                    characterObj: matchChar || (item.isUser ? { name: userName, isUser: true } : { name: item.name }),
-                    avatar: matchChar?.avatar,
+                    characterObj: matchChar?.rawChar || matchChar || (item.isUser ? { name: userName, isUser: true, avatar: userAvatar } : { name: item.name }),
+                    avatar: item.isUser ? userAvatar : (matchChar?.avatar || null),
                     avatarColor: matchChar?.avatarColor || ["#3B6978", "#8C7A6B", "#4E7358", "#8E5B5B", "#D6724B"][idx % 5],
                     rank: idx + 1,
                   };
@@ -83849,23 +83972,23 @@ const WeChatReadingLeaderboardModal = ({
                 calculateUserRank(merged);
                 localStorage.setItem("reader_wechat_ranking_cache", JSON.stringify(merged));
               } else {
-                useFallbackLeaderboard(contactChars, userName);
+                useFallbackLeaderboard(formattedChars, userName, userAvatar);
               }
             } catch (err) {
               console.error("解析好友读书榜失败:", err, reply);
-              useFallbackLeaderboard(contactChars, userName);
+              useFallbackLeaderboard(formattedChars, userName, userAvatar);
             } finally {
               setIsLoading(false);
             }
           },
           (err) => {
             console.error("请求好友读书榜失败:", err);
-            useFallbackLeaderboard(contactChars, userName);
+            useFallbackLeaderboard(formattedChars, userName, userAvatar);
             setIsLoading(false);
           }
         );
       } else {
-        useFallbackLeaderboard(contactChars, userName);
+        useFallbackLeaderboard(formattedChars, userName, userAvatar);
         setIsLoading(false);
       }
     } catch (e) {
@@ -83874,7 +83997,7 @@ const WeChatReadingLeaderboardModal = ({
     }
   };
 
-  const useFallbackLeaderboard = (contactChars, userName) => {
+  const useFallbackLeaderboard = (formattedChars, userName, userAvatar) => {
     const defaultList = [
       {
         id: "furong",
@@ -83885,6 +84008,7 @@ const WeChatReadingLeaderboardModal = ({
         currentBookQuote: "正在精读《九章算术细草》",
         likes: 56,
         rank: 1,
+        avatar: formattedChars.find((c) => c.name === "傅融")?.avatar || null,
         avatarColor: "#4A6B62",
         characterObj: { name: "傅融", id: "furong" },
       },
@@ -83897,8 +84021,9 @@ const WeChatReadingLeaderboardModal = ({
         currentBookQuote: "本周勤勉阅读，名列前茅",
         likes: 88,
         rank: 2,
+        avatar: userAvatar || null,
         avatarColor: "#D6724B",
-        characterObj: { name: userName, isUser: true },
+        characterObj: { name: userName, isUser: true, avatar: userAvatar },
       },
       {
         id: "yuanji",
@@ -83909,6 +84034,7 @@ const WeChatReadingLeaderboardModal = ({
         currentBookQuote: "正在翻阅《茶经与洛水志》",
         likes: 49,
         rank: 3,
+        avatar: formattedChars.find((c) => c.name === "袁基")?.avatar || null,
         avatarColor: "#3D5A80",
         characterObj: { name: "袁基", id: "yuanji" },
       },
@@ -83921,6 +84047,7 @@ const WeChatReadingLeaderboardModal = ({
         currentBookQuote: "正在体悟《南华真经》",
         likes: 31,
         rank: 4,
+        avatar: formattedChars.find((c) => c.name === "左慈")?.avatar || null,
         avatarColor: "#7B5B75",
         characterObj: { name: "左慈", id: "zuoci" },
       },
@@ -83933,6 +84060,7 @@ const WeChatReadingLeaderboardModal = ({
         currentBookQuote: "正在偷看《西厢奇遇记》",
         likes: 62,
         rank: 5,
+        avatar: formattedChars.find((c) => c.name === "刘辩")?.avatar || null,
         avatarColor: "#B86B43",
         characterObj: { name: "刘辩", id: "liubian" },
       },
@@ -84054,19 +84182,13 @@ const WeChatReadingLeaderboardModal = ({
                     )}
                   </div>
 
-                  {/* 圆形头像 */}
-                  <div className="relative">
-                    <div
-                      className="w-12 h-12 rounded-full overflow-hidden flex items-center justify-center text-white font-bold text-base shadow-inner"
-                      style={{ backgroundColor: item.avatarColor || "#695c51" }}
-                    >
-                      {item.avatar ? (
-                        <img src={item.avatar} alt={item.name} className="w-full h-full object-cover" />
-                      ) : (
-                        (item.name || "友").slice(0, 1)
-                      )}
-                    </div>
-                  </div>
+                  {/* 圆形头像 (使用全兼容安全加载器) */}
+                  <WeChatReadingAvatar
+                    avatar={item.avatar}
+                    name={item.name}
+                    avatarColor={item.avatarColor}
+                    size={48}
+                  />
 
                   {/* 名字与读书签名 */}
                   <div className="flex-1 min-w-0">
