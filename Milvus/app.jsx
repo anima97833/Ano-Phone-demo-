@@ -26503,7 +26503,7 @@ const T11AttendanceSubPage = ({ onBack }) => {
   );
 };
 
-// ==================== T11 任务管理子页面组件 (新增) ====================
+// ==================== T11 任务管理子页面组件 (支持 AI 模式切换 + 世界书结合 + 经典随机模式) ====================
 const T11TaskManagementSubPage = ({ onBack }) => {
   // 状态管理
   const [gameState, setGameState] = React.useState("playing"); // playing | success | failure
@@ -26518,6 +26518,13 @@ const T11TaskManagementSubPage = ({ onBack }) => {
   const [isAiming, setIsAiming] = React.useState(false);
   const [aimAngle, setAimAngle] = React.useState(0);
   const [touchStart, setTouchStart] = React.useState({ x: 0, y: 0 });
+
+  // AI 模式状态
+  const [isAIMode, setIsAIMode] = React.useState(() => {
+    return localStorage.getItem("xiuyi_task_ai_mode") === "true";
+  });
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const aiTemplatesRef = React.useRef(null);
 
   // 定时器引用
   const eventTimerRef = React.useRef(null);
@@ -26752,7 +26759,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
   // 敌人列表
   const ENEMIES = ["黄巾军", "董卓军", "袁绍军", "曹操军", "孙权军", "刘备军"];
 
-  // 事件模板
+  // 经典事件模板
   const EVENT_TEMPLATES = {
     宴请: [
       "{角色} 向你发出了{日期}赴诗词雅集的邀请。",
@@ -26854,11 +26861,122 @@ const T11TaskManagementSubPage = ({ onBack }) => {
     return ENEMIES[Math.floor(Math.random() * ENEMIES.length)];
   };
 
+  // AI 调用生成任务模板池
+  const generateAITaskTemplates = async () => {
+    if (!window.sendToLLM) {
+      alert("未检测到 AI 接口，已为您切回经典随机模式。");
+      setIsAIMode(false);
+      localStorage.setItem("xiuyi_task_ai_mode", "false");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      let worldBookContext = "";
+      if (window.getWorldBookContext) {
+        worldBookContext = await window.getWorldBookContext();
+      }
+
+      const prompt = `你是一个熟悉《代号鸢》世界观与古代谍报机构（绣衣楼）的任务派遣官。
+请根据以下启用的世界书背景与设定，为绣衣楼【任务管理】系统生成 8 个分类的任务事件模板词库。
+
+【世界书设定与背景】：
+${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼楼主，掌管天下谍报。楼内有蛾部、雀部、蜂部、鸢部等情报暗探部门。"}
+
+【8大分类与占位符规范】：
+- 宴请：关于赴宴、犒宴、雅集、夜宴的邀请与筹备。（可包含占位符 {角色}、{日期}）
+- 公文：关于密谍情报、案宗、通行凭证、调令等呈报与查收。（可包含占位符 {角色}、{地区}、{数字}、{罪过}、{线索}、{文书}）
+- 会面：关于阵营密使、地方官吏、亲眷拜谒请求。（可包含占位符 {角色}、{地区}）
+- 密约：关于私下邀约、出游、月下对谈等。（可包含占位符 {角色}）
+- 交易：关于物资、军械、灵药等交换。（可包含占位符 {角色}、{物品}）
+- 出征：关于平叛、地宫出战、迎敌作战申请。（可包含占位符 {角色}、{敌人}）
+- 收礼：关于各方势力与角色馈赠或恶搞。（可包含占位符 {角色}、{礼物}）
+- 奇遇：关于书房或外勤偶遇的幽默异闻或变身。（可包含占位符 {角色}、{东西}）
+
+【输出格式】：
+请严格输出一个合法 JSON 对象（不要输出任何 Markdown 代码块标记），包含 8 个分类，每个分类包含 3~5 条模板字符串：
+{
+  "宴请": ["模板1", "模板2", "模板3"],
+  "公文": ["模板1", "模板2", "模板3"],
+  "会面": ["模板1", "模板2", "模板3"],
+  "密约": ["模板1", "模板2", "模板3"],
+  "交易": ["模板1", "模板2", "模板3"],
+  "出征": ["模板1", "模板2", "模板3"],
+  "收礼": ["模板1", "模板2", "模板3"],
+  "奇遇": ["模板1", "模板2", "模板3"]
+}`;
+
+      const apiMessages = [
+        {
+          role: "system",
+          content: "你是一个专业的古代谍报机构任务派遣生成器。只输出合法的 JSON 对象，不包含任何 Markdown 标记。",
+        },
+        { role: "user", content: prompt },
+      ];
+
+      window.sendToLLM(
+        apiMessages,
+        null,
+        (reply) => {
+          setIsGenerating(false);
+          try {
+            let cleanJson = reply.trim();
+            cleanJson = cleanJson.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
+            const parsed = JSON.parse(cleanJson);
+            if (parsed && typeof parsed === "object") {
+              aiTemplatesRef.current = parsed;
+              console.log("✨ 成功根据世界书生成 AI 任务事件模板库:", parsed);
+              const initialEvent = generateRandomEvent();
+              setEvents([initialEvent]);
+              setCurrentBall(generateBallFromEvent(initialEvent.type));
+            } else {
+              throw new Error("AI 返回格式异常");
+            }
+          } catch (e) {
+            console.error("解析 AI 任务模板失败:", e, reply);
+          }
+        },
+        (error) => {
+          setIsGenerating(false);
+          console.error("AI 任务模板请求失败:", error);
+          alert("AI 任务生成请求失败，已为您切回经典随机模式。");
+          setIsAIMode(false);
+          localStorage.setItem("xiuyi_task_ai_mode", "false");
+        },
+      );
+    } catch (e) {
+      setIsGenerating(false);
+      console.error("生成 AI 任务数据异常:", e);
+    }
+  };
+
+  // 切换 AI 模式
+  const handleToggleAIMode = () => {
+    const nextMode = !isAIMode;
+    setIsAIMode(nextMode);
+    localStorage.setItem("xiuyi_task_ai_mode", String(nextMode));
+    if (nextMode) {
+      generateAITaskTemplates();
+    } else {
+      const initialEvent = generateRandomEvent();
+      setEvents([initialEvent]);
+      setCurrentBall(generateBallFromEvent(initialEvent.type));
+    }
+  };
+
   // 生成随机事件
   const generateRandomEvent = () => {
-    const eventTypes = Object.keys(EVENT_TEMPLATES);
+    const activeTemplates = (isAIMode && aiTemplatesRef.current && typeof aiTemplatesRef.current === "object")
+      ? aiTemplatesRef.current
+      : EVENT_TEMPLATES;
+
+    const eventTypes = Object.keys(MORANDI_COLORS);
     const eventType = eventTypes[Math.floor(Math.random() * eventTypes.length)];
-    const templates = EVENT_TEMPLATES[eventType];
+    const templates = (activeTemplates[eventType] && activeTemplates[eventType].length > 0)
+      ? activeTemplates[eventType]
+      : EVENT_TEMPLATES[eventType];
+
     const template = templates[Math.floor(Math.random() * templates.length)];
 
     let eventText = template;
@@ -26946,6 +27064,10 @@ const T11TaskManagementSubPage = ({ onBack }) => {
 
   // 初始化游戏
   React.useEffect(() => {
+    if (isAIMode) {
+      generateAITaskTemplates();
+    }
+
     // 生成初始事件
     const initialEvent = generateRandomEvent();
     setEvents([initialEvent]);
@@ -26980,7 +27102,6 @@ const T11TaskManagementSubPage = ({ onBack }) => {
     gameLoopRef.current = setInterval(() => {
       if (gameState === "playing" && !isAnimating) {
         // 小球向前移动
-        // 这里简化处理，实际游戏中需要更复杂的逻辑
       }
     }, 1000);
 
@@ -26999,7 +27120,6 @@ const T11TaskManagementSubPage = ({ onBack }) => {
   const handleAimStart = (e) => {
     if (isAnimating || gameState !== "playing") return;
 
-    // 防止默认行为，提高触摸灵敏度
     e.preventDefault?.();
 
     setIsAiming(true);
@@ -27014,7 +27134,6 @@ const T11TaskManagementSubPage = ({ onBack }) => {
   const handleAimMove = (e) => {
     if (!isAiming || isAnimating || gameState !== "playing") return;
 
-    // 防止默认行为
     e.preventDefault?.();
 
     const clientX =
@@ -27022,17 +27141,12 @@ const T11TaskManagementSubPage = ({ onBack }) => {
     const clientY =
       e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
 
-    // 【关键修改】获取游戏区域中心点
-    // 假设游戏区域容器占满屏幕宽度，高度居中，这里简化计算
-    // 更严谨的做法是用 ref 获取 div 的 getBoundingClientRect
     const centerX = window.innerWidth / 2;
-    const centerY = window.innerHeight / 2; // 或者根据实际布局偏移量调整
+    const centerY = window.innerHeight / 2;
 
-    // 计算鼠标相对于中心点的角度
     const deltaX = clientX - centerX;
     const deltaY = clientY - centerY;
 
-    // atan2(y, x) 计算弧度，转换为角度
     const angle = (Math.atan2(deltaY, deltaX) * 180) / Math.PI;
     setAimAngle(angle);
   };
@@ -27049,18 +27163,14 @@ const T11TaskManagementSubPage = ({ onBack }) => {
   const calculateInsertPosition = (angle) => {
     if (trackBalls.length === 0) return 0;
 
-    // 1. 规范化角度到 0-360 度范围
     let normalizedAngle = angle % 360;
     if (normalizedAngle < 0) normalizedAngle += 360;
 
-    // 2. 调整角度，使 0 度对应轨道顶部（与小球排列逻辑一致）
     let adjustedAngle = normalizedAngle + 90;
     if (adjustedAngle >= 360) adjustedAngle -= 360;
 
-    // 3. 将角度转换为弧度
     const adjustedRadian = (adjustedAngle * Math.PI) / 180;
 
-    // 4. 计算小球直径和轨道周长（与排列逻辑一致）
     const radiusX = 140;
     const radiusY = 110;
     const ballDiameter = 32;
@@ -27070,11 +27180,8 @@ const T11TaskManagementSubPage = ({ onBack }) => {
         Math.sqrt((3 * radiusX + radiusY) * (radiusX + 3 * radiusY)));
     const anglePerBall = (ballDiameter / trackPerimeter) * Math.PI * 2;
 
-    // 5. 计算目标位置对应的索引
-    // 从顶部开始，顺时针计算有多少个小球可以容纳到目标角度
     const insertIndex = Math.floor(adjustedRadian / anglePerBall);
 
-    // 6. 边界保护
     return Math.max(0, Math.min(trackBalls.length, insertIndex));
   };
 
@@ -27084,41 +27191,30 @@ const T11TaskManagementSubPage = ({ onBack }) => {
 
     setIsAnimating(true);
 
-    // 简化处理：假设发射成功，创建新球
     const newBall = {
       ...currentBall,
       id: Date.now() + Math.random(),
     };
 
-    // 根据瞄准角度计算插入位置
     const insertPosition = calculateInsertPosition(aimAngle);
 
-    // 在计算的位置插入新球
     const newTrackBalls = [...trackBalls];
     newTrackBalls.splice(insertPosition, 0, newBall);
 
-    // 检查是否有消除
     const hasMatch = checkForMatches(newTrackBalls);
 
     if (hasMatch) {
-      // 消除小球
       const afterMatch = removeMatches(newTrackBalls);
       setTrackBalls(afterMatch);
       setScore((prev) => prev + 10);
 
-      // 更新事件状态：对应类型的事件显示"已完成"并移除
       setEvents((prevEvents) => {
-        // 过滤掉与消除小球类型相同的事件
         const remainingEvents = prevEvents.filter(
           (event) => event.type !== currentBall.type,
         );
         return remainingEvents;
       });
 
-      // 回退机制：弹道整体后退2-3格
-      // 这里简化处理
-
-      // 检查是否达到目标分数
       if (score + 10 >= targetScore) {
         setGameState("success");
       }
@@ -27126,13 +27222,10 @@ const T11TaskManagementSubPage = ({ onBack }) => {
       setTrackBalls(newTrackBalls);
     }
 
-    // 更新当前球和下一个球
     setCurrentBall(nextBall);
     setNextBall(generateRandomBall());
 
-    // 检查是否失败
     if (newTrackBalls.length > 15) {
-      // 简化失败条件
       setGameState("failure");
     }
 
@@ -27143,7 +27236,6 @@ const T11TaskManagementSubPage = ({ onBack }) => {
   const checkForMatches = (balls) => {
     if (balls.length < 3) return false;
 
-    // 检查整个轨道上的连续同色小球
     let currentType = balls[0].type;
     let count = 1;
 
@@ -27159,7 +27251,6 @@ const T11TaskManagementSubPage = ({ onBack }) => {
       }
     }
 
-    // 考虑轨道的环形特性（首尾相连）
     if (balls[0].type === balls[balls.length - 1].type) {
       let tailCount = 1;
       for (let i = balls.length - 1; i > 0; i--) {
@@ -27191,7 +27282,6 @@ const T11TaskManagementSubPage = ({ onBack }) => {
   const removeMatches = (balls) => {
     if (balls.length < 3) return balls;
 
-    // 检查整个轨道上的连续同色小球
     let currentType = balls[0].type;
     let startIndex = 0;
     let count = 1;
@@ -27210,12 +27300,9 @@ const T11TaskManagementSubPage = ({ onBack }) => {
       }
     }
 
-    // 处理找到的匹配
     if (matches.length > 0) {
-      // 按起始索引排序
       matches.sort((a, b) => b.start - a.start);
 
-      // 移除匹配的小球
       let result = [...balls];
       matches.forEach((match) => {
         result.splice(match.start, match.end - match.start + 1);
@@ -27224,7 +27311,6 @@ const T11TaskManagementSubPage = ({ onBack }) => {
       return result;
     }
 
-    // 考虑轨道的环形特性（首尾相连）
     if (balls[0].type === balls[balls.length - 1].type) {
       let tailCount = 1;
       for (let i = balls.length - 1; i > 0; i--) {
@@ -27245,7 +27331,6 @@ const T11TaskManagementSubPage = ({ onBack }) => {
       }
 
       if (tailCount + headCount >= 3) {
-        // 移除首尾相连的同色小球
         let result = [...balls];
         result.splice(0, headCount);
         result.splice(result.length - tailCount + 1, tailCount - 1);
@@ -27288,11 +27373,38 @@ const T11TaskManagementSubPage = ({ onBack }) => {
       }}
     >
       {/* 子页面导航栏 */}
-      <div className="t11-nav">
-        <div className="back-btn" onClick={handleBack}>
-          <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+      <div className="t11-nav" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <div className="back-btn" onClick={handleBack}>
+            <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+          </div>
+          <div className="title">任务管理</div>
         </div>
-        <div className="title">任务管理</div>
+
+        {/* 右上角 AI 模式切换开关 */}
+        <div
+          onClick={handleToggleAIMode}
+          style={{
+            marginRight: "12px",
+            padding: "4px 10px",
+            borderRadius: "14px",
+            background: isAIMode
+              ? "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)"
+              : "rgba(0,0,0,0.06)",
+            color: isAIMode ? "#fff" : "#666",
+            fontSize: "12px",
+            fontWeight: isAIMode ? "bold" : "normal",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            cursor: isGenerating ? "not-allowed" : "pointer",
+            boxShadow: isAIMode ? "0 2px 6px rgba(168, 200, 186, 0.4)" : "none",
+            transition: "all 0.2s ease",
+          }}
+        >
+          <i className={`ph-bold ${isAIMode ? "ph-sparkle" : "ph-lightning"}`}></i>
+          <span>{isGenerating ? "生成中..." : isAIMode ? "AI 模式" : "经典模式"}</span>
+        </div>
       </div>
 
       {/* 主要内容区域 */}
@@ -27326,8 +27438,8 @@ const T11TaskManagementSubPage = ({ onBack }) => {
             flexDirection: "row",
             gap: "10px",
             boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
-            touchAction: "auto", // 保留用户手动滚动的选项
-            WebkitOverflowScrolling: "touch", // 为iOS添加平滑滚动
+            touchAction: "auto",
+            WebkitOverflowScrolling: "touch",
           }}
         >
           <div
@@ -27366,17 +27478,16 @@ const T11TaskManagementSubPage = ({ onBack }) => {
           ))}
         </div>
 
-        {/* ==================== 修改开始：祖玛风格游戏区域 ==================== */}
         {/* 中间游戏区域 */}
         <div
           style={{
             width: "100%",
-            height: "500px", // 增加高度，确保有足够空间
-            position: "relative", // 设为相对定位，作为坐标基准
+            height: "500px",
+            position: "relative",
             display: "flex",
             justifyContent: "center",
             alignItems: "center",
-            overflow: "visible", // 【关键】防止小球被遮挡
+            overflow: "visible",
             marginTop: "20px",
           }}
         >
@@ -27423,33 +27534,20 @@ const T11TaskManagementSubPage = ({ onBack }) => {
               width: "100%",
               height: "100%",
               zIndex: 10,
-              pointerEvents: "none", // 让点击事件穿透到底层，或者在具体球上加 pointerEvents: auto
+              pointerEvents: "none",
             }}
           >
             {trackBalls.map((ball, index) => {
-              // 祖玛逻辑：球围绕中心紧密排列
-              // 定义轨道半径 (与上面 SVG 的 rx, ry 保持一致)
               const radiusX = 140;
               const radiusY = 110;
-
-              // 小球直径（用于计算间距）
-              const ballDiameter = 32; // 与小球宽度一致
-
-              // 计算小球之间的角度间距（基于小球直径和轨道周长）
-              // 轨道周长近似值（椭圆周长公式）
+              const ballDiameter = 32;
               const trackPerimeter =
                 Math.PI *
                 (3 * (radiusX + radiusY) -
                   Math.sqrt((3 * radiusX + radiusY) * (radiusX + 3 * radiusY)));
-              // 每两个小球之间的角度间距
               const anglePerBall =
                 (ballDiameter / trackPerimeter) * Math.PI * 2;
-
-              // 计算当前小球的角度：紧密排列
-              // 起始点在上方（-Math.PI/2）
               const angle = index * anglePerBall - Math.PI / 2;
-
-              // 计算偏移量
               const x = Math.cos(angle) * radiusX;
               const y = Math.sin(angle) * radiusY;
 
@@ -27460,10 +27558,9 @@ const T11TaskManagementSubPage = ({ onBack }) => {
                     position: "absolute",
                     left: "50%",
                     top: "50%",
-                    width: "32px", // 稍微加大一点球
+                    width: "32px",
                     height: "32px",
                     borderRadius: "50%",
-                    // 使用 translate 把球心对齐到计算出的坐标
                     transform: `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`,
                     background: `radial-gradient(circle at 30% 30%, ${ball.color}, #00000040)`,
                     boxShadow: "2px 2px 5px rgba(0,0,0,0.2)",
@@ -27477,13 +27574,13 @@ const T11TaskManagementSubPage = ({ onBack }) => {
             })}
           </div>
 
-          {/* 3. 中间发射台 (书案) - 绝对居中 */}
+          {/* 3. 中间发射台 (书案) */}
           <div
             style={{
               position: "absolute",
               left: "50%",
               top: "50%",
-              transform: "translate(-50%, -50%)", // 完美居中
+              transform: "translate(-50%, -50%)",
               width: "120px",
               height: "120px",
               borderRadius: "50%",
@@ -27491,14 +27588,14 @@ const T11TaskManagementSubPage = ({ onBack }) => {
               boxShadow:
                 "0 0 20px rgba(0,0,0,0.1), inset 0 0 10px rgba(255,255,255,0.5)",
               border: "4px solid #fff",
-              zIndex: 20, // 确保在小球上方
+              zIndex: 20,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
             }}
           >
-            {/* 瞄准辅助线 (仅瞄准时显示) */}
+            {/* 瞄准辅助线 */}
             {isAiming && (
               <div
                 style={{
@@ -27506,11 +27603,10 @@ const T11TaskManagementSubPage = ({ onBack }) => {
                   top: "50%",
                   left: "50%",
                   width: "4px",
-                  height: "200px", // 射线长度
+                  height: "200px",
                   background:
                     "linear-gradient(to top, rgba(168, 200, 186, 0.8), transparent)",
-                  transformOrigin: "bottom center", // 以底部为轴心旋转
-                  // 注意：aimAngle 需要根据你的瞄准逻辑调整，这里假设 aimAngle 是角度
+                  transformOrigin: "bottom center",
                   transform: `translate(-50%, -100%) rotate(${aimAngle + 90}deg)`,
                   zIndex: 5,
                   pointerEvents: "none",
@@ -27559,7 +27655,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
             </div>
           </div>
 
-          {/* 4. 发射控制层 (覆盖整个区域，用于接收触摸/鼠标事件) */}
+          {/* 4. 发射控制层 */}
           <div
             style={{
               position: "absolute",
@@ -27580,7 +27676,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
           ></div>
         </div>
 
-        {/* 发射按钮 (可选，如果想保留手动点击发射，放在容器外面) */}
+        {/* 发射按钮 */}
         <div
           style={{
             textAlign: "center",
@@ -27591,7 +27687,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
           }}
         >
           <button
-            onClick={handleLaunchBall} // 注意修正函数名
+            onClick={handleLaunchBall}
             disabled={isAnimating || gameState !== "playing"}
             style={{
               padding: "10px 30px",
@@ -27601,14 +27697,13 @@ const T11TaskManagementSubPage = ({ onBack }) => {
               color: "#fff",
               fontWeight: "bold",
               boxShadow: "0 4px 12px rgba(168, 200, 186, 0.4)",
-              pointerEvents: "auto", // 恢复点击
+              pointerEvents: "auto",
               opacity: 0.8,
             }}
           >
             点击或拖拽发射
           </button>
         </div>
-        {/* ==================== 修改结束 ==================== */}
 
         {/* 分数显示 */}
         <div
@@ -27720,6 +27815,7 @@ const T11TaskManagementSubPage = ({ onBack }) => {
     </div>
   );
 };
+
 
 // ==================== T11 团体协作子页面组件 (新增) ====================
 const T11TeamworkSubPage = ({ onBack }) => {
