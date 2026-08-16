@@ -24059,9 +24059,966 @@ ${JSON.stringify(questions, null, 2)}
   );
 };
 
-// T11 绣衣问卷子页面组件 (完整支持员工满意度 AI 问卷 + 团建活动投票 AI 问卷 + 年会节目投票 AI 问卷 + 团建地点投票)
+// ==================== T11 新春方案征集问卷 (AI 动态生成 + 角色代答 + 历史记录版) ====================
+const SpringFestivalPlanSurveyPage = ({ onBack }) => {
+  const defaultQuestions = [
+    {
+      id: 1,
+      title: "1. 您期望绣衣楼新春除旧布新与楼阁装点的主色调风格？",
+      colorTag: "#D6E4EA",
+      type: "grid",
+      options: [
+        "张灯结彩·红桃木雕符与喜庆春幡",
+        "清雅幽静·兰草暗香伴红泥小火炉",
+        "金碧辉煌·富贵金箔春联迎财神",
+        "冷峻低调·保持谍报机构神秘本色",
+        "生机盎然·各部暗探手植迎春绿梅",
+        "其他",
+      ],
+    },
+    {
+      id: 2,
+      title: "2. 除夕夜绣衣楼守岁年夜饭，您提议由谁主勺掌厨？",
+      colorTag: "#EAD6D6",
+      type: "column",
+      options: [
+        "副官亲自下厨精算食材（主打经济实惠大盆菜）",
+        "楼主掌勺主厨，全员暗探排队打下手",
+        "广陵各大知名酒肆各订一桌，汇聚百家名菜",
+        "各部门暗探各出一道家乡绝活菜，举办厨艺盲盒争霸",
+        "其他",
+      ],
+    },
+    {
+      id: 3,
+      title: "3. 新春期间值守绣衣楼情报枢纽的补贴福利方案？",
+      colorTag: "#E8DED6",
+      type: "column",
+      options: [
+        "发放三倍津贴俸禄，外加免死免扣金牌一次",
+        "副官亲手包的元宝水饺一盘（内藏吉祥铜钱）",
+        "节后享受十五天带薪无扰补休假",
+        "拒绝值班！只想在被窝里摸鱼冬眠",
+        "其他",
+      ],
+      hasExtraCondition: true,
+      extraQuestion: {
+        triggerOption: "发放三倍津贴俸禄，外加免死免扣金牌一次",
+        title: "💰 附加问：若副官以楼内修缮为由，把三倍俸禄折算成铜钱挂件？",
+        options: ["当场向楼主抗议告状！", "只要挂件是楼主开过光的就行"],
+      },
+    },
+    {
+      id: 4,
+      title: "4. 正月初一新春祈福迎财，您的第一站首选？",
+      colorTag: "#D2E6EC",
+      type: "column",
+      options: [
+        "楼内财神殿抢先烧头香，祈求新年暴富不扣钱",
+        "随楼主前往广陵郊外迎春射猎，讨个开门红",
+        "走访各大世家拜年，顺便打探最新情报动向",
+        "在绣衣楼庭院品茶赏梅，享受难得清闲时光",
+        "其他",
+      ],
+    },
+    {
+      id: 5,
+      title: "5. 新春开门红封（开箱红包）的分配与发放方式？",
+      colorTag: "#DEEBE1",
+      type: "column",
+      options: [
+        "楼主亲手发放盲盒红封，全凭手气开惊喜",
+        "全员暗探抓阄碰运气，拼手速抢彩头",
+        "严格按照上一年度出勤与出任务KPI绩效发放",
+        "副官直接将红包存入绣衣楼公共基金充作修缮费",
+        "其他",
+      ],
+      hasExtraCondition: true,
+      extraQuestion: {
+        triggerOption: "副官直接将红包存入绣衣楼公共基金充作修缮费",
+        title: "🧧 附加问：暗探们若打算反向向副官讨要拜年红包？",
+        options: ["副官拔腿就跑并锁死账房大门", "副官反手递出一张记账欠条"],
+      },
+    },
+    {
+      id: 6,
+      title: "6. 对绣衣楼新一年的心愿或想对楼主/副官说的真挚新春祝福？",
+      colorTag: "#F2E6D6",
+      type: "text",
+      placeholder: "许下你的新年暴富/升职/不加班愿望，或写下给楼主的新春祝福...",
+    },
+  ];
+
+  const [questions, setQuestions] = React.useState(defaultQuestions);
+  const [formData, setFormData] = React.useState({});
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [isRoleAnswering, setIsRoleAnswering] = React.useState(false);
+  const [isSubmitted, setIsSubmitted] = React.useState(false);
+  const [characters, setCharacters] = React.useState([]);
+  const [selectedRespondent, setSelectedRespondent] = React.useState("me");
+  const [characterRemark, setCharacterRemark] = React.useState("");
+  const [showHistoryModal, setShowHistoryModal] = React.useState(false);
+  const [historyList, setHistoryList] = React.useState([]);
+
+  React.useEffect(() => {
+    loadInitialData();
+  }, []);
+
+  const loadInitialData = async () => {
+    try {
+      if (window.chatCharacterStore) {
+        const allChars = await window.chatCharacterStore.getAll();
+        if (allChars && allChars.length > 0) {
+          setCharacters(allChars.filter((c) => c && c.name && c.type !== "group"));
+        }
+      }
+    } catch (e) {
+      console.warn("加载传讯角色库失败:", e);
+    }
+
+    try {
+      const db = await openDB();
+      const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+      const store = transaction.objectStore(STORES.USER_SETTINGS);
+      const req = store.get("xiuyi_spring_current_survey");
+      req.onsuccess = () => {
+        if (req.result && req.result.value && Array.isArray(req.result.value) && req.result.value.length >= 5) {
+          setQuestions(req.result.value);
+        }
+      };
+    } catch (e) {
+      console.warn("读取当前新春问卷失败:", e);
+    }
+
+    loadHistoryRecords();
+  };
+
+  const loadHistoryRecords = async () => {
+    try {
+      const db = await openDB();
+      const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+      const store = transaction.objectStore(STORES.USER_SETTINGS);
+      const req = store.get("xiuyi_spring_survey_history");
+      req.onsuccess = () => {
+        if (req.result && req.result.value && Array.isArray(req.result.value)) {
+          setHistoryList(req.result.value);
+        }
+      };
+    } catch (e) {
+      console.warn("读取历史新春问卷记录失败:", e);
+    }
+  };
+
+  // AI 结合世界书生成新春问卷
+  const generateSurveyWithAI = async () => {
+    if (!window.sendToLLM) {
+      alert("未检测到 AI 接口，请先在【设置 -> API设置】中配置大模型 API。");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      let worldBookContext = "";
+      if (window.getWorldBookContext) {
+        worldBookContext = await window.getWorldBookContext();
+      }
+
+      const prompt = `你是一个熟悉《代号鸢》世界观与古代谍报机构（绣衣楼）的幽默新春庆典策划官。
+请根据以下启用的世界书背景与设定，为绣衣楼策划一份【新春方案征集问卷】。
+
+【世界书设定与背景】：
+${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼楼主，掌管天下谍报。楼内有蛾部、雀部、蜂部、鸢部等情报暗探部门。新春佳节临近，副官傅融严控年节采购与红包支出，暗探们渴望除夕年夜饭大鱼大肉、过年轮休放假、向楼主讨要开门红封。"}
+
+【生成要求】：
+1. 必须生成 5 到 6 道题目。
+2. 题目要深度围绕绣衣楼的新春年节活动展开（如楼内新春装扮、年夜饭掌勺菜谱、春节值班三倍俸禄排班、初一迎财祈福、开箱红包分配、新年愿望祝福等）。
+3. 题目类型包括：单选题（grid或column布局）、带条件追问的题目、以及最后一道开放性建议吐槽题。
+4. 必须输出严格的 JSON 格式数组，不要包含任何 markdown 代码块标记。
+
+【JSON 格式规范】：
+[
+  {
+    "id": 1,
+    "title": "1. 题目文本？",
+    "colorTag": "#D6E4EA",
+    "type": "grid",
+    "options": ["选项A", "选项B", "选项C", "选项D", "选项E", "选项F"]
+  },
+  {
+    "id": 2,
+    "title": "2. 题目文本？",
+    "colorTag": "#EAD6D6",
+    "type": "column",
+    "options": ["选项A", "选项B", "选项C", "其他"],
+    "hasExtraCondition": true,
+    "extraQuestion": {
+      "triggerOption": "选项B",
+      "title": "🔍 附加问：追问标题？",
+      "options": ["追问选项1", "追问选项2"]
+    }
+  },
+  ...
+  {
+    "id": 6,
+    "title": "6. 对绣衣楼新一年的心愿或想对楼主/副官说的真挚新春祝福？",
+    "colorTag": "#F2E6D6",
+    "type": "text",
+    "placeholder": "写下您的新年愿望与祝福..."
+  }
+]`;
+
+      const apiMessages = [
+        {
+          role: "system",
+          content: "你是一个专业的古代谍报机构新春庆典策划生成器。只输出合法的 JSON 数组，不输出任何其他解释或 Markdown 标记。",
+        },
+        { role: "user", content: prompt },
+      ];
+
+      window.sendToLLM(
+        apiMessages,
+        null,
+        async (reply) => {
+          setIsGenerating(false);
+          try {
+            let cleanJson = reply.trim();
+            cleanJson = cleanJson.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
+            const parsed = JSON.parse(cleanJson);
+            if (Array.isArray(parsed) && parsed.length >= 5) {
+              setQuestions(parsed);
+              setFormData({});
+              setCharacterRemark("");
+              const db = await openDB();
+              const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+              const store = transaction.objectStore(STORES.USER_SETTINGS);
+              await store.put({
+                key: "xiuyi_spring_current_survey",
+                value: parsed,
+              });
+              alert("✨ 已结合世界书设定为您生成全新新春方案征集问卷！");
+            } else {
+              throw new Error("生成的问卷题目不足5道");
+            }
+          } catch (err) {
+            console.error("解析新春问卷 JSON 失败:", err, reply);
+            alert("AI 生成问卷解析异常，已为您保留默认精品新春问卷。");
+          }
+        },
+        (error) => {
+          setIsGenerating(false);
+          console.error("AI 生成新春问卷出错:", error);
+          alert("AI 新春问卷生成请求出错，请检查【设置 -> API设置】配置。");
+        },
+      );
+    } catch (e) {
+      setIsGenerating(false);
+      console.error("生成新春问卷异常:", e);
+    }
+  };
+
+  // 传讯角色代答
+  const handleRoleAutoAnswer = async (character) => {
+    if (!character || !character.name) return;
+    if (!window.sendToLLM) {
+      alert("未检测到 AI 接口，请先在【设置 -> API设置】中配置大模型 API。");
+      return;
+    }
+
+    setIsRoleAnswering(true);
+
+    try {
+      let worldBookContext = "";
+      if (window.getWorldBookContext) {
+        worldBookContext = await window.getWorldBookContext();
+      }
+
+      const prompt = `你现在是《代号鸢》中的角色【${character.name}】。
+【你的角色人设与设定】：
+- 设定描述：${character.profile?.description || character.name}
+- 性格特点：${character.profile?.personality || "保持原著性格与说话口吻"}
+- 出身背景：${character.profile?.background || "未知"}
+- 语言风格：${character.profile?.style || "符合原著口吻"}
+
+【世界书背景】：
+${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼楼主。"}
+
+【待填写的新春方案征集问卷】：
+${JSON.stringify(questions, null, 2)}
+
+【任务目标】：
+请以你【${character.name}】的真实心理、性格习惯与说话口吻，完成这份新春方案征集问卷的每一道题目！
+对于有选项的题目，请在题目提供的 options 中选择 1 个最符合你性格的选项。
+如果选中的选项触发了附加追问（hasExtraCondition），请同时在 extraAnswer 中选一个追问选项。
+如果是文本题（type === 'text'），请写出符合你人设口吻的独家新年愿望或对楼主的深情新春祝福。
+最后附带一段 30~80 字的角色个性化新年总结留言（characterRemark）。
+
+请严格输出 JSON 对象格式：
+{
+  "answers": {
+    "1": "选中的选项文本",
+    "2": "选中的选项文本",
+    "3": "选中的选项文本",
+    "3_extra": "触发的附加问选项文本（若无则不填）",
+    "4": "选中的选项文本",
+    "5": "选中的选项文本",
+    "6": "文本留言内容..."
+  },
+  "characterRemark": "角色在提交问卷时的新春祝福寄语..."
+}`;
+
+      const apiMessages = [
+        {
+          role: "system",
+          content: `你正在完全代入扮演角色【${character.name}】填写新春方案问卷。只输出合法的 JSON 对象，不输出任何其他无关文字。`,
+        },
+        { role: "user", content: prompt },
+      ];
+
+      window.sendToLLM(
+        apiMessages,
+        null,
+        (reply) => {
+          setIsRoleAnswering(false);
+          try {
+            let cleanJson = reply.trim();
+            cleanJson = cleanJson.replace(/^```json/i, "").replace(/^```/i, "").replace(/```$/i, "").trim();
+            const result = JSON.parse(cleanJson);
+            if (result && result.answers) {
+              setFormData(result.answers);
+              if (result.characterRemark) {
+                setCharacterRemark(result.characterRemark);
+              }
+              alert(`🎉 【${character.name}】已按照其专属人设为您自动填写了新春方案问卷！`);
+            }
+          } catch (err) {
+            console.error("解析角色代答 JSON 失败:", err, reply);
+            alert("角色代答解析失败，请重试。");
+          }
+        },
+        (error) => {
+          setIsRoleAnswering(false);
+          console.error("角色代答出错:", error);
+          alert("角色代答请求出错，请检查 API 配置。");
+        },
+      );
+    } catch (e) {
+      setIsRoleAnswering(false);
+      console.error("代答异常:", e);
+    }
+  };
+
+  // 提交问卷并存入 IndexedDB
+  const handleSubmit = async () => {
+    for (let q of questions) {
+      if (q.type !== "text" && !formData[q.id]) {
+        return alert(`请先完成第 ${q.id} 题再提交哦~`);
+      }
+    }
+
+    const respondentName =
+      selectedRespondent === "me"
+        ? "楼主本人"
+        : selectedRespondent?.name || "传讯角色";
+
+    const record = {
+      id: "spring_survey_" + Date.now(),
+      createdAt: new Date().toLocaleString(),
+      answeredBy: respondentName,
+      characterAvatar:
+        selectedRespondent !== "me" ? selectedRespondent?.avatar : null,
+      characterRemark: characterRemark || null,
+      answers: { ...formData },
+      surveyQuestions: [...questions],
+    };
+
+    try {
+      const db = await openDB();
+      const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+      const store = transaction.objectStore(STORES.USER_SETTINGS);
+      
+      const newHistory = [record, ...historyList].slice(0, 10);
+      await store.put({
+        key: "xiuyi_spring_survey_history",
+        value: newHistory,
+      });
+      setHistoryList(newHistory);
+      setIsSubmitted(true);
+    } catch (e) {
+      console.error("保存新春历史记录失败:", e);
+      setIsSubmitted(true);
+    }
+  };
+
+  // 样式辅助
+  const sectionTitleStyle = {
+    fontSize: "15px",
+    fontWeight: "bold",
+    color: "#5a5f4d",
+    marginBottom: "12px",
+    display: "flex",
+    alignItems: "center",
+    gap: "8px",
+  };
+
+  const optionBtnStyle = (isSelected) => ({
+    padding: "10px 14px",
+    borderRadius: "12px",
+    border: isSelected ? "1px solid #A8C8BA" : "1px solid transparent",
+    background: isSelected ? "#E8F1ED" : "#fff",
+    color: isSelected ? "#5a5f4d" : "#888",
+    fontSize: "14px",
+    textAlign: "left",
+    cursor: "pointer",
+    transition: "all 0.2s",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "space-between",
+  });
+
+  // ==================== 提交完成视图 ====================
+  if (isSubmitted) {
+    const respondentName =
+      selectedRespondent === "me"
+        ? "楼主本人"
+        : selectedRespondent?.name || "传讯角色";
+
+    return (
+      <div
+        style={{
+          position: "absolute",
+          inset: 0,
+          background: "#f9f7f5",
+          zIndex: 30,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          boxSizing: "border-box",
+        }}
+      >
+        <div
+          style={{
+            background: "#fff",
+            padding: "32px 24px",
+            borderRadius: "24px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.05)",
+            textAlign: "center",
+            width: "100%",
+            maxWidth: "340px",
+            boxSizing: "border-box",
+          }}
+        >
+          <div
+            style={{
+              width: "60px",
+              height: "60px",
+              background: "#FCE8E6",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 16px",
+            }}
+          >
+            <i
+              className="ph-fill ph-sparkle"
+              style={{ fontSize: "32px", color: "#d9534f" }}
+            ></i>
+          </div>
+          <h3
+            style={{
+              fontSize: "19px",
+              color: "#5a5f4d",
+              marginBottom: "8px",
+              fontWeight: "bold",
+            }}
+          >
+            新春方案已采纳
+          </h3>
+          <p style={{ fontSize: "13px", color: "#888", lineHeight: "1.5", marginBottom: "16px" }}>
+            提案人：<strong style={{ color: "#5a5f4d" }}>{respondentName}</strong>
+            <br />
+            感谢您为绣衣楼新春盛典献计献策，恭贺新禧！
+          </p>
+
+          {characterRemark && (
+            <div
+              style={{
+                background: "#fdf8f2",
+                border: "1px dashed #d8c2a8",
+                borderRadius: "12px",
+                padding: "12px",
+                fontSize: "13px",
+                color: "#6b563d",
+                lineHeight: "1.5",
+                textAlign: "left",
+                marginBottom: "16px",
+              }}
+            >
+              <div style={{ fontWeight: "bold", marginBottom: "4px" }}>
+                🧧 【{respondentName}】的新春寄语：
+              </div>
+              <div>"{characterRemark}"</div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: "10px", marginTop: "12px" }}>
+            <button
+              onClick={() => {
+                setFormData({});
+                setCharacterRemark("");
+                setIsSubmitted(false);
+              }}
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: "14px",
+                border: "1px solid #ddd",
+                background: "#fff",
+                color: "#666",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              再填一份
+            </button>
+            <button
+              onClick={() => setShowHistoryModal(true)}
+              style={{
+                flex: 1,
+                padding: "10px",
+                borderRadius: "14px",
+                border: "none",
+                background: "#D6E4EA",
+                color: "#556b73",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: "pointer",
+              }}
+            >
+              查看历史
+            </button>
+          </div>
+        </div>
+
+        <button
+          onClick={onBack}
+          style={{
+            marginTop: "24px",
+            padding: "10px 24px",
+            borderRadius: "20px",
+            border: "none",
+            background: "transparent",
+            color: "#999",
+            fontSize: "14px",
+            cursor: "pointer",
+          }}
+        >
+          返回绣衣问卷列表
+        </button>
+
+        {showHistoryModal && (
+          <HistoryRecordsModal
+            title="📋 历史新春方案征集"
+            historyList={historyList}
+            onClose={() => setShowHistoryModal(false)}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ==================== 主表单视图 ====================
+  return (
+    <div
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        background: "#f9f7f5",
+        zIndex: 30,
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* 顶部导航 */}
+      <div className="t11-nav" style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div style={{ display: "flex", alignItems: "center" }}>
+          <div className="back-btn" onClick={onBack}>
+            <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+          </div>
+          <div className="title">新春方案征集</div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", marginRight: "12px" }}>
+          <div
+            onClick={() => setShowHistoryModal(true)}
+            style={{
+              padding: "4px 10px",
+              borderRadius: "12px",
+              background: "rgba(0,0,0,0.05)",
+              color: "#5a5f4d",
+              fontSize: "12px",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+            }}
+          >
+            <i className="ph ph-clock-counter-clockwise"></i>
+            <span>历史</span>
+          </div>
+
+          <div
+            onClick={generateSurveyWithAI}
+            style={{
+              padding: "4px 10px",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #e8d0be 0%, #d8b8a0 100%)",
+              color: "#5c3d28",
+              fontSize: "12px",
+              fontWeight: "bold",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+            }}
+          >
+            <i className="ph-bold ph-sparkle"></i>
+            <span>换新题</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 答卷人选择栏 */}
+      <div
+        style={{
+          background: "#fff",
+          padding: "10px 16px",
+          borderBottom: "1px solid rgba(0,0,0,0.05)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "8px",
+          flexShrink: 0,
+        }}
+      >
+        <div style={{ fontSize: "12px", color: "#888", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <span>选择征集身份：</span>
+          {selectedRespondent !== "me" && (
+            <button
+              onClick={() => handleRoleAutoAnswer(selectedRespondent)}
+              disabled={isRoleAnswering}
+              style={{
+                background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                color: "#fff",
+                border: "none",
+                borderRadius: "10px",
+                padding: "3px 8px",
+                fontSize: "11px",
+                fontWeight: "bold",
+                cursor: isRoleAnswering ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+              }}
+            >
+              <i className="ph-bold ph-magic-wand"></i>
+              <span>{isRoleAnswering ? "代答中..." : `让 ${selectedRespondent.name} 答卷`}</span>
+            </button>
+          )}
+        </div>
+
+        {/* 角色横向滚动选择器 */}
+        <div
+          className="no-scrollbar"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "10px",
+            overflowX: "auto",
+            paddingBottom: "4px",
+          }}
+        >
+          <div
+            onClick={() => setSelectedRespondent("me")}
+            style={{
+              padding: "5px 12px",
+              borderRadius: "14px",
+              background: selectedRespondent === "me" ? "#5a5f4d" : "#f0eee9",
+              color: selectedRespondent === "me" ? "#fff" : "#666",
+              fontSize: "12px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              flexShrink: 0,
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>👑 楼主本人</span>
+          </div>
+
+          {characters.map((char) => {
+            const isSelected = selectedRespondent?.id === char.id;
+            return (
+              <div
+                key={char.id}
+                onClick={() => setSelectedRespondent(char)}
+                style={{
+                  padding: "4px 10px",
+                  borderRadius: "14px",
+                  background: isSelected ? "#A8C8BA" : "#f0eee9",
+                  color: isSelected ? "#fff" : "#555",
+                  fontSize: "12px",
+                  fontWeight: isSelected ? "bold" : "normal",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "5px",
+                  flexShrink: 0,
+                  transition: "all 0.2s ease",
+                }}
+              >
+                <div
+                  style={{
+                    width: "18px",
+                    height: "18px",
+                    borderRadius: "50%",
+                    backgroundColor: char.avatarColor || "#ddd",
+                    overflow: "hidden",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "10px",
+                  }}
+                >
+                  {char.avatar ? (
+                    <img src={char.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  ) : (
+                    char.name[0]
+                  )}
+                </div>
+                <span>{char.name}</span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 问卷表单区域 */}
+      <div
+        className="no-scrollbar"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "16px",
+          paddingBottom: "100px",
+          boxSizing: "border-box",
+        }}
+      >
+        {questions.map((q) => (
+          <div key={q.id} style={{ marginBottom: "24px" }}>
+            <div style={sectionTitleStyle}>
+              <span
+                style={{
+                  background: q.colorTag || "#D6E4EA",
+                  width: "6px",
+                  height: "16px",
+                  borderRadius: "3px",
+                  flexShrink: 0,
+                }}
+              ></span>
+              <span>{q.title}</span>
+            </div>
+
+            {q.type === "grid" && (
+              <div
+                style={{
+                  display: "grid",
+                  gridTemplateColumns: "repeat(3, 1fr)",
+                  gap: "10px",
+                }}
+              >
+                {q.options.map((opt) => (
+                  <div
+                    key={opt}
+                    onClick={() => setFormData({ ...formData, [q.id]: opt })}
+                    style={{
+                      ...optionBtnStyle(formData[q.id] === opt),
+                      justifyContent: "center",
+                      textAlign: "center",
+                    }}
+                  >
+                    {opt}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {q.type === "column" && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                {q.options.map((opt) => (
+                  <div
+                    key={opt}
+                    onClick={() => setFormData({ ...formData, [q.id]: opt })}
+                    style={optionBtnStyle(formData[q.id] === opt)}
+                  >
+                    <span>{opt}</span>
+                    {formData[q.id] === opt && (
+                      <i className="ph-bold ph-check" style={{ color: "#8fa99d" }}></i>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {q.type === "text" && (
+              <div>
+                <textarea
+                  value={formData[q.id] || ""}
+                  onChange={(e) => setFormData({ ...formData, [q.id]: e.target.value })}
+                  placeholder={q.placeholder || "在此写下您的新春建议与祝福..."}
+                  style={{
+                    width: "100%",
+                    minHeight: "80px",
+                    padding: "12px",
+                    borderRadius: "14px",
+                    border: "1px solid rgba(0,0,0,0.08)",
+                    outline: "none",
+                    background: "#fff",
+                    color: "#5a5f4d",
+                    fontSize: "14px",
+                    boxSizing: "border-box",
+                    resize: "none",
+                    fontFamily: "inherit",
+                    lineHeight: "1.5",
+                  }}
+                />
+              </div>
+            )}
+
+            {q.hasExtraCondition && q.extraQuestion && formData[q.id] === q.extraQuestion.triggerOption && (
+              <div
+                style={{
+                  marginTop: "10px",
+                  padding: "14px",
+                  background: "#fff",
+                  borderRadius: "16px",
+                  border: "1px dashed rgba(168, 200, 186, 0.6)",
+                  animation: "fadeIn 0.3s ease",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "13px",
+                    color: "#5a5f4d",
+                    fontWeight: "bold",
+                    marginBottom: "10px",
+                  }}
+                >
+                  {q.extraQuestion.title}
+                </div>
+                <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                  {q.extraQuestion.options.map((extraOpt) => (
+                    <div
+                      key={extraOpt}
+                      onClick={() => setFormData({ ...formData, [`${q.id}_extra`]: extraOpt })}
+                      style={{
+                        ...optionBtnStyle(formData[`${q.id}_extra`] === extraOpt),
+                        padding: "8px 12px",
+                        fontSize: "12px",
+                      }}
+                    >
+                      {extraOpt}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
+
+        <button
+          onClick={handleSubmit}
+          style={{
+            width: "100%",
+            padding: "15px",
+            borderRadius: "24px",
+            border: "none",
+            background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+            color: "white",
+            fontSize: "16px",
+            fontWeight: "bold",
+            marginTop: "12px",
+            boxShadow: "0 8px 20px rgba(168, 200, 186, 0.4)",
+            cursor: "pointer",
+            letterSpacing: "1px",
+          }}
+        >
+          确认提交
+        </button>
+      </div>
+
+      {(isGenerating || isRoleAnswering) && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(249, 247, 245, 0.85)",
+            backdropFilter: "blur(4px)",
+            zIndex: 100,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "12px",
+          }}
+        >
+          <div
+            style={{
+              width: "48px",
+              height: "48px",
+              borderRadius: "50%",
+              border: "3px solid rgba(168, 200, 186, 0.3)",
+              borderTopColor: "#8fa99d",
+              animation: "spin 1s linear infinite",
+            }}
+          ></div>
+          <div style={{ color: "#5a5f4d", fontSize: "14px", fontWeight: "bold" }}>
+            {isGenerating
+              ? "正在研读世界书设定，起草新春方案征集问卷..."
+              : `正在揣摩【${selectedRespondent?.name || "角色"}】人设，自动填写中...`}
+          </div>
+        </div>
+      )}
+
+      {showHistoryModal && (
+        <HistoryRecordsModal
+          title="📋 历史新春方案征集"
+          historyList={historyList}
+          onClose={() => setShowHistoryModal(false)}
+        />
+      )}
+    </div>
+  );
+};
+
+// T11 绣衣问卷子页面组件 (完整支持全部 4 个 AI 问卷 + 团建地点投票)
 const T11QuestionnaireSubPage = ({ onBack }) => {
-  // 控制是否进入具体投票详情页: 'location' | 'satisfaction' | 'activity' | 'gala' | null
+  // 控制是否进入具体投票详情页: 'location' | 'satisfaction' | 'activity' | 'gala' | 'spring' | null
   const [activeVote, setActiveVote] = React.useState(null);
 
   const items = [
@@ -24069,7 +25026,7 @@ const T11QuestionnaireSubPage = ({ onBack }) => {
     { title: "团建活动投票", icon: "confetti", id: "activity_vote" },
     { title: "团建地点投票", icon: "map-pin", id: "location_vote" },
     { title: "年会节目投票", icon: "microphone-stage", id: "gala_vote" },
-    { title: "新春方案征集", icon: "scroll" },
+    { title: "新春方案征集", icon: "scroll", id: "spring_plan" },
   ];
 
   // 处理列表点击
@@ -24082,6 +25039,8 @@ const T11QuestionnaireSubPage = ({ onBack }) => {
       setActiveVote("activity");
     } else if (item.id === "gala_vote") {
       setActiveVote("gala");
+    } else if (item.id === "spring_plan") {
+      setActiveVote("spring");
     } else {
       alert("活动尚未开始，请稍后再来~");
     }
@@ -24112,6 +25071,11 @@ const T11QuestionnaireSubPage = ({ onBack }) => {
       {/* 渲染子页面：年会节目投票 (AI 动态版) */}
       {activeVote === "gala" && (
         <AnnualGalaProgramSurveyPage onBack={() => setActiveVote(null)} />
+      )}
+
+      {/* 渲染子页面：新春方案征集 (AI 动态版) */}
+      {activeVote === "spring" && (
+        <SpringFestivalPlanSurveyPage onBack={() => setActiveVote(null)} />
       )}
 
       {/* 渲染子页面：团建地点投票 */}
