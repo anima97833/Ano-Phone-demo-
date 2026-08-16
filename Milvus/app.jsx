@@ -47548,7 +47548,7 @@ const T13Page = ({
         <SandTablePage onBack={() => { setShowSandTable(false); if (setIsSandTableOpen) setIsSandTableOpen(false); }} />
       )}
       {showRelative && (
-        <ReDeductionPage onBack={() => { setShowRelative(false); if (setIsRelativeOpen) setIsRelativeOpen(false); }} />
+        <RelativeDeductionPage onBack={() => { setShowRelative(false); if (setIsRelativeOpen) setIsRelativeOpen(false); }} />
       )}
       {showFarm && (
         <OddFarmPage onBack={() => { setShowFarm(false); if (setIsFarmOpen) setIsFarmOpen(false); }} />
