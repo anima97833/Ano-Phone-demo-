@@ -15765,6 +15765,113 @@ const T12SearchBar = () => (
   </div>
 );
 
+// 通用安全价格与单位解析函数（防崩溃/支持数字与各类中文、阿拉伯单位）
+const parsePriceAndUnit = (priceInput) => {
+  if (priceInput === null || priceInput === undefined) {
+    return { price: 0, unit: "钱" };
+  }
+  if (typeof priceInput === "number") {
+    return { price: isNaN(priceInput) ? 0 : priceInput, unit: "钱" };
+  }
+  const str = String(priceInput).trim().replace(/起|左右/g, "");
+  if (!str) return { price: 0, unit: "钱" };
+
+  // 纯数字格式
+  if (/^\d+(\.\d+)?$/.test(str)) {
+    return { price: parseFloat(str) || 0, unit: "钱" };
+  }
+
+  // 阿拉伯数字 + 单位 (例如 "49.00钱", "50 铢", "100 粮米(石)")
+  const arabicMatch =
+    str.match(/^(\d+(?:\.\d+)?)\s*([^\d]+)?$/) ||
+    str.match(/(\d+(?:\.\d+)?)\s*([^\d]+)/);
+  if (arabicMatch) {
+    return {
+      price: parseFloat(arabicMatch[1]) || 0,
+      unit: (arabicMatch[2] || "钱").trim() || "钱",
+    };
+  }
+
+  // 中文单位与数字解析
+  const unitMatch = str.match(/^(.*?)(钱|铢|文|两|两银|银|金|贯|铜板|石|匹|蜀锦|白金|黄金)?$/);
+  let mainStr = str;
+  let unitPart = "";
+  if (unitMatch && unitMatch[2]) {
+    mainStr = unitMatch[1] || "";
+    unitPart = unitMatch[2];
+  }
+
+  const chineseNumMap = {
+    零: 0,
+    一: 1,
+    壹: 1,
+    二: 2,
+    贰: 2,
+    两: 2,
+    三: 3,
+    叁: 3,
+    四: 4,
+    肆: 4,
+    五: 5,
+    伍: 5,
+    六: 6,
+    陆: 6,
+    七: 7,
+    柒: 7,
+    八: 8,
+    捌: 8,
+    九: 9,
+    玖: 9,
+    十: 10,
+    拾: 10,
+    百: 100,
+    佰: 100,
+    千: 1000,
+    仟: 1000,
+    万: 10000,
+  };
+
+  let result = 0,
+    temp = 0,
+    hasParsed = false;
+  for (let i = 0; i < mainStr.length; i++) {
+    const char = mainStr[i];
+    const num = chineseNumMap[char];
+    if (num === undefined) {
+      if (char >= "0" && char <= "9") {
+        const numVal = parseFloat(mainStr.slice(i));
+        return {
+          price: isNaN(numVal) ? 0 : numVal,
+          unit: unitPart || "钱",
+        };
+      }
+      continue;
+    }
+    hasParsed = true;
+    if (num >= 10) {
+      if (temp === 0) temp = 1;
+      result += temp * num;
+      temp = 0;
+    } else {
+      temp = num;
+    }
+  }
+  if (temp > 0) result += temp;
+
+  if (hasParsed) {
+    return {
+      price: result,
+      unit: unitPart || "钱",
+    };
+  }
+
+  const fallback = parseFloat(str);
+  return {
+    price: isNaN(fallback) ? 0 : fallback,
+    unit: unitPart || "钱",
+  };
+};
+
 // T12 结算单 (横向滚动核心)
 const T12SettlementList = ({ items }) => {
   // 使用默认数据作为回退
@@ -15792,7 +15899,7 @@ const T12SettlementList = ({ items }) => {
     },
   ];
 
-  const settlementItems = items || defaultItems;
+  const settlementItems = items && items.length > 0 ? items : defaultItems;
 
   return (
     <div className="mb-8">
@@ -15804,44 +15911,50 @@ const T12SettlementList = ({ items }) => {
       </div>
 
       <div className="h-scroller hide-scrollbar py-2">
-        {settlementItems.map((item) => (
-          <div
-            key={item.id}
-            className="snap-item w-[80vw] bg-white rounded-[var(--radius-l)] p-4 shadow-[var(--shadow-card)] flex flex-col justify-between h-36 relative overflow-hidden active-press"
-            style={{ borderLeft: "4px solid var(--primary)" }}
-          >
-            <div className="absolute -right-4 -top-4 w-24 h-24 bg-[var(--primary-light)] rounded-full opacity-50 blur-xl pointer-events-none"></div>
-            <div className="flex justify-between items-start z-10">
-              <div className="flex gap-2">
-                <span className="px-2 py-1 bg-[var(--primary-light)] text-[var(--primary-dark)] text-xs font-bold rounded-lg">
-                  #结算{item.id}
-                </span>
-                <span className="text-sm font-medium text-[var(--text-main)] truncate max-w-[120px]">
-                  {item.shop}
+        {settlementItems.map((item) => {
+          const parsed = parsePriceAndUnit(item.price);
+          return (
+            <div
+              key={item.id}
+              className="snap-item w-[80vw] bg-white rounded-[var(--radius-l)] p-4 shadow-[var(--shadow-card)] flex flex-col justify-between h-36 relative overflow-hidden active-press"
+              style={{ borderLeft: "4px solid var(--primary)" }}
+            >
+              <div className="absolute -right-4 -top-4 w-24 h-24 bg-[var(--primary-light)] rounded-full opacity-50 blur-xl pointer-events-none"></div>
+              <div className="flex justify-between items-start z-10">
+                <div className="flex gap-2">
+                  <span className="px-2 py-1 bg-[var(--primary-light)] text-[var(--primary-dark)] text-xs font-bold rounded-lg">
+                    #结算{item.id}
+                  </span>
+                  <span className="text-sm font-medium text-[var(--text-main)] truncate max-w-[120px]">
+                    {item.shop}
+                  </span>
+                </div>
+                <span className="text-[var(--accent)] font-bold font-mono">
+                  {parsed.price} {parsed.unit}
                 </span>
               </div>
-              <span className="text-[var(--accent)] font-bold font-mono">
-                ¥{item.price.toFixed(2)}
-              </span>
-            </div>
-            <div className="flex gap-2 mt-2 z-10">
-              {item.items.map((food, i) => (
-                <span
-                  key={i}
-                  className="px-3 py-1.5 bg-[#F8F8F8] text-xs text-[var(--text-sub)] rounded-full border border-[#EEE]"
-                >
-                  {food}
+              <div className="flex gap-2 mt-2 z-10">
+                {(Array.isArray(item.items)
+                  ? item.items
+                  : [item.name || "精选美馔"]
+                ).map((food, i) => (
+                  <span
+                    key={i}
+                    className="px-3 py-1.5 bg-[#F8F8F8] text-xs text-[var(--text-sub)] rounded-full border border-[#EEE]"
+                  >
+                    {food}
+                  </span>
+                ))}
+              </div>
+              <div className="flex items-center gap-2 mt-auto pt-3 border-t border-dashed border-[#EEE] z-10">
+                <i className="ph-fill ph-clock text-[var(--primary)]"></i>
+                <span className="text-xs text-[var(--text-sub)]">
+                  理想送达时间 {item.time}
                 </span>
-              ))}
+              </div>
             </div>
-            <div className="flex items-center gap-2 mt-auto pt-3 border-t border-dashed border-[#EEE] z-10">
-              <i className="ph-fill ph-clock text-[var(--primary)]"></i>
-              <span className="text-xs text-[var(--text-sub)]">
-                理想送达时间 {item.time}
-              </span>
-            </div>
-          </div>
-        ))}
+          );
+        })}
         <div className="w-1 flex-shrink-0"></div>
       </div>
     </div>
@@ -18084,112 +18197,27 @@ const T12Page = () => {
     // 1. 计算总价
     const unitTotals = {};
 
-    // 中文数字转阿拉伯数字的函数
-    const chineseToNumber = (chineseNum) => {
-      const numMap = {
-        零: 0,
-        一: 1,
-        二: 2,
-        三: 3,
-        四: 4,
-        五: 5,
-        六: 6,
-        七: 7,
-        八: 8,
-        九: 9,
-        十: 10,
-        百: 100,
-        千: 1000,
-        万: 10000,
-      };
-      let result = 0;
-      let temp = 0;
-      for (let i = 0; i < chineseNum.length; i++) {
-        const char = chineseNum[i];
-        const num = numMap[char];
-        if (num >= 10) {
-          if (temp === 0) temp = 1;
-          result += temp * num;
-          temp = 0;
-        } else {
-          temp = num;
-        }
+    const accumulateItem = (item, selectedIds) => {
+      if (item && selectedIds.includes(item.id)) {
+        const { price, unit } = parsePriceAndUnit(item.price);
+        const safeUnit = unit || "钱";
+        if (!unitTotals[safeUnit]) unitTotals[safeUnit] = 0;
+        unitTotals[safeUnit] += price;
       }
-      if (temp > 0) result += temp;
-      return result;
     };
 
-    // 提取价格和单位的函数
-    const extractPriceAndUnit = (priceStr) => {
-      // 尝试匹配阿拉伯数字
-      const arabicMatch = priceStr.match(/(\d+)([^\d]+)/);
-      if (arabicMatch) {
-        return {
-          price: parseInt(arabicMatch[1], 10),
-          unit: arabicMatch[2].trim(),
-        };
-      }
-
-      // 尝试匹配中文数字
-      const chineseMatch = priceStr.match(
-        /([零一二三四五六七八九十百千]+)([^零一二三四五六七八九十百千]+)/,
-      );
-      if (chineseMatch) {
-        return {
-          price: chineseToNumber(chineseMatch[1]),
-          unit: chineseMatch[2].trim(),
-        };
-      }
-
-      return null;
-    };
-
-    settlementItems.forEach((item) => {
-      if (selectedItems.settlement.includes(item.id)) {
-        const result = extractPriceAndUnit(item.price);
-        if (result) {
-          const { price, unit } = result;
-          if (!unitTotals[unit]) unitTotals[unit] = 0;
-          unitTotals[unit] += price;
-        } else {
-          //  fallback for simple numeric prices
-          const unit = "钱";
-          if (!unitTotals[unit]) unitTotals[unit] = 0;
-          unitTotals[unit] += item.price;
-        }
-      }
-    });
-
-    shoppingItems.forEach((item) => {
-      if (selectedItems.shopping.includes(item.id)) {
-        const result = extractPriceAndUnit(item.price);
-        if (result) {
-          const { price, unit } = result;
-          if (!unitTotals[unit]) unitTotals[unit] = 0;
-          unitTotals[unit] += price;
-        }
-      }
-    });
-    secondHandItems.forEach((item) => {
-      if (selectedItems.secondHand.includes(item.id)) {
-        const result = extractPriceAndUnit(item.price);
-        if (result) {
-          const { price, unit } = result;
-          if (!unitTotals[unit]) unitTotals[unit] = 0;
-          unitTotals[unit] += price;
-        }
-      }
-    });
-    ticketItems.forEach((item) => {
-      if (selectedItems.ticket.includes(item.id)) {
-        const result = extractPriceAndUnit(item.price);
-        if (result) {
-          const { price, unit } = result;
-          if (!unitTotals[unit]) unitTotals[unit] = 0;
-          unitTotals[unit] += price;
-        }
-      }
-    });
+    settlementItems.forEach((item) =>
+      accumulateItem(item, selectedItems.settlement),
+    );
+    shoppingItems.forEach((item) =>
+      accumulateItem(item, selectedItems.shopping),
+    );
+    secondHandItems.forEach((item) =>
+      accumulateItem(item, selectedItems.secondHand),
+    );
+    ticketItems.forEach((item) =>
+      accumulateItem(item, selectedItems.ticket),
+    );
 
     const totals = Object.entries(unitTotals).map(
       ([unit, total]) => `${total}${unit}`,
@@ -18443,75 +18471,26 @@ const T12Page = () => {
       "黄金(斤)": 10000,
     };
 
-    const chineseToNumber = (chineseNum) => {
-      const numMap = {
-        零: 0,
-        一: 1,
-        二: 2,
-        三: 3,
-        四: 4,
-        五: 5,
-        六: 6,
-        七: 7,
-        八: 8,
-        九: 9,
-        十: 10,
-        百: 100,
-        千: 1000,
-        万: 10000,
-      };
-      let result = 0,
-        temp = 0;
-      for (let i = 0; i < chineseNum.length; i++) {
-        const num = numMap[chineseNum[i]];
-        if (num >= 10) {
-          if (temp === 0) temp = 1;
-          result += temp * num;
-          temp = 0;
-        } else {
-          temp = num;
-        }
-      }
-      if (temp > 0) result += temp;
-      return result;
-    };
-
-    const extractPrice = (priceStr) => {
-      if (typeof priceStr === "number") return { price: priceStr, unit: "钱" };
-      const str = priceStr.toString().replace(/起|左右/g, ""); // 过滤无关字眼
-      const arabicMatch = str.match(/(\d+)([^\d]+)?/);
-      if (arabicMatch)
-        return {
-          price: parseInt(arabicMatch[1], 10),
-          unit: (arabicMatch[2] || "钱").trim(),
-        };
-
-      const chineseMatch = str.match(
-        /([零一二三四五六七八九十百千万]+)([^零一二三四五六七八九十百千万]+)?/,
-      );
-      if (chineseMatch)
-        return {
-          price: chineseToNumber(chineseMatch[1]),
-          unit: (chineseMatch[2] || "钱").trim(),
-        };
-      return { price: 0, unit: "钱" };
-    };
-
     let total = 0;
     let names = [];
 
     const process = (items, selectedIds, getNameFunc) => {
+      if (!Array.isArray(items) || !Array.isArray(selectedIds)) return;
       items.forEach((item) => {
-        if (selectedIds.includes(item.id)) {
-          names.push(getNameFunc(item));
-          const parsed = extractPrice(item.price);
+        if (item && selectedIds.includes(item.id)) {
+          names.push(getNameFunc(item) || "商品");
+          const parsed = parsePriceAndUnit(item.price);
           const rate = rates[parsed.unit] || 1; // 找不到单位默认按1:1算
           total += parsed.price * rate;
         }
       });
     };
 
-    process(settlementItems, selectedItems.settlement, (i) => i.shop);
+    process(
+      settlementItems,
+      selectedItems.settlement,
+      (i) => i.shop || i.items?.[0],
+    );
     process(shoppingItems, selectedItems.shopping, (i) => i.name);
     process(secondHandItems, selectedItems.secondHand, (i) => i.item);
     process(ticketItems, selectedItems.ticket, (i) => i.title);
@@ -18835,11 +18814,12 @@ const T12Page = () => {
   };
 
   const handlePlaceOrder = (merchant) => {
+    const rawPrice = merchant?.price ? String(merchant.price) : "50钱";
     const newOrder = {
       id: settlementItems.length + 1,
-      shop: merchant.shopName,
-      items: [merchant.foodName],
-      price: parseFloat(merchant.price.replace("钱", "")),
+      shop: merchant?.shopName || "美食小店",
+      items: [merchant?.foodName || merchant?.name || "招牌美食"],
+      price: rawPrice,
       time: new Date().toLocaleTimeString("zh-CN", {
         hour: "2-digit",
         minute: "2-digit",
@@ -19110,7 +19090,11 @@ const T12Page = () => {
                           </div>
                         </div>
                       </div>
-                      <div className="font-bold">{item.price}钱</div>
+                      <div className="font-bold">
+                        {typeof item.price === "number"
+                          ? `${item.price}钱`
+                          : item.price}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -19274,121 +19258,28 @@ const T12Page = () => {
                 <div className="text-xl font-bold text-[var(--primary)]">
                   {(() => {
                     const unitTotals = {};
-
-                    // 中文数字转阿拉伯数字的函数
-                    const chineseToNumber = (chineseNum) => {
-                      const numMap = {
-                        零: 0,
-                        一: 1,
-                        二: 2,
-                        三: 3,
-                        四: 4,
-                        五: 5,
-                        六: 6,
-                        七: 7,
-                        八: 8,
-                        九: 9,
-                        十: 10,
-                        百: 100,
-                        千: 1000,
-                        万: 10000,
-                      };
-                      let result = 0;
-                      let temp = 0;
-                      for (let i = 0; i < chineseNum.length; i++) {
-                        const char = chineseNum[i];
-                        const num = numMap[char];
-                        if (num >= 10) {
-                          if (temp === 0) temp = 1;
-                          result += temp * num;
-                          temp = 0;
-                        } else {
-                          temp = num;
-                        }
+                    const accumulateItem = (item, selectedIds) => {
+                      if (item && selectedIds.includes(item.id)) {
+                        const { price, unit } = parsePriceAndUnit(item.price);
+                        const safeUnit = unit || "钱";
+                        if (!unitTotals[safeUnit]) unitTotals[safeUnit] = 0;
+                        unitTotals[safeUnit] += price;
                       }
-                      if (temp > 0) result += temp;
-                      return result;
                     };
 
-                    // 提取价格和单位的函数
-                    const extractPriceAndUnit = (priceStr) => {
-                      // 尝试匹配阿拉伯数字
-                      const arabicMatch = priceStr.match(/(\d+)([^\d]+)/);
-                      if (arabicMatch) {
-                        return {
-                          price: parseInt(arabicMatch[1], 10),
-                          unit: arabicMatch[2].trim(),
-                        };
-                      }
+                    settlementItems.forEach((item) =>
+                      accumulateItem(item, selectedItems.settlement),
+                    );
+                    shoppingItems.forEach((item) =>
+                      accumulateItem(item, selectedItems.shopping),
+                    );
+                    secondHandItems.forEach((item) =>
+                      accumulateItem(item, selectedItems.secondHand),
+                    );
+                    ticketItems.forEach((item) =>
+                      accumulateItem(item, selectedItems.ticket),
+                    );
 
-                      // 尝试匹配中文数字
-                      const chineseMatch = priceStr.match(
-                        /([零一二三四五六七八九十百千]+)([^零一二三四五六七八九十百千]+)/,
-                      );
-                      if (chineseMatch) {
-                        return {
-                          price: chineseToNumber(chineseMatch[1]),
-                          unit: chineseMatch[2].trim(),
-                        };
-                      }
-
-                      return null;
-                    };
-
-                    // 计算选中的餐饮商品
-                    settlementItems.forEach((item) => {
-                      if (selectedItems.settlement.includes(item.id)) {
-                        const result = extractPriceAndUnit(item.price);
-                        if (result) {
-                          const { price, unit } = result;
-                          if (!unitTotals[unit]) unitTotals[unit] = 0;
-                          unitTotals[unit] += price;
-                        } else {
-                          //  fallback for simple numeric prices
-                          const unit = "钱";
-                          if (!unitTotals[unit]) unitTotals[unit] = 0;
-                          unitTotals[unit] += item.price;
-                        }
-                      }
-                    });
-
-                    // 计算选中的购物商品
-                    shoppingItems.forEach((item) => {
-                      if (selectedItems.shopping.includes(item.id)) {
-                        const result = extractPriceAndUnit(item.price);
-                        if (result) {
-                          const { price, unit } = result;
-                          if (!unitTotals[unit]) unitTotals[unit] = 0;
-                          unitTotals[unit] += price;
-                        }
-                      }
-                    });
-
-                    // 计算选中的二手商品
-                    secondHandItems.forEach((item) => {
-                      if (selectedItems.secondHand.includes(item.id)) {
-                        const result = extractPriceAndUnit(item.price);
-                        if (result) {
-                          const { price, unit } = result;
-                          if (!unitTotals[unit]) unitTotals[unit] = 0;
-                          unitTotals[unit] += price;
-                        }
-                      }
-                    });
-
-                    // 计算选中的票务商品
-                    ticketItems.forEach((item) => {
-                      if (selectedItems.ticket.includes(item.id)) {
-                        const result = extractPriceAndUnit(item.price);
-                        if (result) {
-                          const { price, unit } = result;
-                          if (!unitTotals[unit]) unitTotals[unit] = 0;
-                          unitTotals[unit] += price;
-                        }
-                      }
-                    });
-
-                    // 构建总计字符串
                     const totals = Object.entries(unitTotals).map(
                       ([unit, total]) => `${total}${unit}`,
                     );
