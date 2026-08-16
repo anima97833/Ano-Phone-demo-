@@ -767,7 +767,7 @@
           });
         },
 
-        // 设置音律训练角色待机图片 (Idle)
+        // 获取音律训练角色待机图片 (Idle)
         setMusicGameCharIdleImage: async (imageData) => {
           const db = await openDB();
           return new Promise((resolve, reject) => {
@@ -776,6 +776,30 @@
             const request = store.put({ key: "musicgame_char_idle_image", value: imageData });
             request.onsuccess = () => resolve(request.result);
             request.onerror = () => reject("保存音律训练角色待机图片失败");
+          });
+        },
+
+        // 获取绣衣楼公告数据
+        getXiuyiNotices: async () => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get("xiuyi_notices");
+            request.onsuccess = () => resolve(request.result?.value || null);
+            request.onerror = () => reject("获取绣衣楼公告失败");
+          });
+        },
+
+        // 设置/保存绣衣楼公告数据
+        setXiuyiNotices: async (notices) => {
+          const db = await openDB();
+          return new Promise((resolve, reject) => {
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.put({ key: "xiuyi_notices", value: notices });
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = () => reject("保存绣衣楼公告失败");
           });
         },
       };

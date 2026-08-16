@@ -30510,101 +30510,117 @@ const T11Page = ({ onBack }) => {
     };
   };
 
-  // 初始化公告数据
+  // 初始化公告数据 (优先从 IndexedDB 加载)
   React.useEffect(() => {
-    const initialNotices = [];
-    const TABS = ["绣衣要闻", "楼内新规", "内外交流", "广陵爆报"];
-    // 为每个板块生成两条消息
-    for (let i = 0; i < TABS.length; i++) {
-      const tabNotices = [];
-      for (let j = 0; j < 2; j++) {
-        // 为绣衣要闻的第一条消息设置固定内容
-        if (i === 0 && j === 0) {
-          tabNotices.push({
-            id: Date.now() + Math.random(),
-            title: "多样打法 拿捏痛点",
-            content:
-              "在本月的培训课上，鸢部华佗向各位新人密探分享了自己的工作经验。痛点的关键，就是抓住关键的痛点，拿捏痛点，可以不拘于特定的手法，推拿、热敷、药浴等等，抓准点线面，就能组合拳。吃透病灶，强化认知，既要尽早定位风险点，也要在更大范围里找到最优解。<br /><br />授课途中，除葛洪被打出教室，众人表示一致好评。",
-            time: generateRandomTime(),
-            character: "傅融",
-          });
-        } else if (i === 0 && j === 1) {
-          // 为绣衣要闻的第二条消息设置固定内容
-          tabNotices.push({
-            id: Date.now() + Math.random(),
-            title: "优化伙食支出 推动降本增效",
-            content:
-              "第一季度结束，傅融宣布，将进一步优化密探饮食结构，缩减柴火支出。<br /><br />傅融认为，近期柴火价格处于市场高位，单凭绣衣楼无法改变定价策略。绣衣楼需要主动出击，通过优化饮食结构，将煮萝卜替换为生吃萝卜，既可以减少柴火用量，也可以通过坚硬的食物，锤炼密探的坚定意志。<br /><br />该笔预算调整，引起各部首首和参议密探巨大争议，场面凶残无法尽述。最终以一票赞成，多数票反对的结果，驳回了此项提议。<br /><br />",
-            time: generateRandomTime(),
-            character: "傅融",
-          });
-        } else if (i === 3 && j === 0) {
-          // 为广陵爆报的第一条消息设置固定内容
-          tabNotices.push({
-            id: Date.now() + Math.random(),
-            title: "热心行商走访困难户 真情帮扶暖人心脾",
-            content:
-              '年关将至，程昱率领商队，走访慰问濮阳界红村困难村民，为他们送上必要的生活物资，纾难解困，进一步加强对偏远村庄的帮扶，同时更有效地了解当地情报。<br /><br /> 走访中，程昱亲切与当地村民进行了深入交流，并询问当地村民的身体健康状况，叮嘱他们平日要注意食品安全问题，多吃新鲜的食物，避免过度食用烟酒。村民对程昱的关怀感到非常感谢："感谢使君这么大老远地过来，时刻惦记着我们的生活，让我们这样山凹凹里的小村子，也能了解天下大势的细微变化……"<br /><br />  当天晚上，界红村举行了盛大的筵席来欢庆程昱使君的到来。明明看起来是一个物资贫瘠的小山村，但却能从后屋里面流水一样端出一道道肉食。程昱使君在宴会上表现得尤其耐心，对每一道乡野小菜都送上了专业的点评："炽热火辣的味道，想必获取这份食材的过程有些周折。哦，这份，滋味很清爽，但还差一点火候……"界红村村民点头如啄米，一一记下这些改进意见，并诚心期待使君下一次的到来。<br /><br />  程昱使君表示："我只是一个普通的商人，通过公平合理的交易，满足他人的愿望，也满足一下自己的爱好。做人嘛，最重要的是火候，好肉不流通，好人不做伪……"',
-            time: generateRandomTime(),
-            character: "程昱",
-          });
-        } else if (i === 3 && j === 1) {
-          // 为广陵爆报的第二条消息设置固定内容
-          tabNotices.push({
-            id: Date.now() + Math.random(),
-            title: "震惊！交州「神秘刺客」组织疑似渗透关中？！",
-            content:
-              '近日有小道消息称，交州士氏死士组织花灯会似乎在关中集结，不知对广陵有何密谋。本报卧底于绣衣楼的探子传回消息，蜂部已开始调查此事。今夜，她甚至截获了蜂部传回的密信，上面赫然是位于广陵某处景区的接头信息！记者将个人生死置之度外，深入险境，连夜奔袭此处湖畔景区，以下直播文字由前线一手传回！首先在此地的是……是伍丹、庞统、朱然和陆绩，每人都抱着一盏花灯，莫非花灯会真的如此残暴，利用小密探们不谙世事的天真，将他们发展成了间谍？让我们看看他们利用花灯在传达什么情报！……"马到成功"、"马年大吉"、"一马当先"、"龙马精神"……啊，是绘画的绘吗，原来是花灯绘啊……',
-            time: generateRandomTime(),
-            character: "广陵记者",
-          });
-        } else if (i === 1 && j === 0) {
-          // 为楼内新规的第一条消息设置固定内容
-          tabNotices.push({
-            id: Date.now() + Math.random(),
-            title: "关于各部考勤和请假的暂行规定（节选）",
-            content:
-              "近期，发现有部分密探，存在上班长期迟到、不到，甚至领空饷、假公济私房公物等问题。为加强密探管理，严明纪律、提高工作效率，结合绣衣楼实际情况，特制定本规定。<br /><br />第一章 总则<br /><br />大汉绣衣校尉直属机关绣衣楼四部登记密探参照本规定执行，闲人密探可根据实际情况酌情执行。<br /><br />第二章 请假类别、期限和待遇<br /><br />（下略）<br /><br />第四章 旷职、旷工及其处理<br /><br />属下列情况之一者，按照旷职、旷工处理——<br /><br />- 长期外派在外，没有按照绣衣楼规章制度完成点卯者；<br /><br />- 完成外派、调查、刺杀任务后，无法按期完成汇报，或使用不明所以的涂鸦完成汇报者；<br /><br />- 无视汇报流程，跨后门，跨窗，跨级别完成汇报者；<br /><br />- 汇报过程中损坏王府以及书房公物（包括花瓶），未完成照价赔偿者；<br /><br />以上内容每触犯一次，计一次过。<br />合计计过三次及以上者，名单将汇报给楼主，取消当月俸禄并记大过一次。计大过满两次者，将会对密探进行劝退，永不录用",
-            time: generateRandomTime(),
-            character: "傅融",
-          });
-        } else if (i === 1 && j === 1) {
-          // 为楼内新规的第二条消息设置固定内容
-          tabNotices.push({
-            id: Date.now() + Math.random(),
-            title: "关于绣衣楼密探外勤任务管理暂行规定（节选）",
-            content:
-              "近期，发现有部分密探在外勤任务中存在情报传递延迟、关键信息遗漏、擅自更改行动路线、私藏任务物资等问题。为规范外勤行动流程，保障任务安全与效率，结合绣衣楼实际情况，特制定本规定。<br /><br />第一章 总则<br /><br />大汉绣衣校尉直属机关绣衣楼所有外勤密探必须严格执行本规定，内勤密探可参照本规定执行相关协作要求。<br /><br />第二章 任务报备与执行<br /><br />1. 外勤任务需提前12小时提交书面报备，明确任务目标、行动路线、预计时长及携带物资清单。<br />2. 执行任务期间，需每4小时通过加密渠道向本部反馈实时进展；进入高危区域时，需每2小时反馈一次。<br />3. 未经本部批准，不得擅自与任务无关人员接触，不得泄露任务相关信息。<br /><br />第三章 情报管理与传递<br /><br />1. 情报需以加密文书形式传递，禁止使用口头、涂鸦等非正式方式汇报核心信息。<br />2. 关键情报需在获取后2小时内传回本部，遇紧急情况需立即启动应急通讯通道。<br />3. 情报内容需包含时间、地点、人物、事件全貌及潜在风险评估，不得遗漏关键细节。<br /><br />第五章 违规处理<br /><br />属下列情况之一者，按外勤违规处理：<br /><br />- 未按时提交任务报备，或擅自更改行动路线未提前报备者；<br />- 未按规定频次反馈任务进展，或故意隐瞒关键情报者；<br />- 擅自接触无关人员、泄露任务信息，或私藏任务物资者；<br />- 情报传递延迟超过4小时，或提交情报存在重大疏漏者；<br /><br />以上内容每触犯一次，计一次过。<br />累计计过两次及以上者，暂停外勤资格并扣发当月50%俸禄；累计计过四次及以上者，调离外勤岗位并记大过一次；计大过满两次者，将予以除名，永不录用。",
-            time: generateRandomTime(),
-            character: "傅融",
-          });
-        } else if (i === 2 && j === 0) {
-          // 为内外交流的第一条消息设置固定内容
-          tabNotices.push({
-            id: Date.now() + Math.random(),
-            title: "绣衣楼出使冀州交流合作圆满完成",
-            content:
-              '近日，绣衣楼使团圆满结束对冀州的友好访问，本次出使以"互通互信、共御时艰"为核心，取得了丰硕成果，为双方后续深度协作奠定了坚实基础。<br /><br />此次交流中，绣衣楼使团与冀州各方贤达坦诚对话，在情报共享、防务协同、物资互助等关键议题上达成高度共识。双方不仅建立了常态化情报互通机制，更就边境联防、应急物资调配等具体事项达成了务实合作意向。<br /><br />冀州各界对绣衣楼使团的到来给予了热忱接待，充分展现了双方以大局为重、共护一方安宁的责任与担当。此次交流不仅深化了绣衣楼与冀州属地的战略互信，更织就了一张联结南北的协作网络，为应对复杂多变的局势筑牢了坚实屏障。<br /><br />使团返程后，绣衣楼将迅速推进各项合作事项落地，以此次交流成果为契机，持续深化与冀州的联动，共同开创互利共赢的新局面。',
-            time: generateRandomTime(),
-            character: "绣衣楼",
-          });
-        } else if (i === 2 && j === 1) {
-          // 为内外交流的第二条消息设置固定内容
-          tabNotices.push({
-            id: Date.now() + Math.random(),
-            title: "绣衣楼关于与许县接触事宜的情况通报",
-            content:
-              '近日，绣衣楼使团按既定计划与许县相关人员开展接触洽谈，旨在就边境情报互通、跨境异动管控等议题探寻协作可能。然因双方立场认知、行事准则存在本质差异，接触过程中产生系列摩擦分歧，现将相关情况通报如下。<br /><br />本次接触之初，绣衣楼使团秉持"坦诚沟通、互利共赢"原则，主动释出协作诚意，就情报共享的范围、跨境行动的协调机制等核心议题提出务实方案。但许县方面坚持自身行事逻辑，对关键协作事项持保留态度，其部分人员言辞强硬、立场固化，且在涉及双方权责划分、信息保密边界等问题上未能形成共识，导致多项洽谈议题未能推进。<br /><br />接触期间，许县部分成员存在越界质询、刻意回避核心问题等行为，与绣衣楼倡导的平等协商原则相悖，引发不必要的沟通阻碍。针对上述情况，绣衣楼使团始终保持克制，坚守底线立场，就分歧点反复阐释我方诉求与协作的必要性，但终因双方核心利益诉求未能契合，未能达成实质性合作意向。',
-            time: generateRandomTime(),
-            character: "绣衣楼",
-          });
-        } else {
-          tabNotices.push(generateRandomNotice(i));
+    const loadNotices = async () => {
+      try {
+        if (window.settingsStore?.getXiuyiNotices) {
+          const saved = await window.settingsStore.getXiuyiNotices();
+          if (
+            saved &&
+            Array.isArray(saved) &&
+            saved.length === 4 &&
+            saved.some((t) => Array.isArray(t) && t.length > 0)
+          ) {
+            setNotices(saved);
+            return;
+          }
         }
+      } catch (e) {
+        console.warn("从 IndexedDB 读取公告失败，使用默认公告", e);
       }
-      initialNotices.push(tabNotices);
-    }
-    setNotices(initialNotices);
+
+      const initialNotices = [];
+      const TABS = ["绣衣要闻", "楼内新规", "内外交流", "广陵爆报"];
+      // 为每个板块生成两条消息
+      for (let i = 0; i < TABS.length; i++) {
+        const tabNotices = [];
+        for (let j = 0; j < 2; j++) {
+          if (i === 0 && j === 0) {
+            tabNotices.push({
+              id: Date.now() + Math.random(),
+              title: "多样打法 拿捏痛点",
+              content:
+                "在本月的培训课上，鸢部华佗向各位新人密探分享了自己的工作经验。痛点的关键，就是抓住关键的痛点，拿捏痛点，可以不拘于特定的手法，推拿、热敷、药浴等等，抓准点线面，就能组合拳。吃透病灶，强化认知，既要尽早定位风险点，也要在更大范围里找到最优解。<br /><br />授课途中，除葛洪被打出教室，众人表示一致好评。",
+              time: generateRandomTime(),
+              character: "傅融",
+            });
+          } else if (i === 0 && j === 1) {
+            tabNotices.push({
+              id: Date.now() + Math.random(),
+              title: "优化伙食支出 推动降本增效",
+              content:
+                "第一季度结束，傅融宣布，将进一步优化密探饮食结构，缩减柴火支出。<br /><br />傅融认为，近期柴火价格处于市场高位，单凭绣衣楼无法改变定价策略。绣衣楼需要主动出击，通过优化饮食结构，将煮萝卜替换为生吃萝卜，既可以减少柴火用量，也可以通过坚硬的食物，锤炼密探的坚定意志。<br /><br />该笔预算调整，引起各部首首和参议密探巨大争议，场面凶残无法尽述。最终以一票赞成，多数票反对的结果，驳回了此项提议。<br /><br />",
+              time: generateRandomTime(),
+              character: "傅融",
+            });
+          } else if (i === 3 && j === 0) {
+            tabNotices.push({
+              id: Date.now() + Math.random(),
+              title: "热心行商走访困难户 真情帮扶暖人心脾",
+              content:
+                '年关将至，程昱率领商队，走访慰问濮阳界红村困难村民，为他们送上必要的生活物资，纾难解困，进一步加强对偏远村庄的帮扶，同时更有效地了解当地情报。<br /><br /> 走访中，程昱亲切与当地村民进行了深入交流，并询问当地村民的身体健康状况，叮嘱他们平日要注意食品安全问题，多吃新鲜的食物，避免过度食用烟酒。村民对程昱的关怀感到非常感谢："感谢使君这么大老远地过来，时刻惦记着我们的生活，让我们这样山凹凹里的小村子，也能了解天下大势的细微变化……"<br /><br />  当天晚上，界红村举行了盛大的筵席来欢庆程昱使君的到来。明明看起来是一个物资贫瘠的小山村，但却能从后屋里面流水一样端出一道道肉食。程昱使君在宴会上表现得尤其耐心，对每一道乡野小菜都送上了专业的点评："炽热火辣的味道，想必获取这份食材的过程有些周折。哦，这份，滋味很清爽，但还差一点火候……"界红村村民点头如啄米，一一记下这些改进意见，并诚心期待使君下一次的到来。<br /><br />  程昱使君表示："我只是一个普通的商人，通过公平合理的交易，满足他人的愿望，也满足一下自己的爱好。做人嘛，最重要的是火候，好肉不流通，好人不做伪……"',
+              time: generateRandomTime(),
+              character: "程昱",
+            });
+          } else if (i === 3 && j === 1) {
+            tabNotices.push({
+              id: Date.now() + Math.random(),
+              title: "震惊！交州「神秘刺客」组织疑似渗透关中？！",
+              content:
+                '近日有小道消息称，交州士氏死士组织花灯会似乎在关中集结，不知对广陵有何密谋。本报卧底于绣衣楼的探子传回消息，蜂部已开始调查此事。今夜，她甚至截获了蜂部传回的密信，上面赫然是位于广陵某处景区的接头信息！记者将个人生死置之度外，深入险境，连夜奔袭此处湖畔景区，以下直播文字由前线一手传回！首先在此地的是……是伍丹、庞统、朱然和陆绩，每人都抱着一盏花灯，莫非花灯会真的如此残暴，利用小密探们不谙世事的天真，将他们发展成了间谍？让我们看看他们利用花灯在传达什么情报！……"马到成功"、"马年大吉"、"一马当先"、"龙马精神"……啊，是绘画的绘吗，原来是花灯绘啊……',
+              time: generateRandomTime(),
+              character: "广陵记者",
+            });
+          } else if (i === 1 && j === 0) {
+            tabNotices.push({
+              id: Date.now() + Math.random(),
+              title: "关于各部考勤和请假的暂行规定（节选）",
+              content:
+                "近期，发现有部分密探，存在上班长期迟到、不到，甚至领空饷、假公济私房公物等问题。为加强密探管理，严明纪律、提高工作效率，结合绣衣楼实际情况，特制定本规定。<br /><br />第一章 总则<br /><br />大汉绣衣校尉直属机关绣衣楼四部登记密探参照本规定执行，闲人密探可根据实际情况酌情执行。<br /><br />第二章 请假类别、期限和待遇<br /><br />（下略）<br /><br />第四章 旷职、旷工及其处理<br /><br />属下列情况之一者，按照旷职、旷工处理——<br /><br />- 长期外派在外，没有按照绣衣楼规章制度完成点卯者；<br /><br />- 完成外派、调查、刺杀任务后，无法按期完成汇报，或使用不明所以的涂鸦完成汇报者；<br /><br />- 无视汇报流程，跨后门，跨窗，跨级别完成汇报者；<br /><br />- 汇报过程中损坏王府以及书房公物（包括花瓶），未完成照价赔偿者；<br /><br />以上内容每触犯一次，计一次过。<br />合计计过三次及以上者，名单将汇报给楼主，取消当月俸禄并记大过一次。计大过满两次者，将会对密探进行劝退，永不录用",
+              time: generateRandomTime(),
+              character: "傅融",
+            });
+          } else if (i === 1 && j === 1) {
+            tabNotices.push({
+              id: Date.now() + Math.random(),
+              title: "关于绣衣楼密探外勤任务管理暂行规定（节选）",
+              content:
+                "近期，发现有部分密探在外勤任务中存在情报传递延迟、关键信息遗漏、擅自更改行动路线、私藏任务物资等问题。为规范外勤行动流程，保障任务安全与效率，结合绣衣楼实际情况，特制定本规定。<br /><br />第一章 总则<br /><br />大汉绣衣校尉直属机关绣衣楼所有外勤密探必须严格执行本规定，内勤密探可参照本规定执行相关协作要求。<br /><br />第二章 任务报备与执行<br /><br />1. 外勤任务需提前12小时提交书面报备，明确任务目标、行动路线、预计时长及携带物资清单。<br />2. 执行任务期间，需每4小时通过加密渠道向本部反馈实时进展；进入高危区域时，需每2小时反馈一次。<br />3. 未经本部批准，不得擅自与任务无关人员接触，不得泄露任务相关信息。<br /><br />第三章 情报管理与传递<br /><br />1. 情报需以加密文书形式传递，禁止使用口头、涂鸦等非正式方式汇报核心信息。<br />2. 关键情报需在获取后2小时内传回本部，遇紧急情况需立即启动应急通讯通道。<br />3. 情报内容需包含时间、地点、人物、事件全貌及潜在风险评估，不得遗漏关键细节。<br /><br />第五章 违规处理<br /><br />属下列情况之一者，按外勤违规处理：<br /><br />- 未按时提交任务报备，或擅自更改行动路线未提前报备者；<br />- 未按规定频次反馈任务进展，或故意隐瞒关键情报者；<br />- 擅自接触无关人员、泄露任务信息，或私藏任务物资者；<br />- 情报传递延迟超过4小时，或提交情报存在重大疏漏者；<br /><br />以上内容每触犯一次，计一次过。<br />累计计过两次及以上者，暂停外勤资格并扣发当月50%俸禄；累计计过四次及以上者，调离外勤岗位并记大过一次；计大过满两次者，将予以除名，永不录用。",
+              time: generateRandomTime(),
+              character: "傅融",
+            });
+          } else if (i === 2 && j === 0) {
+            tabNotices.push({
+              id: Date.now() + Math.random(),
+              title: "绣衣楼出使冀州交流合作圆满完成",
+              content:
+                '近日，绣衣楼使团圆满结束对冀州的友好访问，本次出使以"互通互信、共御时艰"为核心，取得了丰硕成果，为双方后续深度协作奠定了坚实基础。<br /><br />此次交流中，绣衣楼使团与冀州各方贤达坦诚对话，在情报共享、防务协同、物资互助等关键议题上达成高度共识。双方不仅建立了常态化情报互通机制，更就边境联防、应急物资调配等具体事项达成了务实合作意向。<br /><br />冀州各界对绣衣楼使团的到来给予了热忱接待，充分展现了双方以大局为重、共护一方安宁的责任与担当。此次交流不仅深化了绣衣楼与冀州属地的战略互信，更织就了一张联结南北的协作网络，为应对复杂多变的局势筑牢了坚实屏障。<br /><br />使团返程后，绣衣楼将迅速推进各项合作事项落地，以此次交流成果为契机，持续深化与冀州的联动，共同开创互利共赢的新局面。',
+              time: generateRandomTime(),
+              character: "绣衣楼",
+            });
+          } else if (i === 2 && j === 1) {
+            tabNotices.push({
+              id: Date.now() + Math.random(),
+              title: "绣衣楼关于与许县接触事宜的情况通报",
+              content:
+                '近日，绣衣楼使团按既定计划与许县相关人员开展接触洽谈，旨在就边境情报互通、跨境异动管控等议题探寻协作可能。然因双方立场认知、行事准则存在本质差异，接触过程中产生系列摩擦分歧，现将相关情况通报如下。<br /><br />本次接触之初，绣衣楼使团秉持"坦诚沟通、互利共赢"原则，主动释出协作诚意，就情报共享的范围、跨境行动的协调机制等核心议题提出务实方案。但许县方面坚持自身行事逻辑，对关键协作事项持保留态度，其部分人员言辞强硬、立场固化，且在涉及双方权责划分、信息保密边界等问题上未能形成共识，导致多项洽谈议题未能推进。<br /><br />接触期间，许县部分成员存在越界质询、刻意回避核心问题等行为，与绣衣楼倡导的平等协商原则相悖，引发不必要的沟通阻碍。针对上述情况，绣衣楼使团始终保持克制，坚守底线立场，就分歧点反复阐释我方诉求与协作的必要性，但终因双方核心利益诉求未能契合，未能达成实质性合作意向。',
+              time: generateRandomTime(),
+              character: "绣衣楼",
+            });
+          } else {
+            tabNotices.push(generateRandomNotice(i));
+          }
+        }
+        initialNotices.push(tabNotices);
+      }
+      setNotices(initialNotices);
+      if (window.settingsStore?.setXiuyiNotices) {
+        window.settingsStore.setXiuyiNotices(initialNotices);
+      }
+    };
+
+    loadNotices();
   }, []);
 
   // 处理 App 点击
@@ -32493,7 +32509,7 @@ const T11ContactsPage = ({ onBack }) => {
   );
 };
 
-// ==================== T11 公告子页面组件 (新增) ====================
+// ==================== T11 公告子页面组件 (支持 AI 模式生成 + 【传谣】前缀 + IndexedDB 持久化) ====================
 const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
   // ------------------- 状态管理 -------------------
   const [activeTab, setActiveTab] = React.useState(0); // 当前激活的板块索引
@@ -32502,7 +32518,6 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
   const [expandedNotices, setExpandedNotices] = React.useState({}); // 展开状态，格式：{noticeId: boolean}
   const [isEditMode, setIsEditMode] = React.useState(false); // 是否处于编辑模式
   const [currentEditNotice, setCurrentEditNotice] = React.useState({
-    // 当前编辑的公告数据
     title: "",
     content: "",
     selectedTab: 0,
@@ -32510,6 +32525,12 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
     originalNoticeIndex: -1,
   });
   const [swipeState, setSwipeState] = React.useState({}); // 滑动状态，格式：{noticeId: swipeDistance}
+
+  // AI 模式状态
+  const [isAIMode, setIsAIMode] = React.useState(() => {
+    return localStorage.getItem("xiuyi_notice_ai_mode") === "true";
+  });
+  const [isGenerating, setIsGenerating] = React.useState(false);
 
   // ------------------- 常量定义 -------------------
   const TABS = ["绣衣要闻", "楼内新规", "内外交流", "广陵爆报"];
@@ -32619,53 +32640,152 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
     return `${hour.toString().padStart(2, "0")}:${minute.toString().padStart(2, "0")}`;
   };
 
-  // 生成随机消息内容
-  const generateRandomNotice = (tabIndex) => {
-    const tab = TABS[tabIndex];
-    // 楼内新规和绣衣要闻的发布人固定为傅融
-    const character =
-      tabIndex === 0 || tabIndex === 1
-        ? "傅融"
-        : CHARACTERS[Math.floor(Math.random() * CHARACTERS.length)];
-    const time = generateRandomTime();
-
-    let title, content;
-
-    switch (tabIndex) {
-      case 0: // 绣衣要闻
-        title = `${character}传来重要消息`;
-        content = `据可靠情报，${character}今日在绣衣楼议事厅召开紧急会议，讨论近期广陵局势。会议持续了约两个时辰，会后${character}面色凝重，似乎有重大事件发生。`;
-        break;
-      case 1: // 楼内新规
-        title = `绣衣楼新规定发布`;
-        content = `自今日起，绣衣楼实行新的作息制度，所有成员需在辰时三刻前到达岗位。此外，楼内严禁私自带外来人员进入，违者将受到严肃处理。`;
-        break;
-      case 2: // 内外交流
-        title = `${character}出使外邦`;
-        content = `${character}受绣衣楼委派，将于三日后启程前往东吴，进行为期半月的交流访问。此行旨在加强与东吴的情报共享，共同应对当前复杂的局势。`;
-        break;
-      case 3: // 广陵爆报
-        title = `广陵街头热议`;
-        content = `近日广陵街头巷尾热议纷纷，传闻${character}在昨日的比武大会上展现出惊人武艺，击败了多位高手，引起了广泛关注。有市民称，这是近年来广陵最精彩的一场比武。`;
-        break;
-      default:
-        title = `公告`;
-        content = `这是一条重要公告，请大家务必关注。`;
-    }
-
-    return {
-      id: Date.now() + Math.random(),
-      title,
-      content,
-      time,
-      character,
-    };
-  };
-
   // 监听板块切换，重置滑动状态
   React.useEffect(() => {
     setSwipeState({});
   }, [activeTab]);
+
+  // AI 动态生成各板块新闻要务并保存到 IndexedDB
+  const generateAINotices = async () => {
+    if (!window.sendToLLM) {
+      alert("未检测到 AI 接口，请先在【设置 -> API设置】中配置。");
+      setIsAIMode(false);
+      localStorage.setItem("xiuyi_notice_ai_mode", "false");
+      return;
+    }
+
+    setIsGenerating(true);
+
+    try {
+      let worldBookContext = "";
+      if (window.getWorldBookContext) {
+        worldBookContext = await window.getWorldBookContext();
+      }
+
+      const prompt = `你是一个熟悉《代号鸢》世界观与古代谍报机构（绣衣楼）的官方机要秘书与主笔官。
+请根据以下启用的世界书背景与设定，为绣衣楼【公告系统】生成 4 个板块的新闻要务。
+
+【世界书设定与背景】：
+${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼楼主，掌管天下谍报。楼内有蛾部、雀部、蜂部、鸢部等情报暗探部门。"}
+
+【4大板块行文撰写风格规范】：
+1. 绣衣要闻：偏公文/行政报告风，记录楼内重要会议、人员培训经验分享、降本增效或预算调整等，文风略带幽默反讽但语气官方。发布人（character）多为"傅融"或楼内高层。
+2. 楼内新规：章程暂行条例规定风，条目清晰（如第一章、第二章、违规记过扣禄劝退等）。发布人（character）固定为"傅融"。
+3. 内外交流：出使外邦或诸侯属地（东吴、冀州、许县、西凉、蜀中等）的友好访问通报或外交摩擦情况通报，官方辞令。发布人（character）通常为"绣衣楼"或使节角色。
+4. 广陵爆报：市井小报/八卦/震惊体/现场一手暗访报道风，比如走访村民反转、景区花灯会乌龙等。发布人（character）多为"广陵记者"或某暗探。
+
+【重要要求】：
+- 标题规范：所有板块生成的公告标题，开头必须统一加上"【传谣】"二字（例如："【传谣】多样打法 拿捏痛点"、"【传谣】关于绣衣楼密探外勤任务管理暂行规定"）。
+- 内容规范：正文必须包含丰富的细节，段落之间使用 "<br /><br />" 换行分段，贴合《代号鸢》古风谍报与幽默叙事风格。
+- 数量：每个板块生成 2 条具有代表性的新闻公告。
+
+【输出格式】：
+请严格输出一个合法 JSON 对象（不要输出任何 Markdown 代码块标记），包含 4 个板块数组：
+{
+  "绣衣要闻": [
+    { "title": "【传谣】...", "content": "正文段落1<br /><br />正文段落2...", "character": "傅融" },
+    { "title": "【传谣】...", "content": "正文段落1<br /><br />正文段落2...", "character": "傅融" }
+  ],
+  "楼内新规": [
+    { "title": "【传谣】...", "content": "正文段落1...", "character": "傅融" },
+    { "title": "【传谣】...", "content": "正文段落1...", "character": "傅融" }
+  ],
+  "内外交流": [
+    { "title": "【传谣】...", "content": "正文段落1...", "character": "绣衣楼" },
+    { "title": "【传谣】...", "content": "正文段落1...", "character": "绣衣楼" }
+  ],
+  "广陵爆报": [
+    { "title": "【传谣】...", "content": "正文段落1...", "character": "广陵记者" },
+    { "title": "【传谣】...", "content": "正文段落1...", "character": "广陵记者" }
+  ]
+}`;
+
+      const apiMessages = [
+        {
+          role: "system",
+          content: "你是一个专业的古代谍报机构公告与市井小报主笔官。只输出合法的 JSON 对象，不包含任何 Markdown 标记。",
+        },
+        { role: "user", content: prompt },
+      ];
+
+      window.sendToLLM(
+        apiMessages,
+        null,
+        async (reply) => {
+          setIsGenerating(false);
+          try {
+            let cleanJson = reply.trim();
+            cleanJson = cleanJson
+              .replace(/^```json/i, "")
+              .replace(/^```/i, "")
+              .replace(/```$/i, "")
+              .trim();
+            const parsed = JSON.parse(cleanJson);
+            if (parsed && typeof parsed === "object") {
+              const newNotices = [];
+              const tabKeys = ["绣衣要闻", "楼内新规", "内外交流", "广陵爆报"];
+              for (let i = 0; i < tabKeys.length; i++) {
+                const key = tabKeys[i];
+                const rawList = parsed[key] || [];
+                const formattedList = rawList.map((item) => {
+                  let t = (item.title || "重要消息").trim();
+                  if (!t.startsWith("【传谣】")) {
+                    t = "【传谣】" + t;
+                  }
+                  return {
+                    id: Date.now() + Math.random(),
+                    title: t,
+                    content: item.content || "暂无内容",
+                    time: generateRandomTime(),
+                    character:
+                      item.character ||
+                      (i === 0 || i === 1
+                        ? "傅融"
+                        : i === 2
+                          ? "绣衣楼"
+                          : "广陵记者"),
+                  };
+                });
+                newNotices.push(formattedList);
+              }
+
+              setNotices(newNotices);
+              if (window.settingsStore?.setXiuyiNotices) {
+                await window.settingsStore.setXiuyiNotices(newNotices);
+              }
+              console.log(
+                "✨ 成功根据世界书生成 AI 公告并存入 IndexedDB:",
+                newNotices,
+              );
+            } else {
+              throw new Error("AI 返回格式异常");
+            }
+          } catch (e) {
+            console.error("解析 AI 公告失败:", e, reply);
+            alert("解析 AI 公告数据失败，请重试。");
+          }
+        },
+        (error) => {
+          setIsGenerating(false);
+          console.error("AI 公告生成请求失败:", error);
+          alert("AI 公告生成请求失败，请检查 API 设置。");
+        },
+      );
+    } catch (e) {
+      setIsGenerating(false);
+      console.error("生成 AI 公告异常:", e);
+    }
+  };
+
+  // 切换 AI 模式
+  const handleToggleAIMode = () => {
+    const nextMode = !isAIMode;
+    setIsAIMode(nextMode);
+    localStorage.setItem("xiuyi_notice_ai_mode", String(nextMode));
+    if (nextMode) {
+      generateAINotices();
+    }
+  };
 
   // 提交评论
   const submitComment = (tabIndex, noticeIndex) => {
@@ -32686,7 +32806,6 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
         return newComments;
       });
 
-      // 清空输入框
       setInputComments((prev) => ({
         ...prev,
         [`${tabIndex}-${noticeIndex}`]: "",
@@ -32724,7 +32843,7 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
           ? notices[originalTabIndex][originalNoticeIndex].id
           : Date.now() + Math.random(),
       title,
-      content: content.replace(/\n/g, "<br /><br />"), // 替换换行符为HTML换行标签
+      content: content.replace(/\n/g, "<br /><br />"),
       time:
         originalTabIndex >= 0
           ? notices[originalTabIndex][originalNoticeIndex].time
@@ -32732,27 +32851,28 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
       character: selectedTab === 0 || selectedTab === 1 ? "傅融" : "绣衣楼",
     };
 
-    // 更新公告列表
+    // 更新公告列表并同步至 IndexedDB
     setNotices((prev) => {
       const newNotices = [...prev];
 
       if (originalTabIndex >= 0 && originalNoticeIndex >= 0) {
-        // 编辑现有公告
         newNotices[originalTabIndex] = newNotices[originalTabIndex].map(
           (item, index) => (index === originalNoticeIndex ? notice : item),
         );
       } else {
-        // 创建新公告
         if (!newNotices[selectedTab]) {
           newNotices[selectedTab] = [];
         }
         newNotices[selectedTab].push(notice);
       }
 
+      if (window.settingsStore?.setXiuyiNotices) {
+        window.settingsStore.setXiuyiNotices(newNotices);
+      }
+
       return newNotices;
     });
 
-    // 重置编辑状态
     cancelEdit();
   };
 
@@ -32772,7 +32892,7 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
   const handleEditNotice = (notice, tabIndex, noticeIndex) => {
     setCurrentEditNotice({
       title: notice.title,
-      content: notice.content.replace(/<br \/><br \/>/g, "\n"), // 转换HTML换行为普通换行
+      content: notice.content.replace(/<br \/><br \/>/g, "\n"),
       selectedTab: tabIndex,
       originalTabIndex: tabIndex,
       originalNoticeIndex: noticeIndex,
@@ -32788,6 +32908,11 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
         newNotices[tabIndex] = newNotices[tabIndex].filter(
           (_, index) => index !== noticeIndex,
         );
+
+        if (window.settingsStore?.setXiuyiNotices) {
+          window.settingsStore.setXiuyiNotices(newNotices);
+        }
+
         return newNotices;
       });
     }
@@ -32815,10 +32940,8 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
       const deltaX = touch.clientX - swipeData.startX;
       const deltaY = touch.clientY - swipeData.startY;
 
-      // 只处理水平滑动
       if (Math.abs(deltaX) > Math.abs(deltaY) * 2) {
         e.preventDefault();
-        // 限制滑动距离在0到-120之间
         const distance = Math.max(-120, Math.min(0, deltaX));
         setSwipeState((prev) => ({
           ...prev,
@@ -32836,7 +32959,6 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
     const swipeData = swipeState[noticeId];
 
     if (swipeData) {
-      // 如果滑动距离超过-60，则打开操作菜单
       const finalDistance = swipeData.distance < -60 ? -120 : 0;
       setSwipeState((prev) => ({
         ...prev,
@@ -33115,11 +33237,51 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
           }}
         >
           {/* 导航栏 */}
-          <div className="t11-nav">
-            <div className="back-btn" onClick={onBack}>
-              <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+          <div
+            className="t11-nav"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "center" }}>
+              <div className="back-btn" onClick={onBack}>
+                <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+              </div>
+              <div className="title">公告</div>
             </div>
-            <div className="title">公告</div>
+
+            {/* 右上角 AI 模式切换开关 */}
+            <div
+              onClick={handleToggleAIMode}
+              style={{
+                marginRight: "12px",
+                padding: "4px 10px",
+                borderRadius: "14px",
+                background: isAIMode
+                  ? "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)"
+                  : "rgba(0,0,0,0.06)",
+                color: isAIMode ? "#fff" : "#666",
+                fontSize: "12px",
+                fontWeight: isAIMode ? "bold" : "normal",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: isGenerating ? "not-allowed" : "pointer",
+                boxShadow: isAIMode
+                  ? "0 2px 6px rgba(168, 200, 186, 0.4)"
+                  : "none",
+                transition: "all 0.2s ease",
+              }}
+            >
+              <i
+                className={`ph-bold ${isAIMode ? "ph-sparkle" : "ph-lightning"}`}
+              ></i>
+              <span>
+                {isGenerating ? "生成中..." : isAIMode ? "AI 模式" : "经典模式"}
+              </span>
+            </div>
           </div>
 
           <div
@@ -33210,7 +33372,6 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
                   transition: "all 0.3s ease",
                 }}
                 onClick={() => {
-                  // 进入编辑模式
                   setIsEditMode(true);
                 }}
               >
@@ -33221,16 +33382,17 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
 
           {/* 动画样式 */}
           <style>{`
-                                                                                                                                      @keyframes fadeIn {
-                                                                                                                                        from { opacity: 0; transform: translateY(10px); }
-                                                                                                                                        to { opacity: 1; transform: translateY(0); }
-                                                                                                                                      }
-                                                                                                                                    `}</style>
+            @keyframes fadeIn {
+              from { opacity: 0; transform: translateY(10px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+          `}</style>
         </div>
       )}
     </>
   );
 };
+
 
 // ==================== T11 工资单子页面组件 (完全重写版) ====================
 const T11SalarySubPage = ({ onBack }) => {
