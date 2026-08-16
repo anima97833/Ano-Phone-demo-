@@ -32645,6 +32645,83 @@ const T11NoticeSubPage = ({ onBack, notices, setNotices }) => {
     setSwipeState({});
   }, [activeTab]);
 
+  // 健壮的公告 JSON 解析器 (兼容 LLM 生成未转义双引号、Markdown 标记等情况)
+  const robustParseNoticeJson = (rawText) => {
+    let clean = (rawText || "").trim();
+    clean = clean.replace(/^\`\`\`json/i, "").replace(/^\`\`\`/i, "").replace(/\`\`\`$/i, "").trim();
+
+    // 1. 先尝试原生 JSON.parse
+    try {
+      const direct = JSON.parse(clean);
+      if (direct && typeof direct === "object") {
+        return direct;
+      }
+    } catch (e) {
+      console.warn("直接 JSON.parse 失败，启用智能容错提取器...", e.message);
+    }
+
+    // 2. 智能容错正则提取
+    const result = {};
+    const tabKeys = ["绣衣要闻", "楼内新规", "内外交流", "广陵爆报"];
+
+    for (let i = 0; i < tabKeys.length; i++) {
+      const tab = tabKeys[i];
+      result[tab] = [];
+
+      const nextTabs = tabKeys.filter((t) => t !== tab).join("|");
+      const tabRegex = new RegExp(`"${tab}"\\s*:\\s*\\[([\\s\\S]*?)\\](?:\\s*,?\\s*"(?:${nextTabs})"|\\s*\\}|$)`);
+      const tabMatch = clean.match(tabRegex);
+
+      if (tabMatch && tabMatch[1]) {
+        const arrayBody = tabMatch[1];
+        const objBlocks = arrayBody.split(/\{(?=\s*"(?:title|content|character)")/);
+
+        for (const block of objBlocks) {
+          if (!block.trim()) continue;
+
+          let title = "";
+          const titleMatch = block.match(/"title"\s*:\s*"([\s\S]*?)(?="\s*,\s*"(?:content|character)"|",?\s*\n|\s*"\s*\}|\s*$)/);
+          if (titleMatch) {
+            title = titleMatch[1];
+          } else {
+            const fb = block.match(/"title"\s*:\s*"([\s\S]*?)"/);
+            if (fb) title = fb[1];
+          }
+
+          let content = "";
+          const contentMatch = block.match(/"content"\s*:\s*"([\s\S]*?)(?="\s*,\s*"(?:character|title)"|",?\s*\n\s*"character"|\s*"\s*\}|\s*$)/);
+          if (contentMatch) {
+            content = contentMatch[1];
+          } else {
+            const greedyMatch = block.match(/"content"\s*:\s*"([\s\S]*?)(?="\s*,\s*"character"|"\s*\})/);
+            if (greedyMatch) {
+              content = greedyMatch[1];
+            } else {
+              const fb = block.match(/"content"\s*:\s*"([\s\S]*?)"/);
+              if (fb) content = fb[1];
+            }
+          }
+
+          let character = "";
+          const charMatch = block.match(/"character"\s*:\s*"([\s\S]*?)"/);
+          if (charMatch) {
+            character = charMatch[1];
+          }
+
+          if (title || content) {
+            result[tab].push({
+              title: title.trim(),
+              content: content.trim(),
+              character: character.trim(),
+            });
+          }
+        }
+      }
+    }
+
+    return result;
+  };
+
   // AI 动态生成各板块新闻要务并保存到 IndexedDB
   const generateAINotices = async () => {
     if (!window.sendToLLM) {
@@ -32677,6 +32754,7 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
 【重要要求】：
 - 标题规范：所有板块生成的公告标题，开头必须统一加上"【传谣】"二字（例如："【传谣】多样打法 拿捏痛点"、"【传谣】关于绣衣楼密探外勤任务管理暂行规定"）。
 - 内容规范：正文必须包含丰富的细节，段落之间使用 "<br /><br />" 换行分段，贴合《代号鸢》古风谍报与幽默叙事风格。
+- 标点规范：正文及标题中如需引用对话或专有名词，一律使用中文全角引号“ ”或『 』，绝对不要使用英文半角双引号 " ，以防破坏 JSON 结构。
 - 数量：每个板块生成 2 条具有代表性的新闻公告。
 
 【输出格式】：
@@ -32703,7 +32781,7 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
       const apiMessages = [
         {
           role: "system",
-          content: "你是一个专业的古代谍报机构公告与市井小报主笔官。只输出合法的 JSON 对象，不包含任何 Markdown 标记。",
+          content: "你是一个专业的古代谍报机构公告与市井小报主笔官。只输出合法的 JSON 对象，不包含任何 Markdown 标记。正文中所有引号使用中文双引号“”。",
         },
         { role: "user", content: prompt },
       ];
@@ -32714,14 +32792,8 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
         async (reply) => {
           setIsGenerating(false);
           try {
-            let cleanJson = reply.trim();
-            cleanJson = cleanJson
-              .replace(/^```json/i, "")
-              .replace(/^```/i, "")
-              .replace(/```$/i, "")
-              .trim();
-            const parsed = JSON.parse(cleanJson);
-            if (parsed && typeof parsed === "object") {
+            const parsed = robustParseNoticeJson(reply);
+            if (parsed && typeof parsed === "object" && Object.keys(parsed).length > 0) {
               const newNotices = [];
               const tabKeys = ["绣衣要闻", "楼内新规", "内外交流", "广陵爆报"];
               for (let i = 0; i < tabKeys.length; i++) {
@@ -32747,6 +32819,12 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
                   };
                 });
                 newNotices.push(formattedList);
+              }
+
+              // 检查是否至少解析出了公告
+              const totalGenerated = newNotices.reduce((sum, tab) => sum + tab.length, 0);
+              if (totalGenerated === 0) {
+                throw new Error("未能成功解析出有效公告条目");
               }
 
               setNotices(newNotices);
