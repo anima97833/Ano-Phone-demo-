@@ -54461,7 +54461,23 @@ const VoiceCallPage = ({
   }, [characterName]);
 
   return (
-    <div className="voice-call-overlay">
+    <div
+      className="voice-call-overlay"
+      style={{
+        position: "absolute",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        backgroundColor: "#000000",
+        zIndex: 1200,
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        overflow: "hidden",
+      }}
+      onClick={(e) => e.stopPropagation()}
+    >
       <div className="vc-container">
         {/* 顶部装饰弧线 */}
         <svg className="vc-top-arc" viewBox="0 0 300 100">
@@ -57852,6 +57868,672 @@ const T8ChatDetail = ({
         />
       )}
 
+      {/* ================= 全屏弹窗与独立页面层 ================= */}
+      {showSettings &&
+        (chatData?.type === "group" ? (
+          <GroupChatSettingsModal
+            settings={settings}
+            onChange={setSettings}
+            onClose={() => setShowSettings(false)}
+            chatData={chatData}
+            pixabayApiKey={pixabayApiKey}
+            setPixabayApiKey={setPixabayApiKey}
+            voiceId={voiceId}
+            setVoiceId={setVoiceId}
+            onUpdateChat={onUpdateChat}
+            onLeaveGroup={onLeaveGroup}
+          />
+        ) : (
+          <ChatSettingsModal
+            settings={settings}
+            onChange={setSettings}
+            onClose={() => setShowSettings(false)}
+            chatData={chatData}
+            userAvatarFrameCss={userAvatarFrameCss}
+            setUserAvatarFrameCss={setUserAvatarFrameCss}
+            roleAvatarFrameCss={roleAvatarFrameCss}
+            setRoleAvatarFrameCss={setRoleAvatarFrameCss}
+            tapSuffixYou={tapSuffixYou}
+            setTapSuffixYou={setTapSuffixYou}
+            tapSuffixThem={tapSuffixThem}
+            setTapSuffixThem={setTapSuffixThem}
+            userDialogCss={userDialogCss}
+            setUserDialogCss={setUserDialogCss}
+            roleDialogCss={roleDialogCss}
+            setRoleDialogCss={setRoleDialogCss}
+            pixabayApiKey={pixabayApiKey}
+            setPixabayApiKey={setPixabayApiKey}
+            voiceId={voiceId}
+            setVoiceId={setVoiceId}
+          />
+        ))}
+      <style>{` .typing-dot { width: 6px; height: 6px; background: #ccc; border-radius: 50%; animation: typingBounce 1.4s infinite ease-in-out both; } @keyframes typingBounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } } @keyframes heartBeat { 0% { transform: scale(1); } 14% { transform: scale(1.3); } 28% { transform: scale(1); } 42% { transform: scale(1.3); } 70% { transform: scale(1); } } `}</style>
+
+      {showVoiceCallPage.show && (
+        <VoiceCallPage
+          characterName={chatData.name}
+          callType={showVoiceCallPage.callType}
+          onBack={() => {
+            setShowVoiceCallPage({ show: false, callType: "role" });
+          }}
+          onAccept={() => {
+            setShowVoiceCallPage({ show: false, callType: "role" });
+            // AI接通电话
+            const msg = {
+              id: Date.now(),
+              text: "（接通了语音通话）",
+              type: "narration",
+              isMe: false,
+              time: new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            };
+            setMessages((prev) => {
+              const newMsgs = [...prev, msg];
+              // 立即触发AI对话，不延迟
+              handleAITrigger(newMsgs);
+              return newMsgs;
+            });
+            // 立即添加初始问候消息到通话中页面
+            setTimeout(() => {
+              setInCallMessages([{ text: "你好，有什么事吗？", isMe: false }]);
+            }, 100);
+            // 跳转到通话中页面
+            setTimeout(() => setShowInCallUI(true), 300);
+          }}
+          onReject={() => {
+            setShowVoiceCallPage({ show: false, callType: "role" });
+            const msg = {
+              id: Date.now(),
+              text: `（你拒绝了${chatData.name}的心纸君传讯）`,
+              type: "narration",
+              isMe: true, // 是用户挂断的
+              time: new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            };
+            setMessages((prev) => {
+              const newMsgs = [...prev, msg];
+              setTimeout(() => handleAITrigger(newMsgs), 500); // 触发AI对拒接的反应
+              return newMsgs;
+            });
+          }}
+        />
+      )}
+
+      {/* 购物意图拦截弹窗 */}
+      {showShoppingPrompt && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 3000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backdropFilter: "blur(2px)",
+          }}
+        >
+          <div
+            style={{
+              background: "#FDFCF8",
+              padding: "24px",
+              borderRadius: "20px",
+              width: "80%",
+              maxWidth: "320px",
+              textAlign: "center",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
+              animation: "popIn 0.3s ease-out",
+            }}
+          >
+            <div style={{ fontSize: "40px", marginBottom: "10px" }}>🛒</div>
+            <h3
+              style={{
+                color: "#5a5f4d",
+                marginBottom: "8px",
+                fontSize: "18px",
+                fontWeight: "bold",
+              }}
+            >
+              是否要打开太疾驰？
+            </h3>
+            <p
+              style={{
+                color: "#8c917b",
+                fontSize: "13px",
+                marginBottom: "20px",
+                lineHeight: "1.5",
+              }}
+            >
+              系统察觉到你们正在探讨吃喝玩乐，是否携手前往太疾驰开始购物？
+            </p>
+            <div style={{ display: "flex", gap: "12px" }}>
+              <button
+                onClick={() => {
+                  setShowShoppingPrompt(false);
+                  // 【修改】如果点击取消，则检查最后一条是不是用户刚发的话，如果是，手动呼叫 AI 正常回复
+                  const lastMsg = messages[messages.length - 1];
+                  if (lastMsg && lastMsg.isMe) {
+                    handleAITrigger();
+                  }
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  background: "#F5F5F5",
+                  color: "#666",
+                  borderRadius: "12px",
+                  border: "none",
+                  fontWeight: "bold",
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={() => {
+                  setShowShoppingPrompt(false);
+                  // 【修改】如果点击前往，直接跳转，跳过后太疾驰的悬浮窗会立刻接管交互，不触发当前常规聊天的 AI
+                  window.dispatchEvent(
+                    new CustomEvent("startShoppingSession", {
+                      detail: {
+                        character: chatData,
+                        chatId: chatData.id,
+                      },
+                    }),
+                  );
+                }}
+                style={{
+                  flex: 1,
+                  padding: "12px",
+                  background:
+                    "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
+                  color: "white",
+                  borderRadius: "12px",
+                  border: "none",
+                  fontWeight: "bold",
+                  boxShadow: "0 4px 10px rgba(214,114,75,0.3)",
+                }}
+              >
+                携手前往
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 通话中页面 */}
+      {showInCallUI && (
+        <div className="incall-container">
+          {/* 顶部状态 */}
+          <div className="incall-top-status">通话中</div>
+
+          {/* 右上角关闭按钮 */}
+          <div
+            className="incall-top-icon"
+            style={{ cursor: "pointer" }}
+            onClick={() => {
+              // 关闭通话中页面
+              setShowInCallUI(false);
+              // 添加"（挂断了语音通话）"消息
+              const hangupMsg = {
+                id: Date.now(),
+                text: "（挂断了语音通话）",
+                type: "narration",
+                isMe: false,
+                time: new Date().toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }),
+              };
+              setMessages((prev) => [...prev, hangupMsg]);
+              // 清空通话中消息列表
+              setInCallMessages([]);
+            }}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <line x1="18" y1="6" x2="6" y2="18"></line>
+              <line x1="6" y1="6" x2="18" y2="18"></line>
+            </svg>
+          </div>
+
+          {/* 中央虚线框 */}
+          <div
+            className="incall-dashed-box"
+            id={`incall-avatar-${chatData.id}`}
+            style={{ cursor: "pointer" }}
+            onClick={() => {
+              // 创建文件输入框
+              const fileInput = document.createElement("input");
+              fileInput.type = "file";
+              fileInput.accept = "image/*,video/mp4,video/webm";
+              fileInput.style.display = "none";
+
+              // 处理文件选择
+              fileInput.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                  try {
+                    const reader = new FileReader();
+                    reader.onload = async (event) => {
+                      const imageUrl = event.target.result;
+
+                      // 保存到IndexedDB
+                      try {
+                        const db = await openDB();
+                        const transaction = db.transaction(
+                          STORES.USER_SETTINGS,
+                          "readwrite",
+                        );
+                        const store = transaction.objectStore(
+                          STORES.USER_SETTINGS,
+                        );
+                        await store.put({
+                          key: `voice_call_avatar_${chatData.name}`,
+                          value: imageUrl,
+                        });
+                        console.log("语音通话头像保存成功");
+
+                        // 更新当前显示
+                        const avatarElement = document.getElementById(
+                          `incall-avatar-${chatData.id}`,
+                        );
+                        if (avatarElement) {
+                          avatarElement.style.backgroundImage = `url(${imageUrl})`;
+                          avatarElement.style.backgroundSize = "contain";
+                          avatarElement.style.backgroundPosition = "center";
+                          avatarElement.style.backgroundRepeat = "no-repeat";
+                          avatarElement.style.border =
+                            "3px dashed rgba(200, 200, 200, 0.5)";
+                        }
+                      } catch (error) {
+                        console.error("保存头像到IndexedDB失败:", error);
+                      }
+                    };
+                    reader.readAsDataURL(file);
+                  } catch (error) {
+                    console.error("处理文件失败:", error);
+                  }
+                }
+              };
+
+              document.body.appendChild(fileInput);
+              fileInput.click();
+              document.body.removeChild(fileInput);
+            }}
+          ></div>
+
+          {/* 气泡区域 */}
+          <div
+            id="incall-scroll-area"
+            className="incall-dialogue-area"
+            style={{ backgroundColor: "rgba(0, 0, 0, 0.1)" }}
+          >
+            {/* 通话消息列表 */}
+            {inCallMessages.map((msg, index) => (
+              <div
+                key={index}
+                className="incall-bubble-wrapper"
+                style={{
+                  justifyContent: msg.isMe ? "flex-start" : "flex-end",
+                  width: "100%",
+                }}
+              >
+                {/* 名字标签 */}
+                <div
+                  className="incall-name-tag"
+                  style={{
+                    right: msg.isMe ? "auto" : "12px",
+                    left: msg.isMe ? "12px" : "auto",
+                  }}
+                >
+                  {msg.isMe ? "我" : chatData.name}
+                </div>
+                {/* 气泡主体 */}
+                <div
+                  className="incall-bubble-body"
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    padding: "12px 20px",
+                    color: "#000",
+                    fontSize: "14px",
+                    background: msg.isMe
+                      ? "rgba(240, 240, 240, 0.9)"
+                      : "rgba(255, 255, 255, 0.95)",
+                    minWidth: "100px",
+                    maxWidth: "80%",
+                    height: "auto",
+                    textAlign: "center",
+                    wordBreak: "break-word",
+                    whiteSpace: "normal",
+                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
+                    border: "1px solid rgba(255, 255, 255, 0.5)",
+                  }}
+                >
+                  {msg.text}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* 底部输入区域 */}
+          <div className="incall-bottom-bar">
+            {/* 麦克风图标 */}
+            <div className="incall-mic-icon">
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
+                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
+              </svg>
+            </div>
+
+            {/* 输入框 */}
+            <input
+              type="text"
+              className="incall-input-pill"
+              style={{
+                padding: "0 16px",
+                fontSize: "14px",
+                border: "none",
+                outline: "none",
+                color: "#333",
+              }}
+              placeholder="输入消息..."
+              onKeyPress={(e) => {
+                if (e.key === "Enter") {
+                  const inputElement = e.target;
+                  const message = inputElement.value.trim();
+                  if (message) {
+                    // 发送消息逻辑
+                    console.log("发送消息:", message);
+                    // 添加到通话中消息列表
+                    setInCallMessages((prev) => [
+                      ...prev,
+                      { text: message, isMe: true },
+                    ]);
+                    // 清空输入框
+                    inputElement.value = "";
+                    // 触发AI回复
+                    setTimeout(() => {
+                      // 创建用户消息对象
+                      const userMsg = {
+                        id: Date.now(),
+                        text: message,
+                        type: "text",
+                        isMe: true,
+                        time: new Date().toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }),
+                      };
+                      // 触发AI回复
+                      handleAITrigger(null, userMsg);
+                    }, 100);
+                  }
+                }
+              }}
+            />
+
+            {/* 发送按钮 */}
+            <div
+              className="incall-arrow-icon"
+              style={{ cursor: "pointer" }}
+              onClick={() => {
+                const inputElement =
+                  document.querySelector(".incall-input-pill");
+                if (inputElement) {
+                  const message = inputElement.value.trim();
+                  if (message) {
+                    // 发送消息逻辑
+                    console.log("发送消息:", message);
+                    // 添加到通话中消息列表
+                    setInCallMessages((prev) => [
+                      ...prev,
+                      { text: message, isMe: true },
+                    ]);
+                    // 清空输入框
+                    inputElement.value = "";
+                    // 触发AI回复
+                    setTimeout(() => {
+                      // 创建用户消息对象
+                      const userMsg = {
+                        id: Date.now(),
+                        text: message,
+                        type: "text",
+                        isMe: true,
+                        time: new Date().toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }),
+                      };
+                      // 触发AI回复
+                      handleAITrigger(null, userMsg);
+                    }, 100);
+                  }
+                }
+              }}
+            >
+              <svg
+                width="24"
+                height="24"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <line x1="22" y1="2" x2="11" y2="13" />
+                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+              </svg>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* [新增] 整合记录弹窗 */}
+      {showConsolidateModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.5)",
+            zIndex: 9999,
+            display: "flex",
+            flexDirection: "column",
+            justifyContent: "flex-end",
+          }}
+          onClick={() => setShowConsolidateModal(false)}
+        >
+          <div
+            style={{
+              background: "#FDFCF8",
+              width: "100%",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              padding: "24px",
+              paddingBottom: "calc(24px + var(--safe-bottom))",
+              animation: "slideUp 0.3s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "20px",
+              }}
+            >
+              <h3 style={{ margin: 0, fontSize: "18px", color: "#5a5f4d" }}>
+                整合选中的 {selectedMsgIds.length} 条记录
+              </h3>
+              <button
+                onClick={() => setShowConsolidateModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  color: "#999",
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* 模式切换 */}
+            <div
+              style={{
+                display: "flex",
+                gap: "12px",
+                marginBottom: "20px",
+              }}
+            >
+              <button
+                onClick={() => setConsolidateMode("manual")}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "12px",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  background:
+                    consolidateMode === "manual" ? "#D6724B" : "#F5F5F5",
+                  color: consolidateMode === "manual" ? "#fff" : "#666",
+                  border: "none",
+                }}
+              >
+                手动记录
+              </button>
+              <button
+                onClick={() => {
+                  setConsolidateMode("auto");
+                  handleAutoConsolidate();
+                }}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "12px",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  background:
+                    consolidateMode === "auto" ? "#A8C8BA" : "#F5F5F5",
+                  color: consolidateMode === "auto" ? "#fff" : "#666",
+                  border: "none",
+                }}
+              >
+                自动记录(AI)
+              </button>
+            </div>
+
+            {/* 内容展示与编辑区 */}
+            {isConsolidating ? (
+              <div
+                style={{
+                  height: "200px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#8c917b",
+                }}
+              >
+                <iconify-icon
+                  icon="line-md:loading-twotone-loop"
+                  style={{ fontSize: "40px", marginBottom: "10px" }}
+                ></iconify-icon>
+                <span>雀使正在为您提炼卷宗...</span>
+              </div>
+            ) : (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "12px",
+                }}
+              >
+                <input
+                  type="text"
+                  placeholder="请输入核心要义（标题）..."
+                  value={consolidateTitle}
+                  onChange={(e) => setConsolidateTitle(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "12px",
+                    borderRadius: "12px",
+                    border: "1px solid #EAEAEA",
+                    outline: "none",
+                    fontSize: "15px",
+                    color: "#5a5f4d",
+                    background: "#fff",
+                  }}
+                />
+                <textarea
+                  placeholder="请输入这段对话大概讲了什么..."
+                  value={consolidateContent}
+                  onChange={(e) => setConsolidateContent(e.target.value)}
+                  style={{
+                    width: "100%",
+                    height: "150px",
+                    padding: "12px",
+                    borderRadius: "12px",
+                    border: "1px solid #EAEAEA",
+                    outline: "none",
+                    fontSize: "14px",
+                    color: "#666",
+                    background: "#fff",
+                    resize: "none",
+                    lineHeight: "1.5",
+                  }}
+                />
+                <button
+                  onClick={handleSaveConsolidation}
+                  style={{
+                    width: "100%",
+                    padding: "14px",
+                    borderRadius: "16px",
+                    border: "none",
+                    marginTop: "10px",
+                    background:
+                      "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
+                    color: "white",
+                    fontSize: "16px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow: "0 4px 12px rgba(214,114,75,0.3)",
+                  }}
+                >
+                  保存记录
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+
 
       {/* ================= [新增] 语音输入莫兰迪粉弹窗 ================= */}
       {showVoiceModal && (
@@ -60505,669 +61187,7 @@ const T8ChatDetail = ({
 
       
 
-      {showSettings &&
-        (chatData?.type === "group" ? (
-          <GroupChatSettingsModal
-            settings={settings}
-            onChange={setSettings}
-            onClose={() => setShowSettings(false)}
-            chatData={chatData}
-            pixabayApiKey={pixabayApiKey}
-            setPixabayApiKey={setPixabayApiKey}
-            voiceId={voiceId}
-            setVoiceId={setVoiceId}
-            onUpdateChat={onUpdateChat}
-            onLeaveGroup={onLeaveGroup}
-          />
-        ) : (
-          <ChatSettingsModal
-            settings={settings}
-            onChange={setSettings}
-            onClose={() => setShowSettings(false)}
-            chatData={chatData}
-            userAvatarFrameCss={userAvatarFrameCss}
-            setUserAvatarFrameCss={setUserAvatarFrameCss}
-            roleAvatarFrameCss={roleAvatarFrameCss}
-            setRoleAvatarFrameCss={setRoleAvatarFrameCss}
-            tapSuffixYou={tapSuffixYou}
-            setTapSuffixYou={setTapSuffixYou}
-            tapSuffixThem={tapSuffixThem}
-            setTapSuffixThem={setTapSuffixThem}
-            userDialogCss={userDialogCss}
-            setUserDialogCss={setUserDialogCss}
-            roleDialogCss={roleDialogCss}
-            setRoleDialogCss={setRoleDialogCss}
-            pixabayApiKey={pixabayApiKey}
-            setPixabayApiKey={setPixabayApiKey}
-            voiceId={voiceId}
-            setVoiceId={setVoiceId}
-          />
-        ))}
-      <style>{` .typing-dot { width: 6px; height: 6px; background: #ccc; border-radius: 50%; animation: typingBounce 1.4s infinite ease-in-out both; } @keyframes typingBounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } } @keyframes heartBeat { 0% { transform: scale(1); } 14% { transform: scale(1.3); } 28% { transform: scale(1); } 42% { transform: scale(1.3); } 70% { transform: scale(1); } } `}</style>
-
-      {showVoiceCallPage.show && (
-        <VoiceCallPage
-          characterName={chatData.name}
-          callType={showVoiceCallPage.callType}
-          onBack={() => {
-            setShowVoiceCallPage({ show: false, callType: "role" });
-          }}
-          onAccept={() => {
-            setShowVoiceCallPage({ show: false, callType: "role" });
-            // AI接通电话
-            const msg = {
-              id: Date.now(),
-              text: "（接通了语音通话）",
-              type: "narration",
-              isMe: false,
-              time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-            };
-            setMessages((prev) => {
-              const newMsgs = [...prev, msg];
-              // 立即触发AI对话，不延迟
-              handleAITrigger(newMsgs);
-              return newMsgs;
-            });
-            // 立即添加初始问候消息到通话中页面
-            setTimeout(() => {
-              setInCallMessages([{ text: "你好，有什么事吗？", isMe: false }]);
-            }, 100);
-            // 跳转到通话中页面
-            setTimeout(() => setShowInCallUI(true), 300);
-          }}
-          onReject={() => {
-            setShowVoiceCallPage({ show: false, callType: "role" });
-            const msg = {
-              id: Date.now(),
-              text: `（你拒绝了${chatData.name}的心纸君传讯）`,
-              type: "narration",
-              isMe: true, // 是用户挂断的
-              time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-            };
-            setMessages((prev) => {
-              const newMsgs = [...prev, msg];
-              setTimeout(() => handleAITrigger(newMsgs), 500); // 触发AI对拒接的反应
-              return newMsgs;
-            });
-          }}
-        />
-      )}
-
-      {/* 购物意图拦截弹窗 */}
-      {showShoppingPrompt && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            background: "rgba(0,0,0,0.5)",
-            zIndex: 3000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backdropFilter: "blur(2px)",
-          }}
-        >
-          <div
-            style={{
-              background: "#FDFCF8",
-              padding: "24px",
-              borderRadius: "20px",
-              width: "80%",
-              maxWidth: "320px",
-              textAlign: "center",
-              boxShadow: "0 10px 30px rgba(0,0,0,0.15)",
-              animation: "popIn 0.3s ease-out",
-            }}
-          >
-            <div style={{ fontSize: "40px", marginBottom: "10px" }}>🛒</div>
-            <h3
-              style={{
-                color: "#5a5f4d",
-                marginBottom: "8px",
-                fontSize: "18px",
-                fontWeight: "bold",
-              }}
-            >
-              是否要打开太疾驰？
-            </h3>
-            <p
-              style={{
-                color: "#8c917b",
-                fontSize: "13px",
-                marginBottom: "20px",
-                lineHeight: "1.5",
-              }}
-            >
-              系统察觉到你们正在探讨吃喝玩乐，是否携手前往太疾驰开始购物？
-            </p>
-            <div style={{ display: "flex", gap: "12px" }}>
-              <button
-                onClick={() => {
-                  setShowShoppingPrompt(false);
-                  // 【修改】如果点击取消，则检查最后一条是不是用户刚发的话，如果是，手动呼叫 AI 正常回复
-                  const lastMsg = messages[messages.length - 1];
-                  if (lastMsg && lastMsg.isMe) {
-                    handleAITrigger();
-                  }
-                }}
-                style={{
-                  flex: 1,
-                  padding: "12px",
-                  background: "#F5F5F5",
-                  color: "#666",
-                  borderRadius: "12px",
-                  border: "none",
-                  fontWeight: "bold",
-                }}
-              >
-                取消
-              </button>
-              <button
-                onClick={() => {
-                  setShowShoppingPrompt(false);
-                  // 【修改】如果点击前往，直接跳转，跳过后太疾驰的悬浮窗会立刻接管交互，不触发当前常规聊天的 AI
-                  window.dispatchEvent(
-                    new CustomEvent("startShoppingSession", {
-                      detail: {
-                        character: chatData,
-                        chatId: chatData.id,
-                      },
-                    }),
-                  );
-                }}
-                style={{
-                  flex: 1,
-                  padding: "12px",
-                  background:
-                    "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
-                  color: "white",
-                  borderRadius: "12px",
-                  border: "none",
-                  fontWeight: "bold",
-                  boxShadow: "0 4px 10px rgba(214,114,75,0.3)",
-                }}
-              >
-                携手前往
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 通话中页面 */}
-      {showInCallUI && (
-        <div className="incall-container">
-          {/* 顶部状态 */}
-          <div className="incall-top-status">通话中</div>
-
-          {/* 右上角关闭按钮 */}
-          <div
-            className="incall-top-icon"
-            style={{ cursor: "pointer" }}
-            onClick={() => {
-              // 关闭通话中页面
-              setShowInCallUI(false);
-              // 添加"（挂断了语音通话）"消息
-              const hangupMsg = {
-                id: Date.now(),
-                text: "（挂断了语音通话）",
-                type: "narration",
-                isMe: false,
-                time: new Date().toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                }),
-              };
-              setMessages((prev) => [...prev, hangupMsg]);
-              // 清空通话中消息列表
-              setInCallMessages([]);
-            }}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <line x1="18" y1="6" x2="6" y2="18"></line>
-              <line x1="6" y1="6" x2="18" y2="18"></line>
-            </svg>
-          </div>
-
-          {/* 中央虚线框 */}
-          <div
-            className="incall-dashed-box"
-            id={`incall-avatar-${chatData.id}`}
-            style={{ cursor: "pointer" }}
-            onClick={() => {
-              // 创建文件输入框
-              const fileInput = document.createElement("input");
-              fileInput.type = "file";
-              fileInput.accept = "image/*,video/mp4,video/webm";
-              fileInput.style.display = "none";
-
-              // 处理文件选择
-              fileInput.onchange = async (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                  try {
-                    const reader = new FileReader();
-                    reader.onload = async (event) => {
-                      const imageUrl = event.target.result;
-
-                      // 保存到IndexedDB
-                      try {
-                        const db = await openDB();
-                        const transaction = db.transaction(
-                          STORES.USER_SETTINGS,
-                          "readwrite",
-                        );
-                        const store = transaction.objectStore(
-                          STORES.USER_SETTINGS,
-                        );
-                        await store.put({
-                          key: `voice_call_avatar_${chatData.name}`,
-                          value: imageUrl,
-                        });
-                        console.log("语音通话头像保存成功");
-
-                        // 更新当前显示
-                        const avatarElement = document.getElementById(
-                          `incall-avatar-${chatData.id}`,
-                        );
-                        if (avatarElement) {
-                          avatarElement.style.backgroundImage = `url(${imageUrl})`;
-                          avatarElement.style.backgroundSize = "contain";
-                          avatarElement.style.backgroundPosition = "center";
-                          avatarElement.style.backgroundRepeat = "no-repeat";
-                          avatarElement.style.border =
-                            "3px dashed rgba(200, 200, 200, 0.5)";
-                        }
-                      } catch (error) {
-                        console.error("保存头像到IndexedDB失败:", error);
-                      }
-                    };
-                    reader.readAsDataURL(file);
-                  } catch (error) {
-                    console.error("处理文件失败:", error);
-                  }
-                }
-              };
-
-              document.body.appendChild(fileInput);
-              fileInput.click();
-              document.body.removeChild(fileInput);
-            }}
-          ></div>
-
-          {/* 气泡区域 */}
-          <div
-            id="incall-scroll-area"
-            className="incall-dialogue-area"
-            style={{ backgroundColor: "rgba(0, 0, 0, 0.1)" }}
-          >
-            {/* 通话消息列表 */}
-            {inCallMessages.map((msg, index) => (
-              <div
-                key={index}
-                className="incall-bubble-wrapper"
-                style={{
-                  justifyContent: msg.isMe ? "flex-start" : "flex-end",
-                  width: "100%",
-                }}
-              >
-                {/* 名字标签 */}
-                <div
-                  className="incall-name-tag"
-                  style={{
-                    right: msg.isMe ? "auto" : "12px",
-                    left: msg.isMe ? "12px" : "auto",
-                  }}
-                >
-                  {msg.isMe ? "我" : chatData.name}
-                </div>
-                {/* 气泡主体 */}
-                <div
-                  className="incall-bubble-body"
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    padding: "12px 20px",
-                    color: "#000",
-                    fontSize: "14px",
-                    background: msg.isMe
-                      ? "rgba(240, 240, 240, 0.9)"
-                      : "rgba(255, 255, 255, 0.95)",
-                    minWidth: "100px",
-                    maxWidth: "80%",
-                    height: "auto",
-                    textAlign: "center",
-                    wordBreak: "break-word",
-                    whiteSpace: "normal",
-                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.3)",
-                    border: "1px solid rgba(255, 255, 255, 0.5)",
-                  }}
-                >
-                  {msg.text}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          {/* 底部输入区域 */}
-          <div className="incall-bottom-bar">
-            {/* 麦克风图标 */}
-            <div className="incall-mic-icon">
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-              </svg>
-            </div>
-
-            {/* 输入框 */}
-            <input
-              type="text"
-              className="incall-input-pill"
-              style={{
-                padding: "0 16px",
-                fontSize: "14px",
-                border: "none",
-                outline: "none",
-                color: "#333",
-              }}
-              placeholder="输入消息..."
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  const inputElement = e.target;
-                  const message = inputElement.value.trim();
-                  if (message) {
-                    // 发送消息逻辑
-                    console.log("发送消息:", message);
-                    // 添加到通话中消息列表
-                    setInCallMessages((prev) => [
-                      ...prev,
-                      { text: message, isMe: true },
-                    ]);
-                    // 清空输入框
-                    inputElement.value = "";
-                    // 触发AI回复
-                    setTimeout(() => {
-                      // 创建用户消息对象
-                      const userMsg = {
-                        id: Date.now(),
-                        text: message,
-                        type: "text",
-                        isMe: true,
-                        time: new Date().toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }),
-                      };
-                      // 触发AI回复
-                      handleAITrigger(null, userMsg);
-                    }, 100);
-                  }
-                }
-              }}
-            />
-
-            {/* 发送按钮 */}
-            <div
-              className="incall-arrow-icon"
-              style={{ cursor: "pointer" }}
-              onClick={() => {
-                const inputElement =
-                  document.querySelector(".incall-input-pill");
-                if (inputElement) {
-                  const message = inputElement.value.trim();
-                  if (message) {
-                    // 发送消息逻辑
-                    console.log("发送消息:", message);
-                    // 添加到通话中消息列表
-                    setInCallMessages((prev) => [
-                      ...prev,
-                      { text: message, isMe: true },
-                    ]);
-                    // 清空输入框
-                    inputElement.value = "";
-                    // 触发AI回复
-                    setTimeout(() => {
-                      // 创建用户消息对象
-                      const userMsg = {
-                        id: Date.now(),
-                        text: message,
-                        type: "text",
-                        isMe: true,
-                        time: new Date().toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }),
-                      };
-                      // 触发AI回复
-                      handleAITrigger(null, userMsg);
-                    }, 100);
-                  }
-                }
-              }}
-            >
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              >
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
-              </svg>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* [新增] 整合记录弹窗 */}
-      {showConsolidateModal && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(0,0,0,0.5)",
-            zIndex: 9999,
-            display: "flex",
-            flexDirection: "column",
-            justifyContent: "flex-end",
-          }}
-          onClick={() => setShowConsolidateModal(false)}
-        >
-          <div
-            style={{
-              background: "#FDFCF8",
-              width: "100%",
-              borderTopLeftRadius: "24px",
-              borderTopRightRadius: "24px",
-              padding: "24px",
-              paddingBottom: "calc(24px + var(--safe-bottom))",
-              animation: "slideUp 0.3s ease-out",
-            }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: "18px", color: "#5a5f4d" }}>
-                整合选中的 {selectedMsgIds.length} 条记录
-              </h3>
-              <button
-                onClick={() => setShowConsolidateModal(false)}
-                style={{
-                  background: "none",
-                  border: "none",
-                  fontSize: "24px",
-                  color: "#999",
-                  cursor: "pointer",
-                }}
-              >
-                ×
-              </button>
-            </div>
-
-            {/* 模式切换 */}
-            <div
-              style={{
-                display: "flex",
-                gap: "12px",
-                marginBottom: "20px",
-              }}
-            >
-              <button
-                onClick={() => setConsolidateMode("manual")}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  borderRadius: "12px",
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  background:
-                    consolidateMode === "manual" ? "#D6724B" : "#F5F5F5",
-                  color: consolidateMode === "manual" ? "#fff" : "#666",
-                  border: "none",
-                }}
-              >
-                手动记录
-              </button>
-              <button
-                onClick={() => {
-                  setConsolidateMode("auto");
-                  handleAutoConsolidate();
-                }}
-                style={{
-                  flex: 1,
-                  padding: "10px",
-                  borderRadius: "12px",
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  transition: "all 0.2s",
-                  background:
-                    consolidateMode === "auto" ? "#A8C8BA" : "#F5F5F5",
-                  color: consolidateMode === "auto" ? "#fff" : "#666",
-                  border: "none",
-                }}
-              >
-                自动记录(AI)
-              </button>
-            </div>
-
-            {/* 内容展示与编辑区 */}
-            {isConsolidating ? (
-              <div
-                style={{
-                  height: "200px",
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  color: "#8c917b",
-                }}
-              >
-                <iconify-icon
-                  icon="line-md:loading-twotone-loop"
-                  style={{ fontSize: "40px", marginBottom: "10px" }}
-                ></iconify-icon>
-                <span>雀使正在为您提炼卷宗...</span>
-              </div>
-            ) : (
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "12px",
-                }}
-              >
-                <input
-                  type="text"
-                  placeholder="请输入核心要义（标题）..."
-                  value={consolidateTitle}
-                  onChange={(e) => setConsolidateTitle(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "12px",
-                    border: "1px solid #EAEAEA",
-                    outline: "none",
-                    fontSize: "15px",
-                    color: "#5a5f4d",
-                    background: "#fff",
-                  }}
-                />
-                <textarea
-                  placeholder="请输入这段对话大概讲了什么..."
-                  value={consolidateContent}
-                  onChange={(e) => setConsolidateContent(e.target.value)}
-                  style={{
-                    width: "100%",
-                    height: "150px",
-                    padding: "12px",
-                    borderRadius: "12px",
-                    border: "1px solid #EAEAEA",
-                    outline: "none",
-                    fontSize: "14px",
-                    color: "#666",
-                    background: "#fff",
-                    resize: "none",
-                    lineHeight: "1.5",
-                  }}
-                />
-                <button
-                  onClick={handleSaveConsolidation}
-                  style={{
-                    width: "100%",
-                    padding: "14px",
-                    borderRadius: "16px",
-                    border: "none",
-                    marginTop: "10px",
-                    background:
-                      "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
-                    color: "white",
-                    fontSize: "16px",
-                    fontWeight: "bold",
-                    cursor: "pointer",
-                    boxShadow: "0 4px 12px rgba(214,114,75,0.3)",
-                  }}
-                >
-                  保存记录
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+      
     </div>
   );
 };
