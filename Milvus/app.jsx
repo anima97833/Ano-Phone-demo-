@@ -36202,11 +36202,11 @@ const T9Icons = {
   ),
 };
 
-// T9 顶部头像区
+// T9 顶部头像区 (支持伴侣数据全隔离)
 const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaCharacter } = {}) => {
   const { useState, useEffect } = React;
-  const [days, setDays] = useState(99);
-  const [status, setStatus] = useState("异地中");
+  const [days, setDays] = useState(1);
+  const [status, setStatus] = useState("热恋中");
   const [showInput, setShowInput] = useState(false);
   const [showStatusModal, setShowStatusModal] = useState(false);
   const [inputValue, setInputValue] = useState("");
@@ -36223,7 +36223,7 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
   const [availableChars, setAvailableChars] = useState([]);
 
   // 状态选项
-  const statusOptions = ["同居中", "异地中", "已见面"];
+  const statusOptions = ["热恋中", "同居中", "异地中", "已见面", "执手偕老", "相思暗涌"];
 
   // 初始化IndexedDB
   const initDB = () => {
@@ -36249,7 +36249,7 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
       return new Promise((resolve) => {
         request.onsuccess = () => {
           db.close();
-          if (request.result) resolve(request.result.value);
+          if (request.result && request.result.value !== undefined) resolve(request.result.value);
           else resolve(defaultValue);
         };
         request.onerror = () => {
@@ -36279,7 +36279,7 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
     }
   };
 
-  // --- 新增：加载 TA 角色和 我 的身份 ---
+  // 加载 我 的身份
   const loadMyPersona = () => {
     try {
       const savedPersonas = JSON.parse(
@@ -36327,32 +36327,41 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
     loadMyPersona();
   }, []);
 
+  // 关键：当伴侣角色 taCharacter 切换时，实时加载该伴侣专属的相伴天数与状态
   useEffect(() => {
-    const fetchData = async () => {
-      const savedDays = await loadData("days", 99);
-      const savedStatus = await loadData("status", "异地中");
-      setDays(savedDays);
-      setStatus(savedStatus);
-    };
-    fetchData();
-  }, []);
+    if (taCharacter?.id) {
+      const fetchData = async () => {
+        const keyPrefix = `char_${taCharacter.id}_`;
+        const savedDays = await loadData(keyPrefix + "days", 1);
+        const savedStatus = await loadData(keyPrefix + "status", "热恋中");
+        setDays(savedDays);
+        setStatus(savedStatus);
+      };
+      fetchData();
+    }
+  }, [taCharacter?.id]);
 
   const handleDaysClick = () => {
     setInputValue(days.toString());
     setShowInput(true);
   };
+
   const handleInputConfirm = () => {
     const value = parseInt(inputValue);
-    if (!isNaN(value) && value > 0) {
+    if (!isNaN(value) && value > 0 && taCharacter?.id) {
       setDays(value);
-      saveData("days", value);
+      saveData(`char_${taCharacter.id}_days`, value);
     }
     setShowInput(false);
   };
+
   const handleInputCancel = () => setShowInput(false);
+
   const handleStatusSelect = (newStatus) => {
-    setStatus(newStatus);
-    saveData("status", newStatus);
+    if (taCharacter?.id) {
+      setStatus(newStatus);
+      saveData(`char_${taCharacter.id}_status`, newStatus);
+    }
     setShowStatusModal(false);
   };
 
@@ -36365,7 +36374,7 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
       }}
     >
       <div className="flex-between" style={{ marginBottom: "16px" }}>
-        {/* --- 修改：TA 的头像及点击事件 --- */}
+        {/* --- TA 的头像及点击选择角色 --- */}
         <div
           className="glass flex-center active-press"
           onClick={() => setShowTaSelect(true)}
@@ -36382,7 +36391,9 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
           {taCharacter ? (
             taCharacter.avatar ? (
               typeof taCharacter.avatar === "string" &&
-              taCharacter.avatar.startsWith("data:image") ? (
+              (taCharacter.avatar.startsWith("data:image") ||
+                taCharacter.avatar.startsWith("http") ||
+                taCharacter.avatar.startsWith("/")) ? (
                 <img
                   src={taCharacter.avatar}
                   style={{
@@ -36421,7 +36432,7 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
           )}
         </div>
 
-        {/* --- 修改：我 的头像及点击事件 --- */}
+        {/* --- 我 的头像及点击展示当前面具 --- */}
         <div
           className="glass flex-center active-press"
           onClick={() => {
@@ -36483,12 +36494,12 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
       <div style={{ textAlign: "center" }}>
         <div
           style={{
-            fontSize: "16px",
+            fontSize: "15px",
             color: "var(--text-main)",
             marginBottom: "4px",
           }}
         >
-          今天是我们在一起
+          今天是我与【{taCharacter?.name || "TA"}】相伴
         </div>
         <div
           style={{
@@ -36505,6 +36516,8 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
               cursor: "pointer",
               textDecoration: "underline",
               textDecorationColor: "rgba(0,0,0,0.3)",
+              color: "#D6724B",
+              fontWeight: "700",
             }}
             onClick={handleDaysClick}
           >
@@ -36535,8 +36548,8 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
                 boxShadow: "0 8px 24px rgba(0,0,0,0.2)",
               }}
             >
-              <h3 style={{ marginBottom: "16px", textAlign: "center" }}>
-                设置纪念日天数
+              <h3 style={{ marginBottom: "16px", textAlign: "center", color: "#5a5f4d" }}>
+                设置与 {taCharacter?.name} 的纪念日天数
               </h3>
               <input
                 type="number"
@@ -36562,6 +36575,7 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
                     borderRadius: "8px",
                     border: "1px solid #ddd",
                     background: "#f5f5f5",
+                    cursor: "pointer",
                   }}
                 >
                   取消
@@ -36575,6 +36589,8 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
                     border: "none",
                     background: "var(--accent-primary)",
                     color: "white",
+                    fontWeight: "bold",
+                    cursor: "pointer",
                   }}
                 >
                   确认
@@ -36593,12 +36609,13 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
               borderRadius: "16px",
               fontSize: "12px",
               color: "var(--text-sub)",
-              background: "rgba(255,255,255,0.3)",
+              background: "rgba(255,255,255,0.4)",
               cursor: "pointer",
+              border: "1px solid rgba(255,255,255,0.6)",
             }}
           >
             <T9Icons.Calendar />
-            <span style={{ marginLeft: "4px" }}>{status}</span>
+            <span style={{ marginLeft: "4px", fontWeight: "600" }}>{status}</span>
           </div>
         </div>
 
@@ -36623,14 +36640,14 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
                 maxWidth: "300px",
               }}
             >
-              <h3 style={{ marginBottom: "16px", textAlign: "center" }}>
-                选择状态
+              <h3 style={{ marginBottom: "16px", textAlign: "center", color: "#5a5f4d" }}>
+                选择与 {taCharacter?.name} 的相处状态
               </h3>
               <div
                 style={{
                   display: "flex",
                   flexDirection: "column",
-                  gap: "12px",
+                  gap: "10px",
                   marginBottom: "20px",
                 }}
               >
@@ -36639,16 +36656,18 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
                     key={option}
                     onClick={() => handleStatusSelect(option)}
                     style={{
-                      padding: "12px",
-                      borderRadius: "8px",
+                      padding: "10px",
+                      borderRadius: "10px",
                       border:
                         option === status
-                          ? "1px solid var(--accent-primary)"
+                          ? "1.5px solid var(--accent-primary)"
                           : "1px solid #ddd",
                       background:
-                        option === status ? "rgba(0,0,0,0.05)" : "#f5f5f5",
+                        option === status ? "#E8F1ED" : "#f9f9f9",
                       cursor: "pointer",
                       textAlign: "center",
+                      fontWeight: option === status ? "bold" : "normal",
+                      color: option === status ? "#5A8F6D" : "#555",
                     }}
                   >
                     {option}
@@ -36663,6 +36682,7 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
                   borderRadius: "8px",
                   border: "1px solid #ddd",
                   background: "#f5f5f5",
+                  cursor: "pointer",
                 }}
               >
                 取消
@@ -36672,7 +36692,7 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
         )}
       </div>
 
-      {/* --- 新增：TA角色选择弹窗 --- */}
+      {/* --- TA角色选择弹窗 --- */}
       {showTaSelect && (
         <div
           style={{
@@ -36766,7 +36786,9 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
                     >
                       {char.avatar ? (
                         typeof char.avatar === "string" &&
-                        char.avatar.startsWith("data:image") ? (
+                        (char.avatar.startsWith("data:image") ||
+                          char.avatar.startsWith("http") ||
+                          char.avatar.startsWith("/")) ? (
                           <img
                             src={char.avatar}
                             style={{
@@ -36816,30 +36838,27 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
   );
 };
 
-// T9 情侣空间主页面组件 (包含“与你相伴”深度功能)
+// T9 情侣空间主页面组件 (全面实现各伴侣子功能历史记录与事件数据完全隔离)
 const T9Page = () => {
   const { useState, useEffect, useRef } = React;
 
-  // 模态框及陪伴状态
-  const [showModal, setShowModal] = useState(false);
-  const [sessionState, setSessionState] = useState("setup"); // 'setup', 'active', 'summary'
-
-  // 表单数据
-  const [taskName, setTaskName] = useState("");
-  const [duration, setDuration] = useState(30); // 预计时长(分钟)
-  const [companionType, setCompanionType] = useState("quiet"); // 'quiet' 或 'verbal'
-
-  // 运行中状态
+  // 伴侣 TA 状态与用户身份
   const [taCharacter, setTaCharacter] = useState(null);
-  const [mePersona, setMePersona] = useState(null); // 用户角色
-  const [timePassed, setTimePassed] = useState(0); // 已进行秒数
+  const [mePersona, setMePersona] = useState(null);
+
+  // 1. 陪伴功能状态
+  const [showModal, setShowModal] = useState(false);
+  const [sessionState, setSessionState] = useState("setup");
+  const [taskName, setTaskName] = useState("");
+  const [duration, setDuration] = useState(30);
+  const [companionType, setCompanionType] = useState("quiet");
+  const [timePassed, setTimePassed] = useState(0);
   const [aiMessage, setAiMessage] = useState("静静地注视着你...");
   const [records, setRecords] = useState([]);
-
   const timerRef = useRef(null);
   const aiTimerRef = useRef(null);
 
-  // ================== [新增] 共同记账功能状态 ==================
+  // 2. 共同记账功能状态
   const [showBillingModal, setShowBillingModal] = useState(false);
   const [billingViewTab, setBillingViewTab] = useState("user");
   const [userBills, setUserBills] = useState([]);
@@ -36853,25 +36872,163 @@ const T9Page = () => {
   });
   const [isGeneratingTaBills, setIsGeneratingTaBills] = useState(false);
 
-  // ================== [新增] 我问你猜功能状态 ==================
+  // 3. 任务拆解功能状态
+  const [showTaskModal, setShowTaskModal] = useState(false);
+  const [taskBreakName, setTaskBreakName] = useState("");
+  const [taskBreakDesc, setTaskBreakDesc] = useState("");
+  const [isBreakingDown, setIsBreakingDown] = useState(false);
+  const [currentBreakdown, setCurrentBreakdown] = useState(null);
+  const [breakdownHistory, setBreakdownHistory] = useState([]);
+  const [taskFeedback, setTaskFeedback] = useState("");
+
+  // 4. 我问你猜功能状态
   const [showGuessGame, setShowGuessGame] = useState(false);
   const [guessState, setGuessState] = useState({
     round: 1,
-    turn: "char", // 'char' (AI提问用户猜) | 'user' (用户提问AI猜)
+    turn: "char",
     charScore: 0,
     userScore: 0,
     question: "",
     answer: "",
     feedback: "",
-    status: "idle", // idle (等待提问), asking (已提问待回答), judged (已判定)
+    status: "idle",
   });
   const [guessInput, setGuessInput] = useState("");
   const [isGuessGenerating, setIsGuessGenerating] = useState(false);
   const [showScoreBoard, setShowScoreBoard] = useState(false);
 
-  // 持久化读取我问你猜数据
+  // 5. 愿望清单功能状态
+  const [showWishlistModal, setShowWishlistModal] = useState(false);
+  const [wishlist, setWishlist] = useState([]);
+  const [newWishInput, setNewWishInput] = useState("");
+  const [isGeneratingWish, setIsGeneratingWish] = useState(false);
+
+  // ================== 初始化伴侣 TA 角色 ==================
+  const loadTaCharacter = async () => {
+    const taId = localStorage.getItem("t9_ta_character_id");
+    let allChars = [];
+    if (window.chatCharacterStore) {
+      allChars = await window.chatCharacterStore.getAll();
+    } else {
+      try {
+        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+      } catch (e) {
+        allChars = [];
+      }
+    }
+    const validChars = allChars.filter(
+      (c) => !String(c.id).startsWith("group") && c.type !== "decor",
+    );
+    let char = validChars.find((c) => String(c.id) === taId);
+    if (!char && validChars.length > 0) {
+      char = validChars[0];
+      localStorage.setItem("t9_ta_character_id", char.id);
+    }
+    setTaCharacter(char || null);
+    return char;
+  };
+
   useEffect(() => {
-    if (taCharacter) {
+    loadTaCharacter();
+  }, []);
+
+  // 加载用户面具
+  useEffect(() => {
+    const savedPersonas = JSON.parse(
+      localStorage.getItem("user_personas") || "[]",
+    );
+    const activeId = localStorage.getItem("active_persona_id");
+    if (activeId) {
+      const activeUser = savedPersonas.find((p) => p.id == activeId);
+      if (activeUser) {
+        setMePersona(activeUser);
+      }
+    }
+  }, []);
+
+  // ================== 核心：所有子功能数据在伴侣 taCharacter 切换时全面隔离重载 ==================
+
+  // 1. 与你相伴记录隔离重载
+  useEffect(() => {
+    if (taCharacter?.id) {
+      const savedRecords = localStorage.getItem(`t9_companion_records_${taCharacter.id}`);
+      setRecords(savedRecords ? JSON.parse(savedRecords) : []);
+    } else {
+      setRecords([]);
+    }
+  }, [taCharacter?.id]);
+
+  // 2. 任务拆解数据隔离重载
+  useEffect(() => {
+    if (taCharacter?.id) {
+      const savedHistory = localStorage.getItem(`t9_breakdown_history_${taCharacter.id}`);
+      setBreakdownHistory(savedHistory ? JSON.parse(savedHistory) : []);
+
+      const savedCurrent = localStorage.getItem(`t9_current_breakdown_${taCharacter.id}`);
+      setCurrentBreakdown(savedCurrent ? JSON.parse(savedCurrent) : null);
+    } else {
+      setBreakdownHistory([]);
+      setCurrentBreakdown(null);
+    }
+  }, [taCharacter?.id]);
+
+  // 任务拆解数据保存 (按伴侣 ID)
+  useEffect(() => {
+    if (taCharacter?.id) {
+      localStorage.setItem(
+        `t9_breakdown_history_${taCharacter.id}`,
+        JSON.stringify(breakdownHistory),
+      );
+    }
+  }, [breakdownHistory, taCharacter?.id]);
+
+  useEffect(() => {
+    if (taCharacter?.id) {
+      if (currentBreakdown) {
+        localStorage.setItem(
+          `t9_current_breakdown_${taCharacter.id}`,
+          JSON.stringify(currentBreakdown),
+        );
+      } else {
+        localStorage.removeItem(`t9_current_breakdown_${taCharacter.id}`);
+      }
+    }
+  }, [currentBreakdown, taCharacter?.id]);
+
+  // 3. 共同记账数据隔离重载
+  useEffect(() => {
+    if (taCharacter?.id) {
+      const savedBills = localStorage.getItem(`t9_bills_${taCharacter.id}`);
+      if (savedBills) {
+        const parsed = JSON.parse(savedBills);
+        setUserBills(parsed.userBills || []);
+        setTaBills(parsed.taBills || []);
+      } else {
+        setUserBills([]);
+        setTaBills([]);
+      }
+    } else {
+      setUserBills([]);
+      setTaBills([]);
+    }
+  }, [taCharacter?.id]);
+
+  // 账单数据变动保存 (按伴侣 ID)
+  useEffect(() => {
+    if (taCharacter?.id) {
+      localStorage.setItem(
+        `t9_bills_${taCharacter.id}`,
+        JSON.stringify({
+          userBills,
+          taBills,
+        }),
+      );
+    }
+  }, [userBills, taBills, taCharacter?.id]);
+
+  // 4. 我问你猜数据隔离重载
+  useEffect(() => {
+    if (taCharacter?.id) {
       const savedGame = localStorage.getItem(`t9_guess_game_${taCharacter.id}`);
       if (savedGame) {
         setGuessState(JSON.parse(savedGame));
@@ -36888,58 +37045,342 @@ const T9Page = () => {
         });
       }
     }
-  }, [taCharacter]);
+  }, [taCharacter?.id]);
 
-  // 持久化保存我问你猜数据
+  // 我问你猜数据保存 (按伴侣 ID)
   useEffect(() => {
-    if (taCharacter && guessState.round > 0) {
+    if (taCharacter?.id && guessState.round > 0) {
       localStorage.setItem(
         `t9_guess_game_${taCharacter.id}`,
         JSON.stringify(guessState),
       );
     }
-  }, [guessState, taCharacter]);
+  }, [guessState, taCharacter?.id]);
 
-  // --- 我问你猜 AI 调用逻辑 ---
-  const handleGenerateGuessQuestion = async () => {
-    if (isGuessGenerating) return;
-    setIsGuessGenerating(true);
-    try {
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "";
-      let userContext = "";
-      const savedPersonas = JSON.parse(
-        localStorage.getItem("user_personas") || "[]",
-      );
-      const activeId = localStorage.getItem("active_persona_id");
-      if (activeId) {
-        const activeUser = savedPersonas.find((p) => p.id == activeId);
-        if (activeUser)
-          userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "无"}`;
+  // 5. 愿望清单数据隔离重载
+  useEffect(() => {
+    if (taCharacter?.id) {
+      const savedWishes = localStorage.getItem(`t9_wishlist_${taCharacter.id}`);
+      if (savedWishes) {
+        setWishlist(JSON.parse(savedWishes));
+      } else {
+        setWishlist([
+          { id: 1, text: `与 ${taCharacter.name} 一起去洛阳城楼看上元灯会`, done: false, date: "待完成" },
+          { id: 2, text: `让 ${taCharacter.name} 亲手煮一壶蒙顶甘露`, done: false, date: "待完成" }
+        ]);
       }
+    }
+  }, [taCharacter?.id]);
 
-      const sysPrompt =
-        "你是一个沉浸式角色扮演AI，正在和用户玩'我问你猜'的默契游戏。";
+  // 愿望清单保存
+  useEffect(() => {
+    if (taCharacter?.id && wishlist.length > 0) {
+      localStorage.setItem(`t9_wishlist_${taCharacter.id}`, JSON.stringify(wishlist));
+    }
+  }, [wishlist, taCharacter?.id]);
+
+  // ================== 与你相伴功能逻辑 ==================
+  const fetchAiMessage = async (char) => {
+    if (!char) return;
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
+      let userContext = "";
+      if (mePersona) {
+        userContext = `【用户身份】姓名:${mePersona.name}, 性格:${mePersona.personality || "未知"}`;
+      }
+      const charContext = `【陪伴角色设定】\n姓名:${char.name}\n性格:${char.profile?.personality || "无"}\n说话风格:${char.profile?.style || "无"}`;
+      const sysPrompt = "你是一个陪伴用户的沉浸式角色扮演AI。";
       const userPrompt = `
               ${worldContext}
               ${userContext}
-              【你的角色设定】姓名:${taCharacter.name}, 性格:${taCharacter.profile?.personality}, 说话风格:${taCharacter.profile?.style}
-              
-              【任务】
-              请结合你的设定和世界观，构思一个具体的场景或突发事件，向用户提问："在这种情况下，我会怎么做/说什么？"
-              问题可以天马行空，也可以是日常琐事，但必须极度贴合你的性格。
-              
-              【要求】
-              只输出你提问的这段话，不要任何前缀、旁白或 Markdown 标记。
+              ${charContext}
+              【当前情境】用户正在进行任务：【${taskName}】。你正在旁边陪伴。请根据你的角色性格说一句话。
+              直接输出台词，不要带任何Markdown或旁白括号。
             `;
 
       if (window.sendToLLM) {
         window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
+          [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
+          null,
+          (reply) => setAiMessage(reply.trim()),
+          (err) => console.error("AI 陪伴获取失败", err),
+        );
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const startSession = async () => {
+    if (!taskName.trim()) return alert("请填写任务名称！");
+    if (!taCharacter) return alert("请先在上方头像处选择 TA 的身份！");
+
+    setSessionState("active");
+    setTimePassed(0);
+    setAiMessage(companionType === "quiet" ? "静静地陪伴着你..." : "（正在酝酿情绪...）");
+
+    timerRef.current = setInterval(() => {
+      setTimePassed((prev) => prev + 1);
+    }, 1000);
+
+    if (companionType === "verbal") {
+      fetchAiMessage(taCharacter);
+      aiTimerRef.current = setInterval(() => {
+        fetchAiMessage(taCharacter);
+      }, 300000);
+    }
+  };
+
+  const stopSession = () => {
+    clearInterval(timerRef.current);
+    clearInterval(aiTimerRef.current);
+
+    const mins = Math.floor(timePassed / 60);
+    const secs = timePassed % 60;
+    const timeStr = mins > 0 ? `${mins}分${secs}秒` : `${secs}秒`;
+
+    const newRecord = {
+      id: Date.now(),
+      charName: taCharacter ? taCharacter.name : "未知",
+      taskName: taskName,
+      timeStr: timeStr,
+      date: new Date().toLocaleString(),
+    };
+
+    const updatedRecords = [newRecord, ...records];
+    setRecords(updatedRecords);
+    if (taCharacter?.id) {
+      localStorage.setItem(`t9_companion_records_${taCharacter.id}`, JSON.stringify(updatedRecords));
+    }
+    setSessionState("summary");
+  };
+
+  const closeCompanion = () => {
+    setShowModal(false);
+    setSessionState("setup");
+    setTaskName("");
+    setDuration(30);
+    setCompanionType("quiet");
+    clearInterval(timerRef.current);
+    clearInterval(aiTimerRef.current);
+  };
+
+  const formatPassedTime = (seconds) => {
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    const s = seconds % 60;
+    if (h > 0)
+      return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
+  };
+
+  // ================== 任务拆解功能逻辑 ==================
+  const handleGenerateBreakdown = async () => {
+    if (!taskBreakName.trim() || !taskBreakDesc.trim())
+      return alert("请填写任务名称和简介！");
+    if (!taCharacter) return alert("请先在上方头像处选择 TA 的身份！");
+
+    setIsBreakingDown(true);
+
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
+      let userContext = mePersona ? `【用户身份】姓名:${mePersona.name}, 性格:${mePersona.personality || "未知"}` : "";
+      const sysPrompt = "你是一个沉浸式角色扮演AI兼任务拆解助手。";
+      const userPrompt = `
+              ${worldContext}
+              ${userContext}
+              【你的角色设定】姓名:${taCharacter.name}, 性格:${taCharacter.profile?.personality}, 说话风格:${taCharacter.profile?.style}
+              【任务名称】${taskBreakName}
+              【任务简介】${taskBreakDesc}
+              【指令】请以你的角色口吻，为用户拆解为 5 到 8 个具体可执行步骤。必须纯 JSON 格式输出：
+              {
+                "greeting": "鼓励或叮嘱的一句话",
+                "steps": [
+                  { "title": "步骤描述", "minutes": 10 }
+                ]
+              }
+            `;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
+          null,
+          (reply) => {
+            try {
+              const cleanJson = reply.replace(/```json|```/g, "").trim();
+              const data = JSON.parse(cleanJson);
+              setCurrentBreakdown({
+                id: Date.now(),
+                charName: taCharacter.name,
+                taskName: taskBreakName,
+                taskDesc: taskBreakDesc,
+                greeting: data.greeting || "交给我吧。",
+                steps: data.steps.map((s, idx) => ({ ...s, id: idx, isDone: false })),
+                lastStepTime: Date.now(),
+                status: "ongoing",
+              });
+              setTaskBreakName("");
+              setTaskBreakDesc("");
+            } catch (e) {
+              console.error("拆解解析失败:", e, reply);
+              alert("TA 刚才思绪有些混乱，请重新点击拆解！");
+            } finally {
+              setIsBreakingDown(false);
+            }
+          },
+          (err) => {
+            console.error(err);
+            alert("网络连接受阻，请检查 API 配置。");
+            setIsBreakingDown(false);
+          },
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      setIsBreakingDown(false);
+    }
+  };
+
+  const handleCompleteStep = (stepId, estimatedMinutes) => {
+    const now = Date.now();
+    const updatedSteps = currentBreakdown.steps.map((s) =>
+      s.id === stepId ? { ...s, isDone: true } : s,
+    );
+    const isAllDone = updatedSteps.every((s) => s.isDone);
+
+    setTaskFeedback(`${currentBreakdown.charName} 赞许地看着你。`);
+    setTimeout(() => setTaskFeedback(""), 3000);
+
+    const updatedBreakdown = {
+      ...currentBreakdown,
+      steps: updatedSteps,
+      lastStepTime: now,
+    };
+
+    if (isAllDone) {
+      updatedBreakdown.status = "completed";
+      updatedBreakdown.completedAt = new Date().toLocaleString();
+      updatedBreakdown.hasFlower = true;
+      setBreakdownHistory([updatedBreakdown, ...breakdownHistory]);
+      setCurrentBreakdown(null);
+      alert(`恭喜！你完成了与 ${currentBreakdown.charName} 的【${currentBreakdown.taskName}】，获得了一朵小花 🌸！`);
+    } else {
+      setCurrentBreakdown(updatedBreakdown);
+    }
+  };
+
+  const handleCancelBreakdown = () => {
+    if (confirm("确定要放弃当前的任务拆解吗？")) {
+      const cancelled = {
+        ...currentBreakdown,
+        status: "cancelled",
+        completedAt: new Date().toLocaleString(),
+        hasFlower: false,
+      };
+      setBreakdownHistory([cancelled, ...breakdownHistory]);
+      setCurrentBreakdown(null);
+    }
+  };
+
+  // ================== 共同记账功能逻辑 ==================
+  const handleSaveBill = () => {
+    if (!newBill.category || !newBill.amount || !newBill.date) {
+      alert("请将账单信息填写完整！");
+      return;
+    }
+    const bill = {
+      id: Date.now(),
+      ...newBill,
+      amount: parseFloat(newBill.amount),
+    };
+    setUserBills((prev) => [bill, ...prev]);
+    setShowAddBillModal(false);
+    setNewBill({
+      type: "expense",
+      category: "",
+      amount: "",
+      date: new Date().toISOString().split("T")[0],
+    });
+  };
+
+  const handleGenerateTaBills = async () => {
+    setBillingViewTab("ta");
+    if (!taCharacter || isGeneratingTaBills) return;
+    setIsGeneratingTaBills(true);
+
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
+      let userContext = mePersona ? `【用户身份】姓名:${mePersona.name}, 性格:${mePersona.personality || "未知"}` : "";
+      const charContext = `【记账角色设定】\n姓名:${taCharacter.name}\n性格:${taCharacter.profile?.personality || "无"}`;
+      const sysPrompt = "你是一个沉浸式角色扮演AI兼记账生成助手。";
+      const userPrompt = `
+              ${worldContext}
+              ${userContext}
+              ${charContext}
+              【任务】请以【${taCharacter.name}】身份生成 5 条符合该角色和东汉特色的账目（有收有支）。
+              严格返回纯 JSON 数组，格式示例：
+              [
+                {"type": "expense", "category": "购买上等佳酿", "amount": 500, "date": "2026-08-16"},
+                {"type": "income", "category": "朝廷俸禄", "amount": 2000, "date": "2026-08-15"}
+              ]
+            `;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
+          null,
+          (reply) => {
+            try {
+              const cleanJson = reply.replace(/```json|```/g, "").trim();
+              const data = JSON.parse(cleanJson);
+              if (Array.isArray(data)) {
+                const formatted = data.map((item, idx) => ({
+                  id: Date.now() + idx,
+                  type: item.type === "income" ? "income" : "expense",
+                  category: item.category,
+                  amount: parseFloat(item.amount) || 0,
+                  date: item.date || new Date().toISOString().split("T")[0],
+                }));
+                setTaBills(formatted);
+              }
+            } catch (e) {
+              console.error("账单解析失败:", e);
+            } finally {
+              setIsGeneratingTaBills(false);
+            }
+          },
+          () => setIsGeneratingTaBills(false),
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      setIsGeneratingTaBills(false);
+    }
+  };
+
+  const userExpense = userBills.filter((b) => b.type === "expense").reduce((sum, b) => sum + b.amount, 0);
+  const userIncome = userBills.filter((b) => b.type === "income").reduce((sum, b) => sum + b.amount, 0);
+  const taExpense = taBills.filter((b) => b.type === "expense").reduce((sum, b) => sum + b.amount, 0);
+  const taIncome = taBills.filter((b) => b.type === "income").reduce((sum, b) => sum + b.amount, 0);
+
+  // ================== 我问你猜功能逻辑 ==================
+  const handleGenerateGuessQuestion = async () => {
+    if (isGuessGenerating || !taCharacter) return;
+    setIsGuessGenerating(true);
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
+      let userContext = mePersona ? `【用户身份】姓名:${mePersona.name}, 性格:${mePersona.personality || "无"}` : "";
+      const sysPrompt = "你是一个沉浸式角色扮演AI，正在和用户玩'我问你猜'的默契游戏。";
+      const userPrompt = `
+              ${worldContext}
+              ${userContext}
+              【你的角色设定】姓名:${taCharacter.name}, 性格:${taCharacter.profile?.personality}
+              向用户提问：“在这种情况下，我会怎么做/说什么？” 直接输出提问，不要旁白。
+            `;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
           null,
           (reply) => {
             setGuessState((prev) => ({
@@ -36951,10 +37392,7 @@ const T9Page = () => {
             }));
             setIsGuessGenerating(false);
           },
-          (err) => {
-            alert("TA还在思考，请重试");
-            setIsGuessGenerating(false);
-          },
+          () => setIsGuessGenerating(false),
         );
       }
     } catch (e) {
@@ -36964,38 +37402,28 @@ const T9Page = () => {
   };
 
   const handleSubmitGuessAnswer = async () => {
-    if (!guessInput.trim()) return alert("请先输入你的回答！");
+    if (!guessInput.trim() || !taCharacter) return alert("请先输入你的回答！");
     setIsGuessGenerating(true);
     const userAnswer = guessInput.trim();
     setGuessState((prev) => ({ ...prev, answer: userAnswer }));
     setGuessInput("");
 
     try {
-      const sysPrompt =
-        "你是一个沉浸式角色扮演AI。你在和用户玩'我问你猜'游戏。你负责判定用户的回答是否符合你的人设。";
+      const sysPrompt = "你是一个沉浸式角色扮演AI。负责判定用户回答是否符合你的人设。";
       const userPrompt = `
               【你的设定】姓名:${taCharacter.name}, 性格:${taCharacter.profile?.personality}
               【你的提问】：${guessState.question}
-              【用户的回答】：${userAnswer}
-
-              【任务】
-              请根据你真实的性格客观评判用户的回答对不对。如果有偏差，绝不放水，错了就是错。
-              请给出你的点评。
-
-              【输出格式】
-              严格输出JSON格式，不要任何 Markdown 标记。格式如下：
+              【用户回答】：${userAnswer}
+              严格输出JSON格式：
               {
                 "isCorrect": true或false,
-                "feedback": "用你的口吻给出的点评，告诉对方为什么对或错。"
+                "feedback": "用你的口吻点评"
               }
             `;
 
       if (window.sendToLLM) {
         window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
+          [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
           null,
           (reply) => {
             try {
@@ -37012,10 +37440,7 @@ const T9Page = () => {
               setIsGuessGenerating(false);
             }
           },
-          (err) => {
-            alert("网络异常");
-            setIsGuessGenerating(false);
-          },
+          () => setIsGuessGenerating(false),
         );
       }
     } catch (e) {
@@ -37025,7 +37450,7 @@ const T9Page = () => {
   };
 
   const handleUserAskQuestion = async () => {
-    if (!guessInput.trim()) return alert("请先输入你的问题！");
+    if (!guessInput.trim() || !taCharacter) return alert("请先输入你的问题！");
     setIsGuessGenerating(true);
     const userQuestion = guessInput.trim();
     setGuessState((prev) => ({
@@ -37036,20 +37461,16 @@ const T9Page = () => {
     setGuessInput("");
 
     try {
-      const sysPrompt =
-        "你是一个沉浸式角色扮演AI。用户在'我问你猜'游戏中向你提问。";
+      const sysPrompt = "你是一个沉浸式角色扮演AI。用户在'我问你猜'游戏中向你提问。";
       const userPrompt = `
               【你的设定】姓名:${taCharacter.name}, 性格:${taCharacter.profile?.personality}
-              【用户的提问】：${userQuestion}
-              【任务】请用你的设定第一人称，直接回答用户的问题，展现你的脑洞和特色。不要带旁白括号。
+              【用户提问】：${userQuestion}
+              用你的设定第一人称直接回答。
             `;
 
       if (window.sendToLLM) {
         window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
+          [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
           null,
           (reply) => {
             setGuessState((prev) => ({
@@ -37059,10 +37480,7 @@ const T9Page = () => {
             }));
             setIsGuessGenerating(false);
           },
-          (err) => {
-            alert("网络异常");
-            setIsGuessGenerating(false);
-          },
+          () => setIsGuessGenerating(false),
         );
       }
     } catch (e) {
@@ -37089,593 +37507,66 @@ const T9Page = () => {
       };
     });
   };
-  // ==========================================================
 
-  // 加载用户角色数据
-  useEffect(() => {
-    const savedPersonas = JSON.parse(
-      localStorage.getItem("user_personas") || "[]",
-    );
-    const activeId = localStorage.getItem("active_persona_id");
-    if (activeId) {
-      const activeUser = savedPersonas.find((p) => p.id == activeId);
-      if (activeUser) {
-        setMePersona(activeUser);
-      }
-    }
-  }, []);
-
-  // 加载账单数据
-  useEffect(() => {
-    if (taCharacter) {
-      const savedBills = localStorage.getItem(`t9_bills_${taCharacter.id}`);
-      if (savedBills) {
-        const parsed = JSON.parse(savedBills);
-        setUserBills(parsed.userBills || []);
-        setTaBills(parsed.taBills || []);
-      } else {
-        setUserBills([]);
-        setTaBills([]);
-      }
-    }
-  }, [taCharacter]);
-
-  // 账单数据变动时保存
-  useEffect(() => {
-    if (taCharacter) {
-      localStorage.setItem(
-        `t9_bills_${taCharacter.id}`,
-        JSON.stringify({
-          userBills,
-          taBills,
-        }),
-      );
-    }
-  }, [userBills, taBills, taCharacter]);
-
-  const handleSaveBill = () => {
-    if (!newBill.category || !newBill.amount || !newBill.date) {
-      alert("请将账单信息填写完整！");
-      return;
-    }
-    const bill = {
+  // ================== 愿望清单功能逻辑 ==================
+  const handleAddWish = () => {
+    if (!newWishInput.trim()) return;
+    const newWish = {
       id: Date.now(),
-      ...newBill,
-      amount: parseFloat(newBill.amount),
+      text: newWishInput.trim(),
+      done: false,
+      date: new Date().toLocaleDateString(),
     };
-    setUserBills((prev) => [bill, ...prev]);
-    setShowAddBillModal(false);
-    setNewBill({
-      type: "expense",
-      category: "",
-      amount: "",
-      date: new Date().toISOString().split("T")[0],
-    });
+    setWishlist((prev) => [newWish, ...prev]);
+    setNewWishInput("");
   };
 
-  const handleGenerateTaBills = async () => {
-    setBillingViewTab("ta");
-    if (!taCharacter) return;
-    if (isGeneratingTaBills) return;
+  const handleToggleWish = (id) => {
+    setWishlist((prev) =>
+      prev.map((w) => (w.id === id ? { ...w, done: !w.done } : w)),
+    );
+  };
 
-    setIsGeneratingTaBills(true);
+  const handleDeleteWish = (id) => {
+    setWishlist((prev) => prev.filter((w) => w.id !== id));
+  };
 
+  const handleGenerateAiWish = async () => {
+    if (!taCharacter || isGeneratingWish) return;
+    setIsGeneratingWish(true);
     try {
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定设定";
-
-      let userContext = "";
-      try {
-        const savedPersonas = JSON.parse(
-          localStorage.getItem("user_personas") || "[]",
-        );
-        const activeId = localStorage.getItem("active_persona_id");
-        if (activeId) {
-          const activeUser = savedPersonas.find((p) => p.id == activeId);
-          if (activeUser) {
-            userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}`;
-          }
-        }
-      } catch (e) {}
-
-      const charContext = `【记账角色设定】\n姓名:${taCharacter.name}\n性格:${taCharacter.profile?.personality || "无"}\n背景:${taCharacter.profile?.background || "无"}`;
-
-      let chatContext = "";
-      if (window.chatHistoryStore) {
-        const history = await window.chatHistoryStore.getRecentMessages(
-          taCharacter.id,
-          15,
-        );
-        chatContext =
-          "【最近聊天上下文】\n" +
-          history
-            .map((m) => `${m.isMe ? "用户" : taCharacter.name}: ${m.text}`)
-            .join("\n");
-      }
-
-      const sysPrompt = "你是一个沉浸式角色扮演AI兼记账生成助手。";
+      const sysPrompt = "你是一个深情而具有独特人设的古代角色。";
       const userPrompt = `
-              ${worldContext}
-              ${userContext}
-              ${charContext}
-              ${chatContext}
-
-              【任务】
-              请以【${taCharacter.name}】的身份，结合上面提供的设定、世界观和你们的最近聊天记录，生成一份账单。
-              要求：
-              1. 生成 5 到 7 条账目记录，要同时包含“收入”(income)和“支出”(expense)，以支出为主。
-              2. 款项名称必须符合东汉时期的特色、该角色的身份、或是最近聊天中提到的事物。金额(amount)必须是纯阿拉伯数字。
-              3. 类别(category)写明资金的用途或来源（如：“买西域神药”、“发俸禄”、“赔偿酒肆损失”）。
-              4. 必须严格返回纯 JSON 数组格式，绝对不要包含 Markdown 标记（如 \`\`\`json ），直接以 [ 开头， ] 结尾。
-
-              JSON 格式示例：
-              [
-                {"type": "expense", "category": "购买上等佳酿", "amount": 500, "date": "2023-10-25"},
-                {"type": "income", "category": "朝廷俸禄", "amount": 2000, "date": "2023-10-24"}
-              ]
-            `;
-
+        【你的角色】姓名：${taCharacter.name}，性格：${taCharacter.profile?.personality}
+        请为你和楼主（用户）构想一个符合你性格与心意的浪漫或日常愿望（例如：一起夜游、共赏初雪、微服出巡等）。
+        一句话概括，不要任何前缀。
+      `;
       if (window.sendToLLM) {
         window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
+          [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
           null,
           (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data)) {
-                const formattedData = data.map((item, idx) => ({
-                  id: Date.now() + idx,
-                  type: item.type === "income" ? "income" : "expense",
-                  category: item.category,
-                  amount: parseFloat(item.amount) || 0,
-                  date: item.date || new Date().toISOString().split("T")[0],
-                }));
-                // 追加或覆盖均可，这里选择完全替换更新
-                setTaBills(formattedData);
-              }
-            } catch (e) {
-              console.error("账单解析失败:", e, reply);
-              alert("TA的账本被大风刮跑了，解析失败！");
-            } finally {
-              setIsGeneratingTaBills(false);
+            const cleanWish = reply.replace(/[“"”]/g, "").trim();
+            if (cleanWish) {
+              setWishlist((prev) => [
+                { id: Date.now(), text: cleanWish, done: false, date: "TA的心愿" },
+                ...prev,
+              ]);
             }
+            setIsGeneratingWish(false);
           },
-          (err) => {
-            console.error(err);
-            alert("无法获取账单，请检查 API 配置。");
-            setIsGeneratingTaBills(false);
-          },
-        );
-      } else {
-        alert("未配置API！");
-        setIsGeneratingTaBills(false);
-      }
-    } catch (e) {
-      console.error(e);
-      setIsGeneratingTaBills(false);
-    }
-  };
-
-  const userExpense = userBills
-    .filter((b) => b.type === "expense")
-    .reduce((sum, b) => sum + b.amount, 0);
-  const userIncome = userBills
-    .filter((b) => b.type === "income")
-    .reduce((sum, b) => sum + b.amount, 0);
-  const taExpense = taBills
-    .filter((b) => b.type === "expense")
-    .reduce((sum, b) => sum + b.amount, 0);
-  const taIncome = taBills
-    .filter((b) => b.type === "income")
-    .reduce((sum, b) => sum + b.amount, 0);
-  // ==============================================================
-
-  // ================== [新增] 任务拆解功能状态 ==================
-  const [showTaskModal, setShowTaskModal] = useState(false);
-  const [taskBreakName, setTaskBreakName] = useState("");
-  const [taskBreakDesc, setTaskBreakDesc] = useState("");
-  const [isBreakingDown, setIsBreakingDown] = useState(false);
-  // 当前进行中的任务拆解
-  const [currentBreakdown, setCurrentBreakdown] = useState(null);
-  // 历史拆解记录
-  const [breakdownHistory, setBreakdownHistory] = useState([]);
-  // 防作弊反馈吐司
-  const [taskFeedback, setTaskFeedback] = useState("");
-
-  // 加载任务拆解持久化数据
-  useEffect(() => {
-    const savedHistory = localStorage.getItem("t9_breakdown_history");
-    if (savedHistory) setBreakdownHistory(JSON.parse(savedHistory));
-
-    const savedCurrent = localStorage.getItem("t9_current_breakdown");
-    if (savedCurrent) setCurrentBreakdown(JSON.parse(savedCurrent));
-  }, []);
-
-  // 保存任务拆解持久化数据
-  useEffect(() => {
-    localStorage.setItem(
-      "t9_breakdown_history",
-      JSON.stringify(breakdownHistory),
-    );
-  }, [breakdownHistory]);
-
-  useEffect(() => {
-    if (currentBreakdown) {
-      localStorage.setItem(
-        "t9_current_breakdown",
-        JSON.stringify(currentBreakdown),
-      );
-    } else {
-      localStorage.removeItem("t9_current_breakdown");
-    }
-  }, [currentBreakdown]);
-  // ==========================================================
-
-  // 加载历史记录
-  useEffect(() => {
-    const savedRecords = localStorage.getItem("t9_companion_records");
-    if (savedRecords) {
-      setRecords(JSON.parse(savedRecords));
-    }
-  }, []);
-
-  // 组件挂载时自动加载 TA 角色（供所有功能共享）
-  useEffect(() => {
-    loadTaCharacter();
-  }, []);
-
-  // 获取当前选定的 TA 角色
-  const loadTaCharacter = async () => {
-    const taId = localStorage.getItem("t9_ta_character_id");
-    let allChars = [];
-    if (window.chatCharacterStore) {
-      allChars = await window.chatCharacterStore.getAll();
-    } else {
-      try {
-        allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
-      } catch (e) {
-        allChars = [];
-      }
-    }
-    const validChars = allChars.filter(
-      (c) => !String(c.id).startsWith("group") && c.type !== "decor",
-    );
-    let char = validChars.find((c) => String(c.id) === taId);
-    if (!char && validChars.length > 0) {
-      char = validChars[0];
-      localStorage.setItem("t9_ta_character_id", char.id);
-    }
-    setTaCharacter(char || null);
-    return char;
-  };
-
-  // 调用 AI 接口
-  const fetchAiMessage = async (char) => {
-    if (!char) return;
-    try {
-      // 获取世界书
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "";
-
-      // 获取用户身份
-      let userContext = "";
-      const savedPersonas = JSON.parse(
-        localStorage.getItem("user_personas") || "[]",
-      );
-      const activeId = localStorage.getItem("active_persona_id");
-      if (activeId) {
-        const activeUser = savedPersonas.find((p) => p.id == activeId);
-        if (activeUser) {
-          userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "无"}`;
-        }
-      }
-
-      const charContext = `【陪伴角色设定】\n姓名:${char.name}\n性格:${char.profile?.personality || "无"}\n说话风格:${char.profile?.style || "无"}`;
-
-      const sysPrompt = "你是一个陪伴用户的沉浸式角色扮演AI。";
-      const userPrompt = `
-              ${worldContext}
-              ${userContext}
-              ${charContext}
-
-              【当前情境】
-              用户正在进行任务：【${taskName}】。
-              你正在旁边陪伴。请根据你的角色性格、说话方式，随意说一句话。
-              可以是感慨、吐槽、发问，或者毫不相干的自说自话。
-              【严格要求】
-              1. 严格符合你的角色设定和口吻。
-              2. 只有一句话，简短。
-              3. 直接输出这句话，不要任何Markdown、引号或动作描写的括号。
-            `;
-
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => setAiMessage(reply.trim()),
-          (err) => console.error("AI 陪伴获取失败", err),
+          () => setIsGeneratingWish(false),
         );
       }
     } catch (e) {
       console.error(e);
+      setIsGeneratingWish(false);
     }
-  };
-
-  // 开始陪伴
-  const startSession = async () => {
-    if (!taskName.trim()) return alert("请填写任务名称！");
-    const char = await loadTaCharacter();
-    if (!char) return alert("请先在上方头像处选择 TA 的身份！");
-
-    setSessionState("active");
-    setTimePassed(0);
-    setAiMessage(
-      companionType === "quiet" ? "静静地陪伴着你..." : "（正在酝酿情绪...）",
-    );
-
-    // 开启计时器 (每秒更新)
-    timerRef.current = setInterval(() => {
-      setTimePassed((prev) => prev + 1);
-    }, 1000);
-
-    // 如果是言语陪伴
-    if (companionType === "verbal") {
-      // 立即触发第一次
-      fetchAiMessage(char);
-      // 之后每 5 分钟 (300,000 毫秒) 触发一次
-      aiTimerRef.current = setInterval(() => {
-        fetchAiMessage(char);
-      }, 300000);
-    }
-  };
-
-  // ================== [新增] 任务拆解 AI 调用与处理 ==================
-  const handleGenerateBreakdown = async () => {
-    if (!taskBreakName.trim() || !taskBreakDesc.trim())
-      return alert("请填写任务名称和简介！");
-
-    const taId = localStorage.getItem("t9_ta_character_id");
-    if (!taId) return alert("请先在上方头像处选择 TA 的身份！");
-
-    setIsBreakingDown(true);
-
-    try {
-      // 1. 读取角色设定
-      let allChars = [];
-      if (window.chatCharacterStore)
-        allChars = await window.chatCharacterStore.getAll();
-      else allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
-      const char = allChars.find((c) => String(c.id) === taId);
-      if (!char) {
-        alert("未找到TA的角色配置，请重新选择");
-        setIsBreakingDown(false);
-        return;
-      }
-
-      // 2. 读取上下文(世界书、用户设定)
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "";
-      let userContext = "";
-      const savedPersonas = JSON.parse(
-        localStorage.getItem("user_personas") || "[]",
-      );
-      const activeId = localStorage.getItem("active_persona_id");
-      if (activeId) {
-        const activeUser = savedPersonas.find((p) => p.id == activeId);
-        if (activeUser) {
-          userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "无"}`;
-        }
-      }
-
-      // 3. 构建大模型 Prompt
-      const sysPrompt = "你是一个沉浸式角色扮演AI兼任务拆解助手。";
-      const userPrompt = `
-              ${worldContext}
-              ${userContext}
-              【你的角色设定】姓名:${char.name}, 性格:${char.profile?.personality}, 说话风格:${char.profile?.style}
-
-              【任务名称】${taskBreakName}
-              【任务简介】${taskBreakDesc}
-
-              【指令】
-              请以你的角色设定的口吻，为用户将上述任务拆解为 5 到 10 个具有可执行性的小步骤。
-              要求：
-              1. 语气必须严格符合你的角色设定！
-              2. 拆解步骤要具体、合理、有可执行性，不能天马行空（除非这符合你的性格）。
-              3. 必须输出纯 JSON 格式对象，绝对不要包裹在 \`\`\`json 标记中。
-
-              JSON格式要求如下：
-              {
-                "greeting": "角色在提供拆解前对用户说的一句鼓励、嘲讽或叮嘱的话（符合性格）",
-                "steps": [
-                  { "title": "步骤1的具体描述", "minutes": 10 },
-                  { "title": "步骤2的具体描述", "minutes": 5 }
-                ]
-              }
-            `;
-
-      // 4. 调用 API
-      if (window.sendToLLM) {
-        window.sendToLLM(
-          [
-            { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
-          ],
-          null,
-          (reply) => {
-            try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
-
-              setCurrentBreakdown({
-                id: Date.now(),
-                charName: char.name,
-                taskName: taskBreakName,
-                taskDesc: taskBreakDesc,
-                greeting: data.greeting || "交给我吧。",
-                steps: data.steps.map((s, idx) => ({
-                  ...s,
-                  id: idx,
-                  isDone: false,
-                })),
-                lastStepTime: Date.now(), // 用于防作弊计时
-                status: "ongoing",
-              });
-              setTaskBreakName("");
-              setTaskBreakDesc("");
-            } catch (e) {
-              console.error("拆解解析失败:", e, reply);
-              alert("TA 刚才思绪有些混乱，请重新点击拆解！");
-            } finally {
-              setIsBreakingDown(false);
-            }
-          },
-          (err) => {
-            console.error(err);
-            alert("网络连接受阻，请检查 API 配置。");
-            setIsBreakingDown(false);
-          },
-        );
-      } else {
-        alert("未配置API！");
-        setIsBreakingDown(false);
-      }
-    } catch (e) {
-      console.error(e);
-      setIsBreakingDown(false);
-    }
-  };
-
-  // 处理划掉任务（包含防作弊机制）
-  const handleCompleteStep = (stepId, estimatedMinutes) => {
-    const now = Date.now();
-    const elapsedMinutes = (now - currentBreakdown.lastStepTime) / 60000;
-    // 防作弊判定：实际耗时不能少于 预估时间 - 3 分钟 (最少给 0.1 分钟宽限期)
-    const requiredMinutes = Math.max(0.1, estimatedMinutes - 3);
-
-    if (elapsedMinutes < requiredMinutes) {
-      setTaskFeedback(
-        `你完成得太快了吧！这步估计需要 ${estimatedMinutes} 分钟，不能作弊敷衍哦。`,
-      );
-      setTimeout(() => setTaskFeedback(""), 3500);
-      return;
-    }
-
-    // 标记完成
-    const updatedSteps = currentBreakdown.steps.map((s) =>
-      s.id === stepId ? { ...s, isDone: true } : s,
-    );
-    const isAllDone = updatedSteps.every((s) => s.isDone);
-
-    setTaskFeedback(`${currentBreakdown.charName} 赞叹了一下。`);
-    setTimeout(() => setTaskFeedback(""), 3000);
-
-    const updatedBreakdown = {
-      ...currentBreakdown,
-      steps: updatedSteps,
-      lastStepTime: now, // 重置计时器，为下一条任务计时
-    };
-
-    if (isAllDone) {
-      // 所有任务完成，奖励小花并归档
-      updatedBreakdown.status = "completed";
-      updatedBreakdown.completedAt = new Date().toLocaleString();
-      updatedBreakdown.hasFlower = true;
-
-      setBreakdownHistory([updatedBreakdown, ...breakdownHistory]);
-      setCurrentBreakdown(null);
-      alert(
-        `恭喜！你脚踏实地完成了【${currentBreakdown.taskName}】，获得了一朵小花 🌸！`,
-      );
-    } else {
-      setCurrentBreakdown(updatedBreakdown);
-    }
-  };
-
-  // 放弃当前拆解
-  const handleCancelBreakdown = () => {
-    if (confirm("确定要放弃当前的任务拆解吗？半途而废将无法获得小花哦。")) {
-      const cancelled = {
-        ...currentBreakdown,
-        status: "cancelled",
-        completedAt: new Date().toLocaleString(),
-        hasFlower: false,
-      };
-      setBreakdownHistory([cancelled, ...breakdownHistory]);
-      setCurrentBreakdown(null);
-    }
-  };
-  // ==============================================================
-
-  // 停止/结束陪伴
-  const stopSession = () => {
-    clearInterval(timerRef.current);
-    clearInterval(aiTimerRef.current);
-
-    // 格式化时间
-    const mins = Math.floor(timePassed / 60);
-    const secs = timePassed % 60;
-    const timeStr = mins > 0 ? `${mins}分${secs}秒` : `${secs}秒`;
-
-    const newRecord = {
-      id: Date.now(),
-      charName: taCharacter ? taCharacter.name : "未知",
-      taskName: taskName,
-      timeStr: timeStr,
-      date: new Date().toLocaleString(),
-    };
-
-    const updatedRecords = [newRecord, ...records];
-    setRecords(updatedRecords);
-    localStorage.setItem(
-      "t9_companion_records",
-      JSON.stringify(updatedRecords),
-    );
-
-    setSessionState("summary");
-  };
-
-  const closeCompanion = () => {
-    setShowModal(false);
-    setSessionState("setup");
-    setTaskName("");
-    setDuration(30);
-    setCompanionType("quiet");
-    clearInterval(timerRef.current);
-    clearInterval(aiTimerRef.current);
-  };
-
-  // 格式化当前经过时间
-  const formatPassedTime = (seconds) => {
-    const h = Math.floor(seconds / 3600);
-    const m = Math.floor((seconds % 3600) / 60);
-    const s = seconds % 60;
-    if (h > 0)
-      return `${h.toString().padStart(2, "0")}:${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
-    return `${m.toString().padStart(2, "0")}:${s.toString().padStart(2, "0")}`;
   };
 
   const features = [
-    {
-      title: "与你相伴",
-      icon: "heart-straight",
-      colorClass: "bg-morandi-1",
-    },
-    {
-      title: "任务拆解",
-      icon: "list-checks",
-      colorClass: "bg-morandi-2",
-    },
+    { title: "与你相伴", icon: "heart-straight", colorClass: "bg-morandi-1" },
+    { title: "任务拆解", icon: "list-checks", colorClass: "bg-morandi-2" },
     { title: "共同记账", icon: "coin", colorClass: "bg-morandi-3" },
     { title: "愿望清单", icon: "star", colorClass: "bg-morandi-4" },
     { title: "我问你猜", icon: "question", colorClass: "bg-morandi-5" },
@@ -37707,7 +37598,7 @@ const T9Page = () => {
             {features.map((item, index) => (
               <div
                 key={index}
-                className={index < 4 ? `active-press ${item.colorClass}` : ""}
+                className={index < 5 ? `active-press ${item.colorClass}` : ""}
                 style={{
                   display: "flex",
                   flexDirection: "column",
@@ -37728,9 +37619,11 @@ const T9Page = () => {
                     setShowTaskModal(true);
                   } else if (index === 2) {
                     setShowBillingModal(true);
+                  } else if (index === 3) {
+                    setShowWishlistModal(true);
                   } else if (index === 4) {
                     setShowGuessGame(true);
-                  } else if (index === 3 || index > 4) {
+                  } else {
                     alert("模块升级部署中，敬请期待！");
                   }
                 }}
@@ -37752,7 +37645,7 @@ const T9Page = () => {
                     className={`ph-fill ph-${item.icon}`}
                     style={{
                       fontSize: "22px",
-                      color: index < 4 ? "#8fa99d" : "#ccc",
+                      color: index < 5 ? "#8fa99d" : "#ccc",
                     }}
                   ></i>
                 </div>
@@ -37818,7 +37711,7 @@ const T9Page = () => {
                   color: "#5a5f4d",
                 }}
               >
-                与你相伴
+                与【{taCharacter?.name || "TA"}】相伴
               </h2>
               <button
                 onClick={closeCompanion}
@@ -37927,10 +37820,10 @@ const T9Page = () => {
                   开启陪伴
                 </button>
 
-                {/* 历史记录预览区 */}
+                {/* 专属伴侣历史记录区 */}
                 {records.length > 0 && (
                   <div style={{ marginTop: "30px" }}>
-                    <div className="companion-label">过往相伴记录</div>
+                    <div className="companion-label">与 {taCharacter?.name} 的相伴记录 ({records.length}条)</div>
                     <div
                       className="no-scrollbar"
                       style={{
@@ -38087,14 +37980,9 @@ const T9Page = () => {
                 className="animate-fadeIn"
                 style={{ textAlign: "center", padding: "20px 0" }}
               >
-                <iconify-icon
-                  icon="ph:check-circle-fill"
-                  style={{
-                    fontSize: "60px",
-                    color: "#A8C8BA",
-                    marginBottom: "16px",
-                  }}
-                ></iconify-icon>
+                <div style={{ fontSize: "60px", color: "#A8C8BA", marginBottom: "16px" }}>
+                  <i className="ph-fill ph-check-circle"></i>
+                </div>
                 <h3
                   style={{
                     fontSize: "20px",
@@ -38158,14 +38046,13 @@ const T9Page = () => {
         </>
       )}
 
-      {/* ================== [新增] 任务拆解弹窗 ================== */}
+      {/* ================== 任务拆解弹窗 ================== */}
       {showTaskModal &&
       ReactDOM.createPortal(
-        /* @__PURE__ */ React.createElement(
+        React.createElement(
           React.Fragment,
           null,
-          /* 1. 遮罩层：全屏固定 */
-          /* @__PURE__ */ React.createElement("div", {
+          React.createElement("div", {
             style: {
               position: "fixed",
               top: 0,
@@ -38178,8 +38065,7 @@ const T9Page = () => {
             },
             onClick: () => setShowTaskModal(false),
           }),
-          /* 2. 底部抽屉弹窗：固定贴底，限制最大高度 */
-          /* @__PURE__ */ React.createElement(
+          React.createElement(
             "div",
             {
               className: "no-scrollbar",
@@ -38201,7 +38087,7 @@ const T9Page = () => {
                 animation: "slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)",
               },
             },
-            /* @__PURE__ */ React.createElement(
+            React.createElement(
               "div",
               {
                 style: {
@@ -38211,7 +38097,7 @@ const T9Page = () => {
                   marginBottom: "20px",
                 },
               },
-              /* @__PURE__ */ React.createElement(
+              React.createElement(
                 "h2",
                 {
                   style: {
@@ -38223,13 +38109,13 @@ const T9Page = () => {
                     gap: "6px",
                   },
                 },
-                /* @__PURE__ */ React.createElement("i", {
+                React.createElement("i", {
                   className: "ph-fill ph-list-checks",
                   style: { color: "#8fa99d" },
                 }),
-                "任务拆解",
+                `与 ${taCharacter?.name || "TA"} 的任务拆解`,
               ),
-              /* @__PURE__ */ React.createElement(
+              React.createElement(
                 "button",
                 {
                   onClick: () => setShowTaskModal(false),
@@ -38245,7 +38131,7 @@ const T9Page = () => {
               ),
             ),
             taskFeedback &&
-              /* @__PURE__ */ React.createElement(
+              React.createElement(
                 "div",
                 {
                   style: {
@@ -38262,21 +38148,21 @@ const T9Page = () => {
                 taskFeedback,
               ),
             !currentBreakdown
-              ? /* @__PURE__ */ React.createElement(
+              ? React.createElement(
                   "div",
                   {
                     className:
                       "animate-fadeIn bg-white p-5 rounded-3xl shadow-sm border border-[#EAE6D6]",
                   },
-                  /* @__PURE__ */ React.createElement(
+                  React.createElement(
                     "div",
                     { className: "companion-form-group" },
-                    /* @__PURE__ */ React.createElement(
+                    React.createElement(
                       "label",
                       { className: "companion-label" },
                       "任务名称",
                     ),
-                    /* @__PURE__ */ React.createElement("input", {
+                    React.createElement("input", {
                       type: "text",
                       className: "companion-input",
                       style: { background: "#F9F7F5" },
@@ -38285,15 +38171,15 @@ const T9Page = () => {
                       onChange: (e) => setTaskBreakName(e.target.value),
                     }),
                   ),
-                  /* @__PURE__ */ React.createElement(
+                  React.createElement(
                     "div",
                     { className: "companion-form-group" },
-                    /* @__PURE__ */ React.createElement(
+                    React.createElement(
                       "label",
                       { className: "companion-label" },
                       "任务简介",
                     ),
-                    /* @__PURE__ */ React.createElement("textarea", {
+                    React.createElement("textarea", {
                       className: "companion-input",
                       style: {
                         background: "#F9F7F5",
@@ -38301,12 +38187,12 @@ const T9Page = () => {
                         resize: "none",
                       },
                       placeholder:
-                        "简要描述一下情况，方便 TA 帮你拆解...",
+                        `简要描述一下情况，方便 ${taCharacter?.name || "TA"} 帮你拆解...`,
                       value: taskBreakDesc,
                       onChange: (e) => setTaskBreakDesc(e.target.value),
                     }),
                   ),
-                  /* @__PURE__ */ React.createElement(
+                  React.createElement(
                     "button",
                     {
                       onClick: handleGenerateBreakdown,
@@ -38330,15 +38216,14 @@ const T9Page = () => {
                       className: "active-press",
                     },
                     isBreakingDown
-                      ? "TA 正在筹划中..."
-                      : "呼叫 TA 拆解",
+                      ? `${taCharacter?.name || "TA"} 正在筹划中...`
+                      : `呼叫 ${taCharacter?.name || "TA"} 拆解`,
                   ),
                 )
-              : /* 正在进行的任务面板 */
-                /* @__PURE__ */ React.createElement(
+              : React.createElement(
                   "div",
                   { className: "animate-fadeIn" },
-                  /* @__PURE__ */ React.createElement(
+                  React.createElement(
                     "div",
                     {
                       style: {
@@ -38349,7 +38234,7 @@ const T9Page = () => {
                         border: "1px solid #A8C8BA",
                       },
                     },
-                    /* @__PURE__ */ React.createElement(
+                    React.createElement(
                       "div",
                       {
                         style: {
@@ -38361,7 +38246,7 @@ const T9Page = () => {
                       },
                       currentBreakdown.taskName,
                     ),
-                    /* @__PURE__ */ React.createElement(
+                    React.createElement(
                       "div",
                       {
                         style: {
@@ -38379,7 +38264,7 @@ const T9Page = () => {
                       currentBreakdown.charName,
                     ),
                   ),
-                  /* @__PURE__ */ React.createElement(
+                  React.createElement(
                     "div",
                     {
                       style: {
@@ -38392,7 +38277,7 @@ const T9Page = () => {
                       className: "no-scrollbar",
                     },
                     currentBreakdown.steps.map((step) =>
-                      /* @__PURE__ */ React.createElement(
+                      React.createElement(
                         "div",
                         {
                           key: step.id,
@@ -38414,7 +38299,7 @@ const T9Page = () => {
                           },
                           className: !step.isDone ? "active-press" : "",
                         },
-                        /* @__PURE__ */ React.createElement(
+                        React.createElement(
                           "div",
                           {
                             style: {
@@ -38429,7 +38314,7 @@ const T9Page = () => {
                           },
                           step.title,
                         ),
-                        /* @__PURE__ */ React.createElement(
+                        React.createElement(
                           "div",
                           {
                             style: {
@@ -38448,7 +38333,7 @@ const T9Page = () => {
                       ),
                     ),
                   ),
-                  /* @__PURE__ */ React.createElement(
+                  React.createElement(
                     "button",
                     {
                       onClick: handleCancelBreakdown,
@@ -38467,11 +38352,10 @@ const T9Page = () => {
                     "放弃该任务",
                   ),
                 ),
-            /* 归档履历 */
-            /* @__PURE__ */ React.createElement(
+            React.createElement(
               "div",
               { style: { marginTop: "30px" } },
-              /* @__PURE__ */ React.createElement(
+              React.createElement(
                 "div",
                 {
                   style: {
@@ -38481,10 +38365,10 @@ const T9Page = () => {
                     marginBottom: "12px",
                   },
                 },
-                "归档履历",
+                `与 ${taCharacter?.name || "TA"} 的归档履历`,
               ),
               breakdownHistory.length === 0
-                ? /* @__PURE__ */ React.createElement(
+                ? React.createElement(
                     "div",
                     {
                       style: {
@@ -38496,7 +38380,7 @@ const T9Page = () => {
                     },
                     "尚未有任何拆解记录",
                   )
-                : /* @__PURE__ */ React.createElement(
+                : React.createElement(
                     "div",
                     {
                       style: {
@@ -38509,7 +38393,7 @@ const T9Page = () => {
                       className: "no-scrollbar",
                     },
                     breakdownHistory.map((record) =>
-                      /* @__PURE__ */ React.createElement(
+                      React.createElement(
                         "div",
                         {
                           key: record.id,
@@ -38525,10 +38409,10 @@ const T9Page = () => {
                             alignItems: "center",
                           },
                         },
-                        /* @__PURE__ */ React.createElement(
+                        React.createElement(
                           "div",
                           null,
-                          /* @__PURE__ */ React.createElement(
+                          React.createElement(
                             "div",
                             {
                               style: {
@@ -38540,7 +38424,7 @@ const T9Page = () => {
                             },
                             record.taskName,
                           ),
-                          /* @__PURE__ */ React.createElement(
+                          React.createElement(
                             "div",
                             { style: { fontSize: "11px", color: "#999" } },
                             record.charName,
@@ -38549,12 +38433,12 @@ const T9Page = () => {
                           ),
                         ),
                         record.hasFlower
-                          ? /* @__PURE__ */ React.createElement(
+                          ? React.createElement(
                               "div",
                               { style: { fontSize: "24px" } },
                               "🌸",
                             )
-                          : /* @__PURE__ */ React.createElement(
+                          : React.createElement(
                               "div",
                               { style: { fontSize: "12px", color: "#ccc" } },
                               "已放弃",
@@ -38567,9 +38451,8 @@ const T9Page = () => {
         ),
         document.body,
       )}
-      {/* ================== [结束] 任务拆解弹窗 ================== */}
 
-      {/* ================== [新增] 共同记账弹窗 ================== */}
+      {/* ================== 共同记账弹窗 ================== */}
       {showBillingModal && (
         <>
           <div
@@ -38618,7 +38501,7 @@ const T9Page = () => {
                 }}
               >
                 <i className="ph-fill ph-coin" style={{ color: "#d6724b" }}></i>
-                共同记账
+                共同记账 ({taCharacter?.name || "TA"})
               </h2>
               <button
                 onClick={() => setShowBillingModal(false)}
@@ -38745,7 +38628,7 @@ const T9Page = () => {
               </button>
             </div>
 
-            {/* 全包裹白底卡片容器 */}
+            {/* 卡片容器 */}
             <div
               style={{
                 flex: 1,
@@ -38761,7 +38644,6 @@ const T9Page = () => {
               }}
             >
               {billingViewTab === "user" ? (
-                /* ================= 用户账本 (我的账本) ================= */
                 <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
                   <div
                     style={{
@@ -38782,7 +38664,6 @@ const T9Page = () => {
                     </span>
                   </div>
 
-                  {/* 收支统计小卡片 */}
                   <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexShrink: 0 }}>
                     <div
                       style={{
@@ -38794,12 +38675,8 @@ const T9Page = () => {
                         border: "1px solid rgba(214,114,75,0.15)",
                       }}
                     >
-                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>
-                        总支出
-                      </div>
-                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#D6724B" }}>
-                        ¥{userExpense}
-                      </div>
+                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>总支出</div>
+                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#D6724B" }}>¥{userExpense}</div>
                     </div>
                     <div
                       style={{
@@ -38811,16 +38688,11 @@ const T9Page = () => {
                         border: "1px solid rgba(90,143,109,0.15)",
                       }}
                     >
-                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>
-                        总收入
-                      </div>
-                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#5A8F6D" }}>
-                        ¥{userIncome}
-                      </div>
+                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>总收入</div>
+                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#5A8F6D" }}>¥{userIncome}</div>
                     </div>
                   </div>
 
-                  {/* 账单列表容器 - 纯内部滚动，彻底防止溢出 */}
                   <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "4px" }}>
                     {userBills.length === 0 ? (
                       <div
@@ -38851,12 +38723,8 @@ const T9Page = () => {
                           }}
                         >
                           <div>
-                            <div style={{ color: "#5a5f4d", fontSize: "14px", fontWeight: "500" }}>
-                              {b.category}
-                            </div>
-                            <div style={{ fontSize: "11px", color: "#aaa", marginTop: "2px" }}>
-                              {b.date}
-                            </div>
+                            <div style={{ color: "#5a5f4d", fontSize: "14px", fontWeight: "500" }}>{b.category}</div>
+                            <div style={{ fontSize: "11px", color: "#aaa", marginTop: "2px" }}>{b.date}</div>
                           </div>
                           <span
                             style={{
@@ -38873,7 +38741,6 @@ const T9Page = () => {
                   </div>
                 </div>
               ) : (
-                /* ================= TA的账本 ================= */
                 <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
                   <div
                     style={{
@@ -38894,7 +38761,6 @@ const T9Page = () => {
                     </span>
                   </div>
 
-                  {/* 收支统计小卡片 */}
                   <div style={{ display: "flex", gap: "10px", marginBottom: "10px", flexShrink: 0 }}>
                     <div
                       style={{
@@ -38906,12 +38772,8 @@ const T9Page = () => {
                         border: "1px solid rgba(214,114,75,0.15)",
                       }}
                     >
-                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>
-                        TA的支出
-                      </div>
-                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#D6724B" }}>
-                        ¥{taExpense}
-                      </div>
+                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>TA的支出</div>
+                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#D6724B" }}>¥{taExpense}</div>
                     </div>
                     <div
                       style={{
@@ -38923,16 +38785,11 @@ const T9Page = () => {
                         border: "1px solid rgba(90,143,109,0.15)",
                       }}
                     >
-                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>
-                        TA的收入
-                      </div>
-                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#5A8F6D" }}>
-                        ¥{taIncome}
-                      </div>
+                      <div style={{ fontSize: "11px", color: "#8c917b", marginBottom: "2px" }}>TA的收入</div>
+                      <div style={{ fontSize: "17px", fontWeight: "bold", color: "#5A8F6D" }}>¥{taIncome}</div>
                     </div>
                   </div>
 
-                  {/* 账单列表容器 - 纯内部滚动 */}
                   <div className="no-scrollbar" style={{ flex: 1, minHeight: 0, overflowY: "auto", paddingRight: "4px" }}>
                     {taBills.length === 0 ? (
                       <div
@@ -38965,12 +38822,8 @@ const T9Page = () => {
                           }}
                         >
                           <div>
-                            <div style={{ color: "#5a5f4d", fontSize: "14px", fontWeight: "500" }}>
-                              {b.category}
-                            </div>
-                            <div style={{ fontSize: "11px", color: "#aaa", marginTop: "2px" }}>
-                              {b.date}
-                            </div>
+                            <div style={{ color: "#5a5f4d", fontSize: "14px", fontWeight: "500" }}>{b.category}</div>
+                            <div style={{ fontSize: "11px", color: "#aaa", marginTop: "2px" }}>{b.date}</div>
                           </div>
                           <span
                             style={{
@@ -38989,7 +38842,6 @@ const T9Page = () => {
               )}
             </div>
 
-            {/* 底部固定操作按钮 - 稳固停靠在卡片下方，从不穿插遮挡 */}
             <div style={{ display: "flex", gap: "12px", marginTop: "14px", flexShrink: 0 }}>
               <button
                 onClick={() => {
@@ -39026,8 +38878,6 @@ const T9Page = () => {
                   borderRadius: "16px",
                   background: isGeneratingTaBills
                     ? "#ccc"
-                    : billingViewTab === "user"
-                    ? "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)"
                     : "#8FA99D",
                   color: "white",
                   fontSize: "15px",
@@ -39059,7 +38909,6 @@ const T9Page = () => {
         </>
       )}
 
-      
       {/* 记一笔表单弹窗 */}
       {showAddBillModal && (
         <>
@@ -39126,7 +38975,6 @@ const T9Page = () => {
               </button>
             </div>
 
-            {/* 收支类型切换 */}
             <div
               style={{
                 display: "flex",
@@ -39172,11 +39020,8 @@ const T9Page = () => {
               </button>
             </div>
 
-            {/* 常用分类快捷标签 */}
             <div style={{ marginBottom: "16px" }}>
-              <div style={{ fontSize: "12px", color: "#8c917b", marginBottom: "8px" }}>
-                常用分类
-              </div>
+              <div style={{ fontSize: "12px", color: "#8c917b", marginBottom: "8px" }}>常用分类</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: "8px" }}>
                 {(newBill.type === "expense"
                   ? ["餐饮", "日用", "服饰", "文房", "礼物", "出行", "其他"]
@@ -39204,11 +39049,8 @@ const T9Page = () => {
               </div>
             </div>
 
-            {/* 自定义类别输入 */}
             <div style={{ marginBottom: "14px" }}>
-              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>
-                分类名称
-              </label>
+              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>分类名称</label>
               <input
                 type="text"
                 value={newBill.category}
@@ -39228,11 +39070,8 @@ const T9Page = () => {
               />
             </div>
 
-            {/* 金额输入 */}
             <div style={{ marginBottom: "14px" }}>
-              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>
-                金额 (¥)
-              </label>
+              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>金额 (¥)</label>
               <input
                 type="number"
                 step="0.01"
@@ -39254,11 +39093,8 @@ const T9Page = () => {
               />
             </div>
 
-            {/* 日期选择 */}
             <div style={{ marginBottom: "20px" }}>
-              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>
-                日期
-              </label>
+              <label style={{ display: "block", fontSize: "12px", color: "#8c917b", marginBottom: "6px" }}>日期</label>
               <input
                 type="date"
                 value={newBill.date}
@@ -39277,7 +39113,6 @@ const T9Page = () => {
               />
             </div>
 
-            {/* 保存操作按钮 */}
             <div style={{ display: "flex", gap: "10px" }}>
               <button
                 onClick={() => setShowAddBillModal(false)}
@@ -39318,7 +39153,7 @@ const T9Page = () => {
         </>
       )}
 
-      {/* 我问你猜弹窗 */}
+      {/* ================== 我问你猜弹窗 ================== */}
       {showGuessGame && (
         <>
           <div
@@ -39368,19 +39203,10 @@ const T9Page = () => {
                   gap: "6px",
                 }}
               >
-                <iconify-icon
-                  icon="ph:question-fill"
-                  style={{ color: "#8fa99d" }}
-                ></iconify-icon>
-                我问你猜 - 第 {guessState.round} 轮
+                <i className="ph-fill ph-question" style={{ color: "#8fa99d" }}></i>
+                我问你猜 - 与 {taCharacter?.name} (第 {guessState.round} 轮)
               </h2>
-              <div
-                style={{
-                  display: "flex",
-                  gap: "10px",
-                  alignItems: "center",
-                }}
-              >
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                 <button
                   onClick={() => setShowScoreBoard(!showScoreBoard)}
                   style={{
@@ -39426,35 +39252,13 @@ const T9Page = () => {
                 }}
               >
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "12px", color: "#8C917B" }}>
-                    {taCharacter?.name}
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "24px",
-                      fontWeight: "bold",
-                      color: "#D6724B",
-                      fontFamily: "Fredoka",
-                    }}
-                  >
-                    {guessState.charScore}
-                  </div>
+                  <div style={{ fontSize: "12px", color: "#8C917B" }}>{taCharacter?.name}</div>
+                  <div style={{ fontSize: "24px", fontWeight: "bold", color: "#D6724B" }}>{guessState.charScore}</div>
                 </div>
                 <div style={{ width: "1px", background: "#EAEAEA" }}></div>
                 <div style={{ textAlign: "center" }}>
-                  <div style={{ fontSize: "12px", color: "#8C917B" }}>
-                    我 ({mePersona?.name || "玩家"})
-                  </div>
-                  <div
-                    style={{
-                      fontSize: "24px",
-                      fontWeight: "bold",
-                      color: "#5A8F6D",
-                      fontFamily: "Fredoka",
-                    }}
-                  >
-                    {guessState.userScore}
-                  </div>
+                  <div style={{ fontSize: "12px", color: "#8C917B" }}>我 ({mePersona?.name || "玩家"})</div>
+                  <div style={{ fontSize: "24px", fontWeight: "bold", color: "#5A8F6D" }}>{guessState.userScore}</div>
                 </div>
               </div>
             )}
@@ -39470,17 +39274,8 @@ const T9Page = () => {
                 marginBottom: "16px",
               }}
             >
-              <div
-                style={{
-                  fontSize: "12px",
-                  color: "#8C917B",
-                  marginBottom: "8px",
-                  fontWeight: "bold",
-                }}
-              >
-                {guessState.turn === "char"
-                  ? `【提问者】: ${taCharacter?.name}`
-                  : `【提问者】: 我`}
+              <div style={{ fontSize: "12px", color: "#8C917B", marginBottom: "8px", fontWeight: "bold" }}>
+                {guessState.turn === "char" ? `【提问者】: ${taCharacter?.name}` : `【提问者】: 我`}
               </div>
               <div
                 className="no-scrollbar"
@@ -39495,17 +39290,12 @@ const T9Page = () => {
                   paddingBottom: "35px",
                 }}
               >
-                {guessState.status === "idle" &&
-                  guessState.turn === "char" &&
-                  "等待对方出题..."}
-                {guessState.status === "idle" &&
-                  guessState.turn === "user" &&
-                  "请在下方输入您的问题..."}
+                {guessState.status === "idle" && guessState.turn === "char" && "等待对方出题..."}
+                {guessState.status === "idle" && guessState.turn === "user" && "请在下方输入您的问题..."}
                 {guessState.question}
               </div>
               {guessState.turn === "char" &&
-                (guessState.status === "idle" ||
-                  guessState.status === "asking") && (
+                (guessState.status === "idle" || guessState.status === "asking") && (
                   <button
                     onClick={handleGenerateGuessQuestion}
                     disabled={isGuessGenerating}
@@ -39525,26 +39315,19 @@ const T9Page = () => {
                       boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
                     }}
                   >
-                    <iconify-icon
-                      icon={
+                    <i
+                      className={
                         isGuessGenerating
-                          ? "line-md:loading-twotone-loop"
-                          : "ph:arrows-clockwise-bold"
+                          ? "ph ph-spinner animate-spin"
+                          : "ph ph-arrows-clockwise"
                       }
                       style={{ color: "#8FA99D", fontSize: "18px" }}
-                    ></iconify-icon>
+                    ></i>
                   </button>
                 )}
             </div>
 
-            <div
-              style={{
-                flex: 1,
-                minHeight: "150px",
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
+            <div style={{ flex: 1, minHeight: "150px", display: "flex", flexDirection: "column" }}>
               {guessState.status === "judged" ? (
                 <div
                   style={{
@@ -39555,34 +39338,18 @@ const T9Page = () => {
                     animation: "popIn 0.3s",
                   }}
                 >
-                  <div
-                    style={{
-                      fontSize: "12px",
-                      color: "#D6724B",
-                      fontWeight: "bold",
-                      marginBottom: "8px",
-                    }}
-                  >
+                  <div style={{ fontSize: "12px", color: "#D6724B", fontWeight: "bold", marginBottom: "8px" }}>
                     {guessState.turn === "char"
                       ? `我的回答：${guessState.answer}`
                       : `${taCharacter?.name}的回答：${guessState.answer}`}
                   </div>
-                  <div
-                    style={{
-                      fontSize: "14px",
-                      color: "#5A5F4D",
-                      lineHeight: "1.5",
-                    }}
-                  >
-                    {guessState.turn === "char"
-                      ? `【TA的评价】: ${guessState.feedback}`
-                      : "请判定对方的回答是否正确："}
+                  <div style={{ fontSize: "14px", color: "#5A5F4D", lineHeight: "1.5" }}>
+                    {guessState.turn === "char" ? `【TA的评价】: ${guessState.feedback}` : "请判定对方的回答是否正确："}
                   </div>
                 </div>
               ) : (
                 <>
-                  {guessState.turn === "user" &&
-                  guessState.status === "idle" ? (
+                  {guessState.turn === "user" && guessState.status === "idle" ? (
                     <textarea
                       value={guessInput}
                       onChange={(e) => setGuessInput(e.target.value)}
@@ -39599,8 +39366,7 @@ const T9Page = () => {
                         color: "#5A5F4D",
                       }}
                     />
-                  ) : guessState.turn === "char" &&
-                    guessState.status === "asking" ? (
+                  ) : guessState.turn === "char" && guessState.status === "asking" ? (
                     <textarea
                       value={guessInput}
                       onChange={(e) => setGuessInput(e.target.value)}
@@ -39635,69 +39401,14 @@ const T9Page = () => {
               )}
             </div>
 
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginTop: "20px",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    borderRadius: "50%",
-                    background: taCharacter?.avatarColor || "#D6724B",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                    color: "white",
-                    fontWeight: "bold",
-                    border:
-                      guessState.turn === "char"
-                        ? "2px solid #8FA99D"
-                        : "2px solid transparent",
-                  }}
-                >
-                  {taCharacter?.avatar ? (
-                    typeof taCharacter.avatar === "string" &&
-                    taCharacter.avatar.startsWith("data:image") ? (
-                      <img
-                        src={taCharacter.avatar}
-                        style={{
-                          width: "100%",
-                          height: "100%",
-                          objectFit: "cover",
-                        }}
-                      />
-                    ) : (
-                      <T8AvatarLoader
-                        avatarId={taCharacter.avatar}
-                        fallbackColor={taCharacter?.avatarColor || "#D6724B"}
-                      />
-                    )
-                  ) : (
-                    taCharacter?.name[0]
-                  )}
-                </div>
-                <span style={{ fontSize: "10px", color: "#8C917B" }}>
-                  {taCharacter?.name}
-                </span>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "20px" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                <WaterMirrorAvatar avatar={taCharacter?.avatar} name={taCharacter?.name} size={40} />
+                <span style={{ fontSize: "10px", color: "#8C917B" }}>{taCharacter?.name}</span>
               </div>
 
               <div style={{ flex: 1, padding: "0 15px" }}>
-                {guessState.status === "judged" &&
-                guessState.turn === "char" ? (
+                {guessState.status === "judged" && guessState.turn === "char" ? (
                   <button
                     onClick={() => handleNextTurn()}
                     className="active-press"
@@ -39705,19 +39416,16 @@ const T9Page = () => {
                       width: "100%",
                       padding: "12px",
                       borderRadius: "20px",
-                      background:
-                        "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                      background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
                       color: "#FFF",
                       border: "none",
                       fontWeight: "bold",
                       fontSize: "14px",
-                      boxShadow: "0 4px 10px rgba(168, 200, 186, 0.3)",
                     }}
                   >
                     下一回合：轮到我提问
                   </button>
-                ) : guessState.status === "judged" &&
-                  guessState.turn === "user" ? (
+                ) : guessState.status === "judged" && guessState.turn === "user" ? (
                   <div style={{ display: "flex", gap: "10px" }}>
                     <button
                       onClick={() => handleNextTurn(false)}
@@ -39762,8 +39470,7 @@ const T9Page = () => {
                     disabled={
                       isGuessGenerating ||
                       !guessInput.trim() ||
-                      (guessState.turn === "char" &&
-                        guessState.status === "idle")
+                      (guessState.turn === "char" && guessState.status === "idle")
                     }
                     className="active-press"
                     style={{
@@ -39778,10 +39485,6 @@ const T9Page = () => {
                       border: "none",
                       fontWeight: "bold",
                       fontSize: "14px",
-                      boxShadow:
-                        isGuessGenerating || !guessInput.trim()
-                          ? "none"
-                          : "0 4px 10px rgba(214,114,75,0.3)",
                     }}
                   >
                     {isGuessGenerating
@@ -39793,60 +39496,235 @@ const T9Page = () => {
                 )}
               </div>
 
-              <div
-                style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "4px",
-                }}
-              >
-                <div
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    borderRadius: "50%",
-                    background:
-                      mePersona?.avatarColor ||
-                      mePersona?.avatarBg ||
-                      "#8FA99D",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    overflow: "hidden",
-                    color: "white",
-                    fontWeight: "bold",
-                    border:
-                      guessState.turn === "user"
-                        ? "2px solid #D6724B"
-                        : "2px solid transparent",
-                  }}
-                >
-                  {mePersona?.avatar ? (
-                    <img
-                      src={mePersona.avatar}
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  ) : (
-                    mePersona?.name[0] || "我"
-                  )}
-                </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                <WaterMirrorAvatar avatar={mePersona?.avatar} name={mePersona?.name || "我"} size={40} />
                 <span style={{ fontSize: "10px", color: "#8C917B" }}>我</span>
               </div>
             </div>
           </div>
         </>
       )}
-      {/* ================== [结束] 我问你猜互动弹窗 ================== */}
+
+      {/* ================== 愿望清单弹窗 ================== */}
+      {showWishlistModal && (
+        <>
+          <div
+            className="t9-companion-mask"
+            onClick={() => setShowWishlistModal(false)}
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              zIndex: 1000,
+              backdropFilter: "blur(2px)",
+            }}
+          ></div>
+          <div
+            className="t9-companion-modal no-scrollbar"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "85vh",
+              overflowY: "auto",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              padding: "24px",
+              zIndex: 1001,
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
+              animation: "slideUp 0.3s ease-out",
+              background: "#FDFCF8",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "18px",
+                  fontWeight: "bold",
+                  color: "#5a5f4d",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  margin: 0,
+                }}
+              >
+                <i className="ph-fill ph-star" style={{ color: "#E8C3A8" }}></i>
+                与 {taCharacter?.name} 的愿望清单 ({wishlist.length}条)
+              </h2>
+              <button
+                onClick={() => setShowWishlistModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  fontSize: "24px",
+                  color: "#999",
+                  cursor: "pointer",
+                }}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* 新增愿望输入栏 */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+              <input
+                type="text"
+                value={newWishInput}
+                onChange={(e) => setNewWishInput(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && handleAddWish()}
+                placeholder={`写下想与 ${taCharacter?.name} 一起做的事...`}
+                style={{
+                  flex: 1,
+                  padding: "10px 14px",
+                  borderRadius: "14px",
+                  border: "1px solid #EAE6D6",
+                  background: "#F9F7F5",
+                  fontSize: "13.5px",
+                  outline: "none",
+                }}
+              />
+              <button
+                onClick={handleAddWish}
+                disabled={!newWishInput.trim()}
+                style={{
+                  padding: "10px 16px",
+                  borderRadius: "14px",
+                  border: "none",
+                  background: newWishInput.trim() ? "#8FA99D" : "#CCC",
+                  color: "#FFF",
+                  fontWeight: "bold",
+                  fontSize: "13px",
+                  cursor: newWishInput.trim() ? "pointer" : "default",
+                }}
+              >
+                许愿
+              </button>
+            </div>
+
+            {/* AI 灵感生成按钮 */}
+            <button
+              onClick={handleGenerateAiWish}
+              disabled={isGeneratingWish}
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "14px",
+                border: "1px dashed #E8C3A8",
+                background: "#FFF9F5",
+                color: "#D6724B",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: isGeneratingWish ? "not-allowed" : "pointer",
+                marginBottom: "16px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+              }}
+            >
+              <i className={isGeneratingWish ? "ph ph-spinner animate-spin" : "ph-fill ph-sparkle"}></i>
+              {isGeneratingWish ? "正在倾听TA的心愿..." : `让 ${taCharacter?.name} 提一个心愿`}
+            </button>
+
+            {/* 愿望列表 */}
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", maxHeight: "300px", overflowY: "auto" }}>
+              {wishlist.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "30px", color: "#BBB", fontSize: "13px" }}>
+                  暂无愿望，快写下你们的第一个浪漫约定吧～
+                </div>
+              ) : (
+                wishlist.map((wish) => (
+                  <div
+                    key={wish.id}
+                    style={{
+                      background: wish.done ? "#F2F7F4" : "#FFFFFF",
+                      borderRadius: "14px",
+                      padding: "12px 14px",
+                      border: wish.done ? "1px solid #A8C8BA" : "1px solid #EAE6D6",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "10px",
+                    }}
+                  >
+                    <div
+                      onClick={() => handleToggleWish(wish.id)}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "10px",
+                        flex: 1,
+                        cursor: "pointer",
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: "22px",
+                          height: "22px",
+                          borderRadius: "50%",
+                          border: wish.done ? "none" : "2px solid #C4B7A6",
+                          background: wish.done ? "#5A8F6D" : "transparent",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          color: "#FFF",
+                          fontSize: "12px",
+                          flexShrink: 0,
+                        }}
+                      >
+                        {wish.done && <i className="ph-bold ph-check"></i>}
+                      </div>
+                      <div>
+                        <div
+                          style={{
+                            fontSize: "13.5px",
+                            fontWeight: "600",
+                            color: wish.done ? "#8FA99D" : "#5a5f4d",
+                            textDecoration: wish.done ? "line-through" : "none",
+                          }}
+                        >
+                          {wish.text}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#AAA", marginTop: "2px" }}>
+                          {wish.date}
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => handleDeleteWish(wish.id)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        color: "#CCC",
+                        fontSize: "16px",
+                        cursor: "pointer",
+                        padding: "4px",
+                      }}
+                    >
+                      <i className="ph ph-trash"></i>
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </>
+      )}
     </>
   );
 };
 
 // ==================== T9 组件群结束 ====================
+
 
 // ==================== T13 休闲一刻/游戏组件群 (移至 MasterApp 外部以修复重置问题) ====================
 
