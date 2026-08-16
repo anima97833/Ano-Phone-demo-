@@ -81569,6 +81569,1585 @@ const AIBookRecommender = ({ books, onConfirm }) => {
   );
 };
 
+// ==================== 强鲁棒性 LLM JSON 清洗与解析器 ====================
+const robustParseLLMJSON = (text) => {
+  if (!text || typeof text !== "string") return null;
+
+  // 1. 去除 Markdown 代码块标记
+  let clean = text.replace(/```(?:json)?/gi, "").replace(/```/g, "").trim();
+
+  // 2. 提取首个 [ 或 { 到 最后一个 ] 或 }
+  const firstBrace = clean.indexOf("{");
+  const firstBracket = clean.indexOf("[");
+  let startIdx = -1;
+  let endIdx = -1;
+
+  if (firstBrace !== -1 && (firstBracket === -1 || firstBrace < firstBracket)) {
+    startIdx = firstBrace;
+    endIdx = clean.lastIndexOf("}");
+  } else if (firstBracket !== -1) {
+    startIdx = firstBracket;
+    endIdx = clean.lastIndexOf("]");
+  }
+
+  if (startIdx !== -1 && endIdx !== -1 && endIdx > startIdx) {
+    clean = clean.slice(startIdx, endIdx + 1);
+  }
+
+  // 3. 首次尝试原生解析
+  try {
+    return JSON.parse(clean);
+  } catch (e1) {
+    // 4. 清洗字符串内部的非法未转义控制字符（如真实换行符）
+    try {
+      let inString = false;
+      let isEscaped = false;
+      let sanitized = "";
+
+      for (let i = 0; i < clean.length; i++) {
+        const char = clean[i];
+
+        if (char === '"' && !isEscaped) {
+          inString = !inString;
+          sanitized += char;
+        } else if (inString) {
+          if (char === '\n') {
+            sanitized += '\\n';
+          } else if (char === '\r') {
+            // 忽略回车
+          } else if (char === '\t') {
+            sanitized += '\\t';
+          } else if (char.charCodeAt(0) < 32) {
+            sanitized += ' ';
+          } else {
+            sanitized += char;
+          }
+        } else {
+          sanitized += char;
+        }
+
+        if (char === '\\' && !isEscaped) {
+          isEscaped = true;
+        } else {
+          isEscaped = false;
+        }
+      }
+
+      return JSON.parse(sanitized);
+    } catch (e2) {
+      console.warn("二次清洗JSON依然失败，尝试正则兜底提取:", e2);
+
+      // 5. 兜底提取对象字段
+      const titleMatch = clean.match(/"title"\s*:\s*"([^"]+)"/);
+      const authorMatch = clean.match(/"authorName"\s*:\s*"([^"]+)"/);
+      const targetCharMatch = clean.match(/"targetCharacter"\s*:\s*"([^"]+)"/);
+      const summaryMatch = clean.match(/"summary"\s*:\s*"([^"]+)"/);
+      const quoteMatch = clean.match(/"highlightQuote"\s*:\s*"([^"]+)"/);
+
+      let fullText = "";
+      const fullTextMatch = clean.match(/"fullText"\s*:\s*"([\s\S]*?)"\s*(?:,|\})/);
+      if (fullTextMatch) {
+        fullText = fullTextMatch[1].replace(/\\n/g, "\n");
+      } else {
+        const fullTextStart = clean.indexOf('"fullText"');
+        if (fullTextStart !== -1) {
+          const colonQuote = clean.indexOf('"', clean.indexOf(':', fullTextStart) + 1);
+          if (colonQuote !== -1) {
+            fullText = clean.slice(colonQuote + 1).replace(/"?\s*\}?\s*$/, "").trim();
+          }
+        }
+      }
+
+      if (titleMatch || fullText) {
+        return {
+          id: "comm_" + Date.now(),
+          title: titleMatch ? titleMatch[1] : "定制佳作",
+          authorName: authorMatch ? authorMatch[1] : "当代名家",
+          targetCharacter: targetCharMatch ? targetCharMatch[1] : "故人",
+          summary: summaryMatch ? summaryMatch[1] : (fullText.slice(0, 50) + "..."),
+          highlightQuote: quoteMatch ? quoteMatch[1] : "",
+          fullText: fullText || clean,
+          wordCount: "约500字",
+          tags: ["独家约稿", "名家执笔"],
+          commissionDate: new Date().toLocaleDateString(),
+        };
+      }
+
+      throw e2;
+    }
+  }
+};
+
+// ==================== 心仪艺术家排行榜与作家书评组件 (轻量分步按需生成版) ====================
+
+const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission }) => {
+  const [activeCategory, setActiveCategory] = React.useState("全部");
+  const [activeTimeframe, setActiveTimeframe] = React.useState("日榜");
+  const [selectedArtist, setSelectedArtist] = React.useState(null);
+  const [artists, setArtists] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(false);
+  const [loadingText, setLoadingText] = React.useState("正在排定天机榜...");
+  
+  // 书评加载状态
+  const [isLoadingComments, setIsLoadingComments] = React.useState(false);
+  
+  // 用户新增书评输入
+  const [userCommentText, setUserCommentText] = React.useState("");
+  const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
+  const [likedComments, setLikedComments] = React.useState({});
+
+  const categories = ["全部", "言情", "悬疑", "志怪仙侠", "历史权谋", "百家杂谈"];
+  const timeframes = ["日榜", "周榜", "月榜"];
+
+  // 读取缓存
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const cacheKey = `reader_artist_ranking_data_${activeTimeframe}`;
+    const cached = localStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setArtists(parsed);
+          return;
+        }
+      } catch (e) {}
+    }
+    generateArtistRanking(activeTimeframe);
+  }, [isOpen, activeTimeframe]);
+
+  const toggleLike = (commentId) => {
+    setLikedComments((prev) => ({
+      ...prev,
+      [commentId]: !prev[commentId],
+    }));
+  };
+
+  // 获取精简世界书上下文
+  const getCleanWorldContext = async () => {
+    try {
+      if (window.getWorldBookContext) {
+        const fullContext = await window.getWorldBookContext();
+        if (fullContext && fullContext.trim()) {
+          return fullContext.slice(0, 800); // 截取前800字，避免Prompt过长超时
+        }
+      }
+    } catch (e) {}
+    return "东汉末年，文人墨客借笔抒怀，藏书阁中奇书辈出。";
+  };
+
+  // 获取精简用户身份
+  const getCleanUserContext = () => {
+    try {
+      const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+      const activeId = localStorage.getItem("active_persona_id");
+      if (activeId && savedPersonas.length > 0) {
+        const activeUser = savedPersonas.find((p) => String(p.id) === String(activeId));
+        if (activeUser) {
+          return `【用户】姓名:${activeUser.name || "楼主"}，身份:${activeUser.occupation || activeUser.role || "绣衣楼楼主"}`;
+        }
+      }
+    } catch (e) {}
+    return "【用户】绣衣楼楼主";
+  };
+
+  // 获取传讯角色精简列表
+  const getCleanContactChars = async () => {
+    try {
+      if (window.chatCharacterStore) {
+        const allChars = await window.chatCharacterStore.getAll();
+        if (allChars && Array.isArray(allChars)) {
+          const valid = allChars
+            .filter((c) => c && typeof c === "object" && (c.name || c.nickname))
+            .map((c) => ({
+              name: String(c.name || c.nickname || "故人").trim(),
+              personality: String(c.profile?.personality || c.personality || "特色鲜明").slice(0, 30),
+              style: String(c.profile?.style || "专属语气").slice(0, 30),
+            }));
+          if (valid.length > 0) return valid.slice(0, 6);
+        }
+      }
+    } catch (e) {}
+    return [
+      { name: "傅融", personality: "精打细算嘴硬心软", style: "常算账催更" },
+      { name: "刘辩", personality: "率直天真依恋楼主", style: "直抒胸臆少主口吻" },
+      { name: "袁基", personality: "温润儒雅深思熟虑", style: "引经据典世家之风" },
+      { name: "左慈", personality: "仙风道骨神叨深奥", style: "玄妙指点" },
+      { name: "孙策", personality: "豪爽直率热血霸道", style: "直爽热血豪气" },
+    ];
+  };
+
+  // 第一步：快速生成艺术家排行榜（轻量极速，不包含120条评论，秒级返回）
+  const generateArtistRanking = async (timeframe = activeTimeframe) => {
+    if (isLoading) return;
+    setIsLoading(true);
+    setLoadingText("正在感知世间文气，汇聚八方名家...");
+
+    try {
+      const worldContext = await getCleanWorldContext();
+      const userContext = getCleanUserContext();
+
+      const sysPrompt = "你是一个深谙古代文坛的文曲星官，请为天下书城生成艺术家天机榜。严格返回纯 JSON 数组格式，直接以 [ 开头，以 ] 结尾，不要输出任何 Markdown 标记。";
+
+      const userPrompt = `
+【世界背景】
+${worldContext}
+${userContext}
+
+【任务】
+请为【心仪艺术家 - ${timeframe}】生成 6 到 8 位极具辨识度的古代名家作家。
+必须涵盖分类：言情、悬疑、志怪仙侠、历史权谋、百家杂谈。
+
+【每位作家数据结构】
+[
+  {
+    "id": "a_1",
+    "rank": 1,
+    "name": "名号/笔名(如:枕霞居士/洛阳夜行客)",
+    "title": "荣誉头衔(如:当世言情圣手/诡案第一执笔)",
+    "category": "言情/悬疑/志怪仙侠/历史权谋/百家杂谈 之一",
+    "timeframe": "${timeframe}",
+    "heat": "98.6万",
+    "badge": "蝉联榜首/口碑黑马/镇榜之作",
+    "avatarColor": "#8C6A5A",
+    "bio": "作家性格简介(30字左右，个性鲜明)",
+    "masterpiece": {
+      "title": "代表作书名",
+      "summary": "作品简介(50-80字)",
+      "highlightQuote": "经典名句摘录",
+      "rating": "9.8",
+      "wordCount": "88万字",
+      "tags": ["强强", "权谋", "HE"]
+    }
+  }
+]
+`;
+
+      if (!window.sendToLLM) {
+        throw new Error("请先在【设置 -> API设置】中配置大模型 API！");
+      }
+
+      window.sendToLLM(
+        [
+          { role: "system", content: sysPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        null,
+        (reply) => {
+          try {
+            const data = robustParseLLMJSON(reply);
+            if (Array.isArray(data) && data.length > 0) {
+              const formatted = data.map((item, idx) => ({
+                ...item,
+                id: item.id || `artist_${Date.now()}_${idx}`,
+                rank: item.rank || idx + 1,
+                avatarColor: item.avatarColor || ["#8C6A5A", "#4A6B62", "#7B5B75", "#B86B43", "#3D5A80", "#8D7B68"][idx % 6],
+                comments: null, // 延迟按需生成
+              }));
+              setArtists(formatted);
+              const cacheKey = `reader_artist_ranking_data_${timeframe}`;
+              localStorage.setItem(cacheKey, JSON.stringify(formatted));
+            } else {
+              throw new Error("返回格式不正确");
+            }
+          } catch (err) {
+            console.error("解析榜单失败:", err, reply);
+            alert("生成榜单解析异常，请重试！");
+          } finally {
+            setIsLoading(false);
+          }
+        },
+        (err) => {
+          console.error("生成榜单请求失败:", err);
+          setIsLoading(false);
+          alert("请求超时或失败，请检查 API 配置！");
+        }
+      );
+    } catch (e) {
+      setIsLoading(false);
+      alert(e.message || "生成艺术家榜单失败");
+    }
+  };
+
+  // 第二步：按需为选中的单个作家生成 10-15 条真实书评及作者回复（单独轻量生成，2-3秒完成）
+  const fetchOrGenerateCommentsForArtist = async (artist, forceRefresh = false) => {
+    if (!forceRefresh && artist.comments && artist.comments.length > 0) {
+      return; // 已有书评，秒开
+    }
+
+    setIsLoadingComments(true);
+    try {
+      const chars = await getCleanContactChars();
+      const charsListStr = chars.map((c) => `${c.name}(${c.personality}，语气:${c.style})`).join("、");
+
+      const sysPrompt = `你是一个古代文坛与现代网文书评评论员。请为作家【${artist.name}】的代表作《${artist.masterpiece?.title || "作品"}》生成 10 到 15 条真实生动的书评和作者互动。严格返回纯 JSON 数组格式，直接以 [ 开头，以 ] 结尾，不要输出任何 Markdown 标记。`;
+
+      const userPrompt = `
+【作家信息】
+作家：${artist.name}（头衔：${artist.title}，性格：${artist.bio}）
+代表作：《${artist.masterpiece?.title}》
+简介：${artist.masterpiece?.summary}
+
+【可用传讯角色】
+${charsListStr}
+
+【任务】
+生成 10 到 15 条极富网感、沉浸真实的书评：
+1. 必须包含 2 到 4 条来自上述传讯角色（如傅融、刘辩、袁基、左慈、孙策等）的独家书评，严格符合其口吻性格！(isCharacter: true, characterName: "角色名")
+2. 其余评论为各界 NPC 读者（太学儒生、茶馆说书人、闺秀、刺客、催更狂魔等，isCharacter: false）。
+3. 其中 4 到 6 条书评必须包含作者【${artist.name}】的亲自幽默/傲娇/求饶回复(authorReply)。
+
+【JSON 格式示例】
+[
+  {
+    "id": "c1",
+    "user": "傅融",
+    "identity": "【绣衣楼副官】",
+    "isCharacter": true,
+    "characterName": "傅融",
+    "content": "此书买断花了五百五铢钱，若下册再断章，便从你稿费里扣回这笔开支。",
+    "likes": 3204,
+    "time": "10分钟前",
+    "authorReply": {
+      "replyContent": "副官大人手下留情！今夜通宵手写三千字奉上！",
+      "replyTime": "5分钟前"
+    }
+  },
+  {
+    "id": "c2",
+    "user": "太学夜读生",
+    "identity": "【太学考据狂】",
+    "isCharacter": false,
+    "characterName": "",
+    "content": "第七章这个伏笔太神了，我连夜翻了三本古籍才对上暗线，求作者速速填坑！",
+    "likes": 842,
+    "time": "1小时前",
+    "authorReply": null
+  }
+]
+`;
+
+      if (!window.sendToLLM) {
+        setIsLoadingComments(false);
+        return;
+      }
+
+      window.sendToLLM(
+        [
+          { role: "system", content: sysPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        null,
+        (reply) => {
+          try {
+            const commentsData = robustParseLLMJSON(reply);
+            if (Array.isArray(commentsData)) {
+              const updatedArtist = {
+                ...artist,
+                comments: commentsData,
+              };
+              setSelectedArtist(updatedArtist);
+
+              // 同步更新列表与缓存
+              const newArtists = artists.map((a) =>
+                a.id === artist.id ? updatedArtist : a
+              );
+              setArtists(newArtists);
+              localStorage.setItem(
+                `reader_artist_ranking_data_${activeTimeframe}`,
+                JSON.stringify(newArtists)
+              );
+            }
+          } catch (e) {
+            console.error("解析书评失败:", e, reply);
+          } finally {
+            setIsLoadingComments(false);
+          }
+        },
+        (err) => {
+          console.error("生成书评请求失败:", err);
+          setIsLoadingComments(false);
+        }
+      );
+    } catch (e) {
+      console.error(e);
+      setIsLoadingComments(false);
+    }
+  };
+
+  // 点击作家卡片
+  const handleSelectArtist = (artist) => {
+    setSelectedArtist(artist);
+    // 按需触发书评生成
+    fetchOrGenerateCommentsForArtist(artist);
+  };
+
+  // 用户自主提交书评
+  const handleAddUserComment = async () => {
+    if (!userCommentText.trim() || !selectedArtist || isSubmittingComment) return;
+    setIsSubmittingComment(true);
+
+    const userText = userCommentText.trim();
+    setUserCommentText("");
+
+    let userName = "楼主";
+    let userRole = "绣衣楼楼主";
+    try {
+      const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+      const activeId = localStorage.getItem("active_persona_id");
+      if (activeId && savedPersonas.length > 0) {
+        const activeUser = savedPersonas.find((p) => String(p.id) === String(activeId));
+        if (activeUser) {
+          userName = activeUser.name || "楼主";
+          userRole = activeUser.occupation || activeUser.role || "绣衣楼楼主";
+        }
+      }
+    } catch (e) {}
+
+    const newCommentId = "user_" + Date.now();
+    const newCommentItem = {
+      id: newCommentId,
+      user: userName,
+      identity: `【${userRole}】`,
+      isCharacter: false,
+      characterName: "",
+      content: userText,
+      likes: 1,
+      time: "刚刚",
+      authorReply: null,
+    };
+
+    const updatedSelectedArtist = {
+      ...selectedArtist,
+      comments: [newCommentItem, ...(selectedArtist.comments || [])],
+    };
+    setSelectedArtist(updatedSelectedArtist);
+
+    if (window.sendToLLM) {
+      const sysPrompt = `你正在扮演作家【${selectedArtist.name}】（性格：${selectedArtist.bio}）。`;
+      const prompt = `读者【${userName}】在你的代表作《${selectedArtist.masterpiece?.title}》下留评：\n"${userText}"\n\n请以作者的第一人称进行一段生动幽默、符合性格的简短回复（30-50字）。直接输出正文。`;
+
+      window.sendToLLM(
+        [
+          { role: "system", content: sysPrompt },
+          { role: "user", content: prompt },
+        ],
+        null,
+        (reply) => {
+          const authorReplyText = reply.replace(/```/g, "").trim();
+          const withReplyArtist = {
+            ...updatedSelectedArtist,
+            comments: updatedSelectedArtist.comments.map((c) =>
+              c.id === newCommentId
+                ? {
+                    ...c,
+                    authorReply: {
+                      replyContent: authorReplyText,
+                      replyTime: "刚刚",
+                    },
+                  }
+                : c
+            ),
+          };
+          setSelectedArtist(withReplyArtist);
+          const newArtists = artists.map((a) =>
+            a.id === selectedArtist.id ? withReplyArtist : a
+          );
+          setArtists(newArtists);
+          localStorage.setItem(
+            `reader_artist_ranking_data_${activeTimeframe}`,
+            JSON.stringify(newArtists)
+          );
+          setIsSubmittingComment(false);
+        },
+        () => setIsSubmittingComment(false)
+      );
+    } else {
+      setIsSubmittingComment(false);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const filteredArtists = artists.filter((artist) => {
+    if (activeCategory === "全部") return true;
+    return artist.category === activeCategory;
+  });
+
+  return (
+    <div
+      className="artist-rank-overlay open fixed inset-0 flex flex-col bg-[#FAF7F2] dark:bg-[#1A1816] text-[#2C2420] dark:text-[#E8E2D9] overflow-hidden font-sans"
+      style={{
+        position: "fixed",
+        inset: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 1400,
+        backgroundImage: "radial-gradient(ellipse at 50% 0%, rgba(214, 114, 75, 0.06) 0%, transparent 60%)",
+      }}
+    >
+      {/* 顶部导航 Header */}
+      <header className="flex-shrink-0 flex items-center justify-between px-5 pt-12 pb-4 bg-[#FAF7F2]/90 dark:bg-[#1A1816]/90 backdrop-blur-md border-b border-[#E8E0D5] dark:border-[#332D28] z-30">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => {
+              if (selectedArtist) setSelectedArtist(null);
+              else onClose();
+            }}
+            className="w-10 h-10 rounded-full flex items-center justify-center bg-[#EFE8DE] dark:bg-[#2B2622] text-[#59685a] dark:text-[#A3B1A4] active:scale-90 transition-transform shadow-sm"
+          >
+            <span className="material-symbols-outlined text-xl">
+              {selectedArtist ? "arrow_back" : "close"}
+            </span>
+          </button>
+          <div>
+            <h1 className="text-xl font-bold font-serif tracking-wide flex items-center gap-2">
+              <span className="material-symbols-outlined text-[#D6724B]">military_tech</span>
+              {selectedArtist ? selectedArtist.name : "心仪艺术家 · 天机榜"}
+            </h1>
+            <p className="text-[11px] text-[#8C7A6B] dark:text-[#9E9185] tracking-wider">
+              {selectedArtist ? `${selectedArtist.title} · 代表作与书评` : "文曲汇萃 · 东汉名家百晓生"}
+            </p>
+          </div>
+        </div>
+
+        {!selectedArtist ? (
+          <button
+            onClick={() => generateArtistRanking(activeTimeframe)}
+            disabled={isLoading}
+            className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full bg-[#D6724B]/10 text-[#D6724B] border border-[#D6724B]/30 text-xs font-medium active:scale-95 transition-all shadow-sm"
+          >
+            <span className={`material-symbols-outlined text-sm ${isLoading ? "animate-spin" : ""}`}>
+              sync
+            </span>
+            <span>{isLoading ? "推演中..." : "换一批"}</span>
+          </button>
+        ) : (
+          <button
+            onClick={() => fetchOrGenerateCommentsForArtist(selectedArtist, true)}
+            disabled={isLoadingComments}
+            className="flex items-center gap-1 px-3 py-1 rounded-full bg-[#59685a]/10 text-[#59685a] dark:text-[#A3B1A4] text-xs font-medium active:scale-95 transition-all"
+          >
+            <span className={`material-symbols-outlined text-xs ${isLoadingComments ? "animate-spin" : ""}`}>
+              refresh
+            </span>
+            <span>{isLoadingComments ? "研墨中..." : "刷新书评"}</span>
+          </button>
+        )}
+      </header>
+
+      {/* 主内容区域 */}
+      <div className="flex-1 overflow-y-auto relative no-scrollbar">
+        {isLoading ? (
+          <div className="flex flex-col items-center justify-center min-h-[400px] p-8 text-center">
+            <div className="relative w-20 h-20 mb-6 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-4 border-[#D6724B]/20 border-t-[#D6724B] animate-spin"></div>
+              <span className="material-symbols-outlined text-3xl text-[#D6724B]">auto_stories</span>
+            </div>
+            <h3 className="text-lg font-serif font-bold text-[#59685a] dark:text-[#A3B1A4] mb-2">
+              {loadingText}
+            </h3>
+            <p className="text-xs text-[#8C7A6B] max-w-xs leading-relaxed">
+              正在融合世界书设定与名家文采，快速排定天机榜单...
+            </p>
+          </div>
+        ) : selectedArtist ? (
+          /* 作家详情与书评区 */
+          <div className="p-5 max-w-2xl mx-auto space-y-6 pb-28">
+            {/* 作家名片 */}
+            <div
+              className="relative p-6 rounded-3xl overflow-hidden shadow-lg border border-[#E8E0D5]/50 dark:border-[#3A332C]"
+              style={{
+                background: `linear-gradient(135deg, ${selectedArtist.avatarColor}22 0%, #FFFDF9 100%)`,
+              }}
+            >
+              <div className="flex items-center gap-4">
+                <div
+                  className="w-16 h-16 rounded-2xl flex items-center justify-center text-white text-2xl font-serif font-bold shadow-md"
+                  style={{ backgroundColor: selectedArtist.avatarColor || "#695c51" }}
+                >
+                  {(selectedArtist?.name || "作").slice(0, 1)}
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-2xl font-serif font-bold tracking-tight">
+                      {selectedArtist.name}
+                    </h2>
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#D6724B]/15 text-[#D6724B] border border-[#D6724B]/30">
+                      {selectedArtist.badge || `Top ${selectedArtist.rank}`}
+                    </span>
+                    <button
+                      onClick={() => {
+                        if (onOpenCommission) onOpenCommission(selectedArtist);
+                      }}
+                      className="ml-auto px-3 py-1 rounded-full text-xs font-bold bg-[#D6724B] text-white shadow-md active:scale-95 transition-transform flex items-center gap-1 cursor-pointer"
+                    >
+                      <span className="material-symbols-outlined text-xs">history_edu</span>
+                      约稿
+                    </button>
+                  </div>
+                  <p className="text-xs text-[#8C7A6B] font-medium mt-1">
+                    {selectedArtist.title} · {selectedArtist.category}
+                  </p>
+                  <div className="flex items-center gap-3 mt-2 text-[11px] text-[#A39282]">
+                    <span>🔥 热度 {selectedArtist.heat}</span>
+                    <span>📖 代表作《{selectedArtist.masterpiece?.title}》</span>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-5 pt-4 border-t border-[#E8E0D5]/60 dark:border-[#3A332C] text-xs text-[#5C5047] dark:text-[#D1C6B8] leading-relaxed italic bg-white/40 dark:bg-black/20 p-3.5 rounded-2xl">
+                <span className="font-bold not-italic mr-1 text-[#D6724B]">🖋️ 作家心语：</span>
+                "{selectedArtist.bio}"
+              </div>
+            </div>
+
+            {/* 代表作卡片 */}
+            {selectedArtist.masterpiece && (
+              <div className="bg-white/80 dark:bg-[#231F1C]/80 backdrop-blur-md p-5 rounded-3xl border border-[#E8E0D5] dark:border-[#332D28] shadow-sm space-y-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-xs font-bold text-[#8C7A6B] tracking-wider uppercase flex items-center gap-1.5">
+                    <span className="material-symbols-outlined text-base text-[#D6724B]">menu_book</span>
+                    代表作品
+                  </span>
+                  <div className="flex items-center gap-1 text-[#D6724B] font-bold text-sm">
+                    <span>★</span>
+                    <span>{selectedArtist.masterpiece.rating || "9.8"}</span>
+                    <span className="text-[10px] text-[#A39282] font-normal">({selectedArtist.masterpiece.wordCount || "88万字"})</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-4">
+                  <div
+                    className="w-24 aspect-[2/3] rounded-lg shadow-md flex-shrink-0 flex items-center justify-center p-2 relative overflow-hidden text-center"
+                    style={{ backgroundColor: selectedArtist.avatarColor || "#59685a" }}
+                  >
+                    <span
+                      className="font-serif font-bold text-sm text-white mix-blend-overlay drop-shadow"
+                      style={{ writingMode: "vertical-rl", letterSpacing: "2px" }}
+                    >
+                      {selectedArtist.masterpiece.title}
+                    </span>
+                  </div>
+                  <div className="flex-1 flex flex-col justify-between py-1">
+                    <div>
+                      <h3 className="font-serif font-bold text-lg text-[#2C2420] dark:text-[#FAF7F2]">
+                        《{selectedArtist.masterpiece.title}》
+                      </h3>
+                      <p className="text-xs text-[#6E6055] dark:text-[#B8ACA0] mt-1.5 line-clamp-3 leading-relaxed">
+                        {selectedArtist.masterpiece.summary}
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {selectedArtist.masterpiece.tags?.map((t, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 text-[10px] rounded-md bg-[#FAF5EE] dark:bg-[#2C2723] text-[#8C7A6B] border border-[#E8E0D5] dark:border-[#3D352E]"
+                        >
+                          #{t}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {selectedArtist.masterpiece.highlightQuote && (
+                  <div className="bg-[#FAF7F2] dark:bg-[#1C1816] p-3.5 rounded-2xl border-l-4 border-[#D6724B] text-xs text-[#5C5047] dark:text-[#C4B7AA] leading-relaxed">
+                    <span className="font-serif font-bold text-[#D6724B] mr-1.5">『名句摘录』</span>
+                    {selectedArtist.masterpiece.highlightQuote}
+                  </div>
+                )}
+
+                <button
+                  onClick={() => {
+                    if (onAddToBookshelf) {
+                      onAddToBookshelf({
+                        id: selectedArtist.id + "_book",
+                        title: selectedArtist.masterpiece.title,
+                        author: selectedArtist.name,
+                        summary: selectedArtist.masterpiece.summary,
+                        color: selectedArtist.avatarColor,
+                        category: selectedArtist.category,
+                        fullText: `《${selectedArtist.masterpiece.title}》\n作者：${selectedArtist.name}\n\n${selectedArtist.masterpiece.summary}\n\n${selectedArtist.masterpiece.highlightQuote}`,
+                      });
+                    }
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-[#59685a] text-white text-xs font-medium active:scale-95 transition-transform flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-sm">bookmark_add</span>
+                  放入今日阅读
+                </button>
+              </div>
+            )}
+
+            {/* 书评区 */}
+            <div className="space-y-4 pt-2">
+              <div className="flex justify-between items-center px-1">
+                <h3 className="font-serif font-bold text-base flex items-center gap-2 text-[#2C2420] dark:text-[#FAF7F2]">
+                  <span className="material-symbols-outlined text-[#D6724B]">forum</span>
+                  名家书评区
+                  <span className="text-xs font-sans font-normal text-[#8C7A6B]">
+                    ({selectedArtist.comments ? `${selectedArtist.comments.length}条热评` : "正在载入..."})
+                  </span>
+                </h3>
+                <span className="text-[11px] text-[#A39282]">
+                  包含传讯密友与江湖名流
+                </span>
+              </div>
+
+              {isLoadingComments ? (
+                <div className="p-8 rounded-2xl bg-white/60 dark:bg-[#231F1C]/60 text-center space-y-3">
+                  <div className="inline-block w-8 h-8 border-3 border-[#D6724B]/30 border-t-[#D6724B] rounded-full animate-spin"></div>
+                  <p className="text-xs text-[#8C7A6B]">正在邀约传讯密友与各界名流撰写书评...</p>
+                </div>
+              ) : selectedArtist.comments && selectedArtist.comments.length > 0 ? (
+                <div className="space-y-3.5">
+                  {selectedArtist.comments.map((comment) => {
+                    const isLiked = !!likedComments[comment.id];
+                    return (
+                      <div
+                        key={comment.id}
+                        className={`p-4 rounded-2xl border transition-all ${
+                          comment.isCharacter
+                            ? "bg-gradient-to-br from-[#FFF9F3] to-[#FFF4EA] dark:from-[#2B231E] dark:to-[#221B17] border-[#E8C5AF]/60 dark:border-[#4D3A2F] shadow-sm"
+                            : "bg-white/90 dark:bg-[#231F1C]/90 border-[#EFE8DF] dark:border-[#332D28]"
+                        }`}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-2.5">
+                            <div
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-serif font-bold ${
+                                comment.isCharacter
+                                  ? "bg-[#D6724B] text-white ring-2 ring-[#D6724B]/30"
+                                  : "bg-[#EAE4DC] dark:bg-[#38312B] text-[#59685a] dark:text-[#A3B1A4]"
+                              }`}
+                            >
+                              {(comment?.user || "读").slice(0, 1)}
+                            </div>
+                            <div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs font-bold font-serif text-[#2C2420] dark:text-[#FAF7F2]">
+                                  {comment.user}
+                                </span>
+                                {comment.isCharacter && (
+                                  <span className="px-1.5 py-0.2 text-[9px] rounded-full bg-[#D6724B] text-white font-medium">
+                                    ★ 密友
+                                  </span>
+                                )}
+                                <span className="text-[10px] text-[#8C7A6B] dark:text-[#A89A8E]">
+                                  {comment.identity}
+                                </span>
+                              </div>
+                              <span className="text-[10px] text-[#B8ACA0]">{comment.time}</span>
+                            </div>
+                          </div>
+
+                          <button
+                            onClick={() => toggleLike(comment.id)}
+                            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-all active:scale-90 ${
+                              isLiked
+                                ? "text-[#D6724B] bg-[#D6724B]/10 font-bold"
+                                : "text-[#A39282] hover:text-[#59685a]"
+                            }`}
+                          >
+                            <span className="material-symbols-outlined text-sm">
+                              {isLiked ? "favorite" : "favorite_border"}
+                            </span>
+                            <span>{(comment.likes || 0) + (isLiked ? 1 : 0)}</span>
+                          </button>
+                        </div>
+
+                        <p className="text-xs text-[#423832] dark:text-[#D9CEBF] mt-2.5 leading-relaxed pl-10">
+                          {comment.content}
+                        </p>
+
+                        {comment.authorReply && (
+                          <div className="mt-3 ml-10 p-3 rounded-xl bg-[#FAF5EE] dark:bg-[#1E1A17] border border-[#E8DFD3] dark:border-[#38312A] text-xs space-y-1">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-[#D6724B] flex items-center gap-1">
+                                <span className="material-symbols-outlined text-xs">edit_note</span>
+                                作者【{selectedArtist.name}】回复：
+                              </span>
+                              <span className="text-[9px] text-[#B8ACA0]">
+                                {comment.authorReply.replyTime || "片刻前"}
+                              </span>
+                            </div>
+                            <p className="text-[#5C5047] dark:text-[#CFC4B5] leading-relaxed">
+                              {comment.authorReply.replyContent}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-6 text-[#A39282]">
+                  <p className="text-xs">暂无书评，点击右上角“刷新书评”开启研讨</p>
+                </div>
+              )}
+            </div>
+
+            {/* 底部发表评论栏 */}
+            <div className="fixed bottom-0 left-0 right-0 p-4 bg-[#FAF7F2]/95 dark:bg-[#1A1816]/95 backdrop-blur-xl border-t border-[#E8E0D5] dark:border-[#332D28] z-40">
+              <div className="max-w-2xl mx-auto flex items-center gap-2">
+                <input
+                  type="text"
+                  value={userCommentText}
+                  onChange={(e) => setUserCommentText(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") handleAddUserComment();
+                  }}
+                  placeholder={`以楼主身份在《${selectedArtist.masterpiece?.title || "此书"}》下畅言点评...`}
+                  className="flex-1 bg-white dark:bg-[#28231F] border border-[#E8E0D5] dark:border-[#3D352E] rounded-full px-4 py-2.5 text-xs text-[#2C2420] dark:text-[#FAF7F2] placeholder-[#A39282] focus:outline-none focus:border-[#D6724B]"
+                />
+                <button
+                  onClick={handleAddUserComment}
+                  disabled={!userCommentText.trim() || isSubmittingComment}
+                  className={`px-4 py-2.5 rounded-full text-xs font-medium flex items-center gap-1 transition-all active:scale-95 ${
+                    userCommentText.trim() && !isSubmittingComment
+                      ? "bg-[#D6724B] text-white shadow-md cursor-pointer"
+                      : "bg-[#EAE4DC] text-[#A39282] cursor-not-allowed"
+                  }`}
+                >
+                  <span className="material-symbols-outlined text-sm">
+                    {isSubmittingComment ? "sync" : "send"}
+                  </span>
+                  <span>{isSubmittingComment ? "交流中" : "发表"}</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          /* 排行榜主列表视图 */
+          <div className="p-5 max-w-2xl mx-auto space-y-6 pb-24">
+            {/* 时间维度 Tab */}
+            <div className="flex justify-center">
+              <div className="inline-flex p-1 rounded-2xl bg-[#EFE8DE] dark:bg-[#28231F] border border-[#E8E0D5] dark:border-[#38312B] shadow-inner">
+                {timeframes.map((tf) => (
+                  <button
+                    key={tf}
+                    onClick={() => setActiveTimeframe(tf)}
+                    className={`px-6 py-2 rounded-xl text-xs font-medium font-serif tracking-wider transition-all active:scale-95 ${
+                      activeTimeframe === tf
+                        ? "bg-[#D6724B] text-white shadow-md font-bold"
+                        : "text-[#8C7A6B] dark:text-[#9E9185] hover:text-[#2C2420]"
+                    }`}
+                  >
+                    {tf}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 分类 Tab */}
+            <div className="flex gap-2 overflow-x-auto pb-1 no-scrollbar snap-x">
+              {categories.map((cat) => (
+                <button
+                  key={cat}
+                  onClick={() => setActiveCategory(cat)}
+                  className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 ${
+                    activeCategory === cat
+                      ? "bg-[#59685a] text-white shadow-sm"
+                      : "bg-white/80 dark:bg-[#231F1C]/80 text-[#7A6B5E] dark:text-[#9E9185] border border-[#E8E0D5] dark:border-[#38312B]"
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+
+            {/* 6-8位艺术家卡片 */}
+            <div className="space-y-4">
+              {filteredArtists.length > 0 ? (
+                filteredArtists.map((artist, index) => (
+                  <div
+                    key={artist.id || index}
+                    onClick={() => handleSelectArtist(artist)}
+                    className="group p-5 rounded-3xl bg-white/90 dark:bg-[#231F1C]/90 backdrop-blur-md border border-[#E8E0D5] dark:border-[#332D28] shadow-sm hover:shadow-md transition-all active:scale-[0.99] cursor-pointer relative overflow-hidden"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex flex-col items-center justify-center pt-1">
+                        <div
+                          className={`w-9 h-9 rounded-2xl flex items-center justify-center font-serif font-bold text-sm shadow-sm ${
+                            artist.rank === 1
+                              ? "bg-gradient-to-b from-[#F5D061] to-[#E5A823] text-[#4A3200] ring-2 ring-[#F5D061]/50"
+                              : artist.rank === 2
+                              ? "bg-gradient-to-b from-[#D8DCE3] to-[#A0A6B2] text-[#2C3340] ring-2 ring-[#D8DCE3]/50"
+                              : artist.rank === 3
+                              ? "bg-gradient-to-b from-[#E6B08A] to-[#BD7949] text-[#3D1E08] ring-2 ring-[#E6B08A]/50"
+                              : "bg-[#EFE8DF] dark:bg-[#2E2824] text-[#8C7A6B] dark:text-[#A39282]"
+                          }`}
+                        >
+                          {artist.rank}
+                        </div>
+                        <span className="text-[9px] text-[#A39282] mt-1 font-medium">
+                          No.{artist.rank}
+                        </span>
+                      </div>
+
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 truncate">
+                            <h3 className="font-serif font-bold text-base text-[#2C2420] dark:text-[#FAF7F2] truncate">
+                              {artist.name}
+                            </h3>
+                            <span className="flex-shrink-0 px-2 py-0.5 rounded-full text-[10px] font-medium bg-[#59685a]/10 text-[#59685a] dark:text-[#A3B1A4]">
+                              {artist.category}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-bold text-[#D6724B] flex items-center gap-0.5">
+                              🔥 {artist.heat}
+                            </span>
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (onOpenCommission) onOpenCommission(artist);
+                              }}
+                              className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-[#D6724B]/15 text-[#D6724B] border border-[#D6724B]/30 hover:bg-[#D6724B] hover:text-white transition-all active:scale-90 flex items-center gap-0.5 shadow-sm"
+                            >
+                              <span>📜</span>
+                              <span>约稿</span>
+                            </button>
+                          </div>
+                        </div>
+
+                        <p className="text-xs text-[#8C7A6B] mt-0.5 truncate">
+                          {artist.title}
+                        </p>
+
+                        {artist.masterpiece && (
+                          <div className="mt-3 p-2.5 rounded-xl bg-[#FAF7F2] dark:bg-[#1C1917] border border-[#EFE8DF] dark:border-[#38312B] flex items-center justify-between">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="text-xs font-serif font-bold text-[#2C2420] dark:text-[#FAF7F2] truncate">
+                                📖《{artist.masterpiece.title}》
+                              </span>
+                              <span className="text-[10px] text-[#A39282] truncate">
+                                {artist.masterpiece.summary}
+                              </span>
+                            </div>
+                            <span className="text-[10px] text-[#D6724B] font-medium flex-shrink-0 ml-2">
+                              查看评价 &gt;
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center py-16 text-[#A39282]">
+                  <span className="material-symbols-outlined text-4xl opacity-40 mb-2">auto_stories</span>
+                  <p className="text-xs">暂无该分类名家，点击上方“换一批”重新汇聚文气</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
+// ==================== 名家约稿沟通弹窗 (ArtistCommissionModal) ====================
+
+const ArtistCommissionModal = ({
+  isOpen,
+  onClose,
+  artist,
+  onCommissionSuccess,
+  onNavigateToLibrary,
+}) => {
+  const [availableChars, setAvailableChars] = React.useState([]);
+  const [selectedChar, setSelectedChar] = React.useState(null);
+  const [commissionRequirement, setCommissionRequirement] = React.useState("");
+  const [selectedTags, setSelectedTags] = React.useState([]);
+  const [isGenerating, setIsGenerating] = React.useState(false);
+  const [generatedBook, setGeneratedBook] = React.useState(null);
+
+  const quickTags = [
+    "双向奔赴",
+    "并肩作战",
+    "暗恋成真",
+    "朝堂权谋",
+    "甜宠互撩",
+    "救赎治愈",
+    "修罗场",
+    "微醺夜话",
+    "刀口舐血",
+    "宿命相逢",
+  ];
+
+  // 加载传讯通讯录角色
+  React.useEffect(() => {
+    if (!isOpen) return;
+    const loadCharacters = async () => {
+      try {
+        if (window.chatCharacterStore) {
+          const chars = await window.chatCharacterStore.getAll();
+          if (chars && Array.isArray(chars)) {
+            const validChars = chars
+              .filter((c) => c && typeof c === "object")
+              .map((c) => ({
+                id: c.id || c.name || Math.random().toString(),
+                name: String(c.name || c.nickname || c.title || "神秘故人").trim(),
+                profile: c.profile || {},
+                personality: String(c.personality || c.profile?.personality || "特色鲜明"),
+                style: String(c.style || c.profile?.style || "专属口吻"),
+                background: String(c.background || c.profile?.background || ""),
+              }))
+              .filter((c) => c.name && c.name !== "undefined");
+
+            if (validChars.length > 0) {
+              setAvailableChars(validChars);
+              if (!selectedChar) {
+                setSelectedChar(validChars[0]);
+              }
+              return;
+            }
+          }
+        }
+      } catch (e) {
+        console.error("加载传讯角色失败:", e);
+      }
+      // 预设兜底角色
+      const fallbackChars = [
+        { id: "char_furong", name: "傅融", profile: { personality: "精打细算、嘴硬心软、忠诚敏锐", style: "常算账催更，嘴上不饶人实则体贴" } },
+        { id: "char_liubian", name: "刘辩", profile: { personality: "率直天真、深宫寂寥、依赖楼主", style: "少主口吻，直率黏人" } },
+        { id: "char_yuanji", name: "袁基", profile: { personality: "温润儒雅、深思熟虑、世家风骨", style: "引经据典，克制深情" } },
+        { id: "char_zuoci", name: "左慈", profile: { personality: "仙风道骨、神叨玄妙、看破红尘", style: "玄妙指点，神秘莫测" } },
+        { id: "char_sunce", name: "孙策", profile: { personality: "豪爽直率、热血霸道、阳光赤诚", style: "江东小霸王，豪气爽朗" } },
+      ];
+      setAvailableChars(fallbackChars);
+      if (!selectedChar) setSelectedChar(fallbackChars[0]);
+    };
+    loadCharacters();
+  }, [isOpen]);
+
+  const toggleTag = (tag) => {
+    if (selectedTags.includes(tag)) {
+      setSelectedTags(selectedTags.filter((t) => t !== tag));
+    } else {
+      setSelectedTags([...selectedTags, tag]);
+    }
+  };
+
+  // 开始写稿 (调用 AI)
+  const handleStartWriting = async () => {
+    if (!artist || !selectedChar || isGenerating) return;
+    setIsGenerating(true);
+
+    try {
+      // 1. 读取世界书
+      let worldContext = "东汉末年，文人墨客借笔抒怀，藏书阁中奇书辈出。";
+      try {
+        if (window.getWorldBookContext) {
+          const fullContext = await window.getWorldBookContext();
+          if (fullContext && fullContext.trim()) worldContext = fullContext.slice(0, 600);
+        }
+      } catch (e) {}
+
+      // 2. 读取用户身份
+      let userContext = "【用户身份】楼主/主公";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId && savedPersonas.length > 0) {
+          const activeUser = savedPersonas.find((p) => String(p.id) === String(activeId));
+          if (activeUser) {
+            userContext = `【当前用户身份】姓名:${activeUser.name || "楼主"}，身份:${activeUser.occupation || activeUser.role || "绣衣楼楼主"}，性格:${activeUser.personality || "未知"}`;
+          }
+        }
+      } catch (e) {}
+
+      // 3. 选定角色人设
+      const charName = selectedChar.name;
+      const charPersonality = selectedChar.profile?.personality || selectedChar.personality || "特色鲜明";
+      const charStyle = selectedChar.profile?.style || "专属口吻";
+      const charBackground = selectedChar.profile?.background || "";
+
+      // 4. 用户定制要求
+      const tagsStr = selectedTags.length > 0 ? `偏好标签：${selectedTags.join("、")}` : "";
+      const customReqStr = commissionRequirement.trim() ? `具体情节要求：${commissionRequirement.trim()}` : "要求：情节生动跌宕，体现二人独特张力";
+
+      // 改为分段输出格式：元数据JSON + ---FULLTEXT--- 分隔符 + 正文，彻底规避JSON内嵌长文控制字符问题
+      const sysPrompt = `你正在扮演古代名家作家【${artist.name}】（称号：${artist.title}，人设与文风：${artist.bio}）。你收到了楼主的专属约稿委托，请以你的独特文风为主角【${charName}】与楼主定制撰写一篇约500字的精彩短篇小说/书稿。
+
+【严格输出格式】：先输出一个 JSON 对象（不含 fullText 字段），然后换行输出 ---FULLTEXT--- 分隔符，再换行输出纯文本正文。绝不要输出任何 Markdown 代码块标记。`;
+
+      const userPrompt = `
+【世界背景】
+${worldContext}
+
+${userContext}
+
+【故事主角设定】
+主角角色：${charName}
+性格人设：${charPersonality}
+背景特质：${charBackground}
+语言口吻：${charStyle}
+
+【约稿定制要求】
+${tagsStr}
+${customReqStr}
+
+【输出示例格式】：
+{
+  "id": "comm_${Date.now()}",
+  "title": "书名（如《雨落西厢记》）",
+  "authorName": "${artist.name}",
+  "authorTitle": "${artist.title}",
+  "targetCharacter": "${charName}",
+  "category": "${artist.category || "言情"}",
+  "tags": ${JSON.stringify(selectedTags.length > 0 ? selectedTags : ["独家约稿", "名家执笔"])},
+  "summary": "精炼书本简介40-60字",
+  "highlightQuote": "文中最惊艳金句1-2句",
+  "wordCount": "约500字",
+  "commissionDate": "${new Date().toLocaleDateString()}"
+}
+---FULLTEXT---
+（此处直接输出约500字精彩正文，无需任何引号包裹，直接纯文本即可）
+`;
+
+      if (!window.sendToLLM) {
+        throw new Error("请先在【设置 -> API设置】中配置大模型 API！");
+      }
+
+      window.sendToLLM(
+        [
+          { role: "system", content: sysPrompt },
+          { role: "user", content: userPrompt },
+        ],
+        null,
+        (reply) => {
+          try {
+            // 解析分段输出：JSON元数据 + ---FULLTEXT--- + 纯文本正文
+            const SEP = "---FULLTEXT---";
+            let bookData;
+            let fullText = "";
+
+            if (reply.includes(SEP)) {
+              const sepIdx = reply.indexOf(SEP);
+              const jsonPart = reply.slice(0, sepIdx).replace(/```(?:json)?/gi, "").trim();
+              fullText = reply.slice(sepIdx + SEP.length).trim();
+              bookData = robustParseLLMJSON(jsonPart);
+            } else {
+              // 兜底：整体鲁棒解析
+              bookData = robustParseLLMJSON(reply);
+              fullText = bookData?.fullText || reply;
+            }
+
+            if (!bookData) bookData = {};
+            bookData.fullText = fullText || bookData.fullText || reply;
+            if (bookData && bookData.title && bookData.fullText) {
+              const finalBook = {
+                ...bookData,
+                id: bookData.id || `comm_${Date.now()}`,
+                color: artist.avatarColor || "#D6724B",
+                isCustomCommission: true,
+                isStoreBook: true,
+                progress: 0,
+              };
+
+              // 保存到本地约稿藏书阁
+              const savedList = JSON.parse(localStorage.getItem("custom_commission_books") || "[]");
+              const updatedList = [finalBook, ...savedList];
+              localStorage.setItem("custom_commission_books", JSON.stringify(updatedList));
+
+              setGeneratedBook(finalBook);
+              if (onCommissionSuccess) {
+                onCommissionSuccess(finalBook, updatedList);
+              }
+            } else {
+              throw new Error("返回格式缺少关键字段");
+            }
+          } catch (err) {
+            console.error("解析书稿失败:", err, reply);
+            alert("书稿生成解析异常，请重试！");
+          } finally {
+            setIsGenerating(false);
+          }
+        },
+        (err) => {
+          console.error("约稿请求失败:", err);
+          setIsGenerating(false);
+          alert("约稿请求超时或失败，请检查 API 设置！");
+        }
+      );
+    } catch (e) {
+      console.error(e);
+      setIsGenerating(false);
+      alert(e.message || "约稿发起失败");
+    }
+  };
+
+  if (!isOpen || !artist) return null;
+
+  return (
+    <div
+      className="commission-modal-overlay open fixed inset-0 z-[1500] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-fadeIn font-sans"
+      onClick={onClose}
+    >
+      <div
+        className="relative w-full max-w-lg bg-[#FFFDF9] dark:bg-[#201C19] text-[#2C2420] dark:text-[#EAE3D9] rounded-3xl shadow-2xl border border-[#E8DFD3] dark:border-[#3D352E] overflow-hidden flex flex-col max-h-[90vh]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 顶部 Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-[#EFE7DC] dark:border-[#332B25] bg-[#FAF6F0]/80 dark:bg-[#28231F]/80 backdrop-blur-md">
+          <div className="flex items-center gap-3">
+            <div
+              className="w-10 h-10 rounded-xl flex items-center justify-center text-white font-serif font-bold text-lg shadow-sm"
+              style={{ backgroundColor: artist.avatarColor || "#695c51" }}
+            >
+              {(artist?.name || "作").slice(0, 1)}
+            </div>
+            <div>
+              <h2 className="text-base font-serif font-bold tracking-wide flex items-center gap-1.5">
+                向名家【{artist.name}】约稿
+              </h2>
+              <p className="text-[11px] text-[#8C7A6B] dark:text-[#A39587]">
+                {artist.title} · {artist.category}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full flex items-center justify-center bg-[#EFE8DF] dark:bg-[#332C26] text-[#7A6B5E] active:scale-90 transition-transform"
+          >
+            <span className="material-symbols-outlined text-lg">close</span>
+          </button>
+        </div>
+
+        {/* 主体内容 */}
+        <div className="flex-1 overflow-y-auto p-6 space-y-5 no-scrollbar">
+          {generatedBook ? (
+            /* 生成完毕预览状态 */
+            <div className="text-center py-4 space-y-4 animate-fadeIn">
+              <div className="w-16 h-16 rounded-full bg-[#D6724B]/15 text-[#D6724B] mx-auto flex items-center justify-center">
+                <span className="material-symbols-outlined text-3xl">auto_stories</span>
+              </div>
+              <div>
+                <h3 className="font-serif font-bold text-xl text-[#2C2420] dark:text-[#FAF7F2]">
+                  《{generatedBook.title}》
+                </h3>
+                <p className="text-xs text-[#8C7A6B] mt-1">
+                  执笔：{generatedBook.authorName} · 主角：{generatedBook.targetCharacter}
+                </p>
+              </div>
+
+              {/* 金句预览 */}
+              <div className="bg-[#FAF7F2] dark:bg-[#1C1816] p-4 rounded-2xl border-l-4 border-[#D6724B] text-xs text-[#5C5047] dark:text-[#C4B7AA] italic leading-relaxed text-left">
+                “{generatedBook.highlightQuote || generatedBook.summary}”
+              </div>
+
+              <p className="text-xs text-[#59685a] dark:text-[#A3B1A4] font-medium">
+                ✨ 书稿已誊录完毕，已放入天下书城【藏书阁】！
+              </p>
+
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => {
+                    onClose();
+                    if (onNavigateToLibrary) onNavigateToLibrary();
+                  }}
+                  className="flex-1 py-3 rounded-xl bg-[#D6724B] text-white text-xs font-bold shadow-md active:scale-95 transition-transform flex items-center justify-center gap-1.5"
+                >
+                  <span className="material-symbols-outlined text-sm">menu_book</span>
+                  前往藏书阁查看
+                </button>
+                <button
+                  onClick={() => setGeneratedBook(null)}
+                  className="px-4 py-3 rounded-xl bg-[#EFE8DE] dark:bg-[#332C26] text-[#695c51] dark:text-[#C4B7AA] text-xs font-medium active:scale-95"
+                >
+                  再约一篇
+                </button>
+              </div>
+            </div>
+          ) : (
+            /* 约稿交互表单 */
+            <>
+              {/* 作家对话气泡 */}
+              <div className="flex items-start gap-3 p-4 rounded-2xl bg-[#FAF5EE] dark:bg-[#26211D] border border-[#EFE5D8] dark:border-[#383028]">
+                <div
+                  className="w-8 h-8 rounded-full flex-shrink-0 flex items-center justify-center text-white text-xs font-serif font-bold shadow-sm"
+                  style={{ backgroundColor: artist.avatarColor || "#695c51" }}
+                >
+                  {(artist?.name || "作").slice(0, 1)}
+                </div>
+                <div className="text-xs text-[#4A3F37] dark:text-[#D1C6B8] leading-relaxed">
+                  <span className="font-bold text-[#D6724B] mr-1">【{artist.name}】:</span>
+                  楼主亲临，不胜荣幸！不知今日想为传讯中的哪位故人执笔撰写一段专属传奇？
+                </div>
+              </div>
+
+              {/* 1. 选择传讯角色 */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#59685a] dark:text-[#A3B1A4] flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">person_pin</span>
+                  第一步：指定故事主角（来自传讯角色库）
+                </label>
+                <div className="flex gap-2.5 overflow-x-auto pb-2 no-scrollbar snap-x">
+                  {availableChars.map((char) => {
+                    const isSelected = selectedChar?.id === char.id || selectedChar?.name === char.name;
+                    return (
+                      <button
+                        key={char.id || char.name}
+                        onClick={() => setSelectedChar(char)}
+                        className={`flex-shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-2xl border transition-all active:scale-95 snap-start ${
+                          isSelected
+                            ? "bg-[#D6724B] text-white border-[#D6724B] shadow-md"
+                            : "bg-white dark:bg-[#2A2420] text-[#5C5047] dark:text-[#C4B7AA] border-[#E8DFD3] dark:border-[#3D352E] hover:border-[#D6724B]/50"
+                        }`}
+                      >
+                        <div
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
+                            isSelected
+                              ? "bg-white text-[#D6724B]"
+                              : "bg-[#EFE8DF] dark:bg-[#3D352E] text-[#695c51]"
+                          }`}
+                        >
+                          {(char?.name || "角").slice(0, 1)}
+                        </div>
+                        <span className="text-xs font-medium font-serif">{char?.name || "角色"}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 2. 快捷偏好标签 */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#59685a] dark:text-[#A3B1A4] flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">local_offer</span>
+                  第二步：故事基调与情感偏好
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {quickTags.map((tag) => {
+                    const isSelected = selectedTags.includes(tag);
+                    return (
+                      <button
+                        key={tag}
+                        onClick={() => toggleTag(tag)}
+                        className={`px-3 py-1.5 rounded-full text-xs transition-all active:scale-95 ${
+                          isSelected
+                            ? "bg-[#59685a] text-white font-medium shadow-sm"
+                            : "bg-[#FAF5EE] dark:bg-[#28231E] text-[#7A6B5E] dark:text-[#A39587] border border-[#E8DFD3] dark:border-[#3D352E]"
+                        }`}
+                      >
+                        {isSelected ? "✓ " : "# "}{tag}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* 3. 具体情节要求 */}
+              <div className="space-y-2">
+                <label className="text-xs font-bold text-[#59685a] dark:text-[#A3B1A4] flex items-center gap-1">
+                  <span className="material-symbols-outlined text-sm">edit_note</span>
+                  第三步：具体情节与细节要求（选填）
+                </label>
+                <textarea
+                  value={commissionRequirement}
+                  onChange={(e) => setCommissionRequirement(e.target.value)}
+                  placeholder={`例如：写一段在洛阳城雨夜中避雨的暧昧互动；或者两人在暗流涌动的宫廷宴席上眼神拉扯...`}
+                  rows={3}
+                  className="w-full bg-[#FAF7F2] dark:bg-[#1C1816] border border-[#E8DFD3] dark:border-[#3D352E] rounded-2xl p-3 text-xs text-[#2C2420] dark:text-[#FAF7F2] placeholder-[#A39282] focus:outline-none focus:border-[#D6724B] leading-relaxed resize-none"
+                />
+              </div>
+            </>
+          )}
+        </div>
+
+        {/* 底部按钮 */}
+        {!generatedBook && (
+          <div className="p-4 border-t border-[#EFE7DC] dark:border-[#332B25] bg-[#FAF6F0]/80 dark:bg-[#28231F]/80 backdrop-blur-md">
+            <button
+              onClick={handleStartWriting}
+              disabled={isGenerating || !selectedChar}
+              className={`w-full py-3.5 rounded-2xl text-white text-xs font-bold tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all active:scale-98 ${
+                isGenerating || !selectedChar
+                  ? "bg-[#A39282] cursor-not-allowed"
+                  : "bg-gradient-to-r from-[#D6724B] to-[#B85832] hover:opacity-95"
+              }`}
+            >
+              <span className={`material-symbols-outlined text-base ${isGenerating ? "animate-spin" : ""}`}>
+                {isGenerating ? "draw" : "history_edu"}
+              </span>
+              <span>{isGenerating ? "名家正在研墨执笔（约需3秒）..." : `请【${artist.name}】为【${selectedChar?.name || "角色"}】赐稿`}</span>
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+// ==================== 天下书城 · 定制约稿藏书阁 (BookstoreCustomLibrary) ====================
+
+const BookstoreCustomLibrary = ({
+  books,
+  onReadBook,
+  onAddToBookshelf,
+  onDeleteBook,
+  onExploreArtists,
+}) => {
+  return (
+    <div className="flex-1 overflow-y-auto pb-28 pt-4 px-4 max-w-2xl mx-auto space-y-6 font-sans">
+      {/* 顶部 Header */}
+      <header className="space-y-2">
+        <div className="flex items-center justify-between">
+          <h1 className="text-3xl font-serif font-bold text-primary tracking-tight flex items-center gap-2">
+            <span className="material-symbols-outlined text-[#D6724B] text-3xl">auto_stories</span>
+            定制藏书阁
+          </h1>
+          <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#59685a]/10 text-[#59685a] dark:text-[#A3B1A4]">
+            已收录 {books?.length || 0} 部独家手稿
+          </span>
+        </div>
+        <p className="text-xs text-[#8C7A6B] dark:text-[#A39282] leading-relaxed">
+          八方名家受楼主之托，为传讯故人量身撰写的专属书卷与珍藏篇章。
+        </p>
+      </header>
+
+      {/* 藏书列表 */}
+      {books && books.length > 0 ? (
+        <div className="space-y-4">
+          {books.map((book) => (
+            <div
+              key={book.id}
+              className="p-5 rounded-3xl bg-white/90 dark:bg-[#231F1C]/90 backdrop-blur-md border border-[#E8E0D5] dark:border-[#332D28] shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-4 relative overflow-hidden"
+            >
+              {/* 背景装饰印章 */}
+              <div
+                className="absolute right-[-10px] bottom-[-10px] opacity-10 pointer-events-none"
+                style={{ color: book.color || "#D6724B" }}
+              >
+                <span className="material-symbols-outlined text-8xl">menu_book</span>
+              </div>
+
+              <div className="flex gap-4">
+                {/* 书封 */}
+                <div
+                  onClick={() => onReadBook(book)}
+                  className="w-24 aspect-[2/3] rounded-xl shadow-md flex-shrink-0 flex items-center justify-center p-2 relative overflow-hidden text-center cursor-pointer active:scale-95 transition-transform"
+                  style={{ backgroundColor: book.color || "#59685a" }}
+                >
+                  <span
+                    className="font-serif font-bold text-sm text-white mix-blend-overlay drop-shadow"
+                    style={{ writingMode: "vertical-rl", letterSpacing: "2px" }}
+                  >
+                    {book.title}
+                  </span>
+                </div>
+
+                {/* 书籍信息 */}
+                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                  <div>
+                    <div className="flex items-center justify-between gap-2">
+                      <h3
+                        onClick={() => onReadBook(book)}
+                        className="font-serif font-bold text-lg text-[#2C2420] dark:text-[#FAF7F2] truncate cursor-pointer hover:text-[#D6724B]"
+                      >
+                        《{book.title}》
+                      </h3>
+                      <button
+                        onClick={() => {
+                          if (confirm(`确定要将《${book.title}》移出藏书阁吗？`)) {
+                            onDeleteBook(book.id);
+                          }
+                        }}
+                        className="text-[#A39282] hover:text-red-500 p-1 transition-colors"
+                        title="删除手稿"
+                      >
+                        <span className="material-symbols-outlined text-base">delete_outline</span>
+                      </button>
+                    </div>
+
+                    {/* 执笔人与主角名片 */}
+                    <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-[#8C7A6B]">
+                      <span className="flex items-center gap-1 font-medium text-[#D6724B]">
+                        <span>🖋️ 执笔:</span>
+                        {book.authorName}
+                      </span>
+                      <span>•</span>
+                      <span className="flex items-center gap-1 font-medium text-[#59685a] dark:text-[#A3B1A4]">
+                        <span>🎭 主角:</span>
+                        {book.targetCharacter}
+                      </span>
+                    </div>
+
+                    <p className="text-xs text-[#6E6055] dark:text-[#B8ACA0] mt-2 line-clamp-2 leading-relaxed">
+                      {book.summary}
+                    </p>
+                  </div>
+
+                  {/* 标签与日期 */}
+                  <div className="flex items-center justify-between pt-2 text-[10px] text-[#A39282]">
+                    <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                      {book.tags?.slice(0, 3).map((t, idx) => (
+                        <span
+                          key={idx}
+                          className="px-2 py-0.5 rounded bg-[#FAF5EE] dark:bg-[#2C2723] text-[#8C7A6B] border border-[#E8E0D5] dark:border-[#3D352E]"
+                        >
+                          #{t}
+                        </span>
+                      ))}
+                    </div>
+                    <span>{book.commissionDate || "近期约稿"}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 底部操作栏 */}
+              <div className="flex gap-2 pt-1">
+                <button
+                  onClick={() => onReadBook(book)}
+                  className="flex-1 py-2.5 rounded-xl bg-[#59685a] text-white text-xs font-medium active:scale-95 transition-transform flex items-center justify-center gap-1.5 shadow-sm"
+                >
+                  <span className="material-symbols-outlined text-sm">menu_book</span>
+                  沉浸阅读全文
+                </button>
+                <button
+                  onClick={() => onAddToBookshelf(book)}
+                  className="px-4 py-2.5 rounded-xl bg-[#FAF5EE] dark:bg-[#2C2723] text-[#59685a] dark:text-[#A3B1A4] border border-[#E8E0D5] dark:border-[#3D352E] text-xs font-medium active:scale-95 transition-transform flex items-center justify-center gap-1"
+                >
+                  <span className="material-symbols-outlined text-sm">bookmark_add</span>
+                  放入今日书架
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : (
+        /* 空状态 */
+        <div className="text-center py-20 space-y-4">
+          <div className="w-20 h-20 rounded-full bg-[#FAF5EE] dark:bg-[#28231E] mx-auto flex items-center justify-center text-[#A39282]">
+            <span className="material-symbols-outlined text-4xl">edit_note</span>
+          </div>
+          <div>
+            <h3 className="font-serif font-bold text-base text-[#2C2420] dark:text-[#FAF7F2]">
+              藏书阁暂无专属约稿
+            </h3>
+            <p className="text-xs text-[#8C7A6B] mt-1 max-w-xs mx-auto leading-relaxed">
+              前往天机榜结识心仪艺术家，即可为传讯中的故人量身定制独家传奇故事！
+            </p>
+          </div>
+          <button
+            onClick={onExploreArtists}
+            className="px-6 py-2.5 rounded-full bg-[#D6724B] text-white text-xs font-bold shadow-md active:scale-95 transition-transform inline-flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-sm">military_tech</span>
+            前往心仪艺术家约稿
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 // ==================== [新增] 长期记忆设置组件 ====================
 // ==================== [新增/修改] 长期记忆设置组件 ====================
 const LongTermMemoryPage = () => {
@@ -90083,6 +91662,13 @@ const MasterApp = () => {
   const [books, setBooks] = useState([]);
   const [activeBookIndex, setActiveBookIndex] = useState(0);
   const [isReadingDetailOpen, setIsReadingDetailOpen] = useState(false);
+  // [新增] 心仪艺术家排行榜页面状态
+  const [isArtistRankOpen, setIsArtistRankOpen] = useState(false);
+  // [新增] 约稿弹窗与约稿藏书阁状态
+  const [isCommissionModalOpen, setIsCommissionModalOpen] = useState(false);
+  const [activeCommissionArtist, setActiveCommissionArtist] = useState(null);
+  const [bookstoreSubTab, setBookstoreSubTab] = useState("home"); // 'home' | 'custom_library'
+  const [customCommissionBooks, setCustomCommissionBooks] = useState([]);
   const [currentReadingBook, setCurrentReadingBook] = useState(null);
   // 阅读器标签状态
   const [currentReaderTab, setCurrentReaderTab] = useState("today"); // 'today' 或 'bookstore'
@@ -90140,9 +91726,15 @@ const MasterApp = () => {
     const savedRec = localStorage.getItem("store_recommend_books");
     const savedPop = localStorage.getItem("store_popular_books");
     const savedPunch = localStorage.getItem("reader_weekly_punch");
+    const savedCommission = localStorage.getItem("custom_commission_books");
     if (savedRec) setStoreRecommendBooks(JSON.parse(savedRec));
     if (savedPop) setStorePopularBooks(JSON.parse(savedPop));
     if (savedPunch) setReaderWeeklyPunch(JSON.parse(savedPunch));
+    if (savedCommission) {
+      try {
+        setCustomCommissionBooks(JSON.parse(savedCommission));
+      } catch (e) {}
+    }
   }, []);
 
   // [新增] 书城阅读打卡逻辑
@@ -92453,6 +94045,25 @@ const MasterApp = () => {
             </main>
           ) : (
             /* 天下书城 - 显示书城内容 */
+            bookstoreSubTab === "custom_library" ? (
+              <BookstoreCustomLibrary
+                books={customCommissionBooks}
+                onReadBook={async (book) => {
+                  const bookToRead = { ...book, fullText: book.fullText || "暂无正文" };
+                  setCurrentReadingBook(bookToRead);
+                  setIsReadingDetailOpen(true);
+                }}
+                onAddToBookshelf={handleAddToBookshelf}
+                onDeleteBook={(bookId) => {
+                  const next = customCommissionBooks.filter((b) => b.id !== bookId);
+                  setCustomCommissionBooks(next);
+                  localStorage.setItem("custom_commission_books", JSON.stringify(next));
+                }}
+                onExploreArtists={() => {
+                  setIsArtistRankOpen(true);
+                }}
+              />
+            ) : (
             <main className="flex-1 overflow-y-auto pb-24">
               {/* Search Field */}
               <div className="mt-8 mb-12">
@@ -92682,7 +94293,8 @@ const MasterApp = () => {
                     </div>
                   </div>
                   <div
-                    className="p-6 rounded-3xl flex flex-col justify-between"
+                    onClick={() => setIsArtistRankOpen(true)}
+                    className="p-6 rounded-3xl flex flex-col justify-between cursor-pointer active:scale-95 transition-all hover:shadow-md"
                     style={{
                       backgroundColor: "var(--surface-container-high)",
                     }}
@@ -92694,8 +94306,8 @@ const MasterApp = () => {
                       bookmark
                     </span>
                     <p
-                      className="text-xs font-label uppercase tracking-wider mt-4"
-                      style={{ color: "var(--outline)" }}
+                      className="text-xs font-label uppercase tracking-wider mt-4 font-bold"
+                      style={{ color: "var(--secondary)" }}
                     >
                       心仪艺术家
                     </p>
@@ -92722,6 +94334,7 @@ const MasterApp = () => {
                 </div>
               </section>
             </main>
+            )
           )}
 
           {/* [新增] AI 荐书悬浮组件 - 只在今日阅读时显示 */}
@@ -92823,22 +94436,56 @@ const MasterApp = () => {
 
           {/* 天下书城底部导航栏 */}
           {currentReaderTab === "bookstore" && (
-            <footer className="fixed bottom-0 left-0 w-full z-50 bg-[#f7f3ee]/80 dark:bg-stone-950/80 backdrop-blur-2xl flex justify-around items-center px-8 pb-6 pt-3 shadow-[0_-4px_30px_rgba(57,56,52,0.05)] rounded-t-[2rem]">
-              {/* Home Active */}
-              <button className="flex flex-col items-center justify-center bg-[#695c51] text-[#fff6f1] rounded-full p-3 transition-all duration-300 active:scale-90 duration-300 ease-out">
+            <footer className="fixed bottom-0 left-0 w-full z-50 bg-[#f7f3ee]/90 dark:bg-stone-950/90 backdrop-blur-2xl flex justify-around items-center px-8 pb-6 pt-3 shadow-[0_-4px_30px_rgba(57,56,52,0.08)] rounded-t-[2rem] border-t border-[#E8E0D5]/50 dark:border-stone-800/50">
+              {/* 首页 Tab */}
+              <button
+                onClick={() => setBookstoreSubTab("home")}
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full transition-all duration-300 active:scale-90 ${
+                  bookstoreSubTab === "home"
+                    ? "bg-[#695c51] text-[#fff6f1] shadow-md font-bold"
+                    : "text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
+                }`}
+              >
                 <span
-                  className="material-symbols-outlined"
+                  className="material-symbols-outlined text-xl"
                   style={{
                     fontVariationSettings:
-                      "'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+                      bookstoreSubTab === "home"
+                        ? "'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24"
+                        : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
                   }}
                 >
                   home
                 </span>
+                <span className="text-xs font-serif">书城首页</span>
               </button>
-              {/* Library Inactive */}
-              <button className="flex flex-col items-center justify-center text-stone-500 p-3 hover:text-stone-800 transition-colors">
-                <span className="material-symbols-outlined">auto_stories</span>
+
+              {/* 约稿藏书阁 Tab */}
+              <button
+                onClick={() => setBookstoreSubTab("custom_library")}
+                className={`relative flex items-center gap-2 px-5 py-2.5 rounded-full transition-all duration-300 active:scale-90 ${
+                  bookstoreSubTab === "custom_library"
+                    ? "bg-[#D6724B] text-white shadow-md font-bold"
+                    : "text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
+                }`}
+              >
+                <span
+                  className="material-symbols-outlined text-xl"
+                  style={{
+                    fontVariationSettings:
+                      bookstoreSubTab === "custom_library"
+                        ? "'FILL' 1, 'wght' 600, 'GRAD' 0, 'opsz' 24"
+                        : "'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24",
+                  }}
+                >
+                  auto_stories
+                </span>
+                <span className="text-xs font-serif">藏书阁</span>
+                {customCommissionBooks.length > 0 && (
+                  <span className="ml-0.5 px-1.5 py-0.2 rounded-full text-[10px] bg-white/30 text-current font-bold">
+                    {customCommissionBooks.length}
+                  </span>
+                )}
               </button>
             </footer>
           )}
@@ -93125,6 +94772,36 @@ const MasterApp = () => {
           }
         }}
       />
+
+      {/* [新增] 心仪艺术家排行榜与作家书评页面 */}
+      {isArtistRankOpen && (
+        <ArtistRankingPage
+          isOpen={isArtistRankOpen}
+          onClose={() => setIsArtistRankOpen(false)}
+          onAddToBookshelf={handleAddToBookshelf}
+          onOpenCommission={(artist) => {
+            setActiveCommissionArtist(artist);
+            setIsCommissionModalOpen(true);
+          }}
+        />
+      )}
+
+      {/* [新增] 名家约稿小窗 */}
+      {isCommissionModalOpen && (
+        <ArtistCommissionModal
+          isOpen={isCommissionModalOpen}
+          onClose={() => setIsCommissionModalOpen(false)}
+          artist={activeCommissionArtist}
+          onCommissionSuccess={(newBook, allBooks) => {
+            setCustomCommissionBooks(allBooks);
+          }}
+          onNavigateToLibrary={() => {
+            setIsArtistRankOpen(false);
+            setCurrentReaderTab("bookstore");
+            setBookstoreSubTab("custom_library");
+          }}
+        />
+      )}
 
       {/* [新增] 相对演绎页面 */}
       {isRelativeOpen && (
