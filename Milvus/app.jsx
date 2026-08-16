@@ -32062,7 +32062,7 @@ const NoticeEditPage = ({
   );
 };
 
-// ==================== T11 楼内联系人页面组件 (支持点击底部弹出人物介绍卡片 + 留白笔记 + IndexedDB 持久化) ====================
+// ==================== T11 楼内联系人页面组件 (支持点击底部弹出人物介绍填写卡片 + IndexedDB 持久化) ====================
 const T11InsideContactsPage = ({ onBack }) => {
   // 角色列表
   const CHARACTERS = [
@@ -32153,61 +32153,15 @@ const T11InsideContactsPage = ({ onBack }) => {
     "曹丕",
   ];
 
-  // 详尽的人物预设档案介绍
-  const CHARACTER_BIOS = {
-    傅融: "绣衣楼副官兼主簿，精打细算、勤俭持家，每日为楼内财政报销与省钱大计操碎了心。表面冷峻严苛、言辞犀利，实则对广陵王忠心耿耿，背地里默默背负着沉重的债务与旧事秘密。",
-    阿蝉: "广陵王最得力也最信任的鸢部密探与近侍。冷面寡言、行事果决、武艺超群，对楼主之命奉若神明，任何敢对广陵王不利之人都会遭到她无情的利刃制裁。",
-    郭嘉: "字奉孝，天生鬼才，智计绝伦。嗜酒如命，风流不羁，看似玩世不恭，实则洞察天下大势与人心幽微。与广陵王既是棋逢对手的智囊，又常在酒肆花间倾心对饮。",
-    荀彧: "字文若，尚书令，王佐之才。温文尔雅，清正端方，胸怀匡扶汉室之远志。在朝堂纷扰中如寒夜松柏，对广陵王既有关照爱护，亦有深沉的政治期许。",
-    贾诩: "字文和，毒士无双，算无遗策。信奉保命第一，深谙乱世生存法则。行事低调阴沉，计谋往往狠辣决绝，却总能在危局中为广陵王指出一条破局生路。",
-    华佗: "医术通神的神医，鸢部医官。性情古怪执着，热衷于钻研各种奇门药方与外科手术，常拿楼内密探当药理测试对象，令众人既敬且畏。",
-    葛洪: "道门奇人，痴迷于炼丹与修仙妙法。常因在楼内胡乱试丹或炸鼎而被傅融罚款，与华佗是欢喜冤家。",
-    杨修: "字德祖，才思敏捷，恃才傲物。出身弘农杨氏，言辞锋芒毕露，常常一眼看穿他人心思，在各大世家与官场纷争中游刃有余。",
-    庞统: "字士元，号凤雏。外表不修边幅，甚至有些慵懒随性，胸中却有经天纬地之才，善出奇策，对天下局势了然于胸。",
-    程昱: "字仲德，谋略深沉，性格刚毅冷峻。精于算计与物资调度，在乱世中敢作敢当，手段雷厉风行。",
-    颜良: "河北名将，勇冠三军。身材魁梧，威风凛凛，战场上所向披靡，私下里却也有重情重义的一面。",
-    文丑: "河北名将，与颜良齐名。性格豪爽耿直，战力绝伦，对信任之人倾囊相助。",
-    史子眇: "广陵道观道长，仙风道骨，精通符箓与养生之道，广陵王早年旧识，常给予神秘而玄妙的指引。",
-    陈登: "字元龙，广陵名士，胸怀大志。爱食生鱼片，为人豪爽阔达，深得广陵百姓爱戴，是广陵郡不可多得的治世贤良。",
-    张修: "五斗米道大祭酒，行事诡谲莫测，善弄人心与巫蛊之术，在汉中乃至关中暗流涌动中扮演着关键角色。",
-    张角: "太平道教主，大贤良师，符水救人，掀起席卷天下的黄巾风暴，有着极具魅力的号召力与偏执的信仰。",
-    孙权: "字仲谋，江东之主。年少有为，碧眼紫髯，心思深沉，善于平衡各方势力与笼络人心。",
-    孙尚香: "江东枭姬，孙策孙权之妹。性格火辣果敢，弓马娴熟，巾帼不让须眉，性格爽朗真诚。",
-    吕蒙: "江东大将，从行伍勇卒成长为一代名帅。勇猛兼备智谋，对江东忠心不二。",
-    周瑜: "字公瑾，江东大都督。雄姿英发，羽扇纶巾，精通音律与兵法，风华绝代。",
-    陆逊: "字伯言，儒将典范。面如冠玉，性情温厚内敛，韬略深远，善于隐忍后发制人。",
-    甘宁: "字兴霸，锦帆游侠。桀骜不驯，勇猛无双，腰悬铜铃，来去如风，快意恩仇。",
-    郭解: "汉末大侠，重诺轻生，在民间游侠与黑白两道之间威望极高。",
-    甄宓: "江南绝色，江南有二乔，河北甄宓俏。温婉多情，才貌双全，在乱世风云中坚守本心。",
-    蔡琰: "字文姬，一代才女。博学多才，精通音律与书法，命运坎坷却风骨凛然。",
-    小乔: "庐江皖县乔公之女，国色天香，性情娇俏灵动，通晓乐理。",
-    董白: "董卓之孙女，娇蛮任性，在西凉军阀的庇护下长大，性情乖张却又带着一丝孩童的执拗。",
-    夏侯惇: "曹魏名将，刚烈勇悍，身先士卒，性格忠勇率直。",
-    马超: "西凉锦马超，狮盔兽带，勇猛过人，西凉军中的灵魂人物。",
-    张飞: "蜀汉名将，万人敌。性格暴烈却粗中有细，画美人、写草书皆有一绝。",
-    吕布: "字奉先，天下无双之猛将。弓马过人，骁勇善战，人中吕布，马中赤兔。",
-    满宠: "曹魏执法官，执法严苛，铁面无私，精于狱讼与城防。",
-    徐庶: "字元直，早年行侠仗义，后折节向学，谋略超群，重情重义。",
-    张辽: "字文远，智勇双全的名将。威震逍遥津，沉着稳重，深受军民敬仰。",
-  };
-
-  // 生成通用的代号鸢角色档案介绍
-  const getCharacterBio = (charName) => {
-    if (CHARACTER_BIOS[charName]) {
-      return CHARACTER_BIOS[charName];
-    }
-    return `绣衣楼登记在册之密探人物。身怀绝技，常年出没于广陵城内及各郡国谍报前线。在楼主广陵王的统御下，执行刺探、传讯、护卫等重要机密任务。`;
-  };
-
   // 状态管理
   const [avatars, setAvatars] = React.useState({}); // 头像
   const [showItems, setShowItems] = React.useState([]); // 列表动画条目
   const [selectedChar, setSelectedChar] = React.useState(null); // 当前选中查看的角色
-  const [notes, setNotes] = React.useState({}); // 所有角色的自定义笔记字典
-  const [currentNoteText, setCurrentNoteText] = React.useState(""); // 当前编辑中的笔记
+  const [characterBios, setCharacterBios] = React.useState({}); // 所有角色的自定义人物介绍字典 (来自 IndexedDB)
+  const [currentBioText, setCurrentBioText] = React.useState(""); // 当前编辑中的人物介绍
   const [saveStatus, setSaveStatus] = React.useState(""); // 保存状态提示
 
-  // 初始化时加载头像和 IndexedDB 笔记
+  // 初始化时加载头像和 IndexedDB 中的人物介绍
   React.useEffect(() => {
     const savedAvatars = localStorage.getItem("绣衣楼头像");
     if (savedAvatars) {
@@ -32216,20 +32170,20 @@ const T11InsideContactsPage = ({ onBack }) => {
       } catch (e) {}
     }
 
-    // 从 IndexedDB 加载人物笔记
-    const loadNotes = async () => {
+    // 从 IndexedDB 加载人物介绍
+    const loadBios = async () => {
       try {
         if (window.settingsStore?.getCharacterNotes) {
-          const loadedNotes = await window.settingsStore.getCharacterNotes();
-          if (loadedNotes && typeof loadedNotes === "object") {
-            setNotes(loadedNotes);
+          const loadedBios = await window.settingsStore.getCharacterNotes();
+          if (loadedBios && typeof loadedBios === "object") {
+            setCharacterBios(loadedBios);
           }
         }
       } catch (e) {
-        console.warn("加载人物笔记失败:", e);
+        console.warn("加载人物介绍失败:", e);
       }
     };
-    loadNotes();
+    loadBios();
 
     // 列表条目动画
     let index = 0;
@@ -32240,7 +32194,7 @@ const T11InsideContactsPage = ({ onBack }) => {
       } else {
         clearInterval(interval);
       }
-    }, 60);
+    }, 50);
 
     return () => clearInterval(interval);
   }, []);
@@ -32248,30 +32202,30 @@ const T11InsideContactsPage = ({ onBack }) => {
   // 处理点击角色卡片打开底部抽屉
   const handleOpenCharCard = (character) => {
     setSelectedChar(character);
-    const existingNote = notes[character] || "";
-    setCurrentNoteText(existingNote);
+    const existingBio = characterBios[character] || "";
+    setCurrentBioText(existingBio);
     setSaveStatus("");
   };
 
-  // 保存当前角色的笔记到 IndexedDB
-  const handleSaveNote = async (character, text) => {
-    const updatedNotes = {
-      ...notes,
+  // 保存当前角色的人物介绍到 IndexedDB
+  const handleSaveBio = async (character, text) => {
+    const updatedBios = {
+      ...characterBios,
       [character]: text,
     };
-    setNotes(updatedNotes);
+    setCharacterBios(updatedBios);
     setSaveStatus("正在保存...");
 
     try {
       if (window.settingsStore?.saveCharacterNote) {
         await window.settingsStore.saveCharacterNote(character, text);
       } else {
-        localStorage.setItem("xiuyi_char_notes", JSON.stringify(updatedNotes));
+        localStorage.setItem("xiuyi_character_bios", JSON.stringify(updatedBios));
       }
-      setSaveStatus("已保存到数据库");
+      setSaveStatus("已保存至数据库");
       setTimeout(() => setSaveStatus(""), 2000);
     } catch (e) {
-      console.error("保存笔记失败", e);
+      console.error("保存人物介绍失败", e);
       setSaveStatus("保存失败");
     }
   };
@@ -32424,21 +32378,41 @@ const T11InsideContactsPage = ({ onBack }) => {
               </div>
             </div>
 
-            {/* 角色名称与状态标签 */}
+            {/* 角色名称与介绍状态 */}
             <div style={{ flex: 1 }}>
               <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                <h3
-                  style={{
-                    fontSize: "16px",
-                    fontWeight: "bold",
-                    color: "#5a5f4d",
-                    margin: 0,
-                  }}
-                >
-                  {character}
-                </h3>
+                <div>
+                  <h3
+                    style={{
+                      fontSize: "16px",
+                      fontWeight: "bold",
+                      color: "#5a5f4d",
+                      margin: "0 0 2px 0",
+                    }}
+                  >
+                    {character}
+                  </h3>
+                  {characterBios[character] ? (
+                    <div
+                      style={{
+                        fontSize: "12px",
+                        color: "#999",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        maxWidth: "200px",
+                      }}
+                    >
+                      {characterBios[character]}
+                    </div>
+                  ) : (
+                    <div style={{ fontSize: "12px", color: "#BBB" }}>
+                      点击填写人物介绍...
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
-                  {notes[character] && (
+                  {characterBios[character] && (
                     <span
                       style={{
                         fontSize: "11px",
@@ -32449,7 +32423,7 @@ const T11InsideContactsPage = ({ onBack }) => {
                         fontWeight: "500",
                       }}
                     >
-                      已批注
+                      已填写
                     </span>
                   )}
                   <i className="ph ph-caret-right" style={{ color: "#CCC", fontSize: "16px" }}></i>
@@ -32602,7 +32576,7 @@ const T11InsideContactsPage = ({ onBack }) => {
               </div>
             </div>
 
-            {/* 可滚动正文区 */}
+            {/* 可滚动正文区：用户自定义填写的人物介绍栏 */}
             <div
               className="no-scrollbar"
               style={{
@@ -32611,40 +32585,8 @@ const T11InsideContactsPage = ({ onBack }) => {
                 paddingRight: "2px",
               }}
             >
-              {/* 1. 人物介绍模块 */}
+              {/* 人物介绍填写栏 */}
               <div style={{ marginBottom: "18px" }}>
-                <div
-                  style={{
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                    fontSize: "14px",
-                    fontWeight: "600",
-                    color: "#5A5F4D",
-                    marginBottom: "8px",
-                  }}
-                >
-                  <i className="ph-bold ph-book-open" style={{ color: "#A8C8BA" }}></i>
-                  <span>人物介绍</span>
-                </div>
-                <div
-                  style={{
-                    background: "#FAF7F2",
-                    border: "1px solid #EDE8DE",
-                    borderRadius: "16px",
-                    padding: "14px 16px",
-                    fontSize: "13.5px",
-                    color: "#555A4D",
-                    lineHeight: "1.65",
-                    letterSpacing: "0.2px",
-                  }}
-                >
-                  {getCharacterBio(selectedChar)}
-                </div>
-              </div>
-
-              {/* 2. 人物介绍下方留白：供用户自行填写 */}
-              <div>
                 <div
                   style={{
                     display: "flex",
@@ -32663,8 +32605,8 @@ const T11InsideContactsPage = ({ onBack }) => {
                       color: "#5A5F4D",
                     }}
                   >
-                    <i className="ph-bold ph-pencil-simple-line" style={{ color: "#E8C3A8" }}></i>
-                    <span>楼主随笔 / 自定义备注</span>
+                    <i className="ph-bold ph-book-open" style={{ color: "#A8C8BA" }}></i>
+                    <span>人物介绍</span>
                   </div>
                   {saveStatus && (
                     <span
@@ -32681,24 +32623,24 @@ const T11InsideContactsPage = ({ onBack }) => {
                 </div>
 
                 <textarea
-                  value={currentNoteText}
+                  value={currentBioText}
                   onChange={(e) => {
                     const val = e.target.value;
-                    setCurrentNoteText(val);
-                    handleSaveNote(selectedChar, val);
+                    setCurrentBioText(val);
+                    handleSaveBio(selectedChar, val);
                   }}
-                  placeholder="在此留白记录关于该密探的专属情报、密闻、备忘或随笔评语（实时存入数据库）..."
+                  placeholder={`在此填写关于${selectedChar}的人物介绍与背景档案（输入后自动保存至本地数据库）...`}
                   style={{
                     width: "100%",
                     boxSizing: "border-box",
-                    minHeight: "115px",
-                    padding: "12px 14px",
-                    borderRadius: "16px",
+                    minHeight: "180px",
+                    padding: "14px 16px",
+                    borderRadius: "18px",
                     border: "1.5px solid #E2DED4",
                     background: "#FFF",
-                    fontSize: "13.5px",
+                    fontSize: "14px",
                     color: "#4A4F44",
-                    lineHeight: "1.6",
+                    lineHeight: "1.65",
                     outline: "none",
                     resize: "vertical",
                     boxShadow: "inset 0 2px 4px rgba(0, 0, 0, 0.02)",
@@ -32717,17 +32659,17 @@ const T11InsideContactsPage = ({ onBack }) => {
               </div>
 
               {/* 完成关闭按钮 */}
-              <div style={{ marginTop: "18px" }}>
+              <div>
                 <button
                   onClick={() => setSelectedChar(null)}
                   style={{
                     width: "100%",
-                    padding: "11px 0",
-                    borderRadius: "14px",
+                    padding: "12px 0",
+                    borderRadius: "16px",
                     border: "none",
                     background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
                     color: "#FFF",
-                    fontSize: "14px",
+                    fontSize: "15px",
                     fontWeight: "600",
                     cursor: "pointer",
                     boxShadow: "0 4px 12px rgba(168, 200, 186, 0.35)",
@@ -32736,7 +32678,7 @@ const T11InsideContactsPage = ({ onBack }) => {
                   onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.98)")}
                   onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
                 >
-                  完成并收起
+                  保存并完成
                 </button>
               </div>
             </div>
