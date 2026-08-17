@@ -2000,6 +2000,138 @@
       }
 
       // 暴露全局变量，确保在React组件中可用
+      
+      // ✅ 新增：太疾驰配送订单存储操作对象 (IndexedDB + localStorage 双重同步)
+      const deliveryOrderStore = {
+        getAll: async () => {
+          try {
+            const raw = localStorage.getItem("tjc_delivery_orders");
+            return raw ? JSON.parse(raw) : [];
+          } catch (e) {
+            console.error("读取太疾驰配送订单失败", e);
+            return [];
+          }
+        },
+        saveAll: async (orders) => {
+          try {
+            localStorage.setItem("tjc_delivery_orders", JSON.stringify(orders || []));
+            window.dispatchEvent(new CustomEvent("deliveryOrdersUpdated"));
+            return true;
+          } catch (e) {
+            console.error("保存太疾驰配送订单失败", e);
+            return false;
+          }
+        },
+        addOrder: async (orderData) => {
+          try {
+            const orders = await deliveryOrderStore.getAll();
+            const now = Date.now();
+            const durationMinutes = orderData.durationMinutes || (Math.floor(Math.random() * 3) + 2);
+            const newOrder = {
+              id: orderData.id || `TJC_${now}_${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+              orderTime: now,
+              estimatedDeliveryTime: now + durationMinutes * 60 * 1000,
+              durationMinutes: durationMinutes,
+              merchantName: orderData.merchantName || "太疾驰合作商家",
+              merchantLocation: orderData.merchantLocation || "洛阳城繁华东市",
+              userAddress: orderData.userAddress || "广陵王府·听雨阁",
+              courier: orderData.courier || {
+                name: "太疾驰快马骑手·戴宗",
+                avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=DaiZong",
+                vehicle: "神行千里马",
+                rating: 4.98,
+                phone: "传讯灵佩 #9527"
+              },
+              items: orderData.items || [],
+              totalPriceStr: orderData.totalPriceStr || "0钱",
+              totalBase: orderData.totalBase || 0,
+              payMethod: orderData.payMethod || "self",
+              payerRoleName: orderData.payerRoleName || "",
+              status: "delivering", // delivering | delivered | completed
+              rushCount: 0,
+              ...orderData
+            };
+            orders.unshift(newOrder);
+            await deliveryOrderStore.saveAll(orders);
+            return newOrder;
+          } catch (e) {
+            console.error("新增配送订单失败", e);
+            return null;
+          }
+        },
+        completeOrder: async (orderId) => {
+          try {
+            const orders = await deliveryOrderStore.getAll();
+            const target = orders.find(o => o.id === orderId);
+            if (target && target.status !== "completed") {
+              target.status = "completed";
+              target.completedTime = Date.now();
+              // 将商品存入背包
+              if (window.backpackStore && target.items && target.items.length > 0) {
+                await window.backpackStore.addItems(target.items);
+              }
+              await deliveryOrderStore.saveAll(orders);
+              return true;
+            }
+            return false;
+          } catch (e) {
+            console.error("确认收货入库失败", e);
+            return false;
+          }
+        },
+        rushDelivery: async (orderId) => {
+          try {
+            const orders = await deliveryOrderStore.getAll();
+            const target = orders.find(o => o.id === orderId);
+            if (target && target.status === "delivering") {
+              target.rushCount = (target.rushCount || 0) + 1;
+              // 每次催单加速 35 秒
+              target.estimatedDeliveryTime = Math.max(Date.now(), target.estimatedDeliveryTime - 35000);
+              await deliveryOrderStore.saveAll(orders);
+              return target;
+            }
+            return null;
+          } catch (e) {
+            console.error("催单失败", e);
+            return null;
+          }
+        },
+        deleteOrder: async (orderId) => {
+          try {
+            let orders = await deliveryOrderStore.getAll();
+            orders = orders.filter(o => o.id !== orderId);
+            await deliveryOrderStore.saveAll(orders);
+            return true;
+          } catch (e) {
+            console.error("删除订单失败", e);
+            return false;
+          }
+        },
+        checkAutoDelivery: async () => {
+          try {
+            const orders = await deliveryOrderStore.getAll();
+            const now = Date.now();
+            let changed = false;
+            for (const order of orders) {
+              if (order.status === "delivering" && now >= order.estimatedDeliveryTime) {
+                order.status = "completed";
+                order.completedTime = now;
+                changed = true;
+                if (window.backpackStore && order.items && order.items.length > 0) {
+                  await window.backpackStore.addItems(order.items);
+                }
+              }
+            }
+            if (changed) {
+              await deliveryOrderStore.saveAll(orders);
+            }
+          } catch (e) {
+            console.error("检查自动配送履约失败", e);
+          }
+        }
+      };
+      window.deliveryOrderStore = deliveryOrderStore;
+
       window.settingsStore = settingsStore;
       window.migrateUserData = migrateUserData;
       window.chatCharacterStore = chatCharacterStore;

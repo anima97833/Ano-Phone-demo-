@@ -16695,9 +16695,9 @@ const T12TicketPage = ({ onTicketLock }) => {
   );
 };
 
-// ==================== T12 二手交易页面 (1:1 复刻版) ====================
+// ==================== T12 二手交易页面 (集成个人闲置发布、拟真出价互动与拼多多每日签到金) ====================
 const T12SecondHandPage = ({ onAddToSettlement }) => {
-  const { useState } = React;
+  const { useState, useEffect, useRef } = React;
 
   const categories = [
     { name: "日用", color: "#EBE4F5" }, // 淡紫
@@ -16716,8 +16716,289 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
   const [selectedTrade, setSelectedTrade] = useState(null);
   const [hotSellers, setHotSellers] = useState([]);
 
+  // ==== 个人发布闲置拍卖相关状态 ====
+  const [userAuctions, setUserAuctions] = useState([]);
+  const [showPublishModal, setShowPublishModal] = useState(false);
+  const [backpackItems, setBackpackItems] = useState([]);
+  const [selectedBackpackItem, setSelectedBackpackItem] = useState(null);
+  const [publishForm, setPublishForm] = useState({
+    price: "50铢",
+    category: "日用",
+    intro: "广陵王府库房清仓，九九新自刀出，支持同城快马！"
+  });
+  const [showMyAuctionDetail, setShowMyAuctionDetail] = useState(null);
+  const [myAuctionTab, setMyAuctionTab] = useState("bids"); // "bids" | "messages"
+
+  // ==== 拼多多式每日签到金状态 ====
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [hasSignedToday, setHasSignedToday] = useState(false);
+  const [todaySignAmount, setTodaySignAmount] = useState(0);
+  const [showBurstCelebration, setShowBurstCelebration] = useState(false);
+  const [burstAmount, setBurstAmount] = useState(0);
+
+  // 初始化加载签到金和个人拍卖数据
+  useEffect(() => {
+    // 读取签到状态
+    const lastDate = localStorage.getItem("tjc_last_sign_date");
+    const lastAmount = localStorage.getItem("tjc_today_sign_amount");
+    if (lastDate === todayStr) {
+      setHasSignedToday(true);
+      setTodaySignAmount(parseFloat(lastAmount || "0"));
+    } else {
+      setHasSignedToday(false);
+      setTodaySignAmount(0);
+    }
+
+    // 读取个人拍卖列表
+    try {
+      const stored = localStorage.getItem("tjc_user_auctions");
+      if (stored) {
+        setUserAuctions(JSON.parse(stored));
+      }
+    } catch (e) {
+      console.error(e);
+    }
+  }, []);
+
+  // 加载背包物品
+  const loadBackpackItems = async () => {
+    if (window.backpackStore) {
+      const items = await window.backpackStore.getAll();
+      setBackpackItems(items || []);
+      if (items && items.length > 0) {
+        setSelectedBackpackItem(items[0]);
+      }
+    }
+  };
+
+  // 随机闲鱼文案库
+  const randomXianyuIntros = [
+    "广陵王府库房大清仓，九九新自刀出，诚心要的可小刀！",
+    "前日密探相赠之物，用不上换点酒钱，爽快老哥包快马！",
+    "传世珍藏，成色极佳，明码标价，记者鸽子勿扰！",
+    "西苑观戏时购得，全新未拆封，因缺五铢钱忍痛割爱！",
+    "江东名士同款，仅试用过一次，带诚意出价立出！",
+    "府邸搬迁降价急出，支持太疾驰闪送验货，手慢无！"
+  ];
+
+  const handleRandomIntro = () => {
+    const random = randomXianyuIntros[Math.floor(Math.random() * randomXianyuIntros.length)];
+    setPublishForm(prev => ({ ...prev, intro: random }));
+  };
+
+  // 处理发布个人闲置
+  const handlePublishAuction = () => {
+    if (!selectedBackpackItem) {
+      alert("请先选择一件背包中的物品！");
+      return;
+    }
+    if (!publishForm.price.trim()) {
+      alert("请填写起拍价格！");
+      return;
+    }
+
+    // 读取当前主控名字与头像
+    let userName = "广陵王";
+    let userAvatar = "";
+    try {
+      const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+      const activeId = localStorage.getItem("active_persona_id");
+      if (activeId) {
+        const activeUser = savedPersonas.find(p => p.id == activeId);
+        if (activeUser) {
+          userName = activeUser.name || "广陵王";
+          userAvatar = activeUser.avatar || "";
+        }
+      }
+    } catch (e) {}
+
+    const parsedPrice = parseInt(publishForm.price.replace(/[^0-9]/g, '')) || 50;
+
+    const newAuction = {
+      id: `AUCTION_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+      backpackItemId: selectedBackpackItem.id,
+      item: selectedBackpackItem.name,
+      seller: userName,
+      sellerAvatar: userAvatar,
+      isMe: true,
+      category: publishForm.category,
+      price: publishForm.price,
+      basePriceNum: parsedPrice,
+      currentBidNum: parsedPrice,
+      highestBidder: "暂无出价",
+      intro: publishForm.intro || "九成新自刀出，诚心要的可聊！",
+      wantCount: Math.floor(Math.random() * 5) + 1,
+      publishTime: Date.now(),
+      status: "active",
+      bids: [
+        {
+          bidder: "初始起拍价",
+          amount: parsedPrice,
+          amountStr: publishForm.price,
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          avatar: userAvatar
+        }
+      ],
+      messages: [
+        {
+          sender: "系统提醒",
+          text: "您的闲置拍卖品已成功上架东汉集市，快马买家正在赶来围观！",
+          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+          avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=System"
+        }
+      ]
+    };
+
+    const updated = [newAuction, ...userAuctions];
+    setUserAuctions(updated);
+    localStorage.setItem("tjc_user_auctions", JSON.stringify(updated));
+
+    setShowPublishModal(false);
+    alert(`🎉 恭喜！物品【${selectedBackpackItem.name}】已成功发布到太疾驰二手集市！名士商贩正陆续赶来出价竞拍！`);
+  };
+
+  // 拟真后台买家事件流（竞价、私聊留言、收藏增加）
+  useEffect(() => {
+    const buyerNames = ["曹植", "陈登", "郭嘉", "孙策", "陆逊", "周瑜", "洛阳古董掌柜", "东市鉴宝客", "西苑客商", "江东锦衣郎", "许都行脚商", "建安坊藏家"];
+    const buyerMessages = [
+      "楼主，这件成色真不错，可否小刀 5 铢？",
+      "诚心要，能包太疾驰快马速递吗？",
+      "已出价！楼主看合适就速速点成交吧！",
+      "好物！已加入收藏，蹲一个降价！",
+      "这件在江东可罕见了，我加价要了！",
+      "东西保真吗？若保真我直接按最高价拍下！",
+      "楼主还在吗？私聊留个传讯印信呗！"
+    ];
+
+    const interval = setInterval(() => {
+      setUserAuctions(prevAuctions => {
+        let changed = false;
+        const updated = prevAuctions.map(auction => {
+          if (auction.status !== "active") return auction;
+
+          // 30% 概率触发新出价
+          if (Math.random() < 0.35) {
+            changed = true;
+            const bidder = buyerNames[Math.floor(Math.random() * buyerNames.length)];
+            const increment = Math.floor(Math.random() * 15) + 5;
+            const newBid = auction.currentBidNum + increment;
+            const newBids = [
+              ...auction.bids,
+              {
+                bidder: bidder,
+                amount: newBid,
+                amountStr: `${newBid}铢`,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${bidder}`
+              }
+            ];
+            return {
+              ...auction,
+              currentBidNum: newBid,
+              highestBidder: bidder,
+              price: `${newBid}铢`,
+              wantCount: auction.wantCount + Math.floor(Math.random() * 2) + 1,
+              bids: newBids
+            };
+          }
+
+          // 25% 概率触发新私聊留言
+          if (Math.random() < 0.3) {
+            changed = true;
+            const sender = buyerNames[Math.floor(Math.random() * buyerNames.length)];
+            const text = buyerMessages[Math.floor(Math.random() * buyerMessages.length)];
+            const newMsgs = [
+              ...auction.messages,
+              {
+                sender: sender,
+                text: text,
+                time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+                avatar: `https://api.dicebear.com/7.x/notionists/svg?seed=${sender}`
+              }
+            ];
+            return {
+              ...auction,
+              wantCount: auction.wantCount + 1,
+              messages: newMsgs
+            };
+          }
+
+          return auction;
+        });
+
+        if (changed) {
+          localStorage.setItem("tjc_user_auctions", JSON.stringify(updated));
+        }
+        return updated;
+      });
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, []);
+
+  // 确认成交拍卖
+  const handleConfirmSell = (auction) => {
+    const finalPrice = auction.currentBidNum || auction.basePriceNum;
+    const bidder = auction.highestBidder || "洛阳富商";
+
+    // 1. 金库增加金币
+    const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500");
+    const newCoins = currentCoins + finalPrice;
+    localStorage.setItem("farm_coins", newCoins.toString());
+
+    // 2. 写入全局收支账册
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord("income", finalPrice, `二手拍卖成交：${auction.item} (买家:${bidder})`);
+    }
+
+    // 3. 更新拍卖状态
+    const updated = userAuctions.map(a => a.id === auction.id ? { ...a, status: "sold" } : a);
+    setUserAuctions(updated);
+    localStorage.setItem("tjc_user_auctions", JSON.stringify(updated));
+
+    setShowMyAuctionDetail(null);
+    alert(`🎊 恭喜成交！【${auction.item}】已成功被【${bidder}】以 ${finalPrice} 铢拍得！${finalPrice} 铢已转入您的金库，可在【我的钱包】查看！`);
+  };
+
+  // 下架拍卖
+  const handleCancelAuction = (auction) => {
+    if (window.confirm(`确定要下架物品【${auction.item}】吗？`)) {
+      const updated = userAuctions.filter(a => a.id !== auction.id);
+      setUserAuctions(updated);
+      localStorage.setItem("tjc_user_auctions", JSON.stringify(updated));
+      setShowMyAuctionDetail(null);
+      alert("已成功下架该物品！");
+    }
+  };
+
+  // 拼多多式每日签到领金
+  const handleSignInClick = () => {
+    if (hasSignedToday) {
+      alert(`客官今日已领过签到金（${todaySignAmount} 铢）啦！明日辰时再来开礼盒领金吧~`);
+      return;
+    }
+
+    // 随机获得 18 ~ 128 五铢钱
+    const randomAmount = Math.floor(Math.random() * 111) + 18;
+    const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500");
+    const newCoins = currentCoins + randomAmount;
+    localStorage.setItem("farm_coins", newCoins.toString());
+
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord("income", randomAmount, "太疾驰·每日签到金红包");
+    }
+
+    localStorage.setItem("tjc_last_sign_date", todayStr);
+    localStorage.setItem("tjc_today_sign_amount", randomAmount.toString());
+
+    setHasSignedToday(true);
+    setTodaySignAmount(randomAmount);
+    setBurstAmount(randomAmount);
+    setShowBurstCelebration(true);
+  };
+
   // 暴露二手数据到window供悬浮框AI读取
-  React.useEffect(() => {
+  useEffect(() => {
     let contextData = "";
     if (showDetailModal && selectedTrade) {
       contextData = `用户正在查看二手商品详情：物品【${selectedTrade.item}】, 卖家【${selectedTrade.seller}】, 价格【${selectedTrade.price}】, 简介【${selectedTrade.intro}】。`;
@@ -16740,12 +17021,10 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
     setTradeItems([]);
 
     try {
-      // 1. 获取世界书
       const worldContext = window.getWorldBookContext
         ? await window.getWorldBookContext()
         : "无特定背景设定";
 
-      // 2. 获取传讯角色
       let allChars = [];
       if (window.chatCharacterStore) {
         allChars = await window.chatCharacterStore.getAll();
@@ -16756,7 +17035,6 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
         (c) => !String(c.id).startsWith("group") && c.type !== "decor",
       );
 
-      // 取最多10个角色，避免Token过长
       const sampledChars = validChars
         .sort(() => 0.5 - Math.random())
         .slice(0, 3);
@@ -16767,40 +17045,25 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
         )
         .join("\n");
 
-      // 3. 构建 Prompt
       const sysPrompt =
         "你是一个东汉末年背景下的二手交易平台数据生成器，深谙现代闲鱼文案精髓，同时语言要贴合古代词汇与对应的人设。";
       const userPrompt = `
-                                                                                                                                【世界设定】
-                                                                                                                                ${worldContext}
+        【世界设定】
+        ${worldContext}
 
-                                                                                                                                【可选传讯角色列表】
-                                                                                                                                ${charsInfo}
+        【可选传讯角色列表】
+        ${charsInfo}
 
-                                                                                                                                【当前选中分类】：${category.name}
+        【当前选中分类】：${category.name}
 
-                                                                                                                                【任务】
-                                                                                                                                请生成10到15个符合"${category.name}"分类的二手拍卖物品数据。
-                                                                                                                                要求：
-                                                                                                                                1. 拍卖人可以是上面【可选传讯角色列表】中的人，也可以是你编造的东汉五湖四海的随机NPC。务必让名士角色和NPC混搭。
-                                                                                                                                2. 拍卖物品可以非常抽象、奇葩（例如"吕布的原味内衣"、"郭嘉的香吻"、"曹操代卖的荀彧香囊"等），充分发挥脑洞。卖家不一定要卖自己的东西。
-                                                                                                                                3. 简介(intro)必须带有浓厚的闲鱼风格（如"舔狗送的不要了"、"自刀出"、"仅试穿"等古风魔改版），如果拍卖人是【可选传讯角色列表】中的人，简介必须严格符合该角色的性格和说话风格，以第一人称口吻发表。
-                                                                                                                                4. 价格(price)带单位，如"五十金"、"三百钱"、"十匹蜀锦"、"一口价八十金"。
-                                                                                                                                5. 想要人数(wantCount)是一个随机整数。
-                                                                                                                                6. 必须严格返回纯 JSON 数组格式，不要包含任何 Markdown 标记（如 \`\`\`json ），直接以 [ 开头，] 结尾。
-
-                                                                                                                                返回格式示例：
-                                                                                                                                [
-                                                                                                                                  {
-                                                                                                                                    "seller": "拍卖人名字",
-                                                                                                                                    "isNpc": true,
-                                                                                                                                    "item": "拍卖物品名称",
-                                                                                                                                    "price": "一口价五十金",
-                                                                                                                                    "intro": "卖家对物品的简单介绍、吐槽或售卖原因（例如：郭嘉送的，闻着头晕，九九新自刀出，不包邮）",
-                                                                                                                                    "wantCount": 128
-                                                                                                                                  }
-                                                                                                                                ]
-                                                                                                                                `;
+        【任务】
+        请生成10到15个符合"${category.name}"分类的二手拍卖物品数据。
+        要求：
+        1. 拍卖人可以是名士也可以是随机NPC，混搭。
+        2. 物品抽象奇葩幽默接地气，简介浓厚闲鱼吐槽风。
+        3. 价格带单位（如"五十铢"、"三百钱"）。
+        4. 必须严格返回纯 JSON 数组格式，直接以 [ 开头，] 结尾。
+      `;
 
       if (window.sendToLLM) {
         window.sendToLLM(
@@ -16811,14 +17074,15 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
+              const cleanJson = reply.replace(/\`\`\`json|\`\`\`/g, "").trim();
               const data = JSON.parse(cleanJson);
               if (Array.isArray(data)) {
-                setTradeItems(data);
+                // 聚合该分类下用户发布的拍卖商品
+                const myInCat = userAuctions.filter(a => a.category === category.name && a.status === "active");
+                setTradeItems([...myInCat, ...data]);
               }
             } catch (e) {
-              console.error("解析二手交易数据失败:", e, reply);
-              alert("获取交易数据失败，请重试。");
+              console.error("解析二手交易数据失败:", e);
             } finally {
               setIsLoading(false);
             }
@@ -16826,11 +17090,9 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
           (err) => {
             console.error("获取交易数据失败:", err);
             setIsLoading(false);
-            alert("网络波动，获取数据失败。");
-          },
+          }
         );
       } else {
-        alert("未找到 API 接口，请先在设置中配置 API！");
         setIsLoading(false);
       }
     } catch (e) {
@@ -16839,47 +17101,16 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
     }
   };
 
-  // 处理商品卡片点击
   const handleTradeClick = (trade) => {
+    if (trade.isMe) {
+      setShowMyAuctionDetail(trade);
+      return;
+    }
     setSelectedTrade(trade);
     setShowDetailModal(true);
-
-    // 将卖家添加到热门卖家列表
-    if (trade.seller) {
-      setHotSellers((prevSellers) => {
-        // 检查卖家是否已经在列表中
-        const existingSeller = prevSellers.find(
-          (seller) => seller.name === trade.seller,
-        );
-
-        if (existingSeller) {
-          // 如果卖家已存在，更新其想要人数
-          const updatedSellers = prevSellers.map((seller) => {
-            if (seller.name === trade.seller) {
-              return {
-                ...seller,
-                wantCount: seller.wantCount + trade.wantCount,
-              };
-            }
-            return seller;
-          });
-          // 按想要人数排序
-          return updatedSellers.sort((a, b) => b.wantCount - a.wantCount);
-        } else {
-          // 如果卖家不存在，添加到列表
-          const newSeller = {
-            name: trade.seller,
-            wantCount: trade.wantCount,
-            isNpc: trade.isNpc,
-          };
-          // 按想要人数排序
-          return [...prevSellers, newSeller].sort(
-            (a, b) => b.wantCount - a.wantCount,
-          );
-        }
-      });
-    }
   };
+
+  const activeMyAuctions = userAuctions.filter(a => a.status === "active");
 
   return (
     <div
@@ -16890,127 +17121,188 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
       }}
     >
       <div className="flex-1 overflow-y-auto pb-24 relative z-10 no-scrollbar">
-        {/* 头部区域 */}
-        <div style={{ padding: "30px 24px 20px" }}>
+        {/* 头部区域与【发布闲置】按钮 */}
+        <div style={{ padding: "26px 20px 16px" }}>
           <div className="flex justify-between items-start">
-            <div>
-              <h1
-                style={{
-                  fontSize: "22px",
-                  color: "#8C8279",
-                  marginBottom: "6px",
-                  fontWeight: "bold",
-                  letterSpacing: "1px",
-                }}
-              >
-                您有闲置物品吗？
-              </h1>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-1">
+                <h1
+                  style={{
+                    fontSize: "20px",
+                    color: "#8C8279",
+                    fontWeight: "bold",
+                    letterSpacing: "0.5px",
+                  }}
+                >
+                  您有闲置物品吗？
+                </h1>
+              </div>
               <p style={{ fontSize: "12px", color: "#B0A69D" }}>
-                加入我们的交易圈，享受最低价！
+                挂出闲置换五铢钱，名士商贾在线竞价！
               </p>
             </div>
-            {/* 刷新按钮 */}
-            <div
-              style={{
-                width: "44px",
-                height: "44px",
-                borderRadius: "50%",
-                background: "#FFF",
-                border: "3px solid #E3C862",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                boxShadow: "0 4px 10px rgba(227, 200, 98, 0.2)",
-              }}
-            >
-              <i className="ph-bold ph-arrows-clockwise text-[#E3C862] text-2xl"></i>
+
+            {/* ✅ 新增：发布闲置拍卖按钮 */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => {
+                  loadBackpackItems();
+                  setShowPublishModal(true);
+                }}
+                className="px-3.5 py-2 rounded-2xl text-white font-bold text-xs shadow-md active:scale-95 transition-all flex items-center gap-1.5"
+                style={{
+                  background: "linear-gradient(135deg, #FF6B35 0%, #D6724B 100%)",
+                  boxShadow: "0 4px 12px rgba(214, 114, 75, 0.3)"
+                }}
+              >
+                <i className="ph-bold ph-plus-circle text-sm"></i>
+                <span>我要拍卖</span>
+              </button>
+
+              {/* 刷新按钮 */}
+              <div
+                onClick={() => {
+                  alert("已为您同步最新的东汉闲置坊市行情！");
+                }}
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  borderRadius: "50%",
+                  background: "#FFF",
+                  border: "2px solid #E3C862",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 3px 8px rgba(227, 200, 98, 0.2)",
+                  cursor: "pointer"
+                }}
+                className="active:scale-95 transition-transform"
+              >
+                <i className="ph-bold ph-arrows-clockwise text-[#E3C862] text-xl"></i>
+              </div>
             </div>
           </div>
 
-          {/* 签到 & 礼盒区 */}
+          {/* 拼多多式签到 & 幸运礼盒区 */}
           <div
             style={{
-              marginTop: "30px",
+              marginTop: "20px",
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "flex-end",
-              paddingRight: "10px",
+              alignItems: "center",
+              padding: "16px 18px",
+              background: "linear-gradient(135deg, #FFF9F5 0%, #FFF0EB 100%)",
+              borderRadius: "20px",
+              border: "1.5px solid #FFE2D6",
+              boxShadow: "0 6px 20px rgba(214, 114, 75, 0.08)"
             }}
           >
-            {/* 左侧粉色礼盒 */}
+            {/* 左侧拼多多动态开箱礼盒 */}
             <div
-              style={{
-                width: "110px",
-                height: "130px",
-                background: "#FADADD",
-                borderRadius: "12px",
-                border: "2px dashed #FFF",
-                position: "relative",
-                boxShadow: "0 8px 20px rgba(244, 154, 193, 0.15)",
-              }}
+              onClick={handleSignInClick}
+              className="cursor-pointer active:scale-95 transition-transform flex items-center gap-3"
             >
-              {/* 蝴蝶结 (CSS模拟) */}
               <div
                 style={{
-                  position: "absolute",
-                  top: "-12px",
-                  left: "50%",
-                  transform: "translateX(-50%)",
+                  width: "56px",
+                  height: "56px",
+                  background: hasSignedToday ? "linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%)" : "linear-gradient(135deg, #FF7043 0%, #E64A19 100%)",
+                  borderRadius: "16px",
                   display: "flex",
                   alignItems: "center",
-                  filter: "drop-shadow(0 2px 2px rgba(0,0,0,0.1))",
+                  justifyContent: "center",
+                  fontSize: "28px",
+                  boxShadow: hasSignedToday ? "0 4px 12px rgba(76, 175, 80, 0.2)" : "0 6px 16px rgba(230, 74, 25, 0.35)",
+                  position: "relative"
                 }}
+                className={hasSignedToday ? "" : "animate-bounce"}
               >
-                <div
-                  style={{
-                    width: 0,
-                    height: 0,
-                    borderTop: "12px solid transparent",
-                    borderBottom: "12px solid transparent",
-                    borderLeft: "20px solid #FF9EB5",
-                  }}
-                ></div>
-                <div
-                  style={{
-                    width: 0,
-                    height: 0,
-                    borderTop: "12px solid transparent",
-                    borderBottom: "12px solid transparent",
-                    borderRight: "20px solid #FF9EB5",
-                  }}
-                ></div>
+                {hasSignedToday ? "🎁" : "🧧"}
+                {!hasSignedToday && (
+                  <span className="absolute -top-1 -right-1 w-3 h-3 bg-yellow-300 rounded-full border-2 border-white animate-ping"></span>
+                )}
+              </div>
+
+              <div>
+                <div className="font-bold text-sm text-[#4A3B28] flex items-center gap-1">
+                  <span>{hasSignedToday ? "今日已开箱" : "每日幸运红包"}</span>
+                  {!hasSignedToday && (
+                    <span className="text-[10px] bg-[#D6724B] text-white px-1.5 py-0.2 rounded-full font-black">
+                      免费领
+                    </span>
+                  )}
+                </div>
+                <div className="text-xs text-[#8C8279] mt-0.5 font-medium">
+                  {hasSignedToday ? `今日已入账 +${todaySignAmount} 铢` : "拼手气开 18~128 五铢钱"}
+                </div>
               </div>
             </div>
 
-            {/* 右侧签到金 */}
-            <div style={{ marginBottom: "30px", textAlign: "center" }}>
-              <div
-                style={{
-                  fontSize: "13px",
-                  color: "#B0A69D",
-                  marginBottom: "8px",
-                  letterSpacing: "1px",
-                }}
+            {/* 右侧签到金按钮与数额 */}
+            <div className="text-right flex flex-col items-end">
+              <button
+                onClick={handleSignInClick}
+                className={`px-4 py-2 rounded-full font-bold text-xs shadow-sm transition-all flex items-center gap-1 ${
+                  hasSignedToday
+                    ? "bg-[#EAEAEA] text-[#888] cursor-default"
+                    : "bg-gradient-to-r from-[#FF5722] to-[#E64A19] text-white active:scale-95 shadow-[0_3px_10px_rgba(230,74,25,0.3)]"
+                }`}
               >
-                签到金
-              </div>
-              <div
-                style={{
-                  background: "#FFF",
-                  padding: "10px 24px",
-                  borderRadius: "20px",
-                  boxShadow: "0 4px 20px rgba(0,0,0,0.03)",
-                  fontSize: "26px",
-                  fontWeight: "bold",
-                  color: "#333",
-                  fontFamily: "Fredoka, sans-serif",
-                }}
-              >
-                99.89
-              </div>
+                <i className="ph-bold ph-coins"></i>
+                <span>{hasSignedToday ? "明日再来" : "立即领金"}</span>
+              </button>
             </div>
           </div>
         </div>
+
+        {/* ✅ 新增：【我的在售拍卖】展示专区 */}
+        {activeMyAuctions.length > 0 && (
+          <div style={{ padding: "0 20px 20px" }}>
+            <div className="flex justify-between items-center mb-3">
+              <h2 className="text-sm font-bold text-[#8C8279] flex items-center gap-1.5">
+                <i className="ph-fill ph-storefront text-[#D6724B]"></i>
+                <span>我的在售拍卖 ({activeMyAuctions.length})</span>
+              </h2>
+              <span className="text-[11px] text-[#D6724B] font-bold">名士竞价中 · 点击查看</span>
+            </div>
+
+            <div className="flex gap-3 overflow-x-auto no-scrollbar pb-2">
+              {activeMyAuctions.map((auction) => (
+                <div
+                  key={auction.id}
+                  onClick={() => setShowMyAuctionDetail(auction)}
+                  className="bg-white rounded-2xl p-3 shadow-sm border-2 border-[#FFD8C7] flex flex-col relative overflow-hidden active:scale-[0.98] transition-transform cursor-pointer shrink-0"
+                  style={{ width: "160px" }}
+                >
+                  <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-[#D6724B] text-white text-[9px] font-black shadow-xs">
+                    👑 楼主自营
+                  </span>
+
+                  <div className="w-full aspect-square rounded-xl mb-2 flex items-center justify-center text-3xl bg-[#FFF4ED] border border-[#FFE2D6]">
+                    📦
+                  </div>
+
+                  <div className="text-xs font-bold text-[#5A5F4D] truncate mb-1">
+                    {auction.item}
+                  </div>
+
+                  <div className="text-[11px] font-black text-[#D6724B] mb-1">
+                    当前价: {auction.price}
+                  </div>
+
+                  <div className="text-[10px] text-[#8C917B] truncate">
+                    最高: <span className="font-bold text-[#444]">{auction.highestBidder}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center mt-2 pt-1.5 border-t border-dashed border-[#F2EFDE] text-[9px] text-[#888]">
+                    <span>❤️ {auction.wantCount}人想要</span>
+                    <span className="text-[#D6724B] font-bold">查看竞价 &gt;</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* 热门卖家 */}
         <div style={{ padding: "0 24px 20px" }}>
@@ -17025,69 +17317,61 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
             热门卖家
           </h2>
           <div className="flex gap-5 overflow-x-auto no-scrollbar py-2">
-            {hotSellers.length > 0
-              ? hotSellers.map((seller, i) => (
-                  <div
-                    key={i}
-                    className="flex flex-col items-center"
-                    style={{ flexShrink: 0 }}
-                  >
-                    <div
-                      style={{
-                        width: "52px",
-                        height: "52px",
-                        borderRadius: "50%",
-                        background: seller.isNpc ? "#DBC2B1" : "#F2E6D8",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "center",
-                        boxShadow: "inset 0 0 10px rgba(0,0,0,0.05)",
-                      }}
-                    >
-                      <span
-                        style={{
-                          color: "white",
-                          fontSize: "14px",
-                          fontWeight: "bold",
-                        }}
-                      >
-                        {seller.name.charAt(0)}
-                      </span>
-                    </div>
-                    <span
-                      style={{
-                        fontSize: "10px",
-                        color: "#8C8279",
-                        marginTop: "4px",
-                        textAlign: "center",
-                      }}
-                    >
-                      {seller.name}
-                    </span>
-                    <span
-                      style={{
-                        fontSize: "8px",
-                        color: "#B0A69D",
-                        marginTop: "2px",
-                      }}
-                    >
-                      {seller.wantCount}人想要
-                    </span>
-                  </div>
-                ))
-              : [1, 2, 3, 4, 5].map((i) => (
-                  <div
-                    key={i}
+            {[
+              { name: "曹操", wantCount: 999, isNpc: false },
+              { name: "荀彧", wantCount: 888, isNpc: false },
+              { name: "孙策", wantCount: 766, isNpc: false },
+              { name: "郭嘉", wantCount: 654, isNpc: false },
+              { name: "洛阳掌柜", wantCount: 520, isNpc: true }
+            ].map((seller, i) => (
+              <div
+                key={i}
+                className="flex flex-col items-center"
+                style={{ flexShrink: 0 }}
+              >
+                <div
+                  style={{
+                    width: "52px",
+                    height: "52px",
+                    borderRadius: "50%",
+                    background: seller.isNpc ? "#DBC2B1" : "#F2E6D8",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    boxShadow: "inset 0 0 10px rgba(0,0,0,0.05)",
+                  }}
+                >
+                  <span
                     style={{
-                      width: "52px",
-                      height: "52px",
-                      borderRadius: "50%",
-                      background: "#F2E6D8",
-                      flexShrink: 0,
-                      boxShadow: "inset 0 0 10px rgba(0,0,0,0.05)",
+                      color: "white",
+                      fontSize: "14px",
+                      fontWeight: "bold",
                     }}
-                  ></div>
-                ))}
+                  >
+                    {seller.name.charAt(0)}
+                  </span>
+                </div>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    color: "#8C8279",
+                    marginTop: "4px",
+                    textAlign: "center",
+                  }}
+                >
+                  {seller.name}
+                </span>
+                <span
+                  style={{
+                    fontSize: "8px",
+                    color: "#B0A69D",
+                    marginTop: "2px",
+                  }}
+                >
+                  {seller.wantCount}人想要
+                </span>
+              </div>
+            ))}
           </div>
         </div>
 
@@ -17117,8 +17401,7 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
                 style={{
                   height: "90px",
                   background: item.color,
-                  borderRadius: "16px", // 基础圆角
-                  // 模拟手绘/不规则感
+                  borderRadius: "16px",
                   borderTopLeftRadius: i % 2 === 0 ? "24px" : "16px",
                   borderBottomRightRadius: i % 2 === 0 ? "16px" : "24px",
                   display: "flex",
@@ -17140,10 +17423,276 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
         </div>
       </div>
 
+      {/* ==== 签到爆金币弹窗 ==== */}
+      {showBurstCelebration && (
+        <div
+          className="fixed inset-0 bg-black/70 z-[150] flex items-center justify-center p-6 animate-fadeIn"
+          onClick={() => setShowBurstCelebration(false)}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 text-center max-w-xs w-full shadow-2xl animate-scaleUp border-4 border-[#FFD54F]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="w-20 h-20 rounded-full bg-[#FFF9C4] flex items-center justify-center text-5xl mx-auto mb-3 shadow-inner animate-bounce">
+              💰
+            </div>
+            <h3 className="text-xl font-black text-[#D6724B] mb-1">
+              每日签到成功！
+            </h3>
+            <p className="text-xs text-[#888] mb-4">
+              太疾驰金库每日特赏，五铢钱已入账
+            </p>
+
+            <div className="bg-[#FFF8E1] p-4 rounded-2xl border border-[#FFE082] mb-5">
+              <span className="text-3xl font-black text-[#F57F17] font-mono">
+                +{burstAmount} <span className="text-sm">铢</span>
+              </span>
+            </div>
+
+            <button
+              onClick={() => setShowBurstCelebration(false)}
+              className="w-full py-3.5 bg-gradient-to-r from-[#FF7043] to-[#D6724B] text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-transform text-sm"
+            >
+              开心收下
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ==== 发布闲置拍卖弹窗 (从背包选物品) ==== */}
+      {showPublishModal && (
+        <div className="fixed inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] z-[90] animate-slide-up h-[82vh] flex flex-col">
+          <div className="p-5 flex justify-between items-center bg-[#FDFCF8] rounded-t-3xl border-b border-[#F2EFDE] z-10 sticky top-0">
+            <h3 className="text-xl font-bold text-[#5A5F4D] flex items-center gap-2">
+              <i className="ph-fill ph-plus-circle text-[#D6724B]"></i>
+              发布闲置拍卖
+            </h3>
+            <button
+              onClick={() => setShowPublishModal(false)}
+              className="w-8 h-8 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#8C8C8C] active:scale-90 transition-transform"
+            >
+              <i className="ph-bold ph-x"></i>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 no-scrollbar bg-[#FAF9F5]">
+            {/* 1. 选择背包中的物品 */}
+            <div>
+              <label className="text-xs font-bold text-[#8C8279] mb-2 block">
+                1. 选择您背包中的闲置物品：
+              </label>
+              {backpackItems.length > 0 ? (
+                <div className="grid grid-cols-2 gap-2.5 max-h-44 overflow-y-auto p-1 bg-white rounded-2xl border border-[#EAEAEA]">
+                  {backpackItems.map((item, idx) => (
+                    <div
+                      key={idx}
+                      onClick={() => setSelectedBackpackItem(item)}
+                      className={`p-2.5 rounded-xl border text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-2 ${
+                        selectedBackpackItem?.id === item.id
+                          ? "bg-[#FFF4ED] border-[#D6724B] shadow-xs text-[#D6724B] font-bold"
+                          : "bg-[#FDFCF8] border-[#EEE] text-[#555]"
+                      }`}
+                    >
+                      <span className="text-base">🎁</span>
+                      <div className="truncate flex-1">
+                        <div className="truncate font-medium">{item.name}</div>
+                        <div className="text-[10px] text-[#999]">{item.price || "无底价"}</div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 bg-white rounded-2xl border border-dashed border-[#DDD] text-center text-xs text-[#999]">
+                  您的背包暂无物品，可先去太疾驰商城选购或训练场收获哦~
+                </div>
+              )}
+            </div>
+
+            {/* 2. 设定起拍价与分类 */}
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-bold text-[#8C8279] mb-1.5 block">
+                  2. 设定起拍价格：
+                </label>
+                <input
+                  type="text"
+                  value={publishForm.price}
+                  onChange={(e) => setPublishForm({ ...publishForm, price: e.target.value })}
+                  placeholder="例如: 60铢 或 100钱"
+                  className="w-full p-3 bg-white rounded-xl border border-[#EAEAEA] text-xs font-bold text-[#D6724B] outline-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-[#8C8279] mb-1.5 block">
+                  3. 选择物品分类：
+                </label>
+                <select
+                  value={publishForm.category}
+                  onChange={(e) => setPublishForm({ ...publishForm, category: e.target.value })}
+                  className="w-full p-3 bg-white rounded-xl border border-[#EAEAEA] text-xs font-bold text-[#555] outline-none"
+                >
+                  {categories.map((cat, i) => (
+                    <option key={i} value={cat.name}>{cat.name}</option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            {/* 3. 闲鱼风吐槽文案 */}
+            <div>
+              <div className="flex justify-between items-center mb-1.5">
+                <label className="text-xs font-bold text-[#8C8279]">
+                  4. 闲鱼风简介文案：
+                </label>
+                <button
+                  type="button"
+                  onClick={handleRandomIntro}
+                  className="text-[11px] text-[#D6724B] font-bold flex items-center gap-1 active:scale-90 transition-transform"
+                >
+                  <i className="ph-bold ph-dice-five"></i>
+                  <span>🎲 换一句文案</span>
+                </button>
+              </div>
+              <textarea
+                value={publishForm.intro}
+                onChange={(e) => setPublishForm({ ...publishForm, intro: e.target.value })}
+                rows={3}
+                placeholder="写下这件物品的来历或售卖原因..."
+                className="w-full p-3 bg-white rounded-xl border border-[#EAEAEA] text-xs text-[#555] leading-relaxed outline-none"
+              ></textarea>
+            </div>
+
+            {/* 提交发布按钮 */}
+            <button
+              onClick={handlePublishAuction}
+              className="w-full py-4 bg-gradient-to-r from-[#FF7043] to-[#D6724B] text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-transform text-sm mt-2"
+            >
+              🚀 立即上架太疾驰拍卖
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ==== 我的在售拍卖详情与互动管理弹窗 ==== */}
+      {showMyAuctionDetail && (
+        <div className="fixed inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.2)] z-[95] animate-slide-up h-[85vh] flex flex-col">
+          <div className="p-5 flex justify-between items-center bg-[#FDFCF8] rounded-t-3xl border-b border-[#F2EFDE] z-10 sticky top-0">
+            <h3 className="text-xl font-bold text-[#5A5F4D] flex items-center gap-2">
+              <span>👑 拍卖管理 · {showMyAuctionDetail.item}</span>
+            </h3>
+            <button
+              onClick={() => setShowMyAuctionDetail(null)}
+              className="w-8 h-8 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#8C8C8C] active:scale-90 transition-transform"
+            >
+              <i className="ph-bold ph-x"></i>
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 no-scrollbar bg-[#FAF9F5] space-y-4">
+            {/* 拍卖品概览卡片 */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-[#FFE2D6]">
+              <div className="flex justify-between items-start mb-2">
+                <div>
+                  <span className="text-xs font-bold text-[#D6724B] bg-[#FFF4ED] px-2 py-0.5 rounded-full">
+                    {showMyAuctionDetail.category} · {showMyAuctionDetail.status === "sold" ? "已成交" : "竞价进行中"}
+                  </span>
+                  <h4 className="text-lg font-bold text-[#333] mt-1.5">{showMyAuctionDetail.item}</h4>
+                </div>
+                <div className="text-right">
+                  <div className="text-xs text-[#888]">当前最高出价</div>
+                  <div className="text-2xl font-black text-[#D6724B] font-mono">{showMyAuctionDetail.price}</div>
+                </div>
+              </div>
+              <p className="text-xs text-[#666] leading-relaxed italic bg-[#FDFCF8] p-2.5 rounded-xl border border-[#EEE]">
+                "{showMyAuctionDetail.intro}"
+              </p>
+            </div>
+
+            {/* 选项卡：出价记录 vs 私聊留言 */}
+            <div className="flex gap-2 p-1 bg-[#EFECE6] rounded-xl">
+              <button
+                onClick={() => setMyAuctionTab("bids")}
+                className={`flex-1 py-2 rounded-lg font-bold text-xs transition-all ${
+                  myAuctionTab === "bids" ? "bg-white text-[#D6724B] shadow-xs" : "text-[#777]"
+                }`}
+              >
+                🔨 竞价记录 ({showMyAuctionDetail.bids?.length || 0})
+              </button>
+              <button
+                onClick={() => setMyAuctionTab("messages")}
+                className={`flex-1 py-2 rounded-lg font-bold text-xs transition-all ${
+                  myAuctionTab === "messages" ? "bg-white text-[#D6724B] shadow-xs" : "text-[#777]"
+                }`}
+              >
+                💬 买家私聊砍价 ({showMyAuctionDetail.messages?.length || 0})
+              </button>
+            </div>
+
+            {/* 动态内容列表 */}
+            <div className="bg-white p-3.5 rounded-2xl shadow-sm border border-[#EAEAEA] min-h-[160px] max-h-[220px] overflow-y-auto space-y-2.5 no-scrollbar">
+              {myAuctionTab === "bids" ? (
+                showMyAuctionDetail.bids && showMyAuctionDetail.bids.length > 0 ? (
+                  showMyAuctionDetail.bids.slice().reverse().map((bid, i) => (
+                    <div key={i} className="flex justify-between items-center pb-2 border-b border-gray-100 last:border-0 last:pb-0 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="w-6 h-6 rounded-full bg-[#E8EDEA] flex items-center justify-center font-bold text-[10px] text-[#4A3B28]">
+                          {bid.bidder.charAt(0)}
+                        </span>
+                        <span className="font-bold text-[#444]">{bid.bidder}</span>
+                        <span className="text-[10px] text-[#999]">{bid.time}</span>
+                      </div>
+                      <span className="font-black text-[#D6724B] text-sm font-mono">{bid.amountStr}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-400 py-8 text-xs">暂无出价记录</div>
+                )
+              ) : (
+                showMyAuctionDetail.messages && showMyAuctionDetail.messages.length > 0 ? (
+                  showMyAuctionDetail.messages.slice().reverse().map((msg, i) => (
+                    <div key={i} className="bg-[#FAF9F5] p-2.5 rounded-xl text-xs space-y-1">
+                      <div className="flex justify-between text-[#888] text-[10px]">
+                        <span className="font-bold text-[#D6724B]">{msg.sender}</span>
+                        <span>{msg.time}</span>
+                      </div>
+                      <p className="text-[#444] font-medium leading-relaxed">{msg.text}</p>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center text-gray-400 py-8 text-xs">暂无私聊砍价</div>
+                )
+              )}
+            </div>
+
+            {/* 操作按钮区 */}
+            {showMyAuctionDetail.status === "active" ? (
+              <div className="flex gap-3 pt-2">
+                <button
+                  onClick={() => handleCancelAuction(showMyAuctionDetail)}
+                  className="flex-1 py-3.5 bg-[#EEE] text-[#666] font-bold rounded-2xl active:scale-95 transition-transform text-xs"
+                >
+                  下架物品
+                </button>
+                <button
+                  onClick={() => handleConfirmSell(showMyAuctionDetail)}
+                  className="flex-[2] py-3.5 bg-gradient-to-r from-[#2ECC71] to-[#27AE60] text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-transform text-sm"
+                >
+                  💰 确认以此最高价成交入账
+                </button>
+              </div>
+            ) : (
+              <div className="p-3 bg-[#E8F8F0] text-[#2ECC71] font-bold text-center rounded-2xl text-xs">
+                ✅ 该商品已完成交易并入账金库！
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* ==== 二手商品列表弹窗 ==== */}
       {showModal && (
         <div className="fixed inset-x-0 bottom-0 bg-[#FDFCF8] rounded-t-3xl shadow-2xl z-[60] animate-slide-up h-[85vh] flex flex-col font-sans">
-          {/* 弹窗头部 */}
           <div
             className="p-5 flex justify-between items-center bg-white rounded-t-3xl shadow-sm z-10"
             style={{
@@ -17169,7 +17718,6 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
             </button>
           </div>
 
-          {/* 弹窗内容 */}
           <div className="flex-1 overflow-y-auto p-4 bg-[#FDFCF8] no-scrollbar">
             {isLoading ? (
               <div className="flex flex-col items-center justify-center h-full text-[#8C917B] gap-3">
@@ -17189,16 +17737,17 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
                 {tradeItems.map((trade, idx) => (
                   <div
                     key={idx}
-                    className="bg-white rounded-2xl p-3 shadow-sm border border-[#F2EFDE] flex flex-col relative overflow-hidden active:scale-[0.98] transition-transform cursor-pointer"
+                    className={`bg-white rounded-2xl p-3 shadow-sm border flex flex-col relative overflow-hidden active:scale-[0.98] transition-transform cursor-pointer ${
+                      trade.isMe ? "border-[#FFB299] ring-2 ring-[#FFD8C7]" : "border-[#F2EFDE]"
+                    }`}
                     onClick={() => handleTradeClick(trade)}
                   >
-                    {/* 装饰背景角 */}
-                    <div
-                      className="absolute -right-4 -top-4 w-12 h-12 rounded-full opacity-20 pointer-events-none"
-                      style={{ background: selectedCategory?.color }}
-                    ></div>
+                    {trade.isMe && (
+                      <span className="absolute top-2 right-2 px-1.5 py-0.5 rounded-full bg-[#D6724B] text-white text-[8px] font-black z-10 shadow-xs">
+                        👑 我的拍卖
+                      </span>
+                    )}
 
-                    {/* 商品图(用带颜色的方块代替) */}
                     <div
                       className="w-full aspect-square rounded-xl mb-3 flex items-center justify-center text-4xl shadow-inner"
                       style={{
@@ -17215,17 +17764,14 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
                       <i className="ph-fill ph-package text-white opacity-80"></i>
                     </div>
 
-                    {/* 商品名 */}
                     <div className="text-[15px] font-bold text-[#5A5F4D] leading-tight mb-2 truncate">
                       {trade.item}
                     </div>
 
-                    {/* 简介/吐槽 */}
                     <div className="text-[12px] text-[#8C917B] leading-snug mb-3 line-clamp-3 italic flex-1">
                       "{trade.intro}"
                     </div>
 
-                    {/* 底部：卖家与价格 */}
                     <div className="flex flex-col gap-2 mt-auto">
                       <div className="flex justify-between items-center">
                         <span className="text-[13px] font-bold text-[#D6724B] truncate max-w-[60%]">
@@ -17261,10 +17807,9 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
         </div>
       )}
 
-      {/* ==== 商品详情弹窗 ==== */}
+      {/* ==== 商品详情弹窗 (购买他人二手) ==== */}
       {showDetailModal && selectedTrade && (
         <div className="fixed inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-2xl z-[70] animate-slide-up h-[80vh] flex flex-col">
-          {/* 弹窗头部 */}
           <div className="p-5 flex justify-between items-center bg-[#FDFCF8] rounded-t-3xl border-b border-[#F2EFDE] z-10">
             <h3 className="text-xl font-bold text-[#5A5F4D]">商品详情</h3>
             <button
@@ -17275,9 +17820,7 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
             </button>
           </div>
 
-          {/* 弹窗内容 */}
           <div className="flex-1 overflow-y-auto p-5">
-            {/* 商品图 */}
             <div
               className="w-full aspect-square rounded-2xl mb-5 flex items-center justify-center text-5xl shadow-inner"
               style={{ backgroundColor: "#EBE4F5" }}
@@ -17285,14 +17828,11 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
               <i className="ph-fill ph-package text-white opacity-80"></i>
             </div>
 
-            {/* 商品信息 */}
             <div className="space-y-4">
-              {/* 商品名 */}
               <h4 className="text-2xl font-bold text-[#5A5F4D] leading-tight">
                 {selectedTrade.item}
               </h4>
 
-              {/* 价格 */}
               <div className="flex items-center gap-2">
                 <span className="text-2xl font-bold text-[#D6724B]">
                   {selectedTrade.price}
@@ -17302,7 +17842,6 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
                 </span>
               </div>
 
-              {/* 卖家信息 */}
               <div className="flex items-center gap-2 p-3 bg-[#FDFCF8] rounded-xl">
                 <div className="w-10 h-10 rounded-full bg-[#DBC2B1] flex items-center justify-center text-white text-sm font-bold">
                   {selectedTrade.seller ? selectedTrade.seller.charAt(0) : "?"}
@@ -17317,7 +17856,6 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
                 </div>
               </div>
 
-              {/* 商品描述 */}
               <div>
                 <h5 className="text-sm font-bold text-[#8C917B] mb-2">
                   商品描述
@@ -17327,10 +17865,9 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
                 </div>
               </div>
 
-              {/* 操作按钮 */}
               <div className="flex gap-3 mt-6">
                 <button
-                  className="flex-1 py-4 bg-[#D6724B] text-white rounded-xl font-bold"
+                  className="flex-1 py-4 bg-[#D6724B] text-white rounded-xl font-bold active:scale-95 transition-transform"
                   onClick={() => {
                     const secondHandItem = {
                       id: Date.now(),
@@ -17352,9 +17889,15 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
                     setShowDetailModal(false);
                   }}
                 >
-                  立即购买
+                  加入结算单
                 </button>
-                <button className="flex-1 py-4 bg-[#F2EFDE] text-[#5A5F4D] rounded-xl font-bold">
+                <button
+                  className="flex-1 py-4 bg-[#F2EFDE] text-[#5A5F4D] rounded-xl font-bold active:scale-95 transition-transform"
+                  onClick={() => {
+                    alert(`已将【${selectedTrade.item}】加入收藏夹！`);
+                    setShowDetailModal(false);
+                  }}
+                >
                   加入收藏
                 </button>
               </div>
@@ -18283,9 +18826,387 @@ const T12BottomBar = ({ activeTab, onTabChange, onSettlementClick }) => {
 
 // T12 太疾驰页面主组件 (集成 AI 外卖商家生成与抢票跳转)
 // T12 太疾驰页面主组件 (集成 AI 外卖商家生成、抢票跳转与AI评价生成)
+
+// ==================== T12 美团风格配送与订单追踪组件 ====================
+const T12DeliveryView = ({ onClose, onGoBackToShopping }) => {
+  const { useState, useEffect } = React;
+  const [activeTab, setActiveTab] = useState("pending"); // "pending" (待收货) | "completed" (已收货)
+  const [orders, setOrders] = useState([]);
+  const [currentTime, setCurrentTime] = useState(Date.now());
+  const [riderToast, setRiderToast] = useState(null); // 骑手传讯气泡
+
+  const refreshOrders = async () => {
+    if (window.deliveryOrderStore) {
+      await window.deliveryOrderStore.checkAutoDelivery();
+      const all = await window.deliveryOrderStore.getAll();
+      setOrders(all || []);
+    }
+  };
+
+  useEffect(() => {
+    refreshOrders();
+    const interval = setInterval(() => {
+      setCurrentTime(Date.now());
+      refreshOrders();
+    }, 1000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const pendingOrders = orders.filter((o) => o.status === "delivering" || o.status === "delivered");
+  const completedOrders = orders.filter((o) => o.status === "completed");
+
+  const handleConfirmReceive = async (orderId) => {
+    if (window.deliveryOrderStore) {
+      const success = await window.deliveryOrderStore.completeOrder(orderId);
+      if (success) {
+        alert("🎉 签收成功！商品已正式存入【设置 - 隐私与安全 - 我的背包】。");
+        refreshOrders();
+      }
+    }
+  };
+
+  const handleRush = async (order) => {
+    if (window.deliveryOrderStore) {
+      const updated = await window.deliveryOrderStore.rushDelivery(order.id);
+      if (updated) {
+        const replies = [
+          `「客官莫急！小的正纵马疾驰，马蹄生风，预计已为您提速 35 秒！」`,
+          `「收到催单！小的已换乘第二匹快马，翻过朱雀桥，转瞬即达！」`,
+          `「驾！太疾驰金牌骑手【${order.courier.name}】已猛挥皮鞭，片刻不歇！」`,
+          `「小的已开启疾风神行术，包裹完好无损，即刻送抵府邸门房！」`
+        ];
+        const randomReply = replies[Math.floor(Math.random() * replies.length)];
+        setRiderToast({ rider: order.courier.name, text: randomReply });
+        setTimeout(() => setRiderToast(null), 4000);
+        refreshOrders();
+      }
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-[#F5F5F7] z-[120] flex flex-col animate-fadeIn no-scrollbar" style={{ fontFamily: 'inherit' }}>
+      {/* 顶部 Header */}
+      <div className="pt-[max(12px,var(--safe-top))] px-4 pb-3 bg-white border-b border-[#F0F0F0] shadow-sm flex items-center justify-between sticky top-0 z-20">
+        <button
+          onClick={onClose}
+          className="w-9 h-9 rounded-full bg-[#F5F5F7] flex items-center justify-center text-[#555] active:scale-90 transition-transform"
+        >
+          <i className="ph-bold ph-caret-left text-xl"></i>
+        </button>
+        <div className="flex flex-col items-center">
+          <span className="font-bold text-base text-[#222]">太疾驰 · 订单与配送</span>
+          <span className="text-[11px] text-[#888]">使命必达 · 快马加鞭</span>
+        </div>
+        <button
+          onClick={onClose}
+          className="w-9 h-9 rounded-full bg-[#F5F5F7] flex items-center justify-center text-[#888] active:scale-90 transition-transform"
+        >
+          <i className="ph-bold ph-x text-lg"></i>
+        </button>
+      </div>
+
+      {/* 待收货 / 已收货 Tab 切换 */}
+      <div className="px-5 pt-3 pb-2 bg-white flex gap-4 border-b border-[#F5F5F5] sticky top-[57px] z-10">
+        <button
+          onClick={() => setActiveTab("pending")}
+          className={`flex-1 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+            activeTab === "pending"
+              ? "bg-[#FFF4ED] text-[#D6724B] border border-[#FFD8C7] shadow-sm"
+              : "bg-[#F8F9FA] text-[#666]"
+          }`}
+        >
+          <i className="ph-fill ph-moped text-lg"></i>
+          <span>待收货</span>
+          {pendingOrders.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-[#D6724B] text-white font-bold animate-pulse">
+              {pendingOrders.length}
+            </span>
+          )}
+        </button>
+
+        <button
+          onClick={() => setActiveTab("completed")}
+          className={`flex-1 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
+            activeTab === "completed"
+              ? "bg-[#EBF7F2] text-[#3D8C68] border border-[#BDE7D3] shadow-sm"
+              : "bg-[#F8F9FA] text-[#666]"
+          }`}
+        >
+          <i className="ph-fill ph-check-circle text-lg"></i>
+          <span>已收货</span>
+          {completedOrders.length > 0 && (
+            <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-[#3D8C68] text-white font-bold">
+              {completedOrders.length}
+            </span>
+          )}
+        </button>
+      </div>
+
+      {/* 骑手传讯悬浮提示气泡 */}
+      {riderToast && (
+        <div className="fixed top-24 left-4 right-4 z-[150] animate-bounce">
+          <div className="bg-[#2C3E50] text-white p-3.5 rounded-2xl shadow-xl border border-white/20 flex items-start gap-3">
+            <div className="w-8 h-8 rounded-full bg-[#D6724B] flex items-center justify-center text-white shrink-0 font-bold text-xs shadow">
+              🏇
+            </div>
+            <div className="flex-1 text-xs leading-relaxed">
+              <div className="font-bold text-[#FFD166] mb-0.5">【{riderToast.rider} 传讯】</div>
+              <div>{riderToast.text}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 订单内容列表 */}
+      <div className="flex-1 overflow-y-auto p-4 space-y-4 no-scrollbar pb-12">
+        {activeTab === "pending" ? (
+          pendingOrders.length > 0 ? (
+            pendingOrders.map((order) => {
+              const diff = order.estimatedDeliveryTime - currentTime;
+              const remainingSec = Math.max(0, Math.floor(diff / 1000));
+              const mins = Math.floor(remainingSec / 60);
+              const secs = remainingSec % 60;
+              const isArrived = remainingSec <= 0;
+              const etaDate = new Date(order.estimatedDeliveryTime);
+              const etaFormatted = etaDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+              // 计算履约进度 0~100%
+              const totalDuration = (order.durationMinutes || 3) * 60;
+              const elapsedSec = totalDuration - remainingSec;
+              const progressPct = Math.min(100, Math.max(15, Math.floor((elapsedSec / totalDuration) * 100)));
+
+              return (
+                <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-[#EAEAEA] overflow-hidden">
+                  {/* 美团风格橙色配送状态顶栏 */}
+                  <div className="p-4 bg-gradient-to-r from-[#FFF7EE] to-[#FFF1E0] border-b border-[#FDE5CC]">
+                    <div className="flex justify-between items-start mb-2">
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs font-bold px-2 py-0.5 rounded-full bg-[#D6724B] text-white shadow-xs">
+                            {isArrived ? "📦 已送达门房" : "🏇 快马疾驰中"}
+                          </span>
+                          <span className="text-xs text-[#8C7A6B] font-mono">单号: {order.id.slice(-8)}</span>
+                        </div>
+                        <h4 className="text-2xl font-black text-[#2B231D] mt-2 tracking-tight">
+                          {isArrived ? "包裹已送达府邸" : `预计 ${etaFormatted} 送达`}
+                        </h4>
+                        <p className="text-xs text-[#9E836A] mt-1 font-medium">
+                          {isArrived
+                            ? "包裹已妥投至门房签收台，请尽快确认入库。"
+                            : `骑手正疾风奔赴府邸，剩余 ${mins}分${secs < 10 ? '0' : ''}${secs}秒`}
+                        </p>
+                      </div>
+                      <div className="w-12 h-12 rounded-2xl bg-white/80 border border-[#FCD2B3] flex items-center justify-center text-2xl shadow-inner">
+                        {isArrived ? "🎁" : "🏇"}
+                      </div>
+                    </div>
+
+                    {/* 动态配送进度条 */}
+                    <div className="mt-3">
+                      <div className="w-full h-2 bg-[#EAD8C7] rounded-full overflow-hidden relative">
+                        <div
+                          className="h-full bg-gradient-to-r from-[#FF9800] to-[#D6724B] rounded-full transition-all duration-500"
+                          style={{ width: `${progressPct}%` }}
+                        ></div>
+                      </div>
+                      <div className="flex justify-between text-[10px] text-[#A69383] mt-1.5 font-medium">
+                        <span className="text-[#D6724B] font-bold">① 下单成功</span>
+                        <span className={progressPct >= 35 ? "text-[#D6724B] font-bold" : ""}>② 商家备膳</span>
+                        <span className={progressPct >= 65 ? "text-[#D6724B] font-bold" : ""}>③ 骑手取货</span>
+                        <span className={progressPct >= 90 ? "text-[#D6724B] font-bold" : ""}>④ 快马派送</span>
+                        <span className={isArrived ? "text-[#D6724B] font-bold" : ""}>⑤ 送达府邸</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* 仿真外卖路线与地址 */}
+                  <div className="p-4 bg-[#FAF9F5] border-b border-[#F0ECE1] flex flex-col gap-2 text-xs">
+                    <div className="flex items-center gap-2 text-[#6D6357]">
+                      <div className="w-5 h-5 rounded-full bg-[#E5DFC9] text-[#7A6B53] flex items-center justify-center font-bold text-[10px]">
+                        起
+                      </div>
+                      <span className="font-bold text-[#423C34]">{order.merchantName}</span>
+                      <span className="text-[#998E80] text-[11px]">({order.merchantLocation})</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-[#6D6357]">
+                      <div className="w-5 h-5 rounded-full bg-[#D6724B] text-white flex items-center justify-center font-bold text-[10px]">
+                        终
+                      </div>
+                      <span className="font-bold text-[#423C34]">{order.userAddress}</span>
+                    </div>
+                  </div>
+
+                  {/* 骑手信息卡片 */}
+                  <div className="p-4 border-b border-[#F0F0F0] flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-11 h-11 rounded-full bg-[#E8EDEA] overflow-hidden border-2 border-white shadow-sm flex items-center justify-center text-xl">
+                        {order.courier.avatar ? (
+                          <img src={order.courier.avatar} className="w-full h-full object-cover" alt="" />
+                        ) : "🏇"}
+                      </div>
+                      <div>
+                        <div className="font-bold text-sm text-[#333] flex items-center gap-1.5">
+                          <span>{order.courier.name}</span>
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-[#FFF2E2] text-[#E67E22] font-bold">
+                            ⭐ {order.courier.rating}
+                          </span>
+                        </div>
+                        <div className="text-xs text-[#888] mt-0.5">
+                          坐骑: <span className="text-[#555] font-medium">{order.courier.vehicle}</span> · {order.courier.phone}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={() => handleRush(order)}
+                        className="px-3 py-2 rounded-xl bg-[#FFF6EE] text-[#D6724B] border border-[#FFDCC7] text-xs font-bold active:scale-95 transition-transform flex items-center gap-1"
+                      >
+                        <i className="ph-bold ph-bell-ringing"></i>
+                        <span>催单</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 商品清单 */}
+                  <div className="p-4">
+                    <div className="text-xs font-bold text-[#888] mb-2.5 flex justify-between items-center">
+                      <span>已购商品清单 ({order.items.length}件)</span>
+                      <span className="text-[11px] text-[#D6724B] font-medium">
+                        {order.payMethod === 'role' ? `密探【${order.payerRoleName || '密探'}】代付` : '自己支付'}
+                      </span>
+                    </div>
+                    <div className="space-y-2 bg-[#F9F9FB] p-3 rounded-xl border border-[#EEEEF2]">
+                      {order.items.map((item, idx) => (
+                        <div key={idx} className="flex justify-between items-center text-xs">
+                          <span className="text-[#444] font-medium flex-1 truncate">{item.name}</span>
+                          <span className="text-[#888] text-[11px] mx-2">×1</span>
+                          <span className="text-[#333] font-bold">{item.price}</span>
+                        </div>
+                      ))}
+                      <div className="pt-2 border-t border-dashed border-[#DDD] flex justify-between items-center text-xs font-bold">
+                        <span className="text-[#666]">合计支付</span>
+                        <span className="text-[#D6724B] text-sm font-black">{order.totalPriceStr}</span>
+                      </div>
+                    </div>
+
+                    {/* 确认收货操作大按钮 */}
+                    <button
+                      onClick={() => handleConfirmReceive(order.id)}
+                      className={`w-full mt-3.5 py-3 rounded-xl text-white font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 ${
+                        isArrived
+                          ? "bg-gradient-to-r from-[#2ECC71] to-[#27AE60] shadow-[0_4px_12px_rgba(46,204,113,0.3)]"
+                          : "bg-gradient-to-r from-[#D6724B] to-[#C05D36] shadow-[0_4px_12px_rgba(214,114,75,0.3)]"
+                      }`}
+                    >
+                      <i className="ph-bold ph-package text-lg"></i>
+                      <span>{isArrived ? "立即签收并放入背包" : "提前签收并存入背包"}</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center">
+              <div className="w-24 h-24 rounded-full bg-[#FFF0E6] flex items-center justify-center text-4xl mb-4 text-[#D6724B] shadow-inner">
+                🏇
+              </div>
+              <h4 className="font-bold text-base text-[#444] mb-1">暂无在途配送订单</h4>
+              <p className="text-xs text-[#888] max-w-xs mb-6 leading-relaxed">
+                当前暂无太疾驰快马在途派送。快去太疾驰商城挑选美食、文玩与暗器吧！
+              </p>
+              <button
+                onClick={onGoBackToShopping}
+                className="px-6 py-2.5 bg-[#D6724B] text-white rounded-full font-bold text-sm shadow-md active:scale-95 transition-transform"
+              >
+                前往太疾驰选购
+              </button>
+            </div>
+          )
+        ) : (
+          completedOrders.length > 0 ? (
+            completedOrders.map((order) => (
+              <div key={order.id} className="bg-white rounded-2xl shadow-sm border border-[#EAEAEA] p-4">
+                <div className="flex justify-between items-center pb-3 border-b border-[#F0F0F0] mb-3">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-[#2ECC71]"></span>
+                    <span className="font-bold text-sm text-[#333]">{order.merchantName}</span>
+                  </div>
+                  <span className="text-xs font-bold text-[#2ECC71] bg-[#E8F8F0] px-2.5 py-0.5 rounded-full">
+                    已收货入库
+                  </span>
+                </div>
+
+                <div className="space-y-1.5 text-xs text-[#666] mb-3 bg-[#F9F9FB] p-3 rounded-xl">
+                  {order.items.map((item, idx) => (
+                    <div key={idx} className="flex justify-between items-center">
+                      <span className="truncate flex-1">{item.name}</span>
+                      <span className="font-bold text-[#444]">{item.price}</span>
+                    </div>
+                  ))}
+                  <div className="pt-2 border-t border-gray-100 flex justify-between items-center text-xs font-bold">
+                    <span className="text-[#888]">实付总额</span>
+                    <span className="text-[#333] font-bold">{order.totalPriceStr}</span>
+                  </div>
+                </div>
+
+                <div className="flex justify-between items-center text-xs text-[#999] pt-1">
+                  <span>签收时间: {new Date(order.completedTime || order.orderTime).toLocaleString([], { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })}</span>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => {
+                        alert("🎒 实物已存入【设置 - 隐私与安全 - 我的背包】中。");
+                      }}
+                      className="px-3 py-1.5 rounded-lg bg-[#F5F5F7] text-[#555] font-bold hover:bg-[#EAEAEA] active:scale-95 transition-all"
+                    >
+                      查看背包
+                    </button>
+                    <button
+                      onClick={onGoBackToShopping}
+                      className="px-3 py-1.5 rounded-lg bg-[#FFF2EB] text-[#D6724B] font-bold hover:bg-[#FFE6D9] active:scale-95 transition-all"
+                    >
+                      再来一单
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div className="flex flex-col items-center justify-center py-20 text-center text-gray-400">
+              <div className="text-4xl mb-3">📦</div>
+              <p className="text-sm font-medium">暂无历史收货记录</p>
+            </div>
+          )
+        )}
+      </div>
+    </div>
+  );
+};
+
 const T12Page = () => {
   const { useState, useEffect } = React;
   const [activeTab, setActiveTab] = useState("二手");
+  const [showDeliveryView, setShowDeliveryView] = useState(false);
+  const [pendingDeliveryCount, setPendingDeliveryCount] = useState(0);
+
+  // 监听并刷新配送订单与自动履约
+  useEffect(() => {
+    const refreshOrders = async () => {
+      if (window.deliveryOrderStore) {
+        await window.deliveryOrderStore.checkAutoDelivery();
+        const all = await window.deliveryOrderStore.getAll();
+        const pending = (all || []).filter((o) => o.status === "delivering" || o.status === "delivered").length;
+        setPendingDeliveryCount(pending);
+      }
+    };
+    refreshOrders();
+    const interval = setInterval(refreshOrders, 2500);
+    window.addEventListener("deliveryOrdersUpdated", refreshOrders);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("deliveryOrdersUpdated", refreshOrders);
+    };
+  }, []);
 
   // 餐饮状态与AI调用逻辑
   const [activeCategory, setActiveCategory] = useState("米食");
@@ -18561,32 +19482,70 @@ const T12Page = () => {
             // 全局提示回复送达
             setTimeout(() => {
               if (isAgreed) {
-                // ✅ 将刚才在外部组装好的 selectedGoods 写入背包
-                // (因为在这个作用域内，selectedGoods数组依然存活)
-                if (window.backpackStore && selectedGoods.length > 0) {
-                  const itemsToSave = selectedGoods.map((g) => ({
+                // ✅ 角色代付成功：生成太疾驰快马外卖配送订单 (不直接入库背包)
+                if (selectedGoods.length > 0) {
+                  const itemsToDeliver = selectedGoods.map((g) => ({
                     name: g.name,
                     merchant: g.merchant,
                     price: g.price,
-                    type: "goods", // 统一标记，或在此处细分
+                    type: "goods",
                   }));
-                  window.backpackStore.addItems(itemsToSave);
-                }
 
-                // 清空购物车
-                setSettlementItems([]);
-                setTicketItems([]);
-                setShoppingItems([]);
-                setSecondHandItems([]);
-                setSelectedItems({
-                  settlement: [],
-                  ticket: [],
-                  shopping: [],
-                  secondHand: [],
-                });
-                alert(
-                  `【飞鹰传讯】${role.name || "未知角色"} 已同意代付！商品已放入【我的背包】中。`,
-                );
+                  // 提取商家信息
+                  const shopName = selectedGoods[0]?.merchant || "太疾驰精选商坊";
+                  const shopLoc = shopName + "总店(东市坊街)";
+
+                  // 读取当前主控身份地址
+                  let userAddr = "广陵王府·听雨阁";
+                  try {
+                    const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+                    const activeId = localStorage.getItem("active_persona_id");
+                    if (activeId) {
+                      const activeUser = savedPersonas.find((p) => p.id == activeId);
+                      if (activeUser && activeUser.name) userAddr = `${activeUser.name}府邸·正殿`;
+                    }
+                  } catch (e) {}
+
+                  const couriers = [
+                    { name: "太疾驰快马骑手·戴宗", vehicle: "神行千里马", rating: 4.98, phone: "传讯灵佩 #9527", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=DaiZong" },
+                    { name: "疾风专送·赵小六", vehicle: "追风赤兔马", rating: 4.95, phone: "千里金铃 #108", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=XiaoLiu" },
+                    { name: "神行驿使·阿飞", vehicle: "踏雪乌骓", rating: 4.99, phone: "风行符印 #777", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=AFei" },
+                    { name: "云步斥候·李四", vehicle: "神行木牛流马", rating: 4.92, phone: "飞鸽信筒 #002", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=LiSi" }
+                  ];
+                  const courier = couriers[Math.floor(Math.random() * couriers.length)];
+                  const durationMinutes = Math.floor(Math.random() * 3) + 2;
+
+                  if (window.deliveryOrderStore) {
+                    window.deliveryOrderStore.addOrder({
+                      merchantName: shopName,
+                      merchantLocation: shopLoc,
+                      userAddress: userAddr,
+                      courier: courier,
+                      items: itemsToDeliver,
+                      totalPriceStr: totalPriceStr,
+                      totalBase: 0,
+                      payMethod: 'role',
+                      payerRoleName: role.name || "密探",
+                      durationMinutes: durationMinutes,
+                      status: 'delivering'
+                    });
+                  }
+
+                  // 清空购物车
+                  setSettlementItems([]);
+                  setTicketItems([]);
+                  setShoppingItems([]);
+                  setSecondHandItems([]);
+                  setSelectedItems({
+                    settlement: [],
+                    ticket: [],
+                    shopping: [],
+                    secondHand: [],
+                  });
+                  alert(
+                    `🎉【飞鹰传讯】${role.name || "未知角色"} 已同意代付！太疾驰快马骑手【${courier.name}】已接单，预计 ${durationMinutes} 分钟送达府邸！可在结算单【收货状态】中实时追踪。`,
+                  );
+                }
               } else {
                 alert(
                   `【飞鹰传讯】${role.name || "未知角色"} 回复了您的代付请求，快去传讯查收吧！`,
@@ -18687,51 +19646,98 @@ const T12Page = () => {
         `购买：${paymentInfo.itemsSummary}`,
       );
 
-      // ✅ 3. 将所选物品提取并存入背包
+      // ✅ 3. 将所选物品提取并生成太疾驰配送订单 (不直接入库背包，交由外卖配送流水线)
       const purchasedItems = [];
+      let shopName = "太疾驰精选商城";
+      let shopLocation = "洛阳东市柳林街";
+
       settlementItems.forEach((item) => {
-        if (selectedItems.settlement.includes(item.id))
+        if (selectedItems.settlement.includes(item.id)) {
+          shopName = item.shop || shopName;
+          shopLocation = item.location || (item.shop ? `${item.shop}总店(东市大街)` : shopLocation);
           purchasedItems.push({
             name: item.items?.[0] || item.name || "美食",
             merchant: item.shop || "未知店家",
-            price: item.price + "钱",
+            price: (typeof item.price === "number" ? `${item.price}钱` : item.price),
             type: "food",
           });
+        }
       });
       shoppingItems.forEach((item) => {
-        if (selectedItems.shopping.includes(item.id))
+        if (selectedItems.shopping.includes(item.id)) {
+          shopName = item.shop || item.merchant || shopName;
+          shopLocation = "朱雀门外坊市甲字号";
           purchasedItems.push({
             name: item.name,
             merchant: item.shop || item.merchant,
             price: item.price,
             type: "shopping",
           });
+        }
       });
       secondHandItems.forEach((item) => {
-        if (selectedItems.secondHand.includes(item.id))
+        if (selectedItems.secondHand.includes(item.id)) {
+          shopName = `${item.seller}的珍宝坊`;
+          shopLocation = "洛阳鬼市街巷";
           purchasedItems.push({
             name: item.item,
             merchant: item.seller,
             price: item.price,
             type: "secondhand",
           });
+        }
       });
       ticketItems.forEach((item) => {
-        if (selectedItems.ticket.includes(item.id))
+        if (selectedItems.ticket.includes(item.id)) {
+          shopName = item.venue || "洛阳大剧场";
+          shopLocation = item.venue || "西苑观戏楼";
           purchasedItems.push({
             name: item.title,
             merchant: item.venue,
             price: item.price,
             type: "ticket",
           });
+        }
       });
 
-      if (window.backpackStore && purchasedItems.length > 0) {
-        window.backpackStore.addItems(purchasedItems);
+      // 读取当前主控身份地址
+      let userAddr = "广陵王府·听雨阁";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId) {
+          const activeUser = savedPersonas.find((p) => p.id == activeId);
+          if (activeUser && activeUser.name) userAddr = `${activeUser.name}府邸·正殿`;
+        }
+      } catch (e) {}
+
+      // 随机生成快马外卖骑手
+      const couriers = [
+        { name: "太疾驰快马骑手·戴宗", vehicle: "神行千里马", rating: 4.98, phone: "传讯灵佩 #9527", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=DaiZong" },
+        { name: "疾风专送·赵小六", vehicle: "追风赤兔马", rating: 4.95, phone: "千里金铃 #108", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=XiaoLiu" },
+        { name: "神行驿使·阿飞", vehicle: "踏雪乌骓", rating: 4.99, phone: "风行符印 #777", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=AFei" },
+        { name: "云步斥候·李四", vehicle: "神行木牛流马", rating: 4.92, phone: "飞鸽信筒 #002", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=LiSi" }
+      ];
+      const courier = couriers[Math.floor(Math.random() * couriers.length)];
+      const durationMinutes = Math.floor(Math.random() * 3) + 2;
+
+      if (window.deliveryOrderStore && purchasedItems.length > 0) {
+        window.deliveryOrderStore.addOrder({
+          merchantName: shopName,
+          merchantLocation: shopLocation,
+          userAddress: userAddr,
+          courier: courier,
+          items: purchasedItems,
+          totalPriceStr: `${paymentInfo.totalBase} 铢`,
+          totalBase: paymentInfo.totalBase,
+          payMethod: 'self',
+          durationMinutes: durationMinutes,
+          status: 'delivering'
+        });
       }
 
       alert(
-        `支付成功！商品已存入【设置-隐私与安全-我的背包】中。本次消费折合 ${paymentInfo.totalBase} 铢。`,
+        `🎉 支付成功！本次消费折合 ${paymentInfo.totalBase} 铢。太疾驰快马骑手【${courier.name}】已接单，预计 ${durationMinutes} 分钟送达府邸！可在结算单右上角【收货状态】中实时追踪。`,
       );
 
       // 4. 清空购物车和状态
@@ -19192,9 +20198,32 @@ const T12Page = () => {
       {/* 结算卡片 */}
       {showSettlementModal && (
         <div className="fixed inset-x-0 bottom-0 bg-white rounded-t-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.15)] z-[70] animate-slide-up h-[75vh] flex flex-col">
-          {/* 弹窗头部 */}
+          {/* 弹窗头部 (增加美团风格【收货状态】配送入口) */}
           <div className="p-5 flex justify-between items-center bg-[#FDFCF8] rounded-t-3xl border-b border-[#F2EFDE] z-10 sticky top-0">
-            <h3 className="text-xl font-bold text-[#5A5F4D]">购物结算</h3>
+            <div className="flex items-center gap-3">
+              <h3 className="text-xl font-bold text-[#5A5F4D]">购物结算</h3>
+              <button
+                onClick={() => {
+                  setShowSettlementModal(false);
+                  setShowDeliveryView(true);
+                }}
+                className="px-3 py-1.5 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm active:scale-95 transition-all"
+                style={{
+                  background: pendingDeliveryCount > 0
+                    ? "linear-gradient(135deg, #FF6B35 0%, #D6724B 100%)"
+                    : "linear-gradient(135deg, #E0F2F1 0%, #B2DFDB 100%)",
+                  color: pendingDeliveryCount > 0 ? "#FFFFFF" : "#00695C",
+                  border: pendingDeliveryCount > 0 ? "1px solid #FF8A65" : "1px solid #80CBC4"
+                }}
+              >
+                <span>📦 收货状态</span>
+                {pendingDeliveryCount > 0 && (
+                  <span className="w-4 h-4 rounded-full bg-white text-[#D6724B] text-[10px] flex items-center justify-center font-black animate-pulse">
+                    {pendingDeliveryCount}
+                  </span>
+                )}
+              </button>
+            </div>
             <button
               onClick={() => setShowSettlementModal(false)}
               className="w-8 h-8 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#8C8C8C] active:scale-90 transition-transform"
@@ -19617,6 +20646,16 @@ const T12Page = () => {
         onTabChange={setActiveTab}
         onSettlementClick={handleSettlementClick}
       />
+
+      {/* ✅ 新增：美团风格太疾驰配送订单全屏页面 */}
+      {showDeliveryView && (
+        <T12DeliveryView
+          onClose={() => setShowDeliveryView(false)}
+          onGoBackToShopping={() => {
+            setShowDeliveryView(false);
+          }}
+        />
+      )}
     </div>
   );
 };
