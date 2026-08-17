@@ -58307,7 +58307,9 @@ ${selectedChars.map((c, idx) => `${idx + 1}. 【${c.name}】: 性格与说话口
 1. 📜【怪谈规则清单 (rules)】(3-5条)：每条必须简短、怪异、真假混杂（如："规则一：红烛熄灭时，切勿回头数身后同伴人数"、"规则二：凡自称是某某者，若左手少一指，立刻向其跪拜"）。
 2. 📖【开篇剧情 (story)】(120-180字)：讲述全员醒来时的诡异场景、四周弥漫的异象与迫在眉睫的危机。
 3. 💬【密探即时对话 (dialogues)】(2-3位密探发言)：符合各自人设，有的神情紧绷给出推论，有的可能暗含说谎或误导！
-4. 🔀【抉择选项 (options)】(3-4个单选抉择)：逻辑清晰，蕴含不同风险与推理路线。
+4. 🔀【抉择选项 (options)】(3-4个单选抉择)：
+   - text: 选项行动文字（必须简短精炼在 15-28 字以内，严禁在 text 中写中括号或附加说明）；
+   - hint: 极简微提示（严格限制在 4-8 个字以内，如"稳妥试探"、"激进搜寻"、"核验规则"，严禁写长句！）；
 
 必须严格返回纯 JSON 对象格式（不要包含任何 \`\`\`json 标记）：
 {
@@ -58377,12 +58379,37 @@ ${selectedChars.map((c, idx) => `${idx + 1}. 【${c.name}】: 性格与说话口
     applyNewTurn(defaultTurn);
   };
 
-  // 应用新回合数据
+  // 应用新回合数据 (增加选项字数与中括号深度净化)
   const applyNewTurn = (turnData) => {
     setCurrentRules(turnData.rules || []);
     setCurrentStory(turnData.story || "");
     setCurrentDialogues(turnData.dialogues || []);
-    setCurrentOptions(turnData.options || []);
+    
+    const rawOptions = turnData.options || [];
+    const sanitizedOptions = rawOptions.map((opt, idx) => {
+      let text = String(opt.text || "").trim();
+      let hint = String(opt.hint || "").trim();
+
+      // 剔除被内嵌在 text 里的 [中括号长说明]
+      const bracketMatch = text.match(/^(.*?)[s]*[(.*?)][s]*$/);
+      if (bracketMatch) {
+        text = bracketMatch[1].trim();
+        if (!hint) hint = bracketMatch[2].trim();
+      }
+
+      // 如果 hint 过长（超过18字），进行适度截断并优化展示
+      if (hint.length > 20) {
+        hint = hint.slice(0, 18) + "...";
+      }
+
+      return {
+        id: opt.id || idx + 1,
+        text: text || `抉择 ${idx + 1}`,
+        hint: hint.replace(/^\[|\]$/g, "").trim(),
+      };
+    });
+
+    setCurrentOptions(sanitizedOptions);
     if (turnData.boss) setCurrentBoss(turnData.boss);
     setStage("playing");
     setIsAiProcessing(false);
@@ -58998,7 +59025,7 @@ ${selectedChars.map((c) => `【${c.name}】(当前好感度:${affections[c.name]
       {/* ================= 阶段 3: 回合制推演主界面 ================= */}
       {stage === "playing" && (
         <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden" }}>
-          {/* 顶部6大属性概览条 */}
+          {/* 顶部6大属性概览条 (固定在顶层，随时掌握生存数值) */}
           <div
             style={{
               background: "#FFFFFF",
@@ -59009,6 +59036,8 @@ ${selectedChars.map((c) => `【${c.name}】(当前好感度:${affections[c.name]
               gap: "4px",
               textAlign: "center",
               flexShrink: 0,
+              zIndex: 10,
+              boxShadow: "0 1px 4px rgba(0,0,0,0.02)",
             }}
           >
             {[
@@ -59031,13 +59060,13 @@ ${selectedChars.map((c) => `【${c.name}】(当前好感度:${affections[c.name]
             ))}
           </div>
 
-          {/* 剧情与怪谈内容区 */}
+          {/* 全屏统一流畅滚动区：包含守则卡、剧情卡、密探发言与抉择卡片，100%全屏利用率 */}
           <div
             className="no-scrollbar"
             style={{
               flex: 1,
               overflowY: "auto",
-              padding: "14px",
+              padding: "14px 14px 28px 14px",
               boxSizing: "border-box",
               display: "flex",
               flexDirection: "column",
@@ -59054,13 +59083,16 @@ ${selectedChars.map((c) => `【${c.name}】(当前好感度:${affections[c.name]
                 boxShadow: "0 4px 14px rgba(245,198,165,0.25)",
               }}
             >
-              <div style={{ fontSize: "14.5px", fontWeight: "800", color: "#8C4A1E", marginBottom: "8px", display: "flex", alignItems: "center", gap: "4px" }}>
-                <span>📜 当前禁忌守则</span>
-                <span style={{ fontSize: "11px", background: "#D6724B", color: "#FFF", padding: "1px 6px", borderRadius: "6px" }}>第 {turnCount} 关</span>
+              <div style={{ fontSize: "14px", fontWeight: "800", color: "#8C4A1E", marginBottom: "8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+                  <span>📜 当前禁忌守则</span>
+                  <span style={{ fontSize: "10.5px", background: "#D6724B", color: "#FFF", padding: "1px 6px", borderRadius: "6px" }}>第 {turnCount} 关</span>
+                </div>
+                <span style={{ fontSize: "11px", color: "#B36B42", fontWeight: "normal" }}>请严格恪守，切莫违背</span>
               </div>
               <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
                 {currentRules.map((rule, idx) => (
-                  <div key={idx} style={{ fontSize: "12.5px", color: "#5A3825", lineHeight: "1.5", paddingLeft: "4px" }}>
+                  <div key={idx} style={{ fontSize: "12.5px", color: "#5A3825", lineHeight: "1.55", paddingLeft: "4px" }}>
                     • {rule}
                   </div>
                 ))}
@@ -59092,7 +59124,7 @@ ${selectedChars.map((c) => `【${c.name}】(当前好感度:${affections[c.name]
                     <div
                       key={idx}
                       style={{
-                        background: "rgba(255, 255, 255, 0.9)",
+                        background: "rgba(255, 255, 255, 0.95)",
                         borderRadius: "14px",
                         padding: "10px 12px",
                         border: "1px solid #EAE3DA",
@@ -59116,60 +59148,102 @@ ${selectedChars.map((c) => `【${c.name}】(当前好感度:${affections[c.name]
               </div>
             )}
 
+            {/* 🔀 本回合生死抉择区 (自然融入文章末尾，绝不遮挡上方内容) */}
+            {currentOptions.length > 0 && (
+              <div
+                style={{
+                  marginTop: "6px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  paddingTop: "6px",
+                }}
+              >
+                <div style={{ fontSize: "12.5px", color: "#7B8072", fontWeight: "700", display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span>👉 请做出本回合的生死抉择 (单选):</span>
+                </div>
+                {currentOptions.map((opt, idx) => {
+                  let text = opt.text || "";
+                  let hint = opt.hint || "";
+
+                  // 容错处理中括号残余
+                  const bracketMatch = text.match(/^(.*?)[\s]*\[(.*?)\][\s]*$/);
+                  if (bracketMatch) {
+                    text = bracketMatch[1].trim();
+                    if (!hint) hint = bracketMatch[2].trim();
+                  }
+
+                  return (
+                    <button
+                      key={opt.id || idx}
+                      onClick={() => handleSelectOption(opt)}
+                      disabled={isAiProcessing}
+                      style={{
+                        width: "100%",
+                        padding: "12px 14px",
+                        borderRadius: "14px",
+                        border: "1.5px solid #DDD3C7",
+                        background: isAiProcessing ? "#F5F2EC" : "#FFFFFF",
+                        color: isAiProcessing ? "#9E998F" : "#3B4235",
+                        cursor: isAiProcessing ? "not-allowed" : "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "flex-start",
+                        gap: "4px",
+                        textAlign: "left",
+                        boxSizing: "border-box",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+                        transition: "all 0.15s ease",
+                      }}
+                      className="hover:border-[#C4B5A5] active:scale-[0.99]"
+                    >
+                      <div
+                        style={{
+                          width: "100%",
+                          fontSize: "13.5px",
+                          fontWeight: "600",
+                          color: isAiProcessing ? "#9E998F" : "#2C3528",
+                          lineHeight: "1.5",
+                          wordBreak: "break-word",
+                          whiteSpace: "normal",
+                        }}
+                      >
+                        {text}
+                      </div>
+                      {hint && (
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "#6B7C6C",
+                            background: "rgba(134, 150, 135, 0.12)",
+                            padding: "2px 7px",
+                            borderRadius: "6px",
+                            lineHeight: "1.35",
+                            wordBreak: "break-word",
+                            whiteSpace: "normal",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            marginTop: "1px",
+                          }}
+                        >
+                          <span style={{ fontSize: "10px" }}>💡</span>
+                          <span>{hint.replace(/^\[|\]$/g, "")}</span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+
             {isAiProcessing && (
-              <div style={{ textAlign: "center", padding: "12px", color: "#8E99A2", fontSize: "12.5px" }}>
+              <div style={{ textAlign: "center", padding: "16px 12px", color: "#8E99A2", fontSize: "12.5px" }}>
                 <i className="ph ph-spinner animate-spin mr-1"></i> 幽冥法则正在推演判定你的抉择后果...
               </div>
             )}
 
             <div ref={scrollRef} />
-          </div>
-
-          {/* 🔀 底部单选决策栏 */}
-          <div
-            style={{
-              padding: "12px 14px",
-              background: "#FFFFFF",
-              borderTop: "1px solid #E2D8CC",
-              display: "flex",
-              flexDirection: "column",
-              gap: "8px",
-              flexShrink: 0,
-            }}
-          >
-            <div style={{ fontSize: "12px", color: "#8E99A2", fontWeight: "600" }}>
-              👉 请做出本回合的生死抉择 (单选):
-            </div>
-            {currentOptions.map((opt) => (
-              <button
-                key={opt.id}
-                onClick={() => handleSelectOption(opt)}
-                disabled={isAiProcessing}
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "14px",
-                  border: "1.5px solid #DDD3C7",
-                  background: isAiProcessing ? "#F5F2EC" : "#FAF7F2",
-                  color: isAiProcessing ? "#9E998F" : "#3B4235",
-                  fontSize: "13px",
-                  fontWeight: "600",
-                  textAlign: "left",
-                  lineHeight: "1.45",
-                  cursor: isAiProcessing ? "not-allowed" : "pointer",
-                  display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                }}
-              >
-                <span>{opt.text}</span>
-                {opt.hint && (
-                  <span style={{ fontSize: "11px", color: "#869687", marginLeft: "6px", flexShrink: 0 }}>
-                    [{opt.hint}]
-                  </span>
-                )}
-              </button>
-            ))}
           </div>
         </div>
       )}
@@ -81680,7 +81754,86 @@ const robustParseLLMJSON = (text) => {
 
 // ==================== 心仪艺术家排行榜与作家书评组件 (轻量分步按需生成版) ====================
 
-const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission }) => {
+const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission, onCommissionSuccess }) => {
+  // 借阅代表作至藏书阁
+  const handleBorrowBook = (masterpiece) => {
+    if (!masterpiece || !selectedArtist) return;
+    const newBook = {
+      id: "borrow_" + Date.now(),
+      title: masterpiece.title,
+      authorName: selectedArtist.name,
+      authorTitle: selectedArtist.title,
+      targetCharacter: "楼主借阅",
+      category: selectedArtist.category || "文学",
+      tags: masterpiece.tags || ["名家手稿", "借阅典藏"],
+      summary: masterpiece.summary,
+      highlightQuote: masterpiece.highlightQuote || "",
+      wordCount: masterpiece.wordCount || "长卷",
+      commissionDate: new Date().toLocaleDateString("zh-CN"),
+      acquisitionType: "borrow",
+      price: 0,
+      color: selectedArtist.avatarColor || "#59685a",
+      fullText: `【第一回 · ${masterpiece.title}】\n\n作者：${selectedArtist.name}\n\n${masterpiece.summary}\n\n“${masterpiece.highlightQuote || "" }”\n\n（借阅手稿已收录至天下书城【藏书阁】，可随时研读或发起名家续写）`,
+    };
+
+    const saved = JSON.parse(localStorage.getItem("custom_commission_books") || "[]");
+    const updated = [newBook, ...saved.filter((b) => b.title !== newBook.title)];
+    localStorage.setItem("custom_commission_books", JSON.stringify(updated));
+    if (onCommissionSuccess) {
+      onCommissionSuccess(newBook, updated);
+    }
+    alert(`✨《${masterpiece.title}》已成功借阅，已存入天下书城【藏书阁】！`);
+  };
+
+  // 斥资购买代表作至藏书阁并自动从钱包扣款记账
+  const handlePurchaseBook = (masterpiece) => {
+    if (!masterpiece || !selectedArtist) return;
+    const price = 50;
+    const currentBalance = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+    if (currentBalance < price) {
+      alert(`金库余额不足！购买此名家手稿需 ${price} 五铢钱，请前往【用户 -> 隐私与安全 -> 我的钱包】充值。`);
+      return;
+    }
+
+    // 1. 扣除钱包余额
+    const newBalance = currentBalance - price;
+    localStorage.setItem("farm_coins", newBalance.toString());
+
+    // 2. 记录交易并触发通知
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord(
+        "expense",
+        price,
+        `购入名家典藏手稿：《${masterpiece.title}》（${selectedArtist.name} 著)`
+      );
+    }
+
+    const newBook = {
+      id: "purchased_" + Date.now(),
+      title: masterpiece.title,
+      authorName: selectedArtist.name,
+      authorTitle: selectedArtist.title,
+      targetCharacter: "楼主典藏",
+      category: selectedArtist.category || "文学",
+      tags: masterpiece.tags || ["名家手稿", "永久典藏"],
+      summary: masterpiece.summary,
+      highlightQuote: masterpiece.highlightQuote || "",
+      wordCount: masterpiece.wordCount || "长卷",
+      commissionDate: new Date().toLocaleDateString("zh-CN"),
+      acquisitionType: "purchased",
+      price: price,
+      color: selectedArtist.avatarColor || "#D6724B",
+      fullText: `【第一回 · ${masterpiece.title}】\n\n作者：${selectedArtist.name}\n\n${masterpiece.summary}\n\n“${masterpiece.highlightQuote || "" }”\n\n（楼主已斥资 ${price} 铢永久购入此典藏手稿，已收录至【藏书阁】，可随时研读或发起名家续写）`,
+    };
+
+    const saved = JSON.parse(localStorage.getItem("custom_commission_books") || "[]");
+    const updated = [newBook, ...saved.filter((b) => b.title !== newBook.title)];
+    localStorage.setItem("custom_commission_books", JSON.stringify(updated));
+    if (onCommissionSuccess) {
+      onCommissionSuccess(newBook, updated);
+    }
+    alert(`✨ 购买成功！已从钱包扣除 ${price} 铢，《${masterpiece.title}》已永久典藏于【藏书阁】！`);
+  };
   const [activeCategory, setActiveCategory] = React.useState("全部");
   const [activeTimeframe, setActiveTimeframe] = React.useState("日榜");
   const [selectedArtist, setSelectedArtist] = React.useState(null);
@@ -81751,29 +81904,66 @@ const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission
     return "【用户】绣衣楼楼主";
   };
 
-  // 获取传讯角色精简列表
+  // 获取传讯角色深度设定列表 (包含详细人设、口吻、身份与生平)
   const getCleanContactChars = async () => {
     try {
+      let allChars = [];
       if (window.chatCharacterStore) {
-        const allChars = await window.chatCharacterStore.getAll();
-        if (allChars && Array.isArray(allChars)) {
-          const valid = allChars
-            .filter((c) => c && typeof c === "object" && (c.name || c.nickname))
-            .map((c) => ({
-              name: String(c.name || c.nickname || "故人").trim(),
-              personality: String(c.profile?.personality || c.personality || "特色鲜明").slice(0, 30),
-              style: String(c.profile?.style || "专属语气").slice(0, 30),
-            }));
-          if (valid.length > 0) return valid.slice(0, 6);
-        }
+        try {
+          const stored = await window.chatCharacterStore.getAll();
+          if (stored && Array.isArray(stored)) allChars = stored;
+        } catch (e) {}
+      }
+      if (allChars.length === 0) {
+        try {
+          const localStored = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+          if (Array.isArray(localStored)) allChars = localStored;
+        } catch (e) {}
+      }
+
+      if (allChars.length > 0) {
+        const valid = allChars
+          .filter((c) => c && typeof c === "object" && (c.name || c.nickname))
+          .map((c) => {
+            const charName = String(c.name || c.nickname || "密探").trim();
+            const charRole = String(c.profile?.role || c.role || c.title || (charName === "傅融" ? "绣衣楼副官" : charName === "刘辩" ? "汉少帝" : charName === "袁基" ? "太仆/世家公子" : charName === "左慈" ? "仙长" : charName === "孙策" ? "江东小霸王" : "密探同僚"));
+            
+            // 提取详尽性格人设
+            let personalityText = "";
+            if (c.profile?.personality) personalityText = c.profile.personality;
+            else if (c.personality) personalityText = c.personality;
+            else if (typeof c.profile === "string") personalityText = c.profile;
+            else if (c.description) personalityText = c.description;
+
+            // 提取说话风格与口吻
+            let styleText = "";
+            if (c.profile?.style) styleText = c.profile.style;
+            else if (c.style) styleText = c.style;
+            else if (c.profile?.tone) styleText = c.profile.tone;
+
+            // 提取背景与口癖
+            let bioText = "";
+            if (c.profile?.bio) bioText = c.profile.bio;
+            else if (c.background) bioText = c.background;
+            else if (c.bio) bioText = c.bio;
+
+            return {
+              name: charName,
+              role: charRole,
+              personality: personalityText || (charName === "傅融" ? "精打细算、计较五铢钱开销、嘴硬心软、务实负责" : charName === "刘辩" ? "天真热烈、爱喝酒、依恋楼主、任性直率" : charName === "袁基" ? "温润如玉、世家风范、引经据典、深思熟虑" : charName === "左慈" ? "清冷出尘、仙风道骨、言语玄妙深邃" : charName === "孙策" ? "豪迈阳光、热血直爽、好战霸气" : "特色鲜明"),
+              style: styleText || (charName === "傅融" ? "常提账本与买书钱，爱算计稿酬，口是心非但处处为绣衣楼着想" : charName === "刘辩" ? "直球任性，少年帝王的委屈与依赖，爱找楼主一起看书" : charName === "袁基" ? "端方知礼，文雅沉稳，字斟句酌，暗含世家谋略与深情" : charName === "左慈" ? "玄机暗藏，常参透命理天道，清冷仙气中略带提点" : charName === "孙策" ? "直来直去，大嗓门热血，喜欢打打杀杀和武侠兵书" : "极具辨识度的专属第一人称口吻"),
+              bio: bioText,
+            };
+          });
+        if (valid.length > 0) return valid.slice(0, 8);
       }
     } catch (e) {}
     return [
-      { name: "傅融", personality: "精打细算嘴硬心软", style: "常算账催更" },
-      { name: "刘辩", personality: "率直天真依恋楼主", style: "直抒胸臆少主口吻" },
-      { name: "袁基", personality: "温润儒雅深思熟虑", style: "引经据典世家之风" },
-      { name: "左慈", personality: "仙风道骨神叨深奥", style: "玄妙指点" },
-      { name: "孙策", personality: "豪爽直率热血霸道", style: "直爽热血豪气" },
+      { name: "傅融", role: "绣衣楼副官", personality: "精打细算、计较五铢钱开销、嘴硬心软、务实负责", style: "常提账本与买书钱，爱算计稿酬，口是心非但处处为绣衣楼着想", bio: "掌管绣衣楼财政大权" },
+      { name: "刘辩", role: "汉少帝", personality: "天真热烈、爱喝酒、依恋楼主、任性直率", style: "直球任性，少年帝王的委屈与依赖，爱找楼主一起看书", bio: "深宫少主，唯信任楼主" },
+      { name: "袁基", role: "太仆·世家公子", personality: "温润如玉、世家风范、引经据典、深思熟虑", style: "端方知礼，文雅沉稳，字斟句酌，暗含世家谋略与深情", bio: "汝南袁氏嫡长子" },
+      { name: "左慈", role: "天机阁仙长", personality: "清冷出尘、仙风道骨、言语玄妙深邃", style: "玄机暗藏，常参透命理天道，清冷仙气中略带提点", bio: "精通奇门遁甲与长生之术" },
+      { name: "孙策", role: "江东小霸王", personality: "豪迈阳光、热血直爽、好战霸气", style: "直来直去，大嗓门热血，喜欢打打杀杀和武侠兵书", bio: "横扫江东之名将" },
     ];
   };
 
@@ -81869,7 +82059,7 @@ ${userContext}
     }
   };
 
-  // 第二步：按需为选中的单个作家生成 10-15 条真实书评及作者回复（单独轻量生成，2-3秒完成）
+  // 第二步：按需为选中的单个作家生成 10-15 条真实书评及作者回复（深度融入角色人设与独特口吻）
   const fetchOrGenerateCommentsForArtist = async (artist, forceRefresh = false) => {
     if (!forceRefresh && artist.comments && artist.comments.length > 0) {
       return; // 已有书评，秒开
@@ -81878,26 +82068,41 @@ ${userContext}
     setIsLoadingComments(true);
     try {
       const chars = await getCleanContactChars();
-      const charsListStr = chars.map((c) => `${c.name}(${c.personality}，语气:${c.style})`).join("、");
+      const charsDetailedBlock = chars
+        .map(
+          (c, idx) =>
+            `${idx + 1}. 【${c.name}】(身份:${c.role})\n   - 性格人设: ${c.personality}\n   - 说话风格与口吻: ${c.style}${c.bio ? `\n   - 背景设定: ${c.bio}` : ""}`
+        )
+        .join("\n");
 
-      const sysPrompt = `你是一个古代文坛与现代网文书评评论员。请为作家【${artist.name}】的代表作《${artist.masterpiece?.title || "作品"}》生成 10 到 15 条真实生动的书评和作者互动。严格返回纯 JSON 数组格式，直接以 [ 开头，以 ] 结尾，不要输出任何 Markdown 标记。`;
+      const sysPrompt = `你是一个精通古代文坛与生动角色扮演的书评评论系统。请为作家【${artist.name}】的代表作《${artist.masterpiece?.title || "作品"}》生成 10 到 15 条极富灵魂、沉浸真实的书评及作者互动。严格返回纯 JSON 数组格式，直接以 [ 开头，以 ] 结尾，不要输出任何 Markdown 标记。`;
 
       const userPrompt = `
 【作家信息】
-作家：${artist.name}（头衔：${artist.title}，性格：${artist.bio}）
+作家：${artist.name}（头衔：${artist.title}，性格与风格：${artist.bio}）
 代表作：《${artist.masterpiece?.title}》
-简介：${artist.masterpiece?.summary}
+代表作简介：${artist.masterpiece?.summary}
 
-【可用传讯角色】
-${charsListStr}
+【传讯角色详细人设档案库（极其重要！书评必须100%严格代入以下角色的性格、人设与口吻）】
+${charsDetailedBlock}
 
-【任务】
-生成 10 到 15 条极富网感、沉浸真实的书评：
-1. 必须包含 2 到 4 条来自上述传讯角色（如傅融、刘辩、袁基、左慈、孙策等）的独家书评，严格符合其口吻性格！(isCharacter: true, characterName: "角色名")
-2. 其余评论为各界 NPC 读者（太学儒生、茶馆说书人、闺秀、刺客、催更狂魔等，isCharacter: false）。
-3. 其中 4 到 6 条书评必须包含作者【${artist.name}】的亲自幽默/傲娇/求饶回复(authorReply)。
+【书评生成任务与核心人设要求】
+生成 10 到 14 条生动有趣的网感书评：
+1. 🌟【传讯角色专属书评 (2 到 4 条)】：
+   - 必须挑选上述档案库中的真实角色（如 ${chars.map((c) => c.name).join("、")} 等），标记 isCharacter: true, characterName: "角色名", identity: "【角色身份】"；
+   - ⚠️【核心口吻戒律】：书评内容必须【完全契合该角色在档案库中的人设与说话口吻】，严禁写成千篇一律的普通读者！
+     * 傅融：必须紧扣五铢钱、绣衣楼开销账目、退钱扣稿费、嘴硬心软、催更；
+     * 刘辩：必须体现少年帝王的天真任性、爱喝酒、依恋楼主、直接直球；
+     * 袁基：必须体现世家大族的温润雅致、引经据典、字斟句酌、暗藏城府与关心；
+     * 左慈：必须体现清冷出尘、玄妙深奥、天机命理之语；
+     * 孙策：必须体现江东霸王的热血豪迈、大开大合、直来直去、爱打斗兵书；
+     * 自定义角色（如张邈等）：必须深度结合其背景档案与说话风格撰写专属点评！
+2. 🎭【各界 NPC 读者书评 (8 到 10 条)】：
+   - 包含太学儒生、茶馆说书客、闺阁千金、隐市刺客、催更魔怔读者、考据狂人等（isCharacter: false，characterName: ""）。
+3. 💬【作家亲自回复 (authorReply)】：
+   - 其中 4 到 6 条书评必须包含作者【${artist.name}】根据其人设性格（${artist.bio}）做出的幽默/求饶/得意/反驳回复。
 
-【JSON 格式示例】
+【JSON 数组格式示例】
 [
   {
     "id": "c1",
@@ -82257,25 +82462,23 @@ ${charsListStr}
                   </div>
                 )}
 
-                <button
-                  onClick={() => {
-                    if (onAddToBookshelf) {
-                      onAddToBookshelf({
-                        id: selectedArtist.id + "_book",
-                        title: selectedArtist.masterpiece.title,
-                        author: selectedArtist.name,
-                        summary: selectedArtist.masterpiece.summary,
-                        color: selectedArtist.avatarColor,
-                        category: selectedArtist.category,
-                        fullText: `《${selectedArtist.masterpiece.title}》\n作者：${selectedArtist.name}\n\n${selectedArtist.masterpiece.summary}\n\n${selectedArtist.masterpiece.highlightQuote}`,
-                      });
-                    }
-                  }}
-                  className="w-full py-2.5 rounded-xl bg-[#59685a] text-white text-xs font-medium active:scale-95 transition-transform flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                  <span className="material-symbols-outlined text-sm">bookmark_add</span>
-                  放入今日阅读
-                </button>
+                {/* 借阅与购买双轨操作栏 */}
+                <div className="grid grid-cols-2 gap-2.5 pt-1">
+                  <button
+                    onClick={() => handleBorrowBook(selectedArtist.masterpiece)}
+                    className="py-2.5 px-3 rounded-xl bg-[#FAF5EE] dark:bg-[#2C2723] text-[#59685a] dark:text-[#A3B1A4] border border-[#59685a]/30 text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1 shadow-sm hover:bg-[#59685a]/10"
+                  >
+                    <span className="material-symbols-outlined text-sm">auto_stories</span>
+                    <span>🔖 免费借阅</span>
+                  </button>
+                  <button
+                    onClick={() => handlePurchaseBook(selectedArtist.masterpiece)}
+                    className="py-2.5 px-3 rounded-xl bg-gradient-to-r from-[#D6724B] to-[#B85630] text-white text-xs font-bold active:scale-95 transition-all flex items-center justify-center gap-1 shadow-sm hover:opacity-90"
+                  >
+                    <span className="material-symbols-outlined text-sm">payments</span>
+                    <span>💰 购买 (50铢)</span>
+                  </button>
+                </div>
               </div>
             )}
 
@@ -82991,8 +83194,80 @@ const BookstoreCustomLibrary = ({
   onReadBook,
   onAddToBookshelf,
   onDeleteBook,
+  onUpdateBook,
   onExploreArtists,
 }) => {
+  const [writingBookId, setWritingBookId] = React.useState(null);
+
+  // AI 名家章节续写功能
+  const handleContinueWriting = (book) => {
+    if (!book || writingBookId) return;
+    if (!window.sendToLLM) {
+      alert("未检测到大模型 API 配置，请前往【设置 -> API设置】进行配置。");
+      return;
+    }
+
+    setWritingBookId(book.id);
+
+    const authorName = book.authorName || "名家";
+    const bookTitle = book.title || "手稿";
+    const existingContent = String(book.fullText || "").slice(-1200);
+
+    const sysPrompt = `你正在扮演古代名家作家【${authorName}】。请为代表作/专属手稿《${bookTitle}》续写下一回章节。`;
+    const userPrompt = `
+【作品信息】
+书名：《${bookTitle}》
+执笔人：${authorName}
+故事梗概：${book.summary || "精彩传奇"}
+
+【已有前文片段】
+${existingContent}
+
+【续写任务】
+请承接上一回的故事剧情与悬念，以该作者独具特色的古代文采与文风，继续创作下一回的新章节（字数约 400-600 字）。
+输出纯文本新章节正文，直接以【第X回 · 回目名】开头，切勿输出任何 Markdown 代码块标签！
+`;
+
+    window.sendToLLM(
+      [
+        { role: "system", content: sysPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      null,
+      (reply) => {
+        try {
+          const cleanText = reply.replace(/```(?:markdown)?/gi, "").replace(/```/g, "").trim();
+          const updatedFullText = `${book.fullText || ""}\n\n${cleanText}`;
+          const updatedBook = {
+            ...book,
+            fullText: updatedFullText,
+            wordCount: `续写至 ${(updatedFullText.length / 1000).toFixed(1)}k字`,
+          };
+
+          if (onUpdateBook) {
+            onUpdateBook(updatedBook);
+          } else {
+            const saved = JSON.parse(localStorage.getItem("custom_commission_books") || "[]");
+            const nextList = saved.map((b) => (b.id === book.id ? updatedBook : b));
+            localStorage.setItem("custom_commission_books", JSON.stringify(nextList));
+          }
+
+          alert(`✨ 名家【${authorName}】已为《${bookTitle}》续写完成新章节！`);
+        } catch (err) {
+          console.error("续写失败:", err);
+          alert("续写保存异常，请重试");
+        } finally {
+          setWritingBookId(null);
+        }
+      },
+      (err) => {
+        console.error("续写请求失败:", err);
+        alert("续写请求失败，请检查网络或 API 设置");
+        setWritingBookId(null);
+      }
+    );
+  };
+
   return (
     <div className="flex-1 overflow-y-auto pb-28 pt-4 px-4 max-w-2xl mx-auto space-y-6 font-sans">
       {/* 顶部 Header */}
@@ -83000,138 +83275,193 @@ const BookstoreCustomLibrary = ({
         <div className="flex items-center justify-between">
           <h1 className="text-3xl font-serif font-bold text-primary tracking-tight flex items-center gap-2">
             <span className="material-symbols-outlined text-[#D6724B] text-3xl">auto_stories</span>
-            定制藏书阁
+            天下书城 · 藏书阁
           </h1>
           <span className="px-3 py-1 rounded-full text-xs font-medium bg-[#59685a]/10 text-[#59685a] dark:text-[#A3B1A4]">
-            已收录 {books?.length || 0} 部独家手稿
+            已收录 {books?.length || 0} 部书稿
           </span>
         </div>
         <p className="text-xs text-[#8C7A6B] dark:text-[#A39282] leading-relaxed">
-          八方名家受楼主之托，为传讯故人量身撰写的专属书卷与珍藏篇章。
+          收录借阅名作、已购典藏与专属定制手稿。支持一键转入今日阅读书架及发起名家无限续写。
         </p>
       </header>
 
       {/* 藏书列表 */}
       {books && books.length > 0 ? (
         <div className="space-y-4">
-          {books.map((book) => (
-            <div
-              key={book.id}
-              className="p-5 rounded-3xl bg-white/90 dark:bg-[#231F1C]/90 backdrop-blur-md border border-[#E8E0D5] dark:border-[#332D28] shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-4 relative overflow-hidden"
-            >
-              {/* 背景装饰印章 */}
+          {books.map((book) => {
+            const isBorrow = book.acquisitionType === "borrow";
+            const isPurchased = book.acquisitionType === "purchased";
+            const isWriting = writingBookId === book.id;
+
+            return (
               <div
-                className="absolute right-[-10px] bottom-[-10px] opacity-10 pointer-events-none"
-                style={{ color: book.color || "#D6724B" }}
+                key={book.id}
+                className="p-5 rounded-3xl bg-white/90 dark:bg-[#231F1C]/90 backdrop-blur-md border border-[#E8E0D5] dark:border-[#332D28] shadow-sm hover:shadow-md transition-all flex flex-col justify-between gap-4 relative overflow-hidden"
               >
-                <span className="material-symbols-outlined text-8xl">menu_book</span>
-              </div>
-
-              <div className="flex gap-4">
-                {/* 书封 */}
+                {/* 背景装饰印章 */}
                 <div
-                  onClick={() => onReadBook(book)}
-                  className="w-24 aspect-[2/3] rounded-xl shadow-md flex-shrink-0 flex items-center justify-center p-2 relative overflow-hidden text-center cursor-pointer active:scale-95 transition-transform"
-                  style={{ backgroundColor: book.color || "#59685a" }}
+                  className="absolute right-[-10px] bottom-[-10px] opacity-10 pointer-events-none"
+                  style={{ color: book.color || "#D6724B" }}
                 >
-                  <span
-                    className="font-serif font-bold text-sm text-white mix-blend-overlay drop-shadow"
-                    style={{ writingMode: "vertical-rl", letterSpacing: "2px" }}
+                  <span className="material-symbols-outlined text-8xl">menu_book</span>
+                </div>
+
+                <div className="flex gap-4">
+                  {/* 书封 */}
+                  <div
+                    onClick={() => onReadBook(book)}
+                    className="w-24 aspect-[2/3] rounded-xl shadow-md flex-shrink-0 flex items-center justify-center p-2 relative overflow-hidden text-center cursor-pointer active:scale-95 transition-transform"
+                    style={{ backgroundColor: book.color || "#59685a" }}
                   >
-                    {book.title}
-                  </span>
-                </div>
-
-                {/* 书籍信息 */}
-                <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
-                  <div>
-                    <div className="flex items-center justify-between gap-2">
-                      <h3
-                        onClick={() => onReadBook(book)}
-                        className="font-serif font-bold text-lg text-[#2C2420] dark:text-[#FAF7F2] truncate cursor-pointer hover:text-[#D6724B]"
-                      >
-                        《{book.title}》
-                      </h3>
-                      <button
-                        onClick={() => {
-                          if (confirm(`确定要将《${book.title}》移出藏书阁吗？`)) {
-                            onDeleteBook(book.id);
-                          }
-                        }}
-                        className="text-[#A39282] hover:text-red-500 p-1 transition-colors"
-                        title="删除手稿"
-                      >
-                        <span className="material-symbols-outlined text-base">delete_outline</span>
-                      </button>
-                    </div>
-
-                    {/* 执笔人与主角名片 */}
-                    <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-[#8C7A6B]">
-                      <span className="flex items-center gap-1 font-medium text-[#D6724B]">
-                        <span>🖋️ 执笔:</span>
-                        {book.authorName}
-                      </span>
-                      <span>•</span>
-                      <span className="flex items-center gap-1 font-medium text-[#59685a] dark:text-[#A3B1A4]">
-                        <span>🎭 主角:</span>
-                        {book.targetCharacter}
-                      </span>
-                    </div>
-
-                    <p className="text-xs text-[#6E6055] dark:text-[#B8ACA0] mt-2 line-clamp-2 leading-relaxed">
-                      {book.summary}
-                    </p>
+                    <span
+                      className="font-serif font-bold text-sm text-white mix-blend-overlay drop-shadow"
+                      style={{ writingMode: "vertical-rl", letterSpacing: "2px" }}
+                    >
+                      {book.title}
+                    </span>
                   </div>
 
-                  {/* 标签与日期 */}
-                  <div className="flex items-center justify-between pt-2 text-[10px] text-[#A39282]">
-                    <div className="flex gap-1 overflow-x-auto no-scrollbar">
-                      {book.tags?.slice(0, 3).map((t, idx) => (
-                        <span
-                          key={idx}
-                          className="px-2 py-0.5 rounded bg-[#FAF5EE] dark:bg-[#2C2723] text-[#8C7A6B] border border-[#E8E0D5] dark:border-[#3D352E]"
+                  {/* 书籍信息 */}
+                  <div className="flex-1 min-w-0 flex flex-col justify-between py-0.5">
+                    <div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2 truncate">
+                          <h3
+                            onClick={() => onReadBook(book)}
+                            className="font-serif font-bold text-lg text-[#2C2420] dark:text-[#FAF7F2] truncate cursor-pointer hover:text-[#D6724B]"
+                          >
+                            《{book.title}》
+                          </h3>
+                          {/* 借阅/购买/约稿徽章 */}
+                          {isBorrow ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#59685a]/15 text-[#59685a] dark:text-[#A3B1A4] border border-[#59685a]/30 flex-shrink-0 flex items-center gap-0.5">
+                              <span>🔖</span>
+                              <span>借阅中</span>
+                            </span>
+                          ) : isPurchased ? (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30 flex-shrink-0 flex items-center gap-0.5">
+                              <span>👑</span>
+                              <span>典藏已购</span>
+                            </span>
+                          ) : (
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-[#D6724B]/15 text-[#D6724B] border border-[#D6724B]/30 flex-shrink-0 flex items-center gap-0.5">
+                              <span>📜</span>
+                              <span>独家约稿</span>
+                            </span>
+                          )}
+                        </div>
+                        <button
+                          onClick={() => {
+                            if (confirm(`确定要将《${book.title}》${isBorrow ? "归还并移出" : "移出"}藏书阁吗？`)) {
+                              onDeleteBook(book.id);
+                            }
+                          }}
+                          className="text-[#A39282] hover:text-red-500 p-1 transition-colors flex-shrink-0"
+                          title="移除手稿"
                         >
-                          #{t}
+                          <span className="material-symbols-outlined text-base">delete_outline</span>
+                        </button>
+                      </div>
+
+                      {/* 执笔人与主角名片 */}
+                      <div className="flex flex-wrap items-center gap-2 mt-1 text-[11px] text-[#8C7A6B]">
+                        <span className="flex items-center gap-1 font-medium text-[#D6724B]">
+                          <span>🖋️ 执笔:</span>
+                          {book.authorName}
                         </span>
-                      ))}
+                        <span>•</span>
+                        <span className="flex items-center gap-1 font-medium text-[#59685a] dark:text-[#A3B1A4]">
+                          <span>🎭 主角:</span>
+                          {book.targetCharacter || "天下名士"}
+                        </span>
+                      </div>
+
+                      <p className="text-xs text-[#6E6055] dark:text-[#B8ACA0] mt-2 line-clamp-2 leading-relaxed">
+                        {book.summary}
+                      </p>
                     </div>
-                    <span>{book.commissionDate || "近期约稿"}</span>
+
+                    {/* 标签与日期 */}
+                    <div className="flex items-center justify-between pt-2 text-[10px] text-[#A39282]">
+                      <div className="flex gap-1 overflow-x-auto no-scrollbar">
+                        {book.tags?.slice(0, 3).map((t, idx) => (
+                          <span
+                            key={idx}
+                            className="px-2 py-0.5 rounded bg-[#FAF5EE] dark:bg-[#2C2723] text-[#8C7A6B] border border-[#E8E0D5] dark:border-[#3D352E]"
+                          >
+                            #{t}
+                          </span>
+                        ))}
+                      </div>
+                      <span>{book.commissionDate || "近期入阁"}</span>
+                    </div>
                   </div>
                 </div>
-              </div>
 
-              {/* 底部操作栏 */}
-              <div className="flex gap-2 pt-1">
-                <button
-                  onClick={() => onReadBook(book)}
-                  className="flex-1 py-2.5 rounded-xl bg-[#59685a] text-white text-xs font-medium active:scale-95 transition-transform flex items-center justify-center gap-1.5 shadow-sm"
-                >
-                  <span className="material-symbols-outlined text-sm">menu_book</span>
-                  沉浸阅读全文
-                </button>
-                <button
-                  onClick={() => onAddToBookshelf(book)}
-                  className="px-4 py-2.5 rounded-xl bg-[#FAF5EE] dark:bg-[#2C2723] text-[#59685a] dark:text-[#A3B1A4] border border-[#E8E0D5] dark:border-[#3D352E] text-xs font-medium active:scale-95 transition-transform flex items-center justify-center gap-1"
-                >
-                  <span className="material-symbols-outlined text-sm">bookmark_add</span>
-                  放入今日书架
-                </button>
+                {/* 底部四维操作栏 */}
+                <div className="flex flex-wrap sm:flex-nowrap gap-2 pt-1 border-t border-[#E8E0D5]/60 dark:border-[#332D28]/60">
+                  {/* 1. 沉浸研读 */}
+                  <button
+                    onClick={() => onReadBook(book)}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-[#59685a] text-white text-xs font-medium active:scale-95 transition-transform flex items-center justify-center gap-1.5 shadow-sm min-w-[100px]"
+                  >
+                    <span className="material-symbols-outlined text-sm">menu_book</span>
+                    <span>沉浸研读</span>
+                  </button>
+
+                  {/* 2. 继续生成 / 续写章节 */}
+                  <button
+                    onClick={() => handleContinueWriting(book)}
+                    disabled={isWriting}
+                    className="py-2.5 px-3.5 rounded-xl bg-gradient-to-r from-[#D6724B] to-[#B85630] text-white text-xs font-medium active:scale-95 transition-all flex items-center justify-center gap-1.5 shadow-sm disabled:opacity-50"
+                    title="让作者承接前文，创作下一回章节"
+                  >
+                    <span className={`material-symbols-outlined text-sm ${isWriting ? "animate-spin" : ""}`}>
+                      {isWriting ? "sync" : "edit_note"}
+                    </span>
+                    <span>{isWriting ? "名家撰稿中..." : "续写章节"}</span>
+                  </button>
+
+                  {/* 3. 放入今日阅读 */}
+                  <button
+                    onClick={() => {
+                      if (onAddToBookshelf) {
+                        onAddToBookshelf({
+                          id: "reader_" + book.id,
+                          title: book.title,
+                          author: book.authorName || "名家",
+                          summary: book.summary,
+                          color: book.color || "#59685a",
+                          category: book.category || "藏书阁",
+                          fullText: book.fullText,
+                        });
+                        alert(`✨《${book.title}》已成功放入【今日阅读】书架！`);
+                      }
+                    }}
+                    className="py-2.5 px-3.5 rounded-xl bg-[#FAF5EE] dark:bg-[#2C2723] text-[#59685a] dark:text-[#A3B1A4] border border-[#E8E0D5] dark:border-[#3D352E] text-xs font-medium active:scale-95 transition-all flex items-center justify-center gap-1 hover:border-[#59685a]/40"
+                    title="克隆至今日阅读主书架"
+                  >
+                    <span className="material-symbols-outlined text-sm">bookmark_add</span>
+                    <span>放入今日阅读</span>
+                  </button>
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       ) : (
         /* 空状态 */
         <div className="text-center py-20 space-y-4">
           <div className="w-20 h-20 rounded-full bg-[#FAF5EE] dark:bg-[#28231E] mx-auto flex items-center justify-center text-[#A39282]">
-            <span className="material-symbols-outlined text-4xl">edit_note</span>
+            <span className="material-symbols-outlined text-4xl">auto_stories</span>
           </div>
           <div>
             <h3 className="font-serif font-bold text-base text-[#2C2420] dark:text-[#FAF7F2]">
-              藏书阁暂无专属约稿
+              藏书阁暂无藏书
             </h3>
             <p className="text-xs text-[#8C7A6B] mt-1 max-w-xs mx-auto leading-relaxed">
-              前往天机榜结识心仪艺术家，即可为传讯中的故人量身定制独家传奇故事！
+              前往天机榜免费借阅、斥资购入名家代表作，或向心仪艺术家约稿量身定制专属故事！
             </p>
           </div>
           <button
@@ -83139,7 +83469,7 @@ const BookstoreCustomLibrary = ({
             className="px-6 py-2.5 rounded-full bg-[#D6724B] text-white text-xs font-bold shadow-md active:scale-95 transition-transform inline-flex items-center gap-1.5"
           >
             <span className="material-symbols-outlined text-sm">military_tech</span>
-            前往心仪艺术家约稿
+            前往天机榜挑选藏书
           </button>
         </div>
       )}
@@ -95153,6 +95483,11 @@ const MasterApp = () => {
                   setCustomCommissionBooks(next);
                   localStorage.setItem("custom_commission_books", JSON.stringify(next));
                 }}
+                onUpdateBook={(updatedBook) => {
+                  const next = customCommissionBooks.map((b) => (b.id === updatedBook.id ? updatedBook : b));
+                  setCustomCommissionBooks(next);
+                  localStorage.setItem("custom_commission_books", JSON.stringify(next));
+                }}
                 onExploreArtists={() => {
                   setIsArtistRankOpen(true);
                 }}
@@ -95877,6 +96212,9 @@ const MasterApp = () => {
           onOpenCommission={(artist) => {
             setActiveCommissionArtist(artist);
             setIsCommissionModalOpen(true);
+          }}
+          onCommissionSuccess={(newBook, allBooks) => {
+            setCustomCommissionBooks(allBooks);
           }}
         />
       )}
