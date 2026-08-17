@@ -7012,10 +7012,7 @@ const CharacterHomePage = ({ character, onBack }) => {
               }}
               onClick={generateNpcComments}
             >
-              <iconify-icon
-                icon="line-md:cloud-alt"
-                style={{ color: "#fff", width: "14px", height: "14px" }}
-              ></iconify-icon>
+              <i className="ph-bold ph-chats-circle text-xs text-white"></i>
               NPC弹幕
             </div>
             <div
@@ -7694,31 +7691,30 @@ const VerticalCarousel = ({ onCharacterClick }) => {
         <button
           onClick={refreshCelebrities}
           disabled={isLoading}
+          title="刷新话题名人"
+          className="active-press"
           style={{
-            background: "none",
+            width: "32px",
+            height: "32px",
+            borderRadius: "50%",
+            background: "rgba(90, 95, 77, 0.08)",
             border: "none",
             cursor: isLoading ? "not-allowed" : "pointer",
             opacity: isLoading ? 0.6 : 1,
-            padding: "4px",
-            borderRadius: "4px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            color: "#5a5f4d",
+            transition: "all 0.2s ease",
           }}
         >
-          <iconify-icon
-            icon={
-              isLoading
-                ? "line-md:loading-twotone-loop"
-                : "line-md:compass-filled-loop"
-            }
+          <i
+            className={`ph-bold ${isLoading ? "ph-spinner" : "ph-arrows-clockwise"}`}
             style={{
-              width: "20px",
-              height: "20px",
-              color: "#5a5f4d",
+              fontSize: "16px",
               animation: isLoading ? "spin 1s linear infinite" : "none",
             }}
-          />
+          ></i>
         </button>
       </div>
       <div
@@ -12250,22 +12246,30 @@ const TopicCelebrityPage = ({ onBack }) => {
         <button
           onClick={generateCelebrities}
           disabled={loading}
+          title="重新生成榜单"
+          className="active-press"
           style={{
-            background: "none",
+            width: "36px",
+            height: "36px",
+            borderRadius: "50%",
+            background: "rgba(0, 0, 0, 0.05)",
             border: "none",
             cursor: loading ? "not-allowed" : "pointer",
             opacity: loading ? 0.6 : 1,
-            padding: "8px",
-            borderRadius: "4px",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
+            color: "#2C2C2C",
+            transition: "all 0.2s ease",
           }}
         >
-          <iconify-icon
-            icon="line-md:coffee-twotone-loop"
-            style={{ width: "24px", height: "24px", color: "#2C2C2C" }}
-          />
+          <i
+            className={`ph-bold ${loading ? "ph-spinner" : "ph-arrows-clockwise"}`}
+            style={{
+              fontSize: "18px",
+              animation: loading ? "spin 1s linear infinite" : "none",
+            }}
+          ></i>
         </button>
       </div>
 
@@ -13518,10 +13522,7 @@ const UserProfileDetailPage = ({ onBack }) => {
             cursor: "pointer",
           }}
         >
-          <iconify-icon
-            icon="line-md:arrow-left"
-            style={{ width: "24px", height: "24px", color: "#333333" }}
-          />
+          <i className="ph-bold ph-arrow-left text-lg text-gray-700"></i>
         </button>
         {/* 背景上传按钮 */}
         <label
@@ -13532,10 +13533,7 @@ const UserProfileDetailPage = ({ onBack }) => {
             cursor: "pointer",
           }}
         >
-          <iconify-icon
-            icon="line-md:edit"
-            style={{ width: "24px", height: "24px", color: "#333333" }}
-          />
+          <i className="ph-bold ph-pencil-simple text-lg text-gray-700"></i>
           <input
             type="file"
             accept="image/*"
@@ -13591,10 +13589,7 @@ const UserProfileDetailPage = ({ onBack }) => {
                 justifyContent: "center",
               }}
             >
-              <iconify-icon
-                icon="line-md:camera"
-                style={{ width: "12px", height: "12px", color: "white" }}
-              />
+              <i className="ph-bold ph-camera text-xs text-white"></i>
             </div>
           </div>
           <input
