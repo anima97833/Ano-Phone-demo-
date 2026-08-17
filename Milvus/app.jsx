@@ -48669,26 +48669,33 @@ const ArcheryGamePage = ({ onBack }) => {
       if (gameState !== 'playing' || playMode !== 'auto') return;
 
       const state = stateRef.current;
-      const validNinjas = state.ninjas.filter(n => n.y > 20 && n.y < 540 && n.x > 10 && n.x < 350);
+      const validNinjas = state.ninjas.filter(n => n.y > 10 && n.y < 540 && n.x > 0 && n.x < 360);
       if (validNinjas.length === 0) return;
 
-      // 智能索敌优先级：若场上目标>=3且有炸弹则射炸弹；否则射特殊(+3)；否则射普通(+1)；避开毒标
-      let chosen = null;
+      // 统计场上有毒箭靶
+      const hasPoisonOnScreen = validNinjas.some(n => n.type === 'poison');
       const bombTarget = validNinjas.find(n => n.type === 'bomb');
-      const specialTarget = validNinjas.find(n => n.type === 'special');
-      const normalTarget = validNinjas.find(n => n.type === 'normal');
+      const specialTargets = validNinjas.filter(n => n.type === 'special');
+      const normalTargets = validNinjas.filter(n => n.type === 'normal');
 
-      if (validNinjas.length >= 3 && bombTarget) {
+      let chosen = null;
+
+      // 🧠 高智商策略：
+      // 1. 如果场上有毒箭靶 (poison)，绝对不能引爆炸弹 (bomb)！否则毒标爆炸会扣血暴毙！
+      //    此时优先定点狙击 special (+3) 或 normal (+1)，精准避开 poison 和 bomb！
+      // 2. 只有当场上【没有任何有毒箭靶】时，且场上目标较多 (>=2) 或只剩炸弹时，才去射击炸弹 (bomb) 进行安全全屏收割！
+      if (!hasPoisonOnScreen && bombTarget && (specialTargets.length + normalTargets.length >= 2 || (specialTargets.length === 0 && normalTargets.length === 0))) {
         chosen = bombTarget;
-      } else if (specialTarget) {
-        chosen = specialTarget;
-      } else if (normalTarget) {
-        chosen = normalTarget;
-      } else if (bombTarget) {
+      } else if (specialTargets.length > 0) {
+        // 优先打最靠下方/快落地的高分特殊目标 (+3)
+        specialTargets.sort((a, b) => b.y - a.y);
+        chosen = specialTargets[0];
+      } else if (normalTargets.length > 0) {
+        // 打普通目标 (+1)
+        normalTargets.sort((a, b) => b.y - a.y);
+        chosen = normalTargets[0];
+      } else if (!hasPoisonOnScreen && bombTarget) {
         chosen = bombTarget;
-      } else {
-        // 只有毒标时，不射击或极小概率射击
-        return;
       }
 
       if (chosen) {
@@ -48702,12 +48709,12 @@ const ArcheryGamePage = ({ onBack }) => {
         let angle = Math.atan2(predY - bowY, predX - bowX);
         if (predY >= bowY) angle = -Math.PI / 2;
 
-        // 拟真人性化抖动
-        const isSlip = Math.random() < 0.15;
-        const variance = (Math.random() - 0.5) * (isSlip ? 0.22 : 0.05);
+        // 高手神射手：极小偏差，神准百步穿杨
+        const isSlip = Math.random() < 0.08;
+        const variance = (Math.random() - 0.5) * (isSlip ? 0.12 : 0.025);
         fireArrowAtAngle(angle + variance);
       }
-    }, 380 + Math.random() * 160);
+    }, 280 + Math.random() * 140);
 
     return () => {
       if (autoPilotTimerRef.current) clearInterval(autoPilotTimerRef.current);
