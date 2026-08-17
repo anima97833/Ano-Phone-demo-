@@ -48411,7 +48411,74 @@ ${isAuto ? `
   );
 };
 
-// 射箭训练 (滑翔忍者击落 - 关卡递增赏金系统: 2, 4, 6, 8, 10... 铢)
+// 独立的射箭训练局内小窗聊天数据库 (IndexedDB)
+const ArcheryGameChatDB = {
+  dbName: "archery_game_db",
+  dbVersion: 1,
+  getDB: function() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.dbVersion);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("char_chats")) {
+          db.createObjectStore("char_chats", { keyPath: "charId" });
+        }
+      };
+      request.onsuccess = (e) => resolve(e.target.result);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  },
+  getMessages: async function(charId) {
+    if (!charId) return [];
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readonly");
+        const store = tx.objectStore("char_chats");
+        const req = store.get(String(charId));
+        req.onsuccess = () => resolve(req.result ? (req.result.messages || []) : []);
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      console.warn("Failed to get in-game archery chat messages:", e);
+      return [];
+    }
+  },
+  saveMessage: async function(charId, message) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      const messages = await this.getMessages(charId);
+      messages.push(message);
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.put({ charId: String(charId), lastUpdated: Date.now(), messages });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      console.warn("Failed to save in-game archery chat message:", e);
+    }
+  },
+  clearMessages: async function(charId) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.delete(String(charId));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      console.warn("Failed to clear in-game archery chat messages:", e);
+    }
+  }
+};
+
+// 射箭训练 (滑翔击落 - 关卡递增赏金系统 &「看Ta操作」代打与局内AI小窗)
 const ArcheryGamePage = ({ onBack }) => {
   const { useState, useEffect, useRef } = React;
   const [visible, setVisible] = useState(false);
@@ -48422,15 +48489,37 @@ const ArcheryGamePage = ({ onBack }) => {
   const targetScore = stage * 30 + 20;
   const [gameState, setGameState] = useState('playing'); // playing, result
 
+  // 模式切换: 'manual' (自己玩) | 'auto' (看Ta操作)
+  const [playMode, setPlayMode] = useState('manual');
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedChar, setSelectedChar] = useState(null);
+  const [showCharModal, setShowCharModal] = useState(false);
+
+  // 外观更换卡片弹窗
+  const [showSkinModal, setShowSkinModal] = useState(false);
+
+  // 局内小窗聊天系统
+  const [showInGameChat, setShowInGameChat] = useState(false);
+  const [inGameChatMsgs, setInGameChatMsgs] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiReplying, setIsAiReplying] = useState(false);
+  const [lastBattleContext, setLastBattleContext] = useState(null);
+  const chatScrollRef = useRef(null);
+
   // 金钱累计系统 (每关递增: 第1关2铢，第2关4铢，第3关6铢，第N关 2*N 铢)
   const [sessionCoins, setSessionCoins] = useState(0);
   const [hasAwardedThisStage, setHasAwardedThisStage] = useState(false);
-  const [showCharModal, setShowCharModal] = useState(false);
+
+  // 立绘与素材
   const [char1Img, setChar1Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOZFqgEELK_9KjEfY9YRFQpcjY3ImbQAC4h4AArHjCFSz5XgbljLw0T0E.png");
   const [char2Img, setChar2Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOYRqgEC1Mz_OffMtgithgxQBrCvDXwAC1R4AArHjCFTKnROMk9dJ3j0E.png");
   const [char3Img, setChar3Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOc1qgEYMdvN4UQMZ0fq8fm4o-qcZUQACLB8AArHjCFQBJZ0wFAt2Sz0E.png");
   const [char4Img, setChar4Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOe9qgEdiyeBcl7SCD3yQWGweP9GZlAACUx8AArHjCFR2Yi9teAZBIT0E.png");
+  const DEFAULT_AVATAR = "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-VFqexSPovwtr3yIGoOEVx0yEHEwRgACNCkAAmsm2Fc0E3_MZ3vJwD0E.png";
+  const [archerAvatar, setArcherAvatar] = useState(DEFAULT_AVATAR);
+
   const canvasRef = useRef(null);
+  const autoPilotTimerRef = useRef(null);
 
   const stateRef = useRef({
     ninjas: [],
@@ -48457,14 +48546,39 @@ const ArcheryGamePage = ({ onBack }) => {
   const imgsRef = useRef({});
 
   useEffect(() => {
-    // 1. Load default assets
+    // 1. 加载角色列表
+    const loadCharacters = async () => {
+      let chars = [];
+      try {
+        if (window.chatCharacterStore) {
+          chars = await window.chatCharacterStore.getAll();
+        } else {
+          chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const validChars = chars.filter(c => !String(c.id).startsWith("group") && c.type !== "decor");
+        setAvailableChars(validChars);
+
+        const savedAutoCharId = localStorage.getItem("archery_game_auto_char_id");
+        if (savedAutoCharId) {
+          const found = validChars.find(c => String(c.id) === String(savedAutoCharId));
+          if (found) setSelectedChar(found);
+        } else if (validChars.length > 0) {
+          setSelectedChar(validChars[0]);
+        }
+      } catch (err) {
+        console.error("加载角色失败:", err);
+      }
+    };
+    loadCharacters();
+
+    // 2. 加载默认素材
     Object.entries(ASSETS).forEach(([key, src]) => {
       const img = new Image();
       img.src = src;
       imgsRef.current[key] = img;
     });
 
-    // 2. Load custom user settings if present
+    // 3. 加载自定义设置
     if (window.settingsStore) {
       if (window.settingsStore.getArcheryGameChar1Image) {
         window.settingsStore.getArcheryGameChar1Image().then(img => {
@@ -48513,6 +48627,92 @@ const ArcheryGamePage = ({ onBack }) => {
     }
     requestAnimationFrame(() => setVisible(true));
   }, []);
+
+  // 载入专属局内小窗聊天记录
+  useEffect(() => {
+    if (selectedChar && selectedChar.id) {
+      ArcheryGameChatDB.getMessages(selectedChar.id).then(msgs => {
+        setInGameChatMsgs(msgs);
+      });
+    }
+  }, [selectedChar]);
+
+  // 自动滚动小窗底部
+  useEffect(() => {
+    if (showInGameChat && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [inGameChatMsgs, showInGameChat, isAiReplying]);
+
+  // 直接发射箭矢
+  const fireArrowAtAngle = (angle) => {
+    const bowX = 180;
+    const bowY = 600;
+    stateRef.current.bowAngle = angle + Math.PI / 2;
+    const speed = 1200;
+    stateRef.current.arrows.push({
+      x: bowX, y: bowY,
+      vx: Math.cos(angle) * speed,
+      vy: Math.sin(angle) * speed,
+      angle: angle + Math.PI / 2
+    });
+  };
+
+  // 拟真自动神射 (Auto-Pilot)
+  useEffect(() => {
+    if (playMode !== 'auto' || gameState !== 'playing' || showInGameChat || showCharModal || showSkinModal) {
+      if (autoPilotTimerRef.current) clearInterval(autoPilotTimerRef.current);
+      return;
+    }
+
+    autoPilotTimerRef.current = setInterval(() => {
+      if (gameState !== 'playing' || playMode !== 'auto') return;
+
+      const state = stateRef.current;
+      const validNinjas = state.ninjas.filter(n => n.y > 20 && n.y < 540 && n.x > 10 && n.x < 350);
+      if (validNinjas.length === 0) return;
+
+      // 智能索敌优先级：若场上目标>=3且有炸弹则射炸弹；否则射特殊(+3)；否则射普通(+1)；避开毒标
+      let chosen = null;
+      const bombTarget = validNinjas.find(n => n.type === 'bomb');
+      const specialTarget = validNinjas.find(n => n.type === 'special');
+      const normalTarget = validNinjas.find(n => n.type === 'normal');
+
+      if (validNinjas.length >= 3 && bombTarget) {
+        chosen = bombTarget;
+      } else if (specialTarget) {
+        chosen = specialTarget;
+      } else if (normalTarget) {
+        chosen = normalTarget;
+      } else if (bombTarget) {
+        chosen = bombTarget;
+      } else {
+        // 只有毒标时，不射击或极小概率射击
+        return;
+      }
+
+      if (chosen) {
+        const bowX = 180;
+        const bowY = 600;
+        const dist = Math.sqrt((chosen.x - bowX) ** 2 + (chosen.y - bowY) ** 2);
+        const flightTime = dist / 1200;
+        const predX = chosen.x + chosen.vx * flightTime;
+        const predY = chosen.y + chosen.vy * flightTime;
+
+        let angle = Math.atan2(predY - bowY, predX - bowX);
+        if (predY >= bowY) angle = -Math.PI / 2;
+
+        // 拟真人性化抖动
+        const isSlip = Math.random() < 0.15;
+        const variance = (Math.random() - 0.5) * (isSlip ? 0.22 : 0.05);
+        fireArrowAtAngle(angle + variance);
+      }
+    }, 380 + Math.random() * 160);
+
+    return () => {
+      if (autoPilotTimerRef.current) clearInterval(autoPilotTimerRef.current);
+    };
+  }, [playMode, gameState, showInGameChat, showCharModal, showSkinModal]);
 
   const handleUploadChar = (type) => {
     const input = document.createElement("input");
@@ -48614,9 +48814,13 @@ const ArcheryGamePage = ({ onBack }) => {
     if (!ctx) return;
 
     let timer = setInterval(() => {
-      if (gameState === 'playing') {
+      if (gameState === 'playing' && !showInGameChat && !showCharModal && !showSkinModal) {
         setTimeLeft(t => {
           if (t <= 1) {
+            setLastBattleContext({
+              stage, score: stateRef.current.score, targetScore,
+              lives: stateRef.current.lives, reason: "时间耗尽，未能达成目标分数", isWin: stateRef.current.score >= targetScore
+            });
             setGameState('result');
             return 0;
           }
@@ -48647,7 +48851,7 @@ const ArcheryGamePage = ({ onBack }) => {
       cancelAnimationFrame(reqId);
       clearInterval(timer);
     };
-  }, [gameState]);
+  }, [gameState, showInGameChat, showCharModal, showSkinModal]);
 
   const update = (dt) => {
     const state = stateRef.current;
@@ -48665,7 +48869,6 @@ const ArcheryGamePage = ({ onBack }) => {
         type = 'bomb';
       }
 
-      // spawn top or sides
       let x, y, vx, vy;
       const side = Math.floor(Math.random() * 3);
       if (side === 0) { // top
@@ -48685,7 +48888,6 @@ const ArcheryGamePage = ({ onBack }) => {
         vy = 100 + Math.random() * 80;
       }
 
-      // Time left and stage affects speed
       const speedMult = 1 + (60 - timeLeft) / 25 + (stage - 1) * 0.15;
 
       state.ninjas.push({
@@ -48696,7 +48898,6 @@ const ArcheryGamePage = ({ onBack }) => {
         width: 80, height: 110
       });
 
-      // Ensure enough ninjas spawn to meet the target score with a 60% margin
       const requiredSpawns = (stage * 30 + 20) * 1.6;
       const avgInterval = 60 / requiredSpawns;
       state.spawnTimer = avgInterval * (0.6 + Math.random() * 0.8);
@@ -48731,7 +48932,6 @@ const ArcheryGamePage = ({ onBack }) => {
         if (Math.sqrt(dx * dx + dy * dy) < 45) {
           // HIT!
           if (n.type === 'bomb') {
-            // HIT BOMB: Trigger explosive detonation across all targets currently on screen!
             for (let k = 0; k < 25; k++) {
               state.particles.push({
                 x: n.x, y: n.y,
@@ -48809,17 +49009,6 @@ const ArcheryGamePage = ({ onBack }) => {
                   color: '#FF9800',
                   life: 1.0
                 });
-              } else if (target.type === 'bomb') {
-                for (let k = 0; k < 15; k++) {
-                  state.particles.push({
-                    x: target.x, y: target.y,
-                    vx: (Math.random() - 0.5) * 250,
-                    vy: (Math.random() - 0.5) * 250,
-                    life: 1.0,
-                    radius: 12 + Math.random() * 15,
-                    color: '#ff5722'
-                  });
-                }
               }
             }
 
@@ -48828,6 +49017,7 @@ const ArcheryGamePage = ({ onBack }) => {
               state.lives = newLives;
               setLives(newLives);
               if (newLives <= 0) {
+                setLastBattleContext({ stage, score: state.score, targetScore, lives: 0, reason: "触爆毒雾，生命耗尽", isWin: false });
                 setGameState('result');
               }
             }
@@ -48844,15 +49034,14 @@ const ArcheryGamePage = ({ onBack }) => {
             state.arrows.splice(i, 1);
             break;
           } else if (n.type === 'poison') {
-            // Hit poison target: lose 1 life!
             const newLives = Math.max(0, state.lives - 1);
             state.lives = newLives;
             setLives(newLives);
             if (newLives <= 0) {
+              setLastBattleContext({ stage, score: state.score, targetScore, lives: 0, reason: "误中紫毒，生命耗尽", isWin: false });
               setGameState('result');
             }
 
-            // Toxic particle effect (purple/magenta smoke)
             for (let k = 0; k < 16; k++) {
               state.particles.push({
                 x: n.x, y: n.y,
@@ -48864,7 +49053,6 @@ const ArcheryGamePage = ({ onBack }) => {
               });
             }
 
-            // Add popup text
             state.popups.push({
               x: n.x, y: n.y - 20,
               text: '-1 ❤',
@@ -48879,7 +49067,6 @@ const ArcheryGamePage = ({ onBack }) => {
               return newScore;
             });
 
-            // Add particles (smoke)
             for (let k = 0; k < 12; k++) {
               state.particles.push({
                 x: n.x, y: n.y,
@@ -48891,7 +49078,6 @@ const ArcheryGamePage = ({ onBack }) => {
               });
             }
 
-            // Add popup text
             state.popups.push({
               x: n.x, y: n.y - 20,
               text: '+' + points,
@@ -49013,7 +49199,7 @@ const ArcheryGamePage = ({ onBack }) => {
   };
 
   const handlePointerDown = (e) => {
-    if (gameState !== 'playing') return;
+    if (playMode === 'auto' || gameState !== 'playing') return;
     const rect = canvasRef.current.getBoundingClientRect();
     const targetX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
     const targetY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
@@ -49022,24 +49208,14 @@ const ArcheryGamePage = ({ onBack }) => {
     const bowY = 600;
     const dx = targetX - bowX;
     const dy = targetY - bowY;
-    const angle = Math.atan2(dy, dx);
-
-    // Only shoot upwards
     if (dy > 0) return;
 
-    stateRef.current.bowAngle = angle + Math.PI / 2;
-
-    const speed = 1200;
-    stateRef.current.arrows.push({
-      x: bowX, y: bowY,
-      vx: Math.cos(angle) * speed,
-      vy: Math.sin(angle) * speed,
-      angle: angle + Math.PI / 2
-    });
+    const angle = Math.atan2(dy, dx);
+    fireArrowAtAngle(angle);
   };
 
   const handlePointerMove = (e) => {
-    if (gameState !== 'playing') return;
+    if (playMode === 'auto' || gameState !== 'playing') return;
     const rect = canvasRef.current.getBoundingClientRect();
     const targetX = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
     const targetY = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
@@ -49051,6 +49227,158 @@ const ArcheryGamePage = ({ onBack }) => {
       stateRef.current.bowAngle = Math.atan2(dy, dx) + Math.PI / 2;
     }
   };
+
+  const handleSelectAutoChar = (char) => {
+    setSelectedChar(char);
+    localStorage.setItem("archery_game_auto_char_id", char.id);
+    if (char.avatar) {
+      setArcherAvatar(char.avatar);
+    }
+    setShowCharModal(false);
+  };
+
+  // 局内小窗发送消息
+  const handleSendInGameMessage = async (msgText) => {
+    const textToSend = (msgText || chatInput).trim();
+    if (!textToSend || !selectedChar || isAiReplying) return;
+
+    setChatInput('');
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      role: 'user',
+      content: textToSend,
+      timestamp: Date.now()
+    };
+
+    const newMsgs = [...inGameChatMsgs, userMsg];
+    setInGameChatMsgs(newMsgs);
+    await ArcheryGameChatDB.saveMessage(selectedChar.id, userMsg);
+    setIsAiReplying(true);
+
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
+      let userContext = "【主控身份】姓名:主控, 性格:沉稳, 背景:隐秘阁主";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId) {
+          const activeUser = savedPersonas.find(p => p.id == activeId);
+          if (activeUser) {
+            userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
+          }
+        }
+      } catch (e) {}
+
+      const profile = selectedChar.profile || {};
+      const charContext = `【代打角色设定】
+姓名: ${selectedChar.name}
+性别: ${profile.gender || "未知"}
+性格: ${profile.personality || "未知"}
+说话风格: ${profile.style || "自然生动"}
+背景故事: ${profile.background || "暂无"}
+MBTI: ${profile.mbti || "无"}`;
+
+      const isAuto = playMode === 'auto';
+      const curScore = stateRef.current.score;
+      const curLives = stateRef.current.lives;
+      const combatContext = `【局内射箭训练战况】
+模式: ${isAuto ? `看Ta操作（由你【${selectedChar.name}】亲自在靶场弯弓速射，主控在场边看你操作）` : `自己玩（由主控亲自在场上弯弓射箭，你在场边观战/打气）`}
+射箭执行者: ${isAuto ? `是你本人【${selectedChar.name}】！` : '是主控本人！'}
+当前关卡: 第 ${stage} 关 (目标积分: ${targetScore}分)
+当前战绩: 积分 ${curScore}分, 剩余生命 ${curLives}心, 剩余时间 ${timeLeft}秒
+累计递增赏金: +${sessionCoins} 铢 (本关通关可得 +${stage * 2} 铢)
+最新战况: ${lastBattleContext ? (
+  isAuto
+    ? (lastBattleContext.isWin
+        ? `你刚才百步穿杨连发神准，以 ${lastBattleContext.score} 分成功突破第 ${lastBattleContext.stage} 关！`
+        : `你在第 ${lastBattleContext.stage} 关未能破关（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
+    : (lastBattleContext.isWin
+        ? `主控刚才箭无虚发，以 ${lastBattleContext.score} 分漂亮突破第 ${lastBattleContext.stage} 关！`
+        : `主控在第 ${lastBattleContext.stage} 关挑战未竟（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
+) : (
+  isAuto ? `你正在弯弓搭箭瞄准空中飞掠的靶标` : `主控正在靶场屏息瞄准`
+)}`;
+
+      const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
+${worldContext}
+${userContext}
+${charContext}
+${combatContext}
+
+【交互情境与视角（极其重要）】
+${isAuto ? `
+- 【极其重要】：当前是【看Ta操作】模式！刚才【是你【${selectedChar.name}】本人】亲自上阵在靶场上弯弓射箭！主控是在场边观看你的操作！
+- 刚才无论是连珠箭引爆炸弹破关，还是不小心擦靶漏射超时或误触毒标，都是【你自己的亲身经历】！
+- 请务必以第一人称（如“我”、“本公子”等符合你身份的称呼）描述【你自己刚才在场上的开弓与射术表现】。绝对不要误以为是主控在射箭！
+- 面对主控在小窗里的打趣、关心或夸赞，你要给出极具个性的人设反应（例如：若是潇洒则夸耀自己的百步穿杨、若是傲娇则辩解风向突变、若是稳重则沉吟箭意等）。
+` : `
+- 当前是【自己玩】模式，刚才【是主控本人】在靶场射箭，你作为密探在场边陪伴与观战。
+- 请以场边陪伴者的视角，对主控刚才的箭术表现给予贴合人设的点评、鼓励或打趣。
+`}
+
+【核心要求】
+1. 必须完全使用【${selectedChar.name}】的独特口吻和性格说话（严禁出戏、严禁AI腔、严禁说自己是人工智能）。
+2. 字数控制在 25-70 字左右，言简意赅，生动传神。直接输出角色说的话，不要带角色名字前缀。`;
+
+      const recentDialogues = newMsgs.slice(-8).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
+
+      const apiMessages = [
+        { role: "system", content: sysPrompt },
+        ...recentDialogues
+      ];
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          apiMessages,
+          null,
+          async (reply) => {
+            const cleanReply = reply.trim();
+            const assistantMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: cleanReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, assistantMsg]);
+            await ArcheryGameChatDB.saveMessage(selectedChar.id, assistantMsg);
+            setIsAiReplying(false);
+          },
+          (err) => {
+            console.error("AI回复失败:", err);
+            const fallbackReply = isAuto
+              ? "（放下宝弓，揉了揉指节）方才风声微骤，下一轮看我连珠三矢直取靶心！"
+              : "（递上羽箭）方才那一记破空之势极盛，稍微调整准星定能百步穿杨。";
+            const fallbackMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: fallbackReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, fallbackMsg]);
+            setIsAiReplying(false);
+          }
+        );
+      } else {
+        setIsAiReplying(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsAiReplying(false);
+    }
+  };
+
+  const handleClearInGameChat = async () => {
+    if (!selectedChar) return;
+    if (confirm("确定要清空与该角色的射箭局内对话记录吗？（不影响传讯页面正常聊天）")) {
+      await ArcheryGameChatDB.clearMessages(selectedChar.id);
+      setInGameChatMsgs([]);
+    }
+  };
+
+  const displayAvatar = (playMode === 'auto' && selectedChar && selectedChar.avatar) ? selectedChar.avatar : archerAvatar;
 
   return (
     <div
@@ -49068,103 +49396,168 @@ const ArcheryGamePage = ({ onBack }) => {
         onPointerMove={handlePointerMove}
       />
 
-      {/* Header UI - Top Left Back & Level & Coins */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, display: 'flex', alignItems: 'center', gap: '8px', zIndex: 10 }}>
-        <div onClick={onBack} style={{ width: 38, height: 38, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)' }}>←</div>
-        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.9) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+      {/* 顶部第一行：返回 + 模式切换胶囊 + 金库收益 */}
+      <div style={{ position: 'absolute', top: 'max(12px, env(safe-area-inset-top))', left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div onClick={onBack} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '5px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.85rem', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span>←</span>
+            <span>退出</span>
+          </div>
+
+          {/* 模式切换胶囊 */}
+          <div style={{ background: 'rgba(255,255,255,0.88)', padding: '2px', borderRadius: 20, display: 'flex', border: '1px solid rgba(196,156,88,0.5)', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+            <div
+              onClick={(e) => { e.stopPropagation(); setPlayMode('manual'); }}
+              style={{
+                padding: '3px 9px', borderRadius: 16, fontSize: '0.74rem', fontWeight: 'bold', cursor: 'pointer',
+                background: playMode === 'manual' ? 'linear-gradient(135deg, #59685a 0%, #435044 100%)' : 'transparent',
+                color: playMode === 'manual' ? '#fff' : '#6E6055',
+                transition: 'all 0.2s'
+              }}
+            >
+              自己玩
+            </div>
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setPlayMode('auto');
+                if (!selectedChar && availableChars.length > 0) {
+                  setShowCharModal(true);
+                }
+              }}
+              style={{
+                padding: '3px 9px', borderRadius: 16, fontSize: '0.74rem', fontWeight: 'bold', cursor: 'pointer',
+                background: playMode === 'auto' ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : 'transparent',
+                color: playMode === 'auto' ? '#fff' : '#6E6055',
+                transition: 'all 0.2s'
+              }}
+            >
+              看Ta操作
+            </div>
+          </div>
+        </div>
+
+        {/* 右侧：金库收益 */}
+        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.92) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
           <span>💰 金库收益:</span>
-          <span style={{ color: '#FFEB3B', fontSize: '0.9rem' }}>+{sessionCoins} 铢</span>
+          <span style={{ color: '#FFEB3B', fontSize: '0.92rem' }}>+{sessionCoins} 铢</span>
         </div>
       </div>
 
-      {/* Top Center Timer */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
-        <div style={{ fontSize: '2.5rem', color: '#FFB300', textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontWeight: 'bold' }}>
-          {timeLeft}
+      {/* 顶部第二行：关卡/代打状态 + 倒计时 + 换外观/小窗 */}
+      <div style={{ position: 'absolute', top: 'max(48px, env(safe-area-inset-top) + 36px)', left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 95 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ background: 'rgba(59, 66, 53, 0.78)', backdropFilter: 'blur(4px)', color: '#FFF9F0', padding: '4px 10px', borderRadius: 14, fontSize: '0.78rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)' }}>
+            🚩 第 {stage} 关
+          </div>
+
+          {playMode === 'auto' && selectedChar && (
+            <div
+              onClick={(e) => { e.stopPropagation(); setShowCharModal(true); }}
+              style={{
+                background: 'rgba(255,255,255,0.92)', color: '#8C4A1E', padding: '3px 9px', borderRadius: 14,
+                fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid #E6D7C3', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}
+              title="点击更换代打密探"
+            >
+              <span>👤 {selectedChar.name}</span>
+              <span style={{ color: '#B85630', fontSize: '0.68rem' }}>[换人]</span>
+            </div>
+          )}
+        </div>
+
+        {/* 倒计时 */}
+        <div style={{ fontSize: '1.8rem', color: timeLeft <= 10 ? '#D32F2F' : '#FFB300', textShadow: '0 2px 4px rgba(0,0,0,0.5)', fontWeight: 'bold' }}>
+          {timeLeft}s
+        </div>
+
+        {/* 右侧功能：换外观 & 小窗 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div
+            onClick={(e) => { e.stopPropagation(); setShowSkinModal(true); }}
+            style={{
+              background: 'rgba(255,255,255,0.92)', color: '#5D4037', padding: '4px 10px', borderRadius: 16,
+              cursor: 'pointer', fontSize: '0.76rem', fontWeight: 'bold', border: '1.5px solid #C49C58',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: '3px'
+            }}
+          >
+            <span>🎨 换外观</span>
+          </div>
+
+          <div
+            onClick={(e) => { e.stopPropagation(); setShowInGameChat(true); }}
+            style={{
+              background: 'linear-gradient(135deg, #FFFDF8 0%, #F5E8D2 100%)',
+              color: '#5D4037', padding: '4px 11px', borderRadius: 16, cursor: 'pointer',
+              fontSize: '0.76rem', fontWeight: 'bold', border: '1.5px solid #C49C58',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: '4px'
+            }}
+          >
+            <span>💬 小窗</span>
+            {inGameChatMsgs.length > 0 && (
+              <span style={{ background: '#D6724B', color: '#fff', fontSize: '0.65rem', padding: '0 4px', borderRadius: 8 }}>
+                {inGameChatMsgs.length}
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Top Right Action Button */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 15, zIndex: 20 }}>
-        <div
-          onClick={(e) => {
-            e.stopPropagation();
-            setShowCharModal(true);
-          }}
-          style={{
-            background: 'rgba(30, 20, 10, 0.65)',
-            color: '#FFE082',
-            padding: '7px 14px',
-            borderRadius: 20,
-            cursor: 'pointer',
-            fontSize: '0.85rem',
-            border: '1px solid rgba(255, 224, 130, 0.4)',
-            backdropFilter: 'blur(8px)',
-            boxShadow: '0 2px 8px rgba(0,0,0,0.3)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '5px',
-            fontWeight: 'bold',
-            userSelect: 'none'
-          }}
-        >
-          <span>🎯</span> 更换角色
-        </div>
-      </div>
-
-      {/* Top Right Scroll UI */}
-      <div style={{ position: 'absolute', top: 'max(65px, env(safe-area-inset-top) + 45px)', right: 15, zIndex: 10, background: 'url(https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ihqeyvVK_wNnLFsi6ZeuvfcYtDGFgACNCoAAmsm2FeJMbyGDdEl0D0E.png)', backgroundSize: '100% 100%' }}>
-        <div style={{ background: '#F5E6C8', padding: '8px 15px', borderRadius: '4px', border: '2px solid #D7CCC8', display: 'flex', flexDirection: 'column', gap: '4px', boxShadow: '2px 2px 8px rgba(0,0,0,0.2)' }}>
+      {/* 右上角羊皮卷面板：目标分 / 当前积分 / 心心 */}
+      <div style={{ position: 'absolute', top: 'max(90px, env(safe-area-inset-top) + 75px)', right: 12, zIndex: 10 }}>
+        <div style={{ background: '#F5E6C8', padding: '6px 12px', borderRadius: '8px', border: '2px solid #D7CCC8', display: 'flex', flexDirection: 'column', gap: '2px', boxShadow: '2px 2px 8px rgba(0,0,0,0.2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <span style={{ color: '#5D4037', fontSize: '0.8rem' }}>第{stage}关目标:</span>
-            <span style={{ color: '#5D4037', fontSize: '1rem', fontWeight: 'bold' }}>{targetScore}</span>
+            <span style={{ color: '#5D4037', fontSize: '0.75rem' }}>第{stage}关目标:</span>
+            <span style={{ color: '#5D4037', fontSize: '0.92rem', fontWeight: 'bold' }}>{targetScore}</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
-            <span style={{ color: '#5D4037', fontSize: '0.9rem' }}>当前积分:</span>
-            <span style={{ color: '#D84315', fontSize: '1.2rem', fontWeight: 'bold' }}>{score}</span>
+            <span style={{ color: '#5D4037', fontSize: '0.82rem' }}>当前积分:</span>
+            <span style={{ color: '#D84315', fontSize: '1.1rem', fontWeight: 'bold' }}>{score}</span>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end', marginTop: 2 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', justifyContent: 'flex-end', marginTop: 1 }}>
             {[...Array(3)].map((_, i) => (
-              <span key={i} style={{ fontSize: '1.1rem', filter: i < lives ? 'none' : 'grayscale(100%)', opacity: i < lives ? 1 : 0.35, transition: 'all 0.3s' }}>❤️</span>
+              <span key={i} style={{ fontSize: '0.95rem', filter: i < lives ? 'none' : 'grayscale(100%)', opacity: i < lives ? 1 : 0.35, transition: 'all 0.3s' }}>❤️</span>
             ))}
           </div>
         </div>
       </div>
 
-      {/* Result Modal */}
+      {/* 结算弹窗 */}
       {gameState === 'result' && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-          <div style={{ background: 'linear-gradient(135deg, #FFFDF8 0%, #F5E8D2 100%)', padding: '32px 24px', borderRadius: 24, textAlign: 'center', position: 'relative', width: '100%', maxWidth: 330, boxShadow: '0 12px 36px rgba(0,0,0,0.5)', border: '2px solid #C49C58' }}>
+          <div style={{ background: 'linear-gradient(135deg, #FFFDF8 0%, #F5E8D2 100%)', padding: '36px 24px 28px 24px', borderRadius: 24, textAlign: 'center', position: 'relative', width: '100%', maxWidth: 330, boxShadow: '0 12px 36px rgba(0,0,0,0.5)', border: '2px solid #C49C58' }}>
+            <img src={displayAvatar} style={{ width: 72, height: 72, borderRadius: '50%', position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', border: '4px solid #fff', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }} />
 
-            <h2 style={{ color: score >= targetScore && lives > 0 ? '#D84315' : '#3E2723', fontSize: '1.5rem', fontWeight: '800', margin: '0 0 6px 0' }}>
-              {lives <= 0 ? '生命耗尽 · 试炼失败' : (score >= targetScore ? `🎉 突破第 ${stage} 关！` : '未达标 · 挑战失败')}
+            <h2 style={{ color: score >= targetScore && lives > 0 ? '#D84315' : '#3E2723', fontSize: '1.4rem', fontWeight: '800', margin: '20px 0 6px 0' }}>
+              {lives <= 0 ? '😔 生命耗尽 · 试炼止步' : (score >= targetScore ? `🎉 百步穿杨 · 突破第 ${stage} 关！` : '😔 未达标 · 挑战失败')}
             </h2>
-            <div style={{ fontSize: '0.82rem', color: '#8D6E63', marginBottom: '12px' }}>
-              击落得分: <span style={{ color: '#D84315', fontWeight: 'bold', fontSize: '1.1rem' }}>{score}</span> (目标: {targetScore})
+            <div style={{ fontSize: '0.8rem', color: '#8D6E63', marginBottom: '12px' }}>
+              击落得分: <span style={{ color: '#D84315', fontWeight: 'bold', fontSize: '1.05rem' }}>{score}</span> (目标: {targetScore})
             </div>
 
             {score >= targetScore && lives > 0 ? (
-              <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '20px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+              <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '10px 12px', borderRadius: '14px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '16px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
                   <span>💰 本关递增赏金：</span>
-                  <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${stage * 2} 五铢钱</span>
+                  <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+{stage * 2} 五铢钱</span>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
                   <span>🏆 本局累计收益：</span>
-                  <span style={{ color: '#8C4A1E', fontWeight: 'bold' }}>+${sessionCoins + (hasAwardedThisStage ? 0 : stage * 2)} 铢</span>
+                  <span style={{ color: '#8C4A1E', fontWeight: 'bold' }}>+{sessionCoins} 铢</span>
                 </div>
-                <div style={{ fontSize: '0.74rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '4px', marginTop: '4px' }}>
+                <div style={{ fontSize: '0.72rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '3px', marginTop: '3px' }}>
                   ✨ 递增赏金已实时存入【隐私与安全-我的金库】
                 </div>
               </div>
             ) : (
-              <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '20px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
+              <div style={{ background: '#FFF', padding: '10px 12px', borderRadius: '14px', border: '1px solid #EAE3DA', marginBottom: '16px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
                 <span>💰 本局已得收益：</span>
-                <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${sessionCoins} 铢</span>（已入金库）
+                <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+{sessionCoins} 铢</span>（已入金库）
               </div>
             )}
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
               {score >= targetScore && lives > 0 ? (
                 <button onClick={() => {
                   setStage(s => s + 1);
@@ -49179,8 +49572,8 @@ const ArcheryGamePage = ({ onBack }) => {
                   stateRef.current.arrows = [];
                   stateRef.current.particles = [];
                   stateRef.current.popups = [];
-                }} style={{ padding: '12px', background: 'linear-gradient(135deg, #D84315 0%, #BF360C 100%)', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(216,67,21,0.4)' }}>
-                  进入第{stage + 1}关 (赏金${(stage + 1) * 2}铢) ➔
+                }} style={{ padding: '11px', background: 'linear-gradient(135deg, #D84315 0%, #BF360C 100%)', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.92rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(216,67,21,0.4)' }}>
+                  进入第{stage + 1}关 (赏金+{(stage + 1) * 2}铢) ➔
                 </button>
               ) : (
                 <button onClick={() => {
@@ -49195,186 +49588,379 @@ const ArcheryGamePage = ({ onBack }) => {
                   stateRef.current.arrows = [];
                   stateRef.current.particles = [];
                   stateRef.current.popups = [];
-                }} style={{ padding: '12px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.92rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(76,175,80,0.3)' }}>
+                }} style={{ padding: '11px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(76,175,80,0.3)' }}>
                   重试本关
                 </button>
               )}
 
-              <button onClick={onBack} style={{ padding: '10px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.85rem', cursor: 'pointer' }}>
+              <button
+                onClick={() => setShowInGameChat(true)}
+                style={{ padding: '9px', borderRadius: 16, border: '1.5px solid #C49C58', background: '#FFFDF9', color: '#8C4A1E', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 'bold' }}
+              >
+                💬 局内小窗复盘交流
+              </button>
+
+              <button onClick={onBack} style={{ padding: '8px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.8rem', cursor: 'pointer' }}>
                 返回修武扬文
               </button>
             </div>
           </div>
         </div>
       )}
-      {/* Bottom Sheet Drawer for Role Management */}
-      {showCharModal && (
+
+      {/* 🎨 底部弹出外观更换卡片 */}
+      {showSkinModal && (
         <div
-          onClick={() => setShowCharModal(false)}
+          onClick={() => setShowSkinModal(false)}
           style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(0, 0, 0, 0.55)',
-            zIndex: 350,
-            display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'flex-end',
-            animation: 'fadeIn 0.25s ease-out'
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            zIndex: 520, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
           }}
         >
           <div
-            onClick={(e) => e.stopPropagation()}
+            onClick={e => e.stopPropagation()}
             style={{
               background: 'linear-gradient(180deg, #FBF7EE 0%, #F5E8D2 100%)',
-              borderRadius: '24px 24px 0 0',
-              padding: '18px 16px max(24px, env(safe-area-inset-bottom)) 16px',
-              boxShadow: '0 -8px 24px rgba(0,0,0,0.35)',
-              borderTop: '3px solid #C49C58',
-              maxHeight: '82%',
-              overflowY: 'auto',
-              animation: 'slideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1)'
+              borderRadius: '24px 24px 0 0', padding: '18px 16px max(24px, env(safe-area-inset-bottom)) 16px',
+              borderTop: '3px solid #C49C58', maxHeight: '82%', overflowY: 'auto'
             }}
           >
-            {/* Drag Bar & Header */}
             <div style={{ width: 36, height: 4, background: '#D7CCC8', borderRadius: 2, margin: '0 auto 10px auto' }} />
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
               <div>
-                <div style={{ fontSize: '1.1rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 6 }}>
-                  <span>🎯</span> 箭靶角色查看与更换
+                <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#4E342E' }}>
+                  🎨 射箭靶标与角色外观
                 </div>
-                <div style={{ fontSize: '0.75rem', color: '#8D6E63', marginTop: 2 }}>
-                  点击各角色卡片可自定义更换游戏中的立绘图片
+                <div style={{ fontSize: '0.74rem', color: '#8D6E63', marginTop: 2 }}>
+                  自定义更换四种空中滑翔箭靶立绘
                 </div>
               </div>
               <div
-                onClick={() => setShowCharModal(false)}
-                style={{
-                  width: 30,
-                  height: 30,
-                  borderRadius: '50%',
-                  background: 'rgba(78, 52, 46, 0.1)',
-                  color: '#5D4037',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  fontSize: '0.95rem',
-                  fontWeight: 'bold'
-                }}
+                onClick={() => setShowSkinModal(false)}
+                style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
               >
                 ✕
               </div>
             </div>
 
-            {/* Grid of 4 Roles */}
+            {/* 4种靶标网格 */}
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 10 }}>
-              {/* Role 1: 普通 */}
-              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
-                <div style={{ alignSelf: 'flex-start', background: '#FFF3E0', color: '#E65100', border: '1px solid #FFE0B2', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+              {/* 普通 */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#FFF3E0', color: '#E65100', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
                   普通 (+1分)
                 </div>
-                <div style={{ width: 64, height: 76, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                <div style={{ width: 64, height: 74, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
                   <img src={char1Img} alt="普通" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                 </div>
                 <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>普通箭靶</div>
-                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
-                  <button
-                    onClick={() => handleUploadChar('normal')}
-                    style={{ flex: 1, padding: '5px 0', background: '#D84315', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
-                  >
-                    更换立绘
-                  </button>
+                <div style={{ display: 'flex', gap: 4, width: '100%' }}>
+                  <button onClick={() => handleUploadChar('normal')} style={{ flex: 1, padding: '5px 0', background: '#D84315', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}>更换立绘</button>
                   {char1Img !== ASSETS.normal && (
-                    <button
-                      onClick={() => handleResetChar('normal')}
-                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
-                    >
-                      重置
-                    </button>
+                    <button onClick={() => handleResetChar('normal')} style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}>重置</button>
                   )}
                 </div>
               </div>
 
-              {/* Role 2: 特殊 */}
-              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
-                <div style={{ alignSelf: 'flex-start', background: '#E8F5E9', color: '#2E7D32', border: '1px solid #C8E6C9', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+              {/* 特殊 */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#E8F5E9', color: '#2E7D32', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
                   特殊 (+3分)
                 </div>
-                <div style={{ width: 64, height: 76, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                <div style={{ width: 64, height: 74, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
                   <img src={char2Img} alt="特殊" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                 </div>
-                <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>特殊箭靶</div>
-                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
-                  <button
-                    onClick={() => handleUploadChar('special')}
-                    style={{ flex: 1, padding: '5px 0', background: '#388E3C', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
-                  >
-                    更换立绘
-                  </button>
+                <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>高分箭靶</div>
+                <div style={{ display: 'flex', gap: 4, width: '100%' }}>
+                  <button onClick={() => handleUploadChar('special')} style={{ flex: 1, padding: '5px 0', background: '#388E3C', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}>更换立绘</button>
                   {char2Img !== ASSETS.special && (
-                    <button
-                      onClick={() => handleResetChar('special')}
-                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
-                    >
-                      重置
-                    </button>
+                    <button onClick={() => handleResetChar('special')} style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}>重置</button>
                   )}
                 </div>
               </div>
 
-              {/* Role 3: 有毒 */}
-              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
-                <div style={{ alignSelf: 'flex-start', background: '#F3E5F5', color: '#7B1FA2', border: '1px solid #E1BEE7', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+              {/* 有毒 */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#F3E5F5', color: '#7B1FA2', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
                   有毒 (-1生命)
                 </div>
-                <div style={{ width: 64, height: 76, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                <div style={{ width: 64, height: 74, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
                   <img src={char3Img} alt="有毒" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                 </div>
                 <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>有毒箭靶</div>
-                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
-                  <button
-                    onClick={() => handleUploadChar('poison')}
-                    style={{ flex: 1, padding: '5px 0', background: '#7B1FA2', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
-                  >
-                    更换立绘
-                  </button>
+                <div style={{ display: 'flex', gap: 4, width: '100%' }}>
+                  <button onClick={() => handleUploadChar('poison')} style={{ flex: 1, padding: '5px 0', background: '#7B1FA2', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}>更换立绘</button>
                   {char3Img !== ASSETS.poison && (
-                    <button
-                      onClick={() => handleResetChar('poison')}
-                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
-                    >
-                      重置
-                    </button>
+                    <button onClick={() => handleResetChar('poison')} style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}>重置</button>
                   )}
                 </div>
               </div>
 
-              {/* Role 4: 爆炸 */}
-              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center', boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
-                <div style={{ alignSelf: 'flex-start', background: '#FBE9E7', color: '#D84315', border: '1px solid #FFCCBC', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
+              {/* 爆炸 */}
+              <div style={{ background: '#FFFDF9', borderRadius: 14, padding: '10px 8px', border: '1.5px solid #E6D7C3', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+                <div style={{ alignSelf: 'flex-start', background: '#FBE9E7', color: '#D84315', fontSize: '0.68rem', padding: '2px 6px', borderRadius: 8, fontWeight: 'bold', marginBottom: 6 }}>
                   爆炸 (全屏引爆)
                 </div>
-                <div style={{ width: 64, height: 76, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
+                <div style={{ width: 64, height: 74, background: 'rgba(0,0,0,0.03)', borderRadius: 10, overflow: 'hidden', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid #ECE0D1', marginBottom: 6 }}>
                   <img src={char4Img} alt="爆炸" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
                 </div>
                 <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 4 }}>爆炸箭靶</div>
-                <div style={{ display: 'flex', gap: 4, width: '100%', marginTop: 2 }}>
-                  <button
-                    onClick={() => handleUploadChar('bomb')}
-                    style={{ flex: 1, padding: '5px 0', background: '#E64A19', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}
-                  >
-                    更换立绘
-                  </button>
+                <div style={{ display: 'flex', gap: 4, width: '100%' }}>
+                  <button onClick={() => handleUploadChar('bomb')} style={{ flex: 1, padding: '5px 0', background: '#E64A19', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer', fontWeight: 'bold' }}>更换立绘</button>
                   {char4Img !== ASSETS.bomb && (
-                    <button
-                      onClick={() => handleResetChar('bomb')}
-                      style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}
-                    >
-                      重置
-                    </button>
+                    <button onClick={() => handleResetChar('bomb')} style={{ padding: '5px 6px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.68rem', cursor: 'pointer' }}>重置</button>
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🎭 角色选择抽屉 (用于「看Ta操作」) */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5E8D2 100%)',
+              borderRadius: '24px 24px 0 0', padding: '20px 16px max(24px, env(safe-area-inset-bottom)) 16px',
+              borderTop: '3px solid #C49C58', maxHeight: '75%', overflowY: 'auto'
+            }}
+          >
+            <div style={{ width: 36, height: 4, background: '#D7CCC8', borderRadius: 2, margin: '0 auto 10px auto' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#4E342E' }}>
+                  🎯 选择代打神射手
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#8D6E63', marginTop: 2 }}>
+                  读取自【传讯-角色配置库】，选择后由其弯弓速射与局内小窗互动
+                </div>
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {availableChars.length === 0 ? (
+              <div style={{ padding: '30px 0', textAlign: 'center', color: '#8D6E63', fontSize: '0.85rem' }}>
+                暂未在【传讯】中配置密探角色，请先前往传讯添加。
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {availableChars.map(char => {
+                  const isCur = selectedChar && String(selectedChar.id) === String(char.id);
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => handleSelectAutoChar(char)}
+                      style={{
+                        background: isCur ? '#FFF3E0' : '#FFFDF9',
+                        borderRadius: 14, padding: '12px 6px',
+                        border: isCur ? '2px solid #D6724B' : '1px solid #E6D7C3',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.06)'
+                      }}
+                    >
+                      <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #D6724B' : '1px solid #DDD', marginBottom: 6 }}>
+                        <img src={char.avatar || DEFAULT_AVATAR} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#D6724B' : '#4E342E', textAlign: 'center' }}>
+                        {char.name}
+                      </div>
+                      {isCur && (
+                        <span style={{ fontSize: '0.65rem', color: '#D6724B', marginTop: 2, fontWeight: 'bold' }}>
+                          ✓ 代打中
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 💬 局内专属悬浮小窗聊天 (IndexedDB 独立存储，对接【设置-API设置】) */}
+      {showInGameChat && (
+        <div
+          onClick={() => setShowInGameChat(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(5px)',
+            zIndex: 550, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5EADB 100%)',
+              borderRadius: '24px 24px 0 0', padding: '16px 14px max(18px, env(safe-area-inset-bottom)) 14px',
+              borderTop: '3px solid #C49C58', height: '82%', maxHeight: 600,
+              display: 'flex', flexDirection: 'column', boxShadow: '0 -10px 30px rgba(0,0,0,0.4)'
+            }}
+          >
+            {/* 小窗头部 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #E6D7C3' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #C49C58' }}>
+                  <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>{selectedChar ? selectedChar.name : "密探"}</span>
+                    <span style={{ fontSize: '0.68rem', background: 'rgba(214,114,75,0.15)', color: '#D6724B', padding: '1px 6px', borderRadius: 8 }}>
+                      {playMode === 'auto' ? '代打中 · 局内复盘' : '观战中 · 局内复盘'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#8D6E63' }}>
+                    🚩 第 {stage} 关 | 得分 {score}/{targetScore} | 累计赏金 +{sessionCoins} 铢
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  onClick={handleClearInGameChat}
+                  style={{ fontSize: '0.72rem', color: '#A08070', background: 'rgba(0,0,0,0.05)', padding: '3px 8px', borderRadius: 10, cursor: 'pointer' }}
+                  title="清空局内对话"
+                >
+                  清空记录
+                </div>
+                <div
+                  onClick={() => setShowInGameChat(false)}
+                  style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  ✕
+                </div>
+              </div>
+            </div>
+
+            {/* 消息滚动流 */}
+            <div
+              ref={chatScrollRef}
+              style={{
+                flex: 1, overflowY: 'auto', padding: '12px 4px', display: 'flex', flexDirection: 'column', gap: 10
+              }}
+            >
+              {inGameChatMsgs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 10px', color: '#8D6E63', fontSize: '0.82rem', lineHeight: '1.6' }}>
+                  {playMode === 'auto'
+                    ? `🏹 刚才【${selectedChar ? selectedChar.name : '密探'}】这一轮箭术表现如何？在下方点击快捷话题或输入文字，跟Ta复盘刚才的发挥吧！`
+                    : `🏹 刚才这一轮射箭表现如何？在下方点击快捷话题或输入文字，与【${selectedChar ? selectedChar.name : '密探'}】小窗复盘箭术吧！`}
+                </div>
+              ) : (
+                inGameChatMsgs.map((msg) => {
+                  const isUser = msg.role === 'user';
+                  return (
+                    <div
+                      key={msg.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: isUser ? 'flex-end' : 'flex-start',
+                        gap: 8
+                      }}
+                    >
+                      {!isUser && (
+                        <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginTop: 2 }}>
+                          <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          maxWidth: '75%',
+                          padding: '8px 12px',
+                          borderRadius: isUser ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
+                          background: isUser ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : '#FFF',
+                          color: isUser ? '#FFF' : '#3E2723',
+                          fontSize: '0.85rem',
+                          lineHeight: '1.45',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                          border: isUser ? 'none' : '1px solid #EAE0D5',
+                          wordBreak: 'break-word'
+                        }}
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              {isAiReplying && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+                    <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <div style={{ background: '#FFF', padding: '8px 14px', borderRadius: '16px 16px 16px 2px', fontSize: '0.8rem', color: '#8D6E63', border: '1px solid #EAE0D5' }}>
+                    {selectedChar?.name} 正在思考回复中... ✍️
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 快捷话题气泡 */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '6px 0', marginBottom: 6 }}>
+              {(playMode === 'auto' ? [
+                "你刚才那一记百步穿杨太帅啦！",
+                "全屏引爆炸弹那一箭好解气！",
+                "刚才差点误中紫毒，好险！",
+                "下一把你有信心突破吗？"
+              ] : [
+                "我刚才那一箭好险啊！",
+                "刚才那个引爆炸弹太爽了！",
+                "你觉得我刚才箭术怎样？",
+                "下一把我们一定能破关！"
+              ]).map((pill, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => handleSendInGameMessage(pill)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 14, background: 'rgba(255,255,255,0.9)',
+                    border: '1px solid #E0D0BE', fontSize: '0.72rem', color: '#6E5244',
+                    whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0
+                  }}
+                >
+                  {pill}
+                </div>
+              ))}
+            </div>
+
+            {/* 输入与发送栏 */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSendInGameMessage(); }}
+                placeholder={`对 ${selectedChar ? selectedChar.name : '密探'} 说点什么...`}
+                style={{
+                  flex: 1, padding: '10px 14px', borderRadius: 20, border: '1.5px solid #D7C7B2',
+                  background: '#FFF', fontSize: '0.85rem', color: '#333', outline: 'none'
+                }}
+              />
+              <button
+                onClick={() => handleSendInGameMessage()}
+                disabled={isAiReplying || !chatInput.trim()}
+                style={{
+                  padding: '10px 18px', borderRadius: 20, border: 'none',
+                  background: (isAiReplying || !chatInput.trim()) ? '#CCC' : 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)',
+                  color: '#fff', fontSize: '0.85rem', fontWeight: 'bold', cursor: (isAiReplying || !chatInput.trim()) ? 'default' : 'pointer',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+                }}
+              >
+                发送
+              </button>
             </div>
           </div>
         </div>
