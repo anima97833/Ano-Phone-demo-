@@ -45663,24 +45663,35 @@ const T13GamblingPage = ({ onBack }) => {
 
 // ==================== T13 修武扬文 - 训练主页面 & 小游戏 ====================
 
-// 木桩训练 (蓄力跳跃)
+// 木桩训练 (蓄力跳跃 - 无限关卡制 & 道具金钱金库同步系统)
 const JumpGamePage = ({ onBack }) => {
   const { useState, useEffect, useRef } = React;
   const [visible, setVisible] = useState(false);
-  const [stage, setStage] = useState(1); // 1-10
+
+  // 关卡系统 (无限关卡)
+  const [level, setLevel] = useState(1); // 1, 2, 3, ... 无限延伸
+  const [subStage, setSubStage] = useState(1); // 1-5 每关5根木桩
+  const [highestLevel, setHighestLevel] = useState(1);
   const [retries, setRetries] = useState(5);
+
+  // 金钱累计系统 (1 道具 = 1 元 / 五铢钱)
+  const [sessionCoins, setSessionCoins] = useState(0); // 本局全局累计
+  const [levelCoins, setLevelCoins] = useState(0); // 当前关卡累计（每关结束后统一入账）
+  const [floatingCoins, setFloatingCoins] = useState([]);
+
+  // 物理与跳跃状态
   const [isCharging, setIsCharging] = useState(false);
   const [chargeValue, setChargeValue] = useState(0); // 0-100
-  const [gameState, setGameState] = useState('idle'); // idle, charging, jumping, result
-  const [logs, setLogs] = useState([{ x: 40, w: 70, hasItem: false }, { x: 240, w: 70, hasItem: true }]); // x is center
+  const [gameState, setGameState] = useState('idle'); // idle, charging, jumping, level_cleared, game_over
+  const [logs, setLogs] = useState([{ x: 40, w: 70, hasItem: false }, { x: 240, w: 70, hasItem: true }]);
   const [charPos, setCharPos] = useState({ x: 40, y: 0 });
   const [camX, setCamX] = useState(0);
 
-  // Custom Images
+  // 自定义图片
   const [charImg, setCharImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ClqevymgmdqN8oAAbGwXpbrH5vAQ2cAArMnAAJrJthXTWQDSRPv8eA9BA.png");
   const [itemImg, setItemImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-Cdqevx852wQyIhKkhpD5PHcRwKURQACsScAAmsm2FeVuGbPGveOSj0E.png");
 
-  // DOM refs for animation loops
+  // 动画与计时引用
   const chargeRef = useRef(0);
   const reqRef = useRef(null);
   const pressTimeRef = useRef(0);
@@ -45688,8 +45699,28 @@ const JumpGamePage = ({ onBack }) => {
   const charW = 75;
   const charH = 100;
   const logH = 120;
+  const stepsPerLevel = 5;
+
+  // 关卡名称生成器
+  const LEVEL_TITLES = [
+    "浅溪初试", "幽谷探桩", "踏波凌虚", "绝壁飞度", "云海幻桩",
+    "风雷渡空", "九幽秘境", "天外摘星", "无极破虚", "神武归元"
+  ];
+
+  const getLevelName = (lvl) => {
+    const baseName = LEVEL_TITLES[(lvl - 1) % LEVEL_TITLES.length];
+    const cycle = Math.floor((lvl - 1) / LEVEL_TITLES.length);
+    return cycle > 0 ? `${baseName} · 第${cycle + 1}重` : baseName;
+  };
 
   useEffect(() => {
+    // 读取历史最高关卡
+    try {
+      const savedHigh = parseInt(localStorage.getItem("jump_game_highest_level") || "1", 10);
+      if (!isNaN(savedHigh)) setHighestLevel(savedHigh);
+    } catch (e) {}
+
+    // 读取自定义皮肤
     if (window.settingsStore) {
       window.settingsStore.getJumpGameCharImage().then(img => {
         if (img) setCharImg(img);
@@ -45744,8 +45775,9 @@ const JumpGamePage = ({ onBack }) => {
     input.click();
   };
 
+  // 蓄力与跳跃
   const handlePointerDown = (e) => {
-    if (gameState !== 'idle' || retries <= 0 || stage > 10) return;
+    if (gameState !== 'idle' || retries <= 0) return;
     setGameState('charging');
     setIsCharging(true);
     chargeRef.current = 0;
@@ -45768,18 +45800,17 @@ const JumpGamePage = ({ onBack }) => {
 
     const power = chargeRef.current; // 0-100
     const maxJumpDist = 450;
-    const jumpDist = (power / 100) * maxJumpDist + 15; // min 15px jump
+    const jumpDist = (power / 100) * maxJumpDist + 15;
 
     const startX = charPos.x;
     const targetX = startX + jumpDist;
 
-    const jumpDuration = 600; // ms
+    const jumpDuration = 600;
     const startTime = Date.now();
 
     const jumpLoop = () => {
       const now = Date.now();
       const p = Math.min((now - startTime) / jumpDuration, 1);
-      // Parabola
       const h = 180;
       const y = 4 * h * p * (1 - p);
       const currentX = startX + (targetX - startX) * p;
@@ -45795,34 +45826,77 @@ const JumpGamePage = ({ onBack }) => {
     reqRef.current = requestAnimationFrame(jumpLoop);
   };
 
+  // 道具收集逻辑：实时累加本关与全局收益，展现浮动动画，关卡结束统一入账记账
+  const handleCollectCoin = (logX) => {
+    setSessionCoins(prev => prev + 1);
+    setLevelCoins(prev => prev + 1);
+
+    const floatId = Date.now() + Math.random();
+    setFloatingCoins(prev => [...prev, { id: floatId, x: logX, text: "+1 铢 ✨" }]);
+    setTimeout(() => {
+      setFloatingCoins(prev => prev.filter(item => item.id !== floatId));
+    }, 1000);
+  };
+
+  // 关卡结束/中途退出时统一汇总入账金库并生成单条收支记录
+  const commitLevelEarnings = (coinsToCommit, lvl, tag = "关卡收益") => {
+    if (coinsToCommit <= 0) return;
+    try {
+      const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+      localStorage.setItem("farm_coins", (currentCoins + coinsToCommit).toString());
+      if (window.addTransactionRecord) {
+        window.addTransactionRecord(
+          "income",
+          coinsToCommit,
+          `木桩训练 · 第${lvl}关${tag}汇总 (+${coinsToCommit}铢)`
+        );
+      }
+    } catch (e) {}
+  };
+
   const checkLanding = (finalX) => {
     const nextLog = logs[1];
     const hitMargin = nextLog.w / 2 + 10;
 
     if (Math.abs(finalX - nextLog.x) <= hitMargin) {
-      // Success
+      // 成功命中
       setCharPos({ x: nextLog.x, y: 0 });
 
       if (nextLog.hasItem) {
         setLogs(prev => [prev[0], { ...prev[1], collected: true }]);
+        handleCollectCoin(nextLog.x);
       }
 
       setTimeout(() => {
-        // 缩短木桩间距，保证两根木桩在手机竖屏中同框可见
-        const newLogX = nextLog.x + 100 + Math.random() * 120;
-        setLogs([{ ...nextLog, hasItem: false, collected: false }, { x: newLogX, w: 70, hasItem: Math.random() > 0.4 }]);
-        setCamX(nextLog.x - 40);
-
-        if (stage < 10) {
-          setStage(s => s + 1);
+        // 判断当前关卡进度
+        if (subStage < stepsPerLevel) {
+          // 当前关卡下一根木桩 (间距随关卡轻微动态微调)
+          const baseDist = 100 + Math.min(level * 1.5, 30);
+          const newLogX = nextLog.x + baseDist + Math.random() * 110;
+          const logWidth = Math.max(52, 70 - Math.min(level, 16));
+          setLogs([
+            { ...nextLog, hasItem: false, collected: false },
+            { x: newLogX, w: logWidth, hasItem: Math.random() > 0.35 }
+          ]);
+          setCamX(nextLog.x - 40);
+          setSubStage(s => s + 1);
           setGameState('idle');
         } else {
-          setGameState('result');
+          // 破关成功！关卡结束统一汇总记账
+          setLevelCoins(curLvlCoins => {
+            commitLevelEarnings(curLvlCoins, level, "破关");
+            return 0;
+          });
+          if (level >= highestLevel) {
+            setHighestLevel(level + 1);
+            localStorage.setItem("jump_game_highest_level", (level + 1).toString());
+          }
+          setGameState('level_cleared');
         }
       }, 400);
     } else {
-      // Fail
-      setCharPos(prev => ({ ...prev, y: -60 })); // sink
+      // 失败落水
+      setCharPos(prev => ({ ...prev, y: -60 }));
       setRetries(r => r - 1);
 
       setTimeout(() => {
@@ -45830,10 +45904,56 @@ const JumpGamePage = ({ onBack }) => {
           setCharPos({ x: logs[0].x, y: 0 });
           setGameState('idle');
         } else {
-          setGameState('result');
+          setLevelCoins(curLvlCoins => {
+            commitLevelEarnings(curLvlCoins, level, "结算");
+            return 0;
+          });
+          setGameState('game_over');
         }
       }, 1000);
     }
+  };
+
+  // 踏入下一关
+  const handleNextLevel = () => {
+    const nextLvl = level + 1;
+    setLevel(nextLvl);
+    setSubStage(1);
+    setRetries(prev => Math.min(prev + 2, 6)); // 过关赠送 2 次重跳机会
+    setLogs([{ x: 40, w: 70, hasItem: false }, { x: 240, w: 70, hasItem: true }]);
+    setCharPos({ x: 40, y: 0 });
+    setCamX(0);
+    setGameState('idle');
+  };
+
+  // 金库复活
+  const handleReviveWithCoins = () => {
+    const cost = 5;
+    const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+    if (currentCoins < cost) {
+      alert(`金库余额不足！复活需 ${cost} 五铢钱，请前往【我的钱包】充值。`);
+      return;
+    }
+
+    localStorage.setItem("farm_coins", (currentCoins - cost).toString());
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord("expense", cost, `木桩训练 · 第${level}关复活重置气力`);
+    }
+
+    setRetries(5);
+    setCharPos({ x: logs[0].x, y: 0 });
+    setGameState('idle');
+  };
+
+  // 重新从第1关开始
+  const handleRestartGame = () => {
+    setLevel(1);
+    setSubStage(1);
+    setRetries(5);
+    setLogs([{ x: 40, w: 70, hasItem: false }, { x: 240, w: 70, hasItem: true }]);
+    setCharPos({ x: 40, y: 0 });
+    setCamX(0);
+    setGameState('idle');
   };
 
   return (
@@ -45852,7 +45972,7 @@ const JumpGamePage = ({ onBack }) => {
       onPointerCancel={handlePointerUp}
       onContextMenu={e => e.preventDefault()}
     >
-      {/* Scrolling background container */}
+      {/* 滚动背景 */}
       <div style={{ position: 'absolute', inset: 0, overflow: 'hidden', pointerEvents: 'none' }}>
         <div style={{
           position: 'absolute', left: 0, top: 0, bottom: 0, width: '300%',
@@ -45863,15 +45983,13 @@ const JumpGamePage = ({ onBack }) => {
         }} />
       </div>
 
-      {/* Gameplay Area */}
-      <div style={{
-        position: 'absolute', bottom: 0, left: 0, right: 0, top: '40%',
-      }}>
+      {/* 游戏场景主体 */}
+      <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, top: '40%' }}>
         <div style={{
           position: 'absolute', bottom: 0, left: -camX, transition: 'left 0.5s ease-out',
           width: 10000, height: '100%'
         }}>
-          {/* Logs */}
+          {/* 木桩列表 */}
           {logs.map((log, i) => (
             <div key={i} style={{ position: 'absolute', bottom: -20, left: log.x - log.w / 2, width: log.w, height: logH }}>
               <img src="https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-CtqevzmzJax9UBc8Y0UcSvcx6pTAQACtScAAmsm2FcLGI-XpRi6Qz0E.png" style={{ width: '100%', height: '100%', objectFit: 'fill', filter: 'drop-shadow(0 10px 10px rgba(0,0,0,0.5))' }} draggable="false" />
@@ -45886,7 +46004,7 @@ const JumpGamePage = ({ onBack }) => {
             </div>
           ))}
 
-          {/* Character */}
+          {/* 角色 */}
           <div style={{
             position: 'absolute',
             bottom: logH - 45 + charPos.y,
@@ -45904,7 +46022,7 @@ const JumpGamePage = ({ onBack }) => {
               }}
               draggable="false"
             />
-            {/* Leaf Swirl Effect */}
+            {/* 树叶蓄力特效 */}
             {isCharging && (
               <div style={{
                 position: 'absolute', inset: -20, animation: 'swirl 1s linear infinite', pointerEvents: 'none', zIndex: 10
@@ -45915,7 +46033,7 @@ const JumpGamePage = ({ onBack }) => {
                 <div style={{ position: 'absolute', top: '50%', right: -5, transform: 'translateY(-50%) rotate(90deg)', color: '#8BC34A', fontSize: '1rem', textShadow: '0 0 5px rgba(255,255,255,0.8)' }}>🍃</div>
               </div>
             )}
-            {/* Charge effect ring */}
+            {/* 蓄力光环 */}
             {isCharging && (
               <div style={{
                 position: 'absolute', bottom: -5, left: '50%', transform: 'translateX(-50%)',
@@ -45925,69 +46043,206 @@ const JumpGamePage = ({ onBack }) => {
               }} />
             )}
           </div>
+
+          {/* 飘动的 +1 铢 动画 */}
+          {floatingCoins.map(fc => (
+            <div
+              key={fc.id}
+              style={{
+                position: 'absolute',
+                bottom: logH + 40,
+                left: fc.x - 30,
+                fontSize: '1.1rem',
+                fontWeight: 'bold',
+                color: '#FFD700',
+                textShadow: '0 2px 6px rgba(0,0,0,0.6)',
+                animation: 'floatUp 0.9s ease-out forwards',
+                pointerEvents: 'none',
+                zIndex: 50
+              }}
+            >
+              {fc.text}
+            </div>
+          ))}
         </div>
       </div>
 
-      {/* Water overlay */}
+      {/* 水波遮罩 */}
       <div style={{ position: 'absolute', bottom: 0, left: 0, right: 0, height: '15%', background: 'linear-gradient(to top, rgba(150,210,220,0.8) 0%, rgba(180,230,235,0.4) 100%)', pointerEvents: 'none' }} />
 
-      {/* UI Overlay */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15 }} onClick={(e) => { e.stopPropagation(); onBack(); }}>
-        <div style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', padding: '6px 16px', borderRadius: 20, cursor: 'pointer', fontSize: '0.9rem', border: '1px solid rgba(255,255,255,0.2)' }}>
-          ←
+      {/* 顶部左侧：返回按钮与关卡标题 */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 14, display: 'flex', alignItems: 'center', gap: '8px', zIndex: 100 }}>
+        <div onClick={(e) => {
+          e.stopPropagation();
+          commitLevelEarnings(levelCoins, level, "结算退出");
+          setLevelCoins(0);
+          onBack();
+        }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '6px 14px', borderRadius: 20, cursor: 'pointer', fontSize: '0.9rem', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span>←</span>
+          <span>退出</span>
         </div>
-      </div>
-      
-      {/* Upload Buttons */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 15, display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <div onClick={(e) => { e.stopPropagation(); handleUploadChar(); }} style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', textAlign: 'center' }}>
-          更换角色
-        </div>
-        <div onClick={(e) => { e.stopPropagation(); handleUploadItem(); }} style={{ background: 'rgba(0,0,0,0.4)', color: '#fff', padding: '6px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.8rem', border: '1px solid rgba(255,255,255,0.2)', textAlign: 'center' }}>
-          更换道具
+        <div style={{ background: 'rgba(59, 66, 53, 0.75)', backdropFilter: 'blur(4px)', color: '#FFF9F0', padding: '5px 12px', borderRadius: 16, fontSize: '0.82rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)', boxShadow: '0 2px 8px rgba(0,0,0,0.2)' }}>
+          🚩 第 {level} 关 · {getLevelName(level)}
         </div>
       </div>
 
-      {/* Top Progress Bar */}
-      <div style={{ position: 'absolute', top: 'max(20px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)', width: '60%', maxWidth: 350, display: 'flex', alignItems: 'center', background: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: '4px 10px', pointerEvents: 'none', border: '1px solid rgba(255,255,255,0.1)' }}>
-        <div style={{ position: 'absolute', height: 6, background: '#4CAF50', left: 20, right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 1, width: `calc(${(stage - 1) / 9 * 100}% - 40px)`, transition: 'width 0.3s' }} />
-        <div style={{ position: 'absolute', height: 6, background: '#444', left: 20, right: 20, top: '50%', transform: 'translateY(-50%)', zIndex: 0 }} />
-
-        {Array.from({ length: 10 }).map((_, i) => (
-          <div key={i} style={{ position: 'relative', flex: 1, display: 'flex', justifyContent: 'center', zIndex: 2 }}>
-            <div style={{
-              width: 22, height: 22, borderRadius: '50%',
-              background: i + 1 < stage ? '#8BC34A' : (i + 1 === stage ? '#FFCA28' : '#333'),
-              border: '2px solid rgba(255,255,255,0.8)', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              fontSize: 12, color: '#fff', boxShadow: '0 2px 4px rgba(0,0,0,0.5)'
-            }}>
-              {i + 1 < stage ? '✓' : (i + 1 === stage ? <img src={charImg} style={{ width: 20, height: 20, objectFit: 'cover', borderRadius: '50%' }} /> : '💰')}
-            </div>
+      {/* 顶部右侧：金库累计金钱 & 皮肤更换 */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 14, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '6px', zIndex: 100 }}>
+        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.9) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.82rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span>💰 金库收益:</span>
+          <span style={{ color: '#FFEB3B', fontSize: '0.95rem' }}>+{sessionCoins} 铢</span>
+        </div>
+        <div style={{ display: 'flex', gap: '6px' }}>
+          <div onClick={(e) => { e.stopPropagation(); handleUploadChar(); }} style={{ background: 'rgba(0,0,0,0.45)', color: '#fff', padding: '4px 10px', borderRadius: 14, cursor: 'pointer', fontSize: '0.72rem', border: '1px solid rgba(255,255,255,0.2)' }}>
+            换角色
           </div>
-        ))}
+          <div onClick={(e) => { e.stopPropagation(); handleUploadItem(); }} style={{ background: 'rgba(0,0,0,0.45)', color: '#fff', padding: '4px 10px', borderRadius: 14, cursor: 'pointer', fontSize: '0.72rem', border: '1px solid rgba(255,255,255,0.2)' }}>
+            换道具
+          </div>
+        </div>
       </div>
 
-      {/* Retries */}
-      <div style={{ position: 'absolute', top: 'max(60px, env(safe-area-inset-top) + 40px)', left: 15, background: 'rgba(0,0,0,0.4)', color: '#fff', padding: '6px 14px', borderRadius: 8, pointerEvents: 'none', fontSize: '0.85rem' }}>
-        剩余重跳机会：{retries}次
+      {/* 顶部中间：关卡内5步进度条 */}
+      <div style={{ position: 'absolute', top: 'max(58px, env(safe-area-inset-top) + 42px)', left: '50%', transform: 'translateX(-50%)', display: 'flex', alignItems: 'center', gap: '6px', background: 'rgba(0,0,0,0.5)', padding: '5px 14px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.15)', pointerEvents: 'none', zIndex: 90 }}>
+        <span style={{ fontSize: '0.75rem', color: '#E0E0E0', fontWeight: 'bold' }}>进度:</span>
+        <div style={{ display: 'flex', gap: '5px' }}>
+          {Array.from({ length: stepsPerLevel }).map((_, i) => {
+            const isDone = i + 1 < subStage;
+            const isCurrent = i + 1 === subStage;
+            return (
+              <div
+                key={i}
+                style={{
+                  width: 14,
+                  height: 14,
+                  borderRadius: '50%',
+                  background: isDone ? '#8BC34A' : isCurrent ? '#FFCA28' : '#555',
+                  border: isCurrent ? '2px solid #FFF' : '1px solid rgba(255,255,255,0.4)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '9px',
+                  color: '#FFF',
+                  fontWeight: 'bold',
+                  boxShadow: isCurrent ? '0 0 6px #FFCA28' : 'none'
+                }}
+              >
+                {isDone ? '✓' : i + 1}
+              </div>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Tutorial Text */}
-      {stage === 1 && gameState === 'idle' && (
-        <div style={{ position: 'absolute', bottom: '8%', left: '50%', transform: 'translateX(-50%)', color: '#fff', background: 'rgba(0,0,0,0.6)', padding: '8px 20px', borderRadius: 20, pointerEvents: 'none', animation: 'pulse 2s infinite', fontSize: '0.9rem', whiteSpace: 'nowrap' }}>
-          长按屏幕再释放，控制密探向前跳跃
+      {/* 剩余重跳机会与最高关卡记录 */}
+      <div style={{ position: 'absolute', top: 'max(94px, env(safe-area-inset-top) + 78px)', left: 14, display: 'flex', gap: '8px', pointerEvents: 'none', zIndex: 90 }}>
+        <div style={{ background: 'rgba(0,0,0,0.45)', color: '#fff', padding: '4px 10px', borderRadius: 8, fontSize: '0.76rem', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span>❤️ 剩余气力:</span>
+          <span style={{ color: retries <= 2 ? '#FF5252' : '#81C784', fontWeight: 'bold' }}>{retries} 次</span>
+        </div>
+        <div style={{ background: 'rgba(0,0,0,0.45)', color: '#E0E0E0', padding: '4px 10px', borderRadius: 8, fontSize: '0.76rem' }}>
+          🏆 历史最高: 第 {highestLevel} 关
+        </div>
+      </div>
+
+      {/* 新手提示 */}
+      {level === 1 && subStage === 1 && gameState === 'idle' && (
+        <div style={{ position: 'absolute', bottom: '8%', left: '50%', transform: 'translateX(-50%)', color: '#fff', background: 'rgba(0,0,0,0.65)', padding: '8px 20px', borderRadius: 20, pointerEvents: 'none', animation: 'pulse 2s infinite', fontSize: '0.88rem', whiteSpace: 'nowrap', zIndex: 90 }}>
+          👆 长按屏幕蓄力，把握力度松开跳跃！
         </div>
       )}
 
-      {/* Game Over / Win Modal */}
-      {gameState === 'result' && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400 }}>
-          <div style={{ background: 'linear-gradient(135deg, #FFEFBA 0%, #FFFFFF 100%)', padding: 40, borderRadius: 20, textAlign: 'center', color: '#333', boxShadow: '0 10px 30px rgba(0,0,0,0.8)' }}>
-            <h2 style={{ color: stage >= 10 ? '#D32F2F' : '#455A64', marginBottom: 20 }}>{stage >= 10 ? '🎉 通关成功！' : '😔 机会耗尽'}</h2>
-            {stage >= 10 && <p style={{ color: '#555', marginBottom: 20 }}>恭喜大侠完成挑战！</p>}
-            <div style={{ marginTop: 20, display: 'flex', gap: 20, justifyContent: 'center' }}>
-              <button onClick={(e) => { e.stopPropagation(); setStage(1); setRetries(5); setLogs([{ x: 40, w: 70, hasItem: false }, { x: 240, w: 70, hasItem: true }]); setCamX(0); setCharPos({ x: 40, y: 0 }); setGameState('idle'); }} style={{ padding: '10px 24px', borderRadius: 25, border: 'none', background: '#D32F2F', color: '#fff', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>再玩一次</button>
-              <button onClick={(e) => { e.stopPropagation(); onBack(); }} style={{ padding: '10px 24px', borderRadius: 25, border: 'none', background: '#CFD8DC', color: '#455A64', cursor: 'pointer', fontSize: '1rem', fontWeight: 'bold' }}>返回</button>
+      {/* 🌟 弹窗 1: 关卡突破成功弹窗 (无限关卡衔接) */}
+      {gameState === 'level_cleared' && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 20 }}>
+          <div style={{ background: 'linear-gradient(135deg, #FFFDF8 0%, #FEEDDC 100%)', padding: '28px 24px', borderRadius: 24, textAlign: 'center', color: '#333', boxShadow: '0 12px 36px rgba(0,0,0,0.5)', width: '100%', maxWidth: 340, border: '2px solid #F5C6A5' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🏆</div>
+            <h2 style={{ color: '#8C4A1E', fontSize: '1.35rem', fontWeight: '800', margin: '0 0 6px 0' }}>
+              突破第 {level} 关！
+            </h2>
+            <div style={{ fontSize: '0.85rem', color: '#A06840', fontWeight: '600', marginBottom: '16px' }}>
+              【{getLevelName(level)}】试炼告捷
+            </div>
+
+            <div style={{ background: 'rgba(255,255,255,0.85)', padding: '12px', borderRadius: '16px', border: '1px solid #EAD8C7', marginBottom: '20px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638', lineHeight: '1.6' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>💰 本局金钱收益：</span>
+                <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+{sessionCoins} 铢</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#8C7A6B' }}>
+                ✨ 道具金钱已实时同步至【隐私与安全-我的金库】
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleNextLevel(); }}
+                style={{ padding: '12px', borderRadius: 16, border: 'none', background: 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)', color: '#fff', cursor: 'pointer', fontSize: '0.95rem', fontWeight: 'bold', boxShadow: '0 4px 12px rgba(214,114,75,0.4)', active: { transform: 'scale(0.98)' } }}
+              >
+                踏入第 {level + 1} 关 ➔
+              </button>
+              <button
+                onClick={(e) => {
+          e.stopPropagation();
+          commitLevelEarnings(levelCoins, level, "结算退出");
+          setLevelCoins(0);
+          onBack();
+        }}
+                style={{ padding: '10px', borderRadius: 16, border: '1px solid #DDD', background: '#FAF7F2', color: '#6E6055', cursor: 'pointer', fontSize: '0.85rem', fontWeight: '600' }}
+              >
+                收手返回修整
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 💀 弹窗 2: 机会耗尽 / 结算弹窗 */}
+      {gameState === 'game_over' && (
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 400, padding: 20 }}>
+          <div style={{ background: 'linear-gradient(135deg, #FAF7F2 0%, #F0E8DD 100%)', padding: '28px 24px', borderRadius: 24, textAlign: 'center', color: '#333', boxShadow: '0 12px 36px rgba(0,0,0,0.5)', width: '100%', maxWidth: 340, border: '1px solid #DDD3C7' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🍃</div>
+            <h2 style={{ color: '#5A4638', fontSize: '1.3rem', fontWeight: '800', margin: '0 0 6px 0' }}>
+              气力耗竭 · 试炼止步
+            </h2>
+            <p style={{ color: '#8C7A6B', fontSize: '0.85rem', margin: '0 0 16px 0' }}>
+              止步于【第 {level} 关 · {getLevelName(level)}】
+            </p>
+
+            <div style={{ background: '#FFF', padding: '12px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '20px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <span>💰 本局带出金钱：</span>
+                <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+{sessionCoins} 铢</span>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#8C7A6B' }}>
+                已全额存入您的金库中，随时可用于坊市消费与善举。
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleReviveWithCoins(); }}
+                style={{ padding: '12px', borderRadius: 16, border: 'none', background: 'linear-gradient(135deg, #59685a 0%, #435044 100%)', color: '#fff', cursor: 'pointer', fontSize: '0.9rem', fontWeight: 'bold', boxShadow: '0 4px 10px rgba(89,104,90,0.3)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
+              >
+                <span>消耗 5 铢金库复活（满气力续关）</span>
+              </button>
+              <button
+                onClick={(e) => { e.stopPropagation(); handleRestartGame(); }}
+                style={{ padding: '10px', borderRadius: 16, border: '1px solid #D6724B', background: '#FFF', color: '#D6724B', cursor: 'pointer', fontSize: '0.85rem', fontWeight: 'bold' }}
+              >
+                从第 1 关重新挑战
+              </button>
+              <button
+                onClick={(e) => {
+          e.stopPropagation();
+          commitLevelEarnings(levelCoins, level, "结算退出");
+          setLevelCoins(0);
+          onBack();
+        }}
+                style={{ padding: '10px', borderRadius: 16, border: '1px solid #DDD', background: 'transparent', color: '#795548', cursor: 'pointer', fontSize: '0.85rem' }}
+              >
+                返回修武扬文
+              </button>
             </div>
           </div>
         </div>
@@ -46008,12 +46263,16 @@ const JumpGamePage = ({ onBack }) => {
            50% { transform: translate(-50%, -30px) scale(1.2); opacity: 0.8; filter: brightness(1.5); }
            100% { transform: translate(-50%, -60px) scale(0.5); opacity: 0; filter: brightness(2); }
          }
+         @keyframes floatUp {
+           0% { transform: translateY(0); opacity: 1; }
+           100% { transform: translateY(-40px); opacity: 0; }
+         }
        `}</style>
     </div>
   );
 };
 
-// 蹴鞠训练 (弹射进洞)
+// 蹴鞠训练 (弹射进洞 - 金钱累计系统 & 金库自动记账)
 const CujuGamePage = ({ onBack }) => {
   const { useState, useEffect, useRef } = React;
   const [visible, setVisible] = useState(false);
@@ -46023,9 +46282,13 @@ const CujuGamePage = ({ onBack }) => {
   const [showRules, setShowRules] = useState(false);
   const [avatarImg, setAvatarImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-VFqexSPovwtr3yIGoOEVx0yEHEwRgACNCkAAmsm2Fc0E3_MZ3vJwD0E.png");
 
+  // 金钱累计系统 (通关一关 = 5 元 / 五铢钱)
+  const [sessionCoins, setSessionCoins] = useState(0);
+  const [hasAwardedThisStage, setHasAwardedThisStage] = useState(false);
+
   const canvasRef = useRef(null);
 
-  // Physics and game state
+  // 物理与状态
   const stateRef = useRef({
     ball: { x: 180, y: 550, vx: 0, vy: 0, r: 24 },
     hole: { x: 180, y: 150, r: 35 },
@@ -46037,7 +46300,6 @@ const CujuGamePage = ({ onBack }) => {
   });
 
   const generateLevel = (levelIndex) => {
-    // Base outer fences
     const fences = [
       { x1: 20, y1: 100, x2: 20, y2: 600 },
       { x1: 340, y1: 100, x2: 340, y2: 600 },
@@ -46045,11 +46307,8 @@ const CujuGamePage = ({ onBack }) => {
       { x1: 20, y1: 600, x2: 340, y2: 600 }
     ];
 
-    // Random hole position in the top half (away from edges)
     const holeX = 60 + Math.random() * 240;
     const holeY = 150 + Math.random() * 150;
-
-    // Calculate number of obstacles based on stage, cap at 5
     const numObstacles = Math.min(Math.floor(levelIndex * 0.8), 5);
 
     const distSqToSegment = (px, py, x1, y1, x2, y2) => {
@@ -46082,11 +46341,9 @@ const CujuGamePage = ({ onBack }) => {
           fenceCandidate = { x1: x, y1: y, x2: x, y2: y + len };
         }
 
-        // Ensure it doesn't overlap hole (r=35) or ball (r=24), keep 65 buffer
         const distHoleSq = distSqToSegment(holeX, holeY, fenceCandidate.x1, fenceCandidate.y1, fenceCandidate.x2, fenceCandidate.y2);
         const distBallSq = distSqToSegment(180, 550, fenceCandidate.x1, fenceCandidate.y1, fenceCandidate.x2, fenceCandidate.y2);
 
-        // Ensure it doesn't overlap other dynamically generated fences (buffer 40px)
         const buffer = 40;
         const cLeft = Math.min(fenceCandidate.x1, fenceCandidate.x2) - buffer;
         const cRight = Math.max(fenceCandidate.x1, fenceCandidate.x2) + buffer;
@@ -46094,7 +46351,7 @@ const CujuGamePage = ({ onBack }) => {
         const cBottom = Math.max(fenceCandidate.y1, fenceCandidate.y2) + buffer;
 
         let overlapsOtherFence = false;
-        for (let j = 4; j < fences.length; j++) { // inner fences start at index 4
+        for (let j = 4; j < fences.length; j++) {
           const f = fences[j];
           const fLeft = Math.min(f.x1, f.x2);
           const fRight = Math.max(f.x1, f.x2);
@@ -46107,7 +46364,7 @@ const CujuGamePage = ({ onBack }) => {
           }
         }
 
-        if (distHoleSq > 4225 && distBallSq > 4225 && !overlapsOtherFence) { // 65^2 = 4225
+        if (distHoleSq > 4225 && distBallSq > 4225 && !overlapsOtherFence) {
           valid = true;
         }
       }
@@ -46130,6 +46387,7 @@ const CujuGamePage = ({ onBack }) => {
     stateRef.current.hole = { ...lvl.hole, r: 35 };
     stateRef.current.fences = lvl.fences;
     stateRef.current.aimAngle = -Math.PI / 2;
+    setHasAwardedThisStage(false);
     setGameState('idle');
   };
 
@@ -46166,7 +46424,7 @@ const CujuGamePage = ({ onBack }) => {
     input.click();
   };
 
-  // Assets loading
+  // 资源加载
   const assetsRef = useRef({});
   useEffect(() => {
     const loadImg = (key, src) => {
@@ -46180,7 +46438,7 @@ const CujuGamePage = ({ onBack }) => {
     loadImg('ball', 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-UpqexPs91Bp2UmZyRci4rZiUyxwzAACLCkAAmsm2Ff4fJ4G2EYsXj0E.png');
   }, []);
 
-  // Game Loop
+  // 游戏主循环
   useEffect(() => {
     let reqId;
     const ctx = canvasRef.current?.getContext('2d');
@@ -46198,17 +46456,40 @@ const CujuGamePage = ({ onBack }) => {
     return () => cancelAnimationFrame(reqId);
   }, [gameState]);
 
+  // 通关奖励与金库自动记账 (通关一关 = 5 铢)
+  const awardStageWin = () => {
+    if (hasAwardedThisStage) return;
+    setHasAwardedThisStage(true);
+
+    const reward = 5;
+    setSessionCoins(prev => prev + reward);
+
+    // 1. 同步金库
+    try {
+      const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+      localStorage.setItem("farm_coins", (currentCoins + reward).toString());
+    } catch (e) {}
+
+    // 2. 写入账本收支明细
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord(
+        "income",
+        reward,
+        `蹴鞠训练 · 突破第${stage}关通关赏金 (+5铢)`
+      );
+    }
+  };
+
   const updatePhysics = (dt) => {
     const state = stateRef.current;
     if (gameState !== 'moving') return;
 
     const ball = state.ball;
 
-    // Apply friction
+    // 摩擦力
     ball.vx *= 0.985;
     ball.vy *= 0.985;
 
-    // Stop if too slow
     const speedSq = ball.vx * ball.vx + ball.vy * ball.vy;
     if (speedSq < 100) {
       ball.vx = 0; ball.vy = 0;
@@ -46221,14 +46502,12 @@ const CujuGamePage = ({ onBack }) => {
       return;
     }
 
-    // Move
     const nextX = ball.x + ball.vx * dt;
     const nextY = ball.y + ball.vy * dt;
 
-    // Wall collision
+    // 围栏碰撞
     let collided = false;
     for (const fence of state.fences) {
-      // Line segment distance
       const l2 = distSq(fence.x1, fence.y1, fence.x2, fence.y2);
       let t = ((nextX - fence.x1) * (fence.x2 - fence.x1) + (nextY - fence.y1) * (fence.y2 - fence.y1)) / l2;
       t = Math.max(0, Math.min(1, t));
@@ -46236,14 +46515,12 @@ const CujuGamePage = ({ onBack }) => {
       const projY = fence.y1 + t * (fence.y2 - fence.y1);
       const dist = Math.sqrt(distSq(nextX, nextY, projX, projY));
 
-      if (dist < ball.r + 10) { // 10 is fence half-thickness
-        // Normal vector
+      if (dist < ball.r + 10) {
         let nx = nextX - projX;
         let ny = nextY - projY;
         const len = Math.sqrt(nx * nx + ny * ny) || 1;
         nx /= len; ny /= len;
 
-        // Reflect velocity
         const dot = ball.vx * nx + ball.vy * ny;
         if (dot < 0) {
           ball.vx = ball.vx - 2 * dot * nx;
@@ -46261,10 +46538,11 @@ const CujuGamePage = ({ onBack }) => {
       ball.y += ball.vy * dt;
     }
 
-    // Hole collision
+    // 进洞判定
     const distToHole = Math.sqrt(distSq(ball.x, ball.y, state.hole.x, state.hole.y));
     if (distToHole < state.hole.r - 5) {
       ball.vx = 0; ball.vy = 0;
+      awardStageWin();
       setGameState('result');
     }
   };
@@ -46275,10 +46553,9 @@ const CujuGamePage = ({ onBack }) => {
     const state = stateRef.current;
     const assets = assetsRef.current;
 
-    // Clear
     ctx.clearRect(0, 0, 360, 640);
 
-    // Bg
+    // 背景
     if (assets.bg && assets.bg.complete) {
       ctx.drawImage(assets.bg, 0, 0, 360, 640);
     } else {
@@ -46286,7 +46563,7 @@ const CujuGamePage = ({ onBack }) => {
       ctx.fillRect(0, 0, 360, 640);
     }
 
-    // Hole
+    // 坑洞
     if (assets.hole && assets.hole.complete) {
       ctx.drawImage(assets.hole, state.hole.x - 55, state.hole.y - 55, 110, 110);
     } else {
@@ -46294,10 +46571,10 @@ const CujuGamePage = ({ onBack }) => {
       ctx.beginPath(); ctx.arc(state.hole.x, state.hole.y, state.hole.r, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Fences
+    // 围栏
     ctx.lineWidth = 14;
     ctx.lineCap = 'round';
-    ctx.strokeStyle = 'transparent'; // drawn with image if possible
+    ctx.strokeStyle = 'transparent';
     for (const fence of state.fences) {
       ctx.beginPath();
       ctx.moveTo(fence.x1, fence.y1);
@@ -46323,7 +46600,7 @@ const CujuGamePage = ({ onBack }) => {
       }
     }
 
-    // Ball
+    // 蹴鞠球
     if (assets.ball && assets.ball.complete) {
       ctx.drawImage(assets.ball, state.ball.x - state.ball.r, state.ball.y - state.ball.r, state.ball.r * 2, state.ball.r * 2);
     } else {
@@ -46331,7 +46608,7 @@ const CujuGamePage = ({ onBack }) => {
       ctx.beginPath(); ctx.arc(state.ball.x, state.ball.y, state.ball.r, 0, Math.PI * 2); ctx.fill();
     }
 
-    // Aim arrow
+    // 瞄准箭头
     if (gameState === 'idle' || gameState === 'aiming') {
       if (!state.isAiming && gameState === 'idle') {
         state.aimAngle = -Math.PI / 2 + Math.sin(Date.now() / 300) * 0.8;
@@ -46403,45 +46680,117 @@ const CujuGamePage = ({ onBack }) => {
         onPointerUp={handleUp} onPointerCancel={handleUp}
       />
 
-      {/* Header UI */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, right: 15, display: 'flex', justifyContent: 'space-between', zIndex: 10 }}>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <div onClick={onBack} style={{ width: 40, height: 40, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', cursor: 'pointer' }}>←</div>
-          <div onClick={(e) => { e.stopPropagation(); handleUploadAvatar(); }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '0 15px', borderRadius: 20, display: 'flex', alignItems: 'center', cursor: 'pointer', fontSize: '0.85rem', border: '1px solid rgba(255,255,255,0.2)' }}>
-            更换头像
+      {/* 顶部 Header UI */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 14, right: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div onClick={onBack} style={{ width: 36, height: 36, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)' }}>←</div>
+          <div style={{ background: 'rgba(59, 66, 53, 0.75)', color: '#FFF', padding: '5px 12px', borderRadius: 16, fontSize: '0.82rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)' }}>
+            🚩 第 {stage} 关
           </div>
         </div>
-        <div onClick={() => setShowRules(true)} style={{ background: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: '0 15px', color: '#fff', display: 'flex', alignItems: 'center', fontSize: '0.9rem', cursor: 'pointer' }}>
-          玩法说明 ℹ️
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* 金库收益徽章 */}
+          <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.9) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.82rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+            <span>💰 金库收益:</span>
+            <span style={{ color: '#FFEB3B', fontSize: '0.92rem' }}>+{sessionCoins} 铢</span>
+          </div>
+          <div onClick={() => setShowRules(true)} style={{ background: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: '5px 10px', color: '#fff', fontSize: '0.8rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)' }}>
+            ℹ️ 规则
+          </div>
         </div>
       </div>
 
-      {/* Footer UI */}
+      {/* 底部 Footer UI */}
       <div style={{ position: 'absolute', bottom: '5%', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'none', zIndex: 10 }}>
-        <img src={avatarImg} style={{ width: 60, height: 60, borderRadius: '50%', border: '3px solid #fff', boxShadow: '0 4px 8px rgba(0,0,0,0.2)', marginBottom: 10, objectFit: 'cover' }} />
-        <div style={{ color: '#333', fontSize: '1.1rem', fontWeight: 'bold', textShadow: '0 1px 2px #fff', marginBottom: 5 }}>还有 {retries} 次踢球机会</div>
-        <div style={{ color: '#555', fontSize: '0.9rem' }}>点击并向后拖拽屏幕，踢出蹴鞠球</div>
+        <div style={{ position: 'relative', pointerEvents: 'auto' }}>
+          <img
+            src={avatarImg}
+            onClick={handleUploadAvatar}
+            style={{ width: 60, height: 60, borderRadius: '50%', border: '3px solid #fff', boxShadow: '0 4px 8px rgba(0,0,0,0.2)', marginBottom: 8, objectFit: 'cover', cursor: 'pointer' }}
+            title="点击更换蹴鞠球皮肤"
+          />
+          <span style={{ position: 'absolute', right: -4, bottom: 6, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '9px', padding: '1px 5px', borderRadius: 8 }}>换皮</span>
+        </div>
+        <div style={{ color: '#2C3528', fontSize: '1.05rem', fontWeight: 'bold', textShadow: '0 1px 3px rgba(255,255,255,0.8)', marginBottom: 3 }}>
+          还有 <span style={{ color: retries <= 2 ? '#D32F2F' : '#388E3C' }}>{retries}</span> 次踢球机会
+        </div>
+        <div style={{ color: '#555', fontSize: '0.82rem', background: 'rgba(255,255,255,0.6)', padding: '2px 10px', borderRadius: 10 }}>
+          反向拖拽屏幕蓄力瞄准，踢入红旗坑洞即得 5 铢
+        </div>
       </div>
 
-      {/* Result Modal */}
+      {/* 结算弹窗 */}
       {gameState === 'result' && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: 'linear-gradient(135deg, #F0F4C3 0%, #FFFFFF 100%)', padding: '40px 30px', borderRadius: 20, textAlign: 'center', position: 'relative', width: '70%', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
-            <img src={avatarImg} style={{ width: 80, height: 80, borderRadius: '50%', position: 'absolute', top: -40, left: '50%', transform: 'translateX(-50%)', border: '4px solid #fff', objectFit: 'cover' }} />
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'linear-gradient(135deg, #FFFDF8 0%, #F5EFEB 100%)', padding: '36px 24px 28px 24px', borderRadius: 24, textAlign: 'center', position: 'relative', width: '100%', maxWidth: 330, boxShadow: '0 12px 36px rgba(0,0,0,0.5)', border: '2px solid #E2D8CC' }}>
+            <img src={avatarImg} style={{ width: 72, height: 72, borderRadius: '50%', position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', border: '4px solid #fff', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }} />
 
             {isWin() ? (
               <>
-                <h2 style={{ color: '#D84315', fontSize: '2rem', margin: '30px 0 10px 0' }}>一击即中</h2>
-                <div style={{ background: '#fff', padding: '5px 15px', borderRadius: 20, color: '#333', display: 'inline-block', marginBottom: 30, boxShadow: '0 2px 5px rgba(0,0,0,0.1)', fontSize: '0.9rem' }}>“有我必胜！”</div>
-                <div>
-                  <button onClick={() => { setStage(s => s + 1); setRetries(5); }} style={{ padding: '12px 30px', background: '#D84315', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>进入第{stage + 1}关</button>
+                <h2 style={{ color: '#D84315', fontSize: '1.45rem', fontWeight: '800', margin: '20px 0 6px 0' }}>
+                  🎉 一击即中 · 突破第 {stage} 关！
+                </h2>
+                <div style={{ background: '#FFF', padding: '4px 14px', borderRadius: 16, color: '#6E6055', display: 'inline-block', marginBottom: 16, border: '1px solid #EAE3DA', fontSize: '0.82rem' }}>
+                  “百步穿杨，名不虚传！”
+                </div>
+
+                <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '20px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span>💰 本关通关赏金：</span>
+                    <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+5 五铢钱</span>
+                  </div>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                    <span>🏆 本局累计收益：</span>
+                    <span style={{ color: '#8C4A1E', fontWeight: 'bold' }}>+{sessionCoins} 铢</span>
+                  </div>
+                  <div style={{ fontSize: '0.74rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '4px', marginTop: '4px' }}>
+                    ✨ 赏金已实时存入【隐私与安全-我的金库】
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button
+                    onClick={() => { setStage(s => s + 1); setRetries(5); }}
+                    style={{ padding: '12px', background: 'linear-gradient(135deg, #D84315 0%, #BF360C 100%)', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(216,67,21,0.4)' }}
+                  >
+                    进入第 {stage + 1} 关 ➔
+                  </button>
+                  <button
+                    onClick={onBack}
+                    style={{ padding: '10px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.85rem', cursor: 'pointer' }}
+                  >
+                    见好就收，返回休整
+                  </button>
                 </div>
               </>
             ) : (
               <>
-                <h2 style={{ color: '#455A64', fontSize: '1.5rem', margin: '30px 0 20px 0' }}>再接再厉</h2>
-                <div>
-                  <button onClick={() => { setRetries(5); loadLevel(stage); }} style={{ padding: '12px 30px', background: '#455A64', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>再试一次</button>
+                <h2 style={{ color: '#455A64', fontSize: '1.35rem', fontWeight: '800', margin: '20px 0 10px 0' }}>
+                  😔 气力耗竭
+                </h2>
+                <p style={{ color: '#78909C', fontSize: '0.82rem', marginBottom: 16 }}>
+                  未能将球踢入坑洞，第 {stage} 关试炼失败
+                </p>
+
+                <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '20px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
+                  <span>💰 本局已得收益：</span>
+                  <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+{sessionCoins} 铢</span>（已入金库）
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <button
+                    onClick={() => { setRetries(5); loadLevel(stage); }}
+                    style={{ padding: '12px', background: '#455A64', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.92rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(69,90,100,0.3)' }}
+                  >
+                    重试本关
+                  </button>
+                  <button
+                    onClick={onBack}
+                    style={{ padding: '10px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.85rem', cursor: 'pointer' }}
+                  >
+                    返回修武扬文
+                  </button>
                 </div>
               </>
             )}
@@ -46449,13 +46798,18 @@ const CujuGamePage = ({ onBack }) => {
         </div>
       )}
 
-      {/* Rules Modal */}
+      {/* 规则说明弹窗 */}
       {showRules && (
-        <div onClick={() => setShowRules(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-          <div style={{ background: '#fff', padding: 30, borderRadius: 16, width: '75%', textAlign: 'center' }} onClick={e => e.stopPropagation()}>
-            <h3 style={{ margin: '0 0 20px 0', color: '#333' }}>蹴鞠训练玩法</h3>
-            <p style={{ textAlign: 'left', lineHeight: 1.6, color: '#555', margin: '0 0 25px 0' }}>1. 观察围栏，寻找反弹角度。<br />2. 触摸屏幕并<strong style={{ color: '#D84315' }}>反向拖拽</strong>调整瞄准箭头，松开踢出。<br />3. 在规定次数内将球踢入终点红旗坑洞即可过关。</p>
-            <button onClick={() => setShowRules(false)} style={{ padding: '10px 24px', borderRadius: 20, border: 'none', background: '#4CAF50', color: '#fff', fontSize: '1rem', cursor: 'pointer' }}>知道了</button>
+        <div onClick={() => setShowRules(false)} style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)', zIndex: 500, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: '#FFFDF8', padding: 28, borderRadius: 20, maxWidth: 320, width: '100%', textAlign: 'center', border: '1px solid #EAE3DA' }} onClick={e => e.stopPropagation()}>
+            <h3 style={{ margin: '0 0 14px 0', color: '#333', fontSize: '1.15rem', fontWeight: 'bold' }}>📜 蹴鞠训练玩法</h3>
+            <p style={{ textAlign: 'left', lineHeight: 1.65, color: '#5A4638', margin: '0 0 20px 0', fontSize: '0.84rem' }}>
+              1. 观察围栏，寻找反弹与折射角度。<br />
+              2. 触摸屏幕并<strong style={{ color: '#D84315' }}>反向拖拽</strong>调整瞄准箭头，松开踢出蹴鞠。<br />
+              3. 在规定次数内将球踢入终点红旗坑洞即可破关。<br />
+              4. 💰 <strong style={{ color: '#D6724B' }}>通关赏金</strong>：每成功突破一关，立得 <strong>5 元五铢钱</strong>，自动同步并记入【我的金库】！
+            </p>
+            <button onClick={() => setShowRules(false)} style={{ padding: '10px 28px', borderRadius: 20, border: 'none', background: 'linear-gradient(135deg, #59685a 0%, #435044 100%)', color: '#fff', fontSize: '0.9rem', fontWeight: 'bold', cursor: 'pointer' }}>明白了</button>
           </div>
         </div>
       )}
@@ -46463,7 +46817,7 @@ const CujuGamePage = ({ onBack }) => {
   );
 };
 
-// 射箭训练 (滑翔忍者击落)
+// 射箭训练 (滑翔忍者击落 - 关卡递增赏金系统: 2, 4, 6, 8, 10... 铢)
 const ArcheryGamePage = ({ onBack }) => {
   const { useState, useEffect, useRef } = React;
   const [visible, setVisible] = useState(false);
@@ -46473,6 +46827,10 @@ const ArcheryGamePage = ({ onBack }) => {
   const [lives, setLives] = useState(3);
   const targetScore = stage * 30 + 20;
   const [gameState, setGameState] = useState('playing'); // playing, result
+
+  // 金钱累计系统 (每关递增: 第1关2铢，第2关4铢，第3关6铢，第N关 2*N 铢)
+  const [sessionCoins, setSessionCoins] = useState(0);
+  const [hasAwardedThisStage, setHasAwardedThisStage] = useState(false);
   const [showCharModal, setShowCharModal] = useState(false);
   const [char1Img, setChar1Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOZFqgEELK_9KjEfY9YRFQpcjY3ImbQAC4h4AArHjCFSz5XgbljLw0T0E.png");
   const [char2Img, setChar2Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOYRqgEC1Mz_OffMtgithgxQBrCvDXwAC1R4AArHjCFTKnROMk9dJ3j0E.png");
@@ -46633,6 +46991,28 @@ const ArcheryGamePage = ({ onBack }) => {
     }
   };
 
+  // 通关递增赏金结算 (第1关2铢, 第2关4铢, 第3关6铢...)
+  const awardArcheryStageWin = (curStage) => {
+    if (hasAwardedThisStage) return;
+    setHasAwardedThisStage(true);
+
+    const reward = curStage * 2;
+    setSessionCoins(prev => prev + reward);
+
+    try {
+      const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+      localStorage.setItem("farm_coins", (currentCoins + reward).toString());
+    } catch (e) {}
+
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord(
+        "income",
+        reward,
+        `射箭训练 · 突破第${curStage}关递增赏金 (+${reward}铢)`
+      );
+    }
+  };
+
   // Game Loop
   useEffect(() => {
     let reqId;
@@ -46654,7 +47034,10 @@ const ArcheryGamePage = ({ onBack }) => {
     const loop = (time) => {
       reqId = requestAnimationFrame(loop);
       if (gameState !== 'playing') {
-        render(ctx); // render static result background
+        if (gameState === 'result' && stateRef.current.score >= targetScore && stateRef.current.lives > 0) {
+          awardArcheryStageWin(stage);
+        }
+        render(ctx);
         return;
       }
 
@@ -47091,9 +47474,13 @@ const ArcheryGamePage = ({ onBack }) => {
         onPointerMove={handlePointerMove}
       />
 
-      {/* Header UI - Top Left Back */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, zIndex: 10 }}>
-        <div onClick={onBack} style={{ width: 40, height: 40, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', cursor: 'pointer' }}>←</div>
+      {/* Header UI - Top Left Back & Level & Coins */}
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, display: 'flex', alignItems: 'center', gap: '8px', zIndex: 10 }}>
+        <div onClick={onBack} style={{ width: 38, height: 38, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)' }}>←</div>
+        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.9) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span>💰 金库收益:</span>
+          <span style={{ color: '#FFEB3B', fontSize: '0.9rem' }}>+{sessionCoins} 铢</span>
+        </div>
       </div>
 
       {/* Top Center Timer */}
@@ -47152,17 +47539,38 @@ const ArcheryGamePage = ({ onBack }) => {
 
       {/* Result Modal */}
       {gameState === 'result' && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s' }}>
-          <div style={{ background: 'linear-gradient(135deg, #F5E6C8 0%, #FFFFFF 100%)', padding: '40px 30px', borderRadius: 20, textAlign: 'center', position: 'relative', width: '75%', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '4px solid #8D6E63' }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'linear-gradient(135deg, #FFFDF8 0%, #F5E8D2 100%)', padding: '32px 24px', borderRadius: 24, textAlign: 'center', position: 'relative', width: '100%', maxWidth: 330, boxShadow: '0 12px 36px rgba(0,0,0,0.5)', border: '2px solid #C49C58' }}>
 
-            <h2 style={{ color: score >= targetScore && lives > 0 ? '#D84315' : '#3E2723', fontSize: '1.8rem', margin: '10px 0 20px 0' }}>
-              {lives <= 0 ? '生命耗尽' : (score >= targetScore ? '挑战成功' : '挑战失败')}
+            <h2 style={{ color: score >= targetScore && lives > 0 ? '#D84315' : '#3E2723', fontSize: '1.5rem', fontWeight: '800', margin: '0 0 6px 0' }}>
+              {lives <= 0 ? '生命耗尽 · 试炼失败' : (score >= targetScore ? `🎉 突破第 ${stage} 关！` : '未达标 · 挑战失败')}
             </h2>
-            <div style={{ fontSize: '1.2rem', color: '#5D4037', marginBottom: '10px' }}>本次击落总分 (目标:{targetScore})</div>
-            <div style={{ fontSize: '3rem', color: '#D84315', fontWeight: 'bold', marginBottom: '10px', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{score}</div>
-            <div style={{ fontSize: '1rem', color: '#5D4037', marginBottom: '25px' }}>剩余生命: {lives} / 3</div>
+            <div style={{ fontSize: '0.82rem', color: '#8D6E63', marginBottom: '12px' }}>
+              击落得分: <span style={{ color: '#D84315', fontWeight: 'bold', fontSize: '1.1rem' }}>{score}</span> (目标: {targetScore})
+            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            {score >= targetScore && lives > 0 ? (
+              <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '20px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>💰 本关递增赏金：</span>
+                  <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${stage * 2} 五铢钱</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>🏆 本局累计收益：</span>
+                  <span style={{ color: '#8C4A1E', fontWeight: 'bold' }}>+${sessionCoins + (hasAwardedThisStage ? 0 : stage * 2)} 铢</span>
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '4px', marginTop: '4px' }}>
+                  ✨ 递增赏金已实时存入【隐私与安全-我的金库】
+                </div>
+              </div>
+            ) : (
+              <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '20px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
+                <span>💰 本局已得收益：</span>
+                <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${sessionCoins} 铢</span>（已入金库）
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {score >= targetScore && lives > 0 ? (
                 <button onClick={() => {
                   setStage(s => s + 1);
@@ -47170,27 +47578,37 @@ const ArcheryGamePage = ({ onBack }) => {
                   setTimeLeft(60);
                   setScore(0);
                   setLives(3);
+                  setHasAwardedThisStage(false);
+                  stateRef.current.score = 0;
                   stateRef.current.lives = 3;
                   stateRef.current.ninjas = [];
                   stateRef.current.arrows = [];
                   stateRef.current.particles = [];
                   stateRef.current.popups = [];
-                }} style={{ padding: '12px 30px', background: '#D84315', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>进入第{stage + 1}关</button>
+                }} style={{ padding: '12px', background: 'linear-gradient(135deg, #D84315 0%, #BF360C 100%)', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(216,67,21,0.4)' }}>
+                  进入第{stage + 1}关 (赏金${(stage + 1) * 2}铢) ➔
+                </button>
               ) : (
                 <button onClick={() => {
                   setGameState('playing');
                   setTimeLeft(60);
                   setScore(0);
                   setLives(3);
+                  setHasAwardedThisStage(false);
+                  stateRef.current.score = 0;
                   stateRef.current.lives = 3;
                   stateRef.current.ninjas = [];
                   stateRef.current.arrows = [];
                   stateRef.current.particles = [];
                   stateRef.current.popups = [];
-                }} style={{ padding: '12px 30px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>再试一次</button>
+                }} style={{ padding: '12px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.92rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(76,175,80,0.3)' }}>
+                  重试本关
+                </button>
               )}
 
-              <button onClick={onBack} style={{ padding: '12px 30px', background: 'transparent', color: '#795548', border: '2px solid #795548', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer' }}>返回修武扬文</button>
+              <button onClick={onBack} style={{ padding: '10px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.85rem', cursor: 'pointer' }}>
+                返回修武扬文
+              </button>
             </div>
           </div>
         </div>
@@ -47371,7 +47789,7 @@ const ArcheryGamePage = ({ onBack }) => {
   );
 };
 
-// 敏捷训练 (农田保卫战 / 打地鼠)
+// 敏捷训练 (农田保卫战 - 关卡递增赏金系统: 2, 4, 6, 8, 10... 铢)
 const AgilityGamePage = ({ onBack }) => {
   const { useState, useEffect, useRef } = React;
   const [visible, setVisible] = useState(false);
@@ -47381,6 +47799,10 @@ const AgilityGamePage = ({ onBack }) => {
   const [lives, setLives] = useState(3);
   const targetScore = stage * 30 + 10;
   const [gameState, setGameState] = useState('playing'); // playing, result
+
+  // 金钱累计系统 (每关递增: 第1关2铢，第2关4铢，第3关6铢，第N关 2*N 铢)
+  const [sessionCoins, setSessionCoins] = useState(0);
+  const [hasAwardedThisStage, setHasAwardedThisStage] = useState(false);
   const [showCharModal, setShowCharModal] = useState(false);
   const [thief1IdleImg, setThief1IdleImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_iBqe9Gsm0GFagZ1TDPzgl4WB1QlagACPicAAkWI4FeNig-3o2880j0E.png");
   const [thief1HitImg, setThief1HitImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_iNqe9HOTh-UDIfYdb09UZCX6UeX0AACQScAAkWI4FeogY0oJaqQsz0E.png");
@@ -47560,12 +47982,37 @@ const AgilityGamePage = ({ onBack }) => {
 
     stateRef.current.lastTime = performance.now();
 
-    const loop = (time) => {
-      reqId = requestAnimationFrame(loop);
-      if (gameState !== 'playing') {
-        render(ctx);
-        return;
+  // 敏捷通关递增赏金结算 (第1关2铢, 第2关4铢, 第3关6铢...)
+  const awardAgilityStageWin = (curStage) => {
+    if (hasAwardedThisStage) return;
+    setHasAwardedThisStage(true);
+
+    const reward = curStage * 2;
+    setSessionCoins(prev => prev + reward);
+
+    try {
+      const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+      localStorage.setItem("farm_coins", (currentCoins + reward).toString());
+    } catch (e) {}
+
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord(
+        "income",
+        reward,
+        `敏捷训练 · 突破第${curStage}关递增赏金 (+${reward}铢)`
+      );
+    }
+  };
+
+  const loop = (time) => {
+    reqId = requestAnimationFrame(loop);
+    if (gameState !== 'playing') {
+      if (gameState === 'result' && stateRef.current && score >= targetScore && lives > 0) {
+        awardAgilityStageWin(stage);
       }
+      render(ctx);
+      return;
+    }
       const dt = Math.min((time - stateRef.current.lastTime) / 1000, 0.05);
       stateRef.current.lastTime = time;
       update(dt);
@@ -47833,17 +48280,21 @@ const AgilityGamePage = ({ onBack }) => {
 
       {/* Header UI */}
       <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 12, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div onClick={onBack} style={{ width: 36, height: 36, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer' }}>←</div>
+        <div onClick={onBack} style={{ width: 36, height: 36, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)' }}>←</div>
+        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.9) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.78rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span>💰 金库收益:</span>
+          <span style={{ color: '#FFEB3B', fontSize: '0.88rem' }}>+{sessionCoins} 铢</span>
+        </div>
         <button
           onClick={() => setShowCharModal(true)}
           style={{
-            height: 36,
+            height: 32,
             padding: '0 10px',
             background: 'rgba(255, 255, 255, 0.92)',
             border: '1.5px solid #C49C58',
-            borderRadius: 18,
+            borderRadius: 16,
             color: '#5D4037',
-            fontSize: '0.78rem',
+            fontSize: '0.75rem',
             fontWeight: 'bold',
             cursor: 'pointer',
             boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
@@ -48058,17 +48509,38 @@ const AgilityGamePage = ({ onBack }) => {
 
       {/* Result Modal */}
       {gameState === 'result' && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s' }}>
-          <div style={{ background: 'linear-gradient(135deg, #F5E6C8 0%, #FFFFFF 100%)', padding: '40px 30px', borderRadius: 20, textAlign: 'center', position: 'relative', width: '75%', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '4px solid #8D6E63' }}>
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'linear-gradient(135deg, #FFFDF8 0%, #F5E8D2 100%)', padding: '32px 24px', borderRadius: 24, textAlign: 'center', position: 'relative', width: '100%', maxWidth: 330, boxShadow: '0 12px 36px rgba(0,0,0,0.5)', border: '2px solid #C49C58' }}>
 
-            <h2 style={{ color: score >= targetScore && lives > 0 ? '#D84315' : '#3E2723', fontSize: '1.8rem', margin: '10px 0 20px 0' }}>
-              {score >= targetScore && lives > 0 ? '挑战成功' : '挑战失败'}
+            <h2 style={{ color: score >= targetScore && lives > 0 ? '#D84315' : '#3E2723', fontSize: '1.5rem', fontWeight: '800', margin: '0 0 6px 0' }}>
+              {lives <= 0 ? '生命耗尽 · 试炼失败' : (score >= targetScore ? `🎉 突破第 ${stage} 关！` : '未达标 · 挑战失败')}
             </h2>
-            <div style={{ fontSize: '1.2rem', color: '#5D4037', marginBottom: '10px' }}>本次保卫得分 (目标:{targetScore})</div>
-            <div style={{ fontSize: '3rem', color: '#D84315', fontWeight: 'bold', marginBottom: '10px', textShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>{score}</div>
-            <div style={{ fontSize: '1rem', color: '#5D4037', marginBottom: '30px' }}>剩余生命: {lives} / 3</div>
+            <div style={{ fontSize: '0.82rem', color: '#8D6E63', marginBottom: '12px' }}>
+              保卫得分: <span style={{ color: '#D84315', fontWeight: 'bold', fontSize: '1.1rem' }}>{score}</span> (目标: {targetScore})
+            </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            {score >= targetScore && lives > 0 ? (
+              <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '20px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>💰 本关递增赏金：</span>
+                  <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${stage * 2} 五铢钱</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>🏆 本局累计收益：</span>
+                  <span style={{ color: '#8C4A1E', fontWeight: 'bold' }}>+${sessionCoins + (hasAwardedThisStage ? 0 : stage * 2)} 铢</span>
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '4px', marginTop: '4px' }}>
+                  ✨ 递增赏金已实时存入【隐私与安全-我的金库】
+                </div>
+              </div>
+            ) : (
+              <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '20px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
+                <span>💰 本局已得收益：</span>
+                <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${sessionCoins} 铢</span>（已入金库）
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {score >= targetScore && lives > 0 ? (
                 <button onClick={() => {
                   setStage(s => s + 1);
@@ -48076,19 +48548,27 @@ const AgilityGamePage = ({ onBack }) => {
                   setTimeLeft(60);
                   setScore(0);
                   setLives(3);
+                  setHasAwardedThisStage(false);
                   stateRef.current.grid.forEach(c => { c.state = 'idle'; c.yOffset = 0; });
-                }} style={{ padding: '12px 30px', background: '#D84315', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>进入第{stage + 1}关</button>
+                }} style={{ padding: '12px', background: 'linear-gradient(135deg, #D84315 0%, #BF360C 100%)', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(216,67,21,0.4)' }}>
+                  进入第{stage + 1}关 (赏金${(stage + 1) * 2}铢) ➔
+                </button>
               ) : (
                 <button onClick={() => {
                   setGameState('playing');
                   setTimeLeft(60);
                   setScore(0);
                   setLives(3);
+                  setHasAwardedThisStage(false);
                   stateRef.current.grid.forEach(c => { c.state = 'idle'; c.yOffset = 0; });
-                }} style={{ padding: '12px 30px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>重新挑战</button>
+                }} style={{ padding: '12px', background: '#4CAF50', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.92rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(76,175,80,0.3)' }}>
+                  重新挑战本关
+                </button>
               )}
 
-              <button onClick={onBack} style={{ padding: '12px 30px', background: 'transparent', color: '#795548', border: '2px solid #795548', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer' }}>返回修武扬文</button>
+              <button onClick={onBack} style={{ padding: '10px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.85rem', cursor: 'pointer' }}>
+                返回修武扬文
+              </button>
             </div>
           </div>
         </div>
@@ -48097,7 +48577,7 @@ const AgilityGamePage = ({ onBack }) => {
   );
 };
 
-// 划船训练 (双人踩点竞速)
+// 划船训练 (双人踩点竞速 - 关卡递增赏金系统: 5, 10, 15, 20, 25... 铢)
 const RowingGamePage = ({ onBack }) => {
   const { useState, useEffect, useRef } = React;
   const [visible, setVisible] = useState(false);
@@ -48107,6 +48587,10 @@ const RowingGamePage = ({ onBack }) => {
   const [stage, setStage] = useState(1);
   const [collectedCount, setCollectedCount] = useState(0);
   const targetCount = stage * 5 + 5;
+
+  // 金钱累计系统 (每关递增: 第1关5铢，第2关10铢，第3关15铢，第N关 5*N 铢)
+  const [sessionCoins, setSessionCoins] = useState(0);
+  const [hasAwardedThisStage, setHasAwardedThisStage] = useState(false);
   const [char1Img, setChar1Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOZFqgEELK_9KjEfY9YRFQpcjY3ImbQAC4h4AArHjCFSz5XgbljLw0T0E.png");
   const [char2Img, setChar2Img] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOYRqgEC1Mz_OffMtgithgxQBrCvDXwAC1R4AArHjCFTKnROMk9dJ3j0E.png");
   const canvasRef = useRef(null);
@@ -48231,12 +48715,37 @@ const RowingGamePage = ({ onBack }) => {
 
     stateRef.current.lastTime = performance.now();
 
-    const loop = (time) => {
-      reqId = requestAnimationFrame(loop);
-      if (gameState !== 'playing') {
-        render(ctx);
-        return;
+  // 划船通关递增赏金结算 (第1关5铢, 第2关10铢, 第3关15铢...)
+  const awardRowingStageWin = (curStage) => {
+    if (hasAwardedThisStage) return;
+    setHasAwardedThisStage(true);
+
+    const reward = curStage * 5;
+    setSessionCoins(prev => prev + reward);
+
+    try {
+      const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+      localStorage.setItem("farm_coins", (currentCoins + reward).toString());
+    } catch (e) {}
+
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord(
+        "income",
+        reward,
+        `划船训练 · 突破第${curStage}关递增赏金 (+${reward}铢)`
+      );
+    }
+  };
+
+  const loop = (time) => {
+    reqId = requestAnimationFrame(loop);
+    if (gameState !== 'playing') {
+      if (gameState === 'result' && collectedCount >= targetCount) {
+        awardRowingStageWin(stage);
       }
+      render(ctx);
+      return;
+    }
       const dt = Math.min((time - stateRef.current.lastTime) / 1000, 0.05);
       stateRef.current.lastTime = time;
       update(dt);
@@ -48629,8 +49138,12 @@ const RowingGamePage = ({ onBack }) => {
       <canvas ref={canvasRef} width={360} height={640} style={{ width: '100%', height: '100%', touchAction: 'none' }} />
 
       {/* Top Bar */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, zIndex: 10 }}>
-        <div onClick={onBack} style={{ width: 40, height: 40, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem', cursor: 'pointer' }}>←</div>
+      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, display: 'flex', alignItems: 'center', gap: '8px', zIndex: 10 }}>
+        <div onClick={onBack} style={{ width: 38, height: 38, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)' }}>←</div>
+        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.9) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.78rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span>💰 金库收益:</span>
+          <span style={{ color: '#FFEB3B', fontSize: '0.88rem' }}>+{sessionCoins} 铢</span>
+        </div>
       </div>
       <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)', zIndex: 10, background: 'rgba(255,255,255,0.8)', padding: '8px 16px', borderRadius: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', border: '2px solid #D7CCC8', textAlign: 'center' }}>
         <div style={{ fontSize: '1.3rem', color: '#5D4037', fontWeight: 'bold' }}>{formatTime(timeLeft)}</div>
@@ -48679,15 +49192,37 @@ const RowingGamePage = ({ onBack }) => {
 
       {/* Result Modal */}
       {gameState === 'result' && (
-        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.7)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', animation: 'fadeIn 0.3s' }}>
-          <div style={{ background: 'linear-gradient(135deg, #E0F7FA 0%, #FFFFFF 100%)', padding: '40px 30px', borderRadius: 20, textAlign: 'center', position: 'relative', width: '75%', boxShadow: '0 10px 30px rgba(0,0,0,0.5)', border: '4px solid #00ACC1' }}>
-            <h2 style={{ color: collectedCount >= targetCount ? '#00838F' : '#D32F2F', fontSize: '1.8rem', margin: '10px 0 20px 0' }}>
-              {collectedCount >= targetCount ? '抵达终点！' : '收集不足...'}
+        <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+          <div style={{ background: 'linear-gradient(135deg, #FFFDF8 0%, #E0F7FA 100%)', padding: '32px 24px', borderRadius: 24, textAlign: 'center', position: 'relative', width: '100%', maxWidth: 330, boxShadow: '0 12px 36px rgba(0,0,0,0.5)', border: '2px solid #00ACC1' }}>
+            <h2 style={{ color: collectedCount >= targetCount ? '#00838F' : '#D32F2F', fontSize: '1.45rem', fontWeight: '800', margin: '0 0 6px 0' }}>
+              {collectedCount >= targetCount ? `🎉 抵达终点 · 突破第 ${stage} 关！` : '采集不足 · 未达标'}
             </h2>
-            <div style={{ fontSize: '1.2rem', color: '#006064', marginBottom: '10px' }}>第 {stage} 关耗时</div>
-            <div style={{ fontSize: '3rem', color: '#00ACC1', fontWeight: 'bold', marginBottom: '10px', textShadow: '0 2px 4px rgba(0,0,0,0.1)' }}>{formatTime(timeLeft)}</div>
-            <div style={{ fontSize: '1rem', color: '#5D4037', marginBottom: '30px' }}>采集数量: {collectedCount} / {targetCount}</div>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+            <div style={{ fontSize: '0.82rem', color: '#006064', marginBottom: '12px' }}>
+              本关耗时: <span style={{ fontWeight: 'bold' }}>{formatTime(timeLeft)}</span> | 采集: <span style={{ fontWeight: 'bold', color: '#D84315' }}>{collectedCount}</span> / {targetCount} 🌸
+            </div>
+
+            {collectedCount >= targetCount ? (
+              <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '20px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>💰 本关递增赏金：</span>
+                  <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${stage * 5} 五铢钱</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <span>🏆 本局累计收益：</span>
+                  <span style={{ color: '#8C4A1E', fontWeight: 'bold' }}>+${sessionCoins + (hasAwardedThisStage ? 0 : stage * 5)} 铢</span>
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '4px', marginTop: '4px' }}>
+                  ✨ 递增赏金已实时存入【隐私与安全-我的金库】
+                </div>
+              </div>
+            ) : (
+              <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '20px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
+                <span>💰 本局已得收益：</span>
+                <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${sessionCoins} 铢</span>（已入金库）
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {collectedCount >= targetCount ? (
                 <button onClick={() => {
                   setStage(s => s + 1);
@@ -48695,22 +49230,30 @@ const RowingGamePage = ({ onBack }) => {
                   setTimeLeft(0);
                   setDistance((stage + 1) * 1000);
                   setCollectedCount(0);
+                  setHasAwardedThisStage(false);
                   stateRef.current.boatX = 0;
                   stateRef.current.obstacles = [];
                   stateRef.current.bubbles = [];
-                }} style={{ padding: '12px 30px', background: '#00ACC1', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>进入下一关</button>
+                }} style={{ padding: '12px', background: 'linear-gradient(135deg, #00ACC1 0%, #00838F 100%)', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(0,172,193,0.4)' }}>
+                  进入第{stage + 1}关 (赏金${(stage + 1) * 5}铢) ➔
+                </button>
               ) : (
                 <button onClick={() => {
                   setGameState('playing');
                   setTimeLeft(0);
                   setDistance(stage * 1000);
                   setCollectedCount(0);
+                  setHasAwardedThisStage(false);
                   stateRef.current.boatX = 0;
                   stateRef.current.obstacles = [];
                   stateRef.current.bubbles = [];
-                }} style={{ padding: '12px 30px', background: '#D32F2F', color: '#fff', border: 'none', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.2)' }}>重新挑战</button>
+                }} style={{ padding: '12px', background: '#D32F2F', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.92rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(211,47,47,0.3)' }}>
+                  重新挑战本关
+                </button>
               )}
-              <button onClick={onBack} style={{ padding: '12px 30px', background: 'transparent', color: '#00838F', border: '2px solid #00838F', borderRadius: 25, fontSize: '1.1rem', cursor: 'pointer' }}>返回修武扬文</button>
+              <button onClick={onBack} style={{ padding: '10px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.85rem', cursor: 'pointer' }}>
+                返回修武扬文
+              </button>
             </div>
           </div>
         </div>
