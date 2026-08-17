@@ -8059,10 +8059,15 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
   const [selectedPost, setSelectedPost] = React.useState(null);
   const [showPostDetail, setShowPostDetail] = React.useState(false);
   const [showPostPage, setShowPostPage] = React.useState(false);
-  // 发布帖子状态
+  // 发布帖子与筛选状态
   const [showCreatePostModal, setShowCreatePostModal] = React.useState(false);
   const [postTitle, setPostTitle] = React.useState("");
   const [postContent, setPostContent] = React.useState("");
+  const [postSection, setPostSection] = React.useState("");
+  const [selectedSectionFilter, setSelectedSectionFilter] = React.useState("全部");
+  const [likedPosts, setLikedPosts] = React.useState({});
+  const [favoritesMap, setFavoritesMap] = React.useState({});
+  const [isReloading, setIsReloading] = React.useState(false);
 
   // 缓存相关
   const getCacheKey = () => {
@@ -8576,6 +8581,11 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
   const handleCreatePost = () => {
     setPostTitle("");
     setPostContent("");
+    setPostSection(
+      selectedSectionFilter !== "全部"
+        ? selectedSectionFilter
+        : (areaContent.sections && areaContent.sections[0]) || "综合",
+    );
     setShowCreatePostModal(true);
   };
 
@@ -8587,14 +8597,18 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
     }
 
     try {
+      const targetSection =
+        postSection || (areaContent.sections && areaContent.sections[0]) || "综合";
       // 创建新帖子
       const newPost = {
-        id: Date.now(),
-        title: postTitle,
-        content: postContent,
-        date: new Date().toLocaleDateString(),
+        id: generatePostId(Date.now()),
+        title: postTitle.trim(),
+        content: postContent.trim(),
+        date: "刚刚",
+        section: targetSection,
         likes: 0,
         comments: 0,
+        areaContent: areaContent,
       };
 
       // 更新区域内容，添加新帖子
@@ -9269,70 +9283,149 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
     loadContent();
   }, [selectedArea]);
 
+  const getAreaTheme = (name) => {
+    switch (name) {
+      case "人文区":
+        return {
+          icon: "ph-bold ph-book-open-text",
+          gradient: "linear-gradient(135deg, #3C4858 0%, #242D3C 100%)",
+          accent: "#D6724B",
+          badge: "文墨风雅",
+          tagline: "研读经典 · 墨客论道 · 雅士共赏",
+        };
+      case "美食区":
+        return {
+          icon: "ph-bold ph-cooking-pot",
+          gradient: "linear-gradient(135deg, #C26322 0%, #8A3E12 100%)",
+          accent: "#D97706",
+          badge: "珍馐肆",
+          tagline: "舌尖风味 · 佳肴食单 · 寻味广陵",
+        };
+      case "手工区":
+        return {
+          icon: "ph-bold ph-hammer",
+          gradient: "linear-gradient(135deg, #2D6A4F 0%, #1B4332 100%)",
+          accent: "#2D6A4F",
+          badge: "天工坊",
+          tagline: "巧思灵手 · 机关造物 · 匠心传承",
+        };
+      case "宠物区":
+        return {
+          icon: "ph-bold ph-paw-print",
+          gradient: "linear-gradient(135deg, #B85B78 0%, #8C3751 100%)",
+          accent: "#EC4899",
+          badge: "百灵园",
+          tagline: "灵宠相伴 · 萌趣生欢 · 驯养心得",
+        };
+      case "体育区":
+        return {
+          icon: "ph-bold ph-sword",
+          gradient: "linear-gradient(135deg, #2B5C8F 0%, #1A3959 100%)",
+          accent: "#3B82F6",
+          badge: "演武场",
+          tagline: "骑射身法 · 武艺切磋 · 健体强身",
+        };
+      case "理财区":
+        return {
+          icon: "ph-bold ph-coins",
+          gradient: "linear-gradient(135deg, #A87627 0%, #6E490D 100%)",
+          accent: "#CA8A04",
+          badge: "司金阁",
+          tagline: "生财有道 · 市肆筹谋 · 经世济民",
+        };
+      case "音乐区":
+        return {
+          icon: "ph-bold ph-music-notes",
+          gradient: "linear-gradient(135deg, #6B4E8C 0%, #462E61 100%)",
+          accent: "#8B5CF6",
+          badge: "聆音楼",
+          tagline: "琴瑟和鸣 · 古乐新调 · 余音绕梁",
+        };
+      case "医疗区":
+        return {
+          icon: "ph-bold ph-first-aid",
+          gradient: "linear-gradient(135deg, #2E7964 0%, #1B4D3F 100%)",
+          accent: "#10B981",
+          badge: "百草堂",
+          tagline: "岐黄医理 · 养生温补 · 辨证施治",
+        };
+      default:
+        return {
+          icon: "ph-bold ph-chats-circle",
+          gradient: "linear-gradient(135deg, #4A5568 0%, #2D3748 100%)",
+          accent: "#D6724B",
+          badge: "隐鸢特区",
+          tagline: "天下秘闻 · 市井杂谈 · 闲居漫话",
+        };
+    }
+  };
+
+  const getPostAuthor = (postId, index) => {
+    const authors = [
+      { name: "广陵探微客", badge: "楼主", color: "#D6724B" },
+      { name: "隐鸢阁奉使", badge: "同僚", color: "#4A5568" },
+      { name: "青囊采药童", badge: "名士", color: "#2D6A4F" },
+      { name: "江左闲步客", badge: "常客", color: "#C26322" },
+      { name: "绣衣掌簿司", badge: "密探", color: "#6B4E8C" },
+      { name: "观星台少客", badge: "知交", color: "#2B5C8F" },
+    ];
+    const hash =
+      typeof postId === "number"
+        ? postId
+        : String(postId)
+            .split("")
+            .reduce((acc, c) => acc + c.charCodeAt(0), 0) + index;
+    return authors[Math.abs(hash) % authors.length];
+  };
+
+  const currentTheme = getAreaTheme(selectedArea?.name);
+
+  // 筛选后的条目列表
+  const filteredItems = (areaContent.items || []).filter((item, index) => {
+    if (selectedSectionFilter === "全部") return true;
+    const itemSection =
+      item.section ||
+      (areaContent.sections &&
+        areaContent.sections[index % areaContent.sections.length]) ||
+      "综合";
+    return itemSection === selectedSectionFilter;
+  });
+
   if (loading) {
     return (
-      <div
-        className="ad-container"
-        style={{ animation: "fadeIn 0.4s ease-out" }}
-      >
-        {/* 顶部导航 */}
+      <div className="ad-container" style={{ animation: "fadeIn 0.3s ease-out" }}>
         <div className="ad-nav">
-          <div onClick={onBack} style={{ cursor: "pointer", padding: "10px" }}>
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#333"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
+          <button
+            onClick={onBack}
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-white/70 shadow-sm border border-black/5 active:scale-95 transition-transform"
+          >
+            <i className="ph-bold ph-arrow-left text-lg text-[#333]"></i>
+          </button>
+          <div className="flex-1 text-center font-bold text-[#333] text-base">
+            {selectedArea?.name || "区域详情"}
           </div>
-          <div style={{ flex: 1 }}></div>
-          <div style={{ cursor: "pointer", padding: "10px" }}>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#333"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-              <polyline points="16 6 12 2 8 6"></polyline>
-              <line x1="12" y1="2" x2="12" y2="15"></line>
-            </svg>
-          </div>
+          <div className="w-9 h-9"></div>
         </div>
-        <div
-          className="ad-scroll-content no-scrollbar"
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "80vh",
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "24px", marginBottom: "16px" }}>
-              加载中...
-            </div>
-            <div
-              style={{
-                width: "40px",
-                height: "40px",
-                border: "4px solid #f3f3f3",
-                borderTop: "4px solid #3498db",
-                borderRadius: "50%",
-                animation: "spin 1s linear infinite",
-                margin: "0 auto",
-              }}
-            ></div>
+        <div className="ad-scroll-content no-scrollbar">
+          {/* 顶部骨架卡片 */}
+          <div className="ad-skeleton-card mb-4" style={{ height: "140px" }}>
+            <div className="ad-skeleton-line" style={{ width: "40%", height: "20px" }}></div>
+            <div className="ad-skeleton-line" style={{ width: "70%" }}></div>
+            <div className="ad-skeleton-line" style={{ width: "90%" }}></div>
+          </div>
+          {/* 列表骨架卡片 */}
+          <div className="ad-post-feed">
+            {[1, 2, 3].map((n) => (
+              <div key={n} className="ad-skeleton-card">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-[#EAE6DE]"></div>
+                  <div className="ad-skeleton-line" style={{ width: "30%" }}></div>
+                </div>
+                <div className="ad-skeleton-line" style={{ width: "80%", height: "16px" }}></div>
+                <div className="ad-skeleton-line" style={{ width: "100%" }}></div>
+                <div className="ad-skeleton-line" style={{ width: "40%" }}></div>
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -9341,68 +9434,29 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
 
   if (error) {
     return (
-      <div
-        className="ad-container"
-        style={{ animation: "fadeIn 0.4s ease-out" }}
-      >
-        {/* 顶部导航 */}
+      <div className="ad-container" style={{ animation: "fadeIn 0.3s ease-out" }}>
         <div className="ad-nav">
-          <div onClick={onBack} style={{ cursor: "pointer", padding: "10px" }}>
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#333"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
+          <button
+            onClick={onBack}
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-white/70 shadow-sm border border-black/5 active:scale-95 transition-transform"
+          >
+            <i className="ph-bold ph-arrow-left text-lg text-[#333]"></i>
+          </button>
+          <div className="flex-1 text-center font-bold text-[#333] text-base">
+            {selectedArea?.name || "区域详情"}
           </div>
-          <div style={{ flex: 1 }}></div>
-          <div style={{ cursor: "pointer", padding: "10px" }}>
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#333"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"></path>
-              <polyline points="16 6 12 2 8 6"></polyline>
-              <line x1="12" y1="2" x2="12" y2="15"></line>
-            </svg>
-          </div>
+          <div className="w-9 h-9"></div>
         </div>
-        <div
-          className="ad-scroll-content no-scrollbar"
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "80vh",
-          }}
-        >
-          <div style={{ textAlign: "center", color: "#ff4d4f" }}>
-            <div style={{ fontSize: "20px", marginBottom: "16px" }}>错误</div>
-            <div style={{ marginBottom: "16px" }}>{error}</div>
+        <div className="ad-scroll-content no-scrollbar flex flex-col items-center justify-center h-[70vh]">
+          <div className="bg-white p-6 rounded-2xl shadow-sm border border-red-100 text-center max-w-xs">
+            <i className="ph-fill ph-warning-circle text-4xl text-red-500 mb-2"></i>
+            <div className="font-bold text-[#333] text-base mb-1">加载失败</div>
+            <div className="text-xs text-gray-500 mb-4">{error}</div>
             <button
-              onClick={() => window.location.reload()}
-              style={{
-                padding: "8px 16px",
-                backgroundColor: "#1890ff",
-                color: "#fff",
-                border: "none",
-                borderRadius: "4px",
-                cursor: "pointer",
-              }}
+              onClick={reloadContent}
+              className="px-4 py-2 bg-[#D6724B] text-white text-xs font-bold rounded-xl active:scale-95 transition-transform"
             >
-              重试
+              重新获取
             </button>
           </div>
         </div>
@@ -9423,410 +9477,454 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
   }
 
   return (
-    <div className="ad-container" style={{ animation: "fadeIn 0.4s ease-out" }}>
+    <div className="ad-container" style={{ animation: "fadeIn 0.3s ease-out" }}>
       {/* 顶部导航 */}
       <div className="ad-nav">
-        <div onClick={onBack} style={{ cursor: "pointer", padding: "10px" }}>
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#333"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="15 18 9 12 15 6"></polyline>
-          </svg>
+        <button
+          onClick={onBack}
+          className="w-9 h-9 rounded-full flex items-center justify-center bg-white/80 shadow-sm border border-black/5 active:scale-95 transition-transform"
+        >
+          <i className="ph-bold ph-arrow-left text-lg text-[#333]"></i>
+        </button>
+        <div className="flex-1 text-center font-bold text-[#333] text-base truncate px-2">
+          {selectedArea?.name || "区域详情"}
         </div>
-        <div style={{ flex: 1 }}></div>
-        <div
-          style={{ cursor: "pointer", padding: "10px" }}
+        <button
           onClick={reloadContent}
+          className="w-9 h-9 rounded-full flex items-center justify-center bg-white/80 shadow-sm border border-black/5 active:scale-95 transition-transform"
+          title="刷新区域"
         >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#333"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4l2 2h4a2 2 0 0 1 2 2v6"></path>
-            <polyline points="16 17 21 12 16 7"></polyline>
-            <line x1="21" y1="12" x2="9" y2="12"></line>
-          </svg>
-        </div>
-        <div
-          style={{ cursor: "pointer", padding: "10px" }}
-          onClick={handleCreatePost}
-        >
-          <svg
-            width="20"
-            height="20"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#333"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <line x1="12" y1="5" x2="12" y2="19"></line>
-            <line x1="5" y1="12" x2="19" y2="12"></line>
-          </svg>
-        </div>
+          <i className="ph-bold ph-arrow-clockwise text-base text-[#555]"></i>
+        </button>
       </div>
 
-      {/* 发布帖子模态框 */}
-      {showCreatePostModal && (
+      <div className="ad-scroll-content no-scrollbar">
+        {/* 区域顶部专属艺术横幅 */}
         <div
+          className="ad-hero-banner"
           style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 1000,
+            background: currentTheme.gradient,
+            color: "#FFF",
+            boxShadow: "0 8px 24px rgba(0,0,0,0.12)",
           }}
         >
-          <div
-            style={{
-              backgroundColor: "#fff",
-              borderRadius: "16px",
-              padding: "32px",
-              width: "90%",
-              maxWidth: "600px",
-              maxHeight: "80vh",
-              overflowY: "auto",
-            }}
-          >
-            <h2
-              style={{
-                fontSize: "20px",
-                fontWeight: "600",
-                color: "#5a5f4d",
-                marginBottom: "24px",
-              }}
-            >
-              发布帖子
-            </h2>
-            <div
-              style={{
-                gap: "16px",
-                display: "flex",
-                flexDirection: "column",
-              }}
-            >
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: "#8c917b",
-                    marginBottom: "8px",
-                  }}
-                >
-                  帖子标题
-                </label>
-                <input
-                  type="text"
-                  value={postTitle}
-                  onChange={(e) => setPostTitle(e.target.value)}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "8px",
-                    border: "1px solid #8c917b",
-                    fontSize: "16px",
-                  }}
-                  placeholder="请输入帖子标题"
-                />
-              </div>
-              <div>
-                <label
-                  style={{
-                    display: "block",
-                    fontSize: "14px",
-                    fontWeight: "500",
-                    color: "#8c917b",
-                    marginBottom: "8px",
-                  }}
-                >
-                  帖子内容
-                </label>
-                <textarea
-                  value={postContent}
-                  onChange={(e) => setPostContent(e.target.value)}
-                  style={{
-                    width: "100%",
-                    minHeight: "200px",
-                    padding: "12px",
-                    borderRadius: "8px",
-                    border: "1px solid #8c917b",
-                    fontSize: "14px",
-                    lineHeight: "1.5",
-                    resize: "vertical",
-                  }}
-                  placeholder="请输入帖子内容"
-                />
-              </div>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2.5">
               <div
-                style={{
-                  display: "flex",
-                  justifyContent: "flex-end",
-                  gap: "12px",
-                  marginTop: "8px",
-                }}
+                className="w-10 h-10 rounded-2xl flex items-center justify-center bg-white/15 backdrop-blur-md border border-white/20"
+                style={{ color: "#FFF" }}
               >
-                <button
-                  style={{
-                    padding: "10px 20px",
-                    borderRadius: "8px",
-                    border: "1px solid #8c917b",
-                    backgroundColor: "#fff",
-                    color: "#8c917b",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                  }}
-                  onClick={handleCloseCreatePostModal}
-                >
-                  取消
-                </button>
-                <button
-                  style={{
-                    padding: "10px 20px",
-                    borderRadius: "8px",
-                    border: "none",
-                    backgroundColor: "#d6724b",
-                    color: "#fff",
-                    fontSize: "14px",
-                    cursor: "pointer",
-                    transition: "all 0.2s ease",
-                  }}
-                  onClick={handlePostSubmit}
-                  disabled={!postTitle.trim() || !postContent.trim()}
-                >
-                  发布
-                </button>
+                <i className={`${currentTheme.icon} text-xl`}></i>
+              </div>
+              <div>
+                <h1 className="text-lg font-bold tracking-wide text-white leading-tight m-0">
+                  {selectedArea?.name || "未知区域"}
+                </h1>
+                <div className="text-[11px] text-white/70 font-medium">
+                  {currentTheme.tagline}
+                </div>
               </div>
             </div>
+            <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-white/20 backdrop-blur-md text-white border border-white/20">
+              {currentTheme.badge}
+            </span>
+          </div>
+
+          <div className="bg-black/15 backdrop-blur-sm rounded-xl p-3 text-xs text-white/90 leading-relaxed border border-white/10">
+            {areaContent.description || "暂无区域简介"}
           </div>
         </div>
-      )}
 
-      <div className="ad-scroll-content no-scrollbar">
-        {/* 头部图标与描述 */}
-        <div className="ad-header-section">
-          <div className="ad-main-icon"></div>
-          <div className="ad-pill-tag"></div>
-          <div className="ad-description">{areaContent.description}</div>
-        </div>
-
-        {/* 板块按钮栏 */}
-        <div className="ad-section-buttons-container">
-          <div className="ad-section-buttons">
-            {areaContent.sections.map((item, i) => (
-              <button key={i} className="ad-section-button">
-                {item}
-              </button>
-            ))}
+        {/* 板块筛选胶囊栏 */}
+        <div className="ad-section-bar my-3.5">
+          <div className="flex items-center gap-2 overflow-x-auto no-scrollbar py-1">
+            {["全部", ...(areaContent.sections || [])].map((sec, idx) => {
+              const isSelected = selectedSectionFilter === sec;
+              return (
+                <button
+                  key={idx}
+                  onClick={() => setSelectedSectionFilter(sec)}
+                  className="active-press"
+                  style={{
+                    padding: "6px 14px",
+                    borderRadius: "20px",
+                    fontSize: "12px",
+                    fontWeight: isSelected ? "700" : "500",
+                    background: isSelected ? "#D6724B" : "#F4F1EA",
+                    color: isSelected ? "#FFF" : "#666",
+                    border: isSelected ? "1px solid #D6724B" : "1px solid #EAE6DE",
+                    boxShadow: isSelected ? "0 3px 10px rgba(214, 114, 75, 0.3)" : "none",
+                    whiteSpace: "nowrap",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease",
+                  }}
+                >
+                  {sec === "全部" ? "🌟 全部" : `# ${sec}`}
+                </button>
+              );
+            })}
             <button
-              className="ad-section-button add-button"
               onClick={() => {
                 const newSection = prompt("请输入新板块名称:");
                 if (newSection && newSection.trim()) {
                   setAreaContent((prev) => {
                     const updatedContent = {
                       ...prev,
-                      sections: [...prev.sections, newSection.trim()],
+                      sections: [...(prev.sections || []), newSection.trim()],
                     };
-                    // 同时更新缓存
                     const cacheKey = getCacheKey();
-                    localStorage.setItem(
-                      cacheKey,
-                      JSON.stringify(updatedContent),
-                    );
+                    localStorage.setItem(cacheKey, JSON.stringify(updatedContent));
                     return updatedContent;
                   });
                 }
               }}
+              className="active-press"
+              style={{
+                padding: "6px 12px",
+                borderRadius: "20px",
+                fontSize: "12px",
+                fontWeight: "600",
+                background: "#FFF",
+                color: "#D6724B",
+                border: "1px dashed #D6724B",
+                whiteSpace: "nowrap",
+                cursor: "pointer",
+              }}
             >
-              + 添加
+              + 新增
             </button>
           </div>
         </div>
 
-        {/* 列表内容 */}
-        <div className="ad-list">
-          {areaContent.items.map((item, index) => (
-            <div
-              key={item.id}
-              className="ad-list-item"
-              style={{
-                cursor: "pointer",
-                transition: "all 0.2s ease",
-                transform: "scale(1)",
-              }}
-            >
-              <div style={{ flex: 1 }} onClick={() => handlePostClick(item)}>
-                <div className="ad-item-left">
-                  <div className="ad-item-header">
-                    <span className="ad-item-tag">
-                      #
-                      {
-                        areaContent.sections[
-                          index % areaContent.sections.length
-                        ]
-                      }
-                    </span>
-                    <div className="ad-item-title">{item.title}</div>
-                  </div>
-                  <div className="ad-item-date">{item.date}</div>
-                </div>
-              </div>
-              <div
-                style={{
-                  padding: "10px",
-                  display: "flex",
-                  alignItems: "center",
-                }}
-              >
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    // 切换收藏状态
-                    const isFavorited =
-                      localStorage.getItem(`post_favorite_${item.id}`) ===
-                      "true";
-                    localStorage.setItem(
-                      `post_favorite_${item.id}`,
-                      (!isFavorited).toString(),
-                    );
-
-                    if (!isFavorited) {
-                      // 保存帖子信息到收藏列表
-                      const favoritedPosts = JSON.parse(
-                        localStorage.getItem("favorited_posts") || "[]",
-                      );
-                      // 确保帖子信息完整
-                      const postToSave = {
-                        id: item.id,
-                        title: item.title,
-                        content: item.content,
-                        date: item.date,
-                        section:
-                          areaContent.sections[
-                            (item.id || 0) % areaContent.sections.length
-                          ],
-                        likes: item.likes || 0,
-                        comments: item.comments || 0,
-                        timestamp: new Date().toISOString(),
-                      };
-                      // 检查是否已存在
-                      const existingIndex = favoritedPosts.findIndex(
-                        (p) => p.id === postToSave.id,
-                      );
-                      if (existingIndex === -1) {
-                        favoritedPosts.push(postToSave);
-                        localStorage.setItem(
-                          "favorited_posts",
-                          JSON.stringify(favoritedPosts),
-                        );
-                      }
-                    } else {
-                      // 从收藏列表中移除
-                      const favoritedPosts = JSON.parse(
-                        localStorage.getItem("favorited_posts") || "[]",
-                      );
-                      const updatedFavorites = favoritedPosts.filter(
-                        (p) => p.id !== item.id,
-                      );
-                      localStorage.setItem(
-                        "favorited_posts",
-                        JSON.stringify(updatedFavorites),
-                      );
-                    }
-
-                    // 显示提示
-                    alert(isFavorited ? "已取消收藏" : "收藏成功");
-                  }}
-                  style={{
-                    background: "none",
-                    border: "none",
-                    cursor: "pointer",
-                    padding: "5px",
-                    color:
-                      localStorage.getItem(`post_favorite_${item.id}`) ===
-                      "true"
-                        ? "#ff4d4f"
-                        : "#999",
-                  }}
-                >
-                  <svg
-                    width="20"
-                    height="20"
-                    viewBox="0 0 24 24"
-                    fill={
-                      localStorage.getItem(`post_favorite_${item.id}`) ===
-                      "true"
-                        ? "currentColor"
-                        : "none"
-                    }
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                  </svg>
-                </button>
-              </div>
+        {/* 帖子列表流 */}
+        <div className="ad-post-feed flex flex-col gap-3.5">
+          {filteredItems.length === 0 ? (
+            <div className="bg-white rounded-2xl p-8 text-center text-gray-400 text-xs border border-black/5 my-4">
+              <i className="ph-bold ph-chat-teardrop-slash text-3xl mb-2 text-gray-300"></i>
+              <div>当前板块暂无帖子，快来发布第一条吧～</div>
             </div>
-          ))}
+          ) : (
+            filteredItems.map((item, index) => {
+              const author = getPostAuthor(item.id, index);
+              const isLiked = likedPosts[item.id] || false;
+              const isFavorited = favoritesMap[item.id] || false;
+              const itemSection =
+                item.section ||
+                (areaContent.sections &&
+                  areaContent.sections[index % areaContent.sections.length]) ||
+                "综合";
 
-          {/* 加载更多指示器 */}
-          {loadingMore && (
-            <div
-              style={{
-                padding: "20px",
-                textAlign: "center",
-                fontSize: "14px",
-                color: "#8c917b",
-              }}
-            >
-              <div
-                style={{
-                  display: "flex",
-                  justifyContent: "center",
-                  alignItems: "center",
-                  gap: "10px",
-                }}
-              >
+              return (
                 <div
-                  style={{
-                    width: "20px",
-                    height: "20px",
-                    border: "2px solid #f3f3f3",
-                    borderTop: "2px solid #3498db",
-                    borderRadius: "50%",
-                    animation: "spin 1s linear infinite",
-                  }}
-                ></div>
-                <span>加载更多内容...</span>
-              </div>
+                  key={item.id || index}
+                  onClick={() => handlePostClick(item)}
+                  className="bg-white rounded-2xl p-4 border border-black/5 shadow-sm hover:shadow-md transition-all cursor-pointer active-press"
+                >
+                  {/* 帖子作者与元信息 */}
+                  <div className="flex items-center justify-between mb-2.5">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="w-7 h-7 rounded-full flex items-center justify-center text-xs font-bold text-white shadow-xs flex-shrink-0"
+                        style={{ background: author.color }}
+                      >
+                        {author.name[0]}
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-xs font-bold text-gray-800">
+                          {author.name}
+                        </span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#F4EBE6] text-[#D6724B] font-semibold">
+                          {author.badge}
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-[11px] text-gray-400 font-medium">
+                      {item.date || "刚刚"}
+                    </span>
+                  </div>
+
+                  {/* 帖子标题 */}
+                  <h2 className="text-[15px] font-bold text-gray-900 mb-1.5 leading-snug">
+                    {item.title}
+                  </h2>
+
+                  {/* 帖子内容摘要 */}
+                  {item.content && (
+                    <p className="text-xs text-gray-600 leading-relaxed mb-3 line-clamp-2">
+                      {item.content}
+                    </p>
+                  )}
+
+                  {/* 底部操作与数据 */}
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100/80">
+                    <span className="text-[11px] font-semibold text-[#8C7B6C] bg-[#F5EFEB] px-2 py-0.5 rounded-md">
+                      #{itemSection}
+                    </span>
+
+                    <div className="flex items-center gap-3.5">
+                      {/* 点赞 */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const nextLiked = !isLiked;
+                          setLikedPosts((prev) => ({
+                            ...prev,
+                            [item.id]: nextLiked,
+                          }));
+                          setAreaContent((prev) => ({
+                            ...prev,
+                            items: prev.items.map((it) =>
+                              it.id === item.id
+                                ? { ...it, likes: (it.likes || 0) + (nextLiked ? 1 : -1) }
+                                : it
+                            ),
+                          }));
+                        }}
+                        className={`flex items-center gap-1 text-xs ${
+                          isLiked ? "text-red-500 font-bold" : "text-gray-400"
+                        }`}
+                      >
+                        <i
+                          className={`ph${
+                            isLiked ? "-fill ph-heart text-red-500" : " ph-heart"
+                          } text-sm`}
+                        ></i>
+                        <span>{(item.likes || 0) + (isLiked ? 1 : 0)}</span>
+                      </button>
+
+                      {/* 评论 */}
+                      <div className="flex items-center gap-1 text-xs text-gray-400">
+                        <i className="ph ph-chat-circle-text text-sm"></i>
+                        <span>{item.comments || 0}</span>
+                      </div>
+
+                      {/* 收藏 */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          const nextFav = !isFavorited;
+                          setFavoritesMap((prev) => ({
+                            ...prev,
+                            [item.id]: nextFav,
+                          }));
+                          localStorage.setItem(
+                            `post_favorite_${item.id}`,
+                            nextFav.toString()
+                          );
+                        }}
+                        className={`flex items-center text-sm ${
+                          isFavorited ? "text-amber-500" : "text-gray-300"
+                        }`}
+                      >
+                        <i
+                          className={`ph${
+                            isFavorited ? "-fill ph-star text-amber-500" : " ph-star"
+                          }`}
+                        ></i>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+
+          {loadingMore && (
+            <div className="p-4 text-center text-xs text-gray-400 flex items-center justify-center gap-2">
+              <div className="w-4 h-4 border-2 border-gray-200 border-t-[#D6724B] rounded-full animate-spin"></div>
+              <span>加载更多帖子...</span>
             </div>
           )}
         </div>
       </div>
+
+      {/* 悬浮发帖按钮 */}
+      <button
+        onClick={handleCreatePost}
+        style={{
+          position: "fixed",
+          bottom: "calc(24px + var(--safe-bottom, 0px))",
+          right: "20px",
+          width: "52px",
+          height: "52px",
+          borderRadius: "50%",
+          background: "linear-gradient(135deg, #D6724B 0%, #B85832 100%)",
+          color: "#FFF",
+          border: "none",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          boxShadow: "0 6px 20px rgba(214, 114, 75, 0.4)",
+          cursor: "pointer",
+          zIndex: 100,
+        }}
+        className="active-press"
+        title="发布帖子"
+      >
+        <i className="ph-bold ph-pencil-simple-line text-2xl"></i>
+      </button>
+
+      {/* 发布帖子模态框 */}
+      {showCreatePostModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0, 0, 0, 0.5)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+            padding: "20px",
+          }}
+        >
+          <div
+            style={{
+              background: "#FFF",
+              borderRadius: "20px",
+              padding: "24px",
+              width: "100%",
+              maxWidth: "460px",
+              boxShadow: "0 20px 40px rgba(0, 0, 0, 0.2)",
+              animation: "fadeIn 0.25s ease-out",
+            }}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-bold text-gray-800 m-0 flex items-center gap-2">
+                <i className="ph-bold ph-pencil-circle text-[#D6724B] text-xl"></i>
+                发布新帖
+              </h2>
+              <button
+                onClick={handleCloseCreatePostModal}
+                className="w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-400 hover:text-gray-600 border-none cursor-pointer"
+              >
+                <i className="ph-bold ph-x text-base"></i>
+              </button>
+            </div>
+
+            {/* 选择板块 */}
+            <div className="mb-3">
+              <label className="block text-xs font-bold text-gray-600 mb-1.5">
+                所属板块
+              </label>
+              <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
+                {(areaContent.sections || ["综合"]).map((sec) => (
+                  <button
+                    key={sec}
+                    type="button"
+                    onClick={() => setPostSection(sec)}
+                    style={{
+                      padding: "4px 12px",
+                      borderRadius: "16px",
+                      fontSize: "11px",
+                      fontWeight: postSection === sec ? "700" : "500",
+                      background: postSection === sec ? "#D6724B" : "#F4F1EA",
+                      color: postSection === sec ? "#FFF" : "#666",
+                      border: "none",
+                      cursor: "pointer",
+                    }}
+                  >
+                    #{sec}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 帖子标题 */}
+            <div className="mb-3">
+              <label className="block text-xs font-bold text-gray-600 mb-1.5">
+                帖子标题
+              </label>
+              <input
+                type="text"
+                value={postTitle}
+                onChange={(e) => setPostTitle(e.target.value)}
+                placeholder="拟一个吸引人的标题..."
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "12px",
+                  border: "1px solid #E2E8F0",
+                  fontSize: "13px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 帖子内容 */}
+            <div className="mb-4">
+              <label className="block text-xs font-bold text-gray-600 mb-1.5">
+                帖子内容
+              </label>
+              <textarea
+                value={postContent}
+                onChange={(e) => setPostContent(e.target.value)}
+                placeholder="分享你的见闻、观点或趣事..."
+                rows={4}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "12px",
+                  border: "1px solid #E2E8F0",
+                  fontSize: "13px",
+                  outline: "none",
+                  resize: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 提交按钮 */}
+            <div className="flex gap-2.5">
+              <button
+                type="button"
+                onClick={handleCloseCreatePostModal}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "12px",
+                  border: "1px solid #E2E8F0",
+                  background: "#F7FAFC",
+                  color: "#666",
+                  fontWeight: "600",
+                  fontSize: "13px",
+                  cursor: "pointer",
+                }}
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={handlePostSubmit}
+                disabled={!postTitle.trim() || !postContent.trim()}
+                style={{
+                  flex: 1.5,
+                  padding: "10px",
+                  borderRadius: "12px",
+                  border: "none",
+                  background:
+                    postTitle.trim() && postContent.trim()
+                      ? "linear-gradient(135deg, #D6724B 0%, #B85832 100%)"
+                      : "#E2E8F0",
+                  color: postTitle.trim() && postContent.trim() ? "#FFF" : "#A0AEC0",
+                  fontWeight: "700",
+                  fontSize: "13px",
+                  cursor:
+                    postTitle.trim() && postContent.trim() ? "pointer" : "not-allowed",
+                  boxShadow:
+                    postTitle.trim() && postContent.trim()
+                      ? "0 4px 12px rgba(214, 114, 75, 0.3)"
+                      : "none",
+                }}
+              >
+                立即发布
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
@@ -9838,54 +9936,43 @@ const PostDetailPage = ({
   areaContent: propAreaContent,
   selectedArea,
 }) => {
-  // 确保areaContent存在且结构正确
   const areaContent = propAreaContent ||
     post.areaContent || {
-      sections: ["板块1", "板块2", "板块3", "板块4"],
+      sections: ["综合", "热议", "闲聊"],
     };
-  // 状态管理
+
   const [loading, setLoading] = React.useState(true);
   const [npcReplies, setNpcReplies] = React.useState([]);
   const [roleReplies, setRoleReplies] = React.useState([]);
+  const [userReplies, setUserReplies] = React.useState([]);
   const [loadingMore, setLoadingMore] = React.useState(false);
   const [page, setPage] = React.useState(1);
-  // 帖子状态
+
+  // 帖子点赞与收藏状态
   const [postLiked, setPostLiked] = React.useState(false);
   const [postLikes, setPostLikes] = React.useState(post.likes || 0);
   const [postComments, setPostComments] = React.useState(post.comments || 0);
-  // 用户回复状态
-  const [userReplies, setUserReplies] = React.useState([]);
+  const [postFavorited, setPostFavorited] = React.useState(
+    () => localStorage.getItem(`post_favorite_${post.id}`) === "true"
+  );
+
+  // 回复交互状态
   const [replyingTo, setReplyingTo] = React.useState(null);
   const [replyContent, setReplyContent] = React.useState("");
-  // 角色数据
+  const [bottomReplyText, setBottomReplyText] = React.useState("");
+
+  // 用户与角色数据
   const [userRoles, setUserRoles] = React.useState([]);
   const [savedAreas, setSavedAreas] = React.useState([]);
-  // 用户身份信息
-  const [userPersonas, setUserPersonas] = React.useState([]);
   const [activePersona, setActivePersona] = React.useState(null);
-  // API请求控制
-  const [isApiRequesting, setIsApiRequesting] = React.useState(false);
-  const [retryCount, setRetryCount] = React.useState(0);
-  const [lastRequestTime, setLastRequestTime] = React.useState(0);
 
-  // 生成帖子缓存键
   const getPostCacheKey = () => {
-    // 不使用帖子的id属性，因为从光晕球重新选定区域时会重新生成ID
-    // 直接使用标题和内容的组合哈希值，确保内容相同的帖子生成相同的缓存键
     const contentHash = Array.from(
-      (post.title || "") + (post.content || ""),
+      (post.title || "") + (post.content || "")
     ).reduce((acc, char) => acc + char.charCodeAt(0), 0);
-    const cacheKey = `post_detail_${contentHash}`;
-    console.log(
-      "生成缓存键（使用内容哈希）:",
-      cacheKey,
-      "内容哈希:",
-      contentHash,
-    );
-    return cacheKey;
+    return `post_detail_${contentHash}`;
   };
 
-  // 保存帖子状态到缓存
   const savePostStateToCache = () => {
     const cacheKey = getPostCacheKey();
     const postState = {
@@ -9900,7 +9987,6 @@ const PostDetailPage = ({
     localStorage.setItem(cacheKey, JSON.stringify(postState));
   };
 
-  // 从缓存加载帖子状态
   const loadPostStateFromCache = () => {
     const cacheKey = getPostCacheKey();
     const cachedState = localStorage.getItem(cacheKey);
@@ -9908,1909 +9994,577 @@ const PostDetailPage = ({
       try {
         return JSON.parse(cachedState);
       } catch (error) {
-        console.error("解析帖子缓存失败:", error);
         return null;
       }
     }
     return null;
   };
 
-  // 加载用户配置数据
+  // 读取用户配置
   React.useEffect(() => {
     const loadUserConfigs = async () => {
       try {
-        // 读取角色信息（从IndexedDB）
-        const chatCharacterStore = window.chatCharacterStore;
-        if (chatCharacterStore) {
-          try {
-            const roles = await chatCharacterStore.getAll();
-            if (roles && roles.length > 0) {
-              setUserRoles(roles);
-            }
-          } catch (e) {
-            console.error("从IndexedDB读取角色信息失败:", e);
-          }
-        }
-
-        // 读取保存的区域数据
-        const loadAreaData = async () => {
-          try {
-            const areaStore = window.areaStore;
-            if (areaStore) {
-              try {
-                const areas = await areaStore.getAreas();
-                if (areas && areas.length > 0) {
-                  setSavedAreas(areas);
-                  console.log("从IndexedDB加载区域数据成功");
-                } else {
-                  // 如果IndexedDB中没有数据，尝试从localStorage迁移
-                  const migrateLargeData = window.migrateLargeData;
-                  if (migrateLargeData) {
-                    console.log(
-                      "IndexedDB中无区域数据，尝试从localStorage迁移...",
-                    );
-                    const migrated = await migrateLargeData();
-                    if (migrated) {
-                      const migratedAreas = await areaStore.getAreas();
-                      if (migratedAreas && migratedAreas.length > 0) {
-                        setSavedAreas(migratedAreas);
-                        console.log("迁移后从IndexedDB加载区域数据成功");
-                      }
-                    }
-                  }
-                }
-              } catch (e) {
-                console.error("从IndexedDB加载区域数据失败:", e);
-              }
-            }
-          } catch (e) {
-            console.error("加载区域数据失败:", e);
-          }
-        };
-
-        loadAreaData();
-
-        // 读取用户身份信息
         const personasData = localStorage.getItem("user_personas");
         if (personasData) {
           try {
             const personas = JSON.parse(personasData);
-            setUserPersonas(personas);
-            // 获取当前激活的身份
             const activeId = localStorage.getItem("active_persona_id");
             if (activeId) {
-              const active = personas.find(
-                (p) => String(p.id) === String(activeId),
-              );
+              const active = personas.find((p) => String(p.id) === String(activeId));
               setActivePersona(active);
             }
-          } catch (e) {
-            console.error("解析身份信息失败:", e);
-          }
+          } catch (e) {}
         }
-      } catch (e) {
-        console.error("加载用户配置失败:", e);
-      }
+      } catch (e) {}
     };
-
     loadUserConfigs();
   }, []);
 
-  // 首先检查缓存（组件加载时立即执行，同步执行）
+  // 检查缓存与加载回复
   React.useEffect(() => {
-    const checkCache = () => {
-      try {
-        setLoading(true);
-
-        // 首先检查缓存
-        const cachedState = loadPostStateFromCache();
-        if (cachedState) {
-          console.log("缓存命中，加载缓存数据:", cachedState);
-          // 如果有缓存，使用缓存的状态
-          setPostLiked(cachedState.postLiked);
-          setPostLikes(cachedState.postLikes);
-          setPostComments(cachedState.postComments);
-          setNpcReplies(cachedState.npcReplies || []);
-          setRoleReplies(cachedState.roleReplies || []);
-          setUserReplies(cachedState.userReplies || []);
-          setPage(cachedState.page);
-          setLoading(false);
-          return true; // 缓存命中
-        }
-
-        console.log("缓存未命中，准备生成回复");
+    const initData = async () => {
+      setLoading(true);
+      const cached = loadPostStateFromCache();
+      if (cached) {
+        setPostLiked(cached.postLiked || false);
+        setPostLikes(cached.postLikes || post.likes || 0);
+        setPostComments(cached.postComments || post.comments || 0);
+        setNpcReplies(cached.npcReplies || []);
+        setRoleReplies(cached.roleReplies || []);
+        setUserReplies(cached.userReplies || []);
+        setPage(cached.page || 1);
         setLoading(false);
-        return false; // 缓存未命中
-      } catch (error) {
-        console.error("检查缓存失败:", error);
-        setLoading(false);
-        return false;
+        return;
       }
-    };
 
-    checkCache();
-  }, [post]); // 只依赖post，确保组件加载时立即检查缓存
+      // 未命中缓存时，通过 LLM 生成 NPC 与 角色回复
+      let generatedNpc = [];
+      let generatedRoles = [];
+      const sections = areaContent?.sections || ["综合"];
+      const npcPrompt = `你是一个论坛回复生成助手。请为以下帖子生成5-8个不同身份NPC的真实生动回复。
+【帖子标题】：${post.title}
+【帖子内容】：${post.content || "无"}
+【所属板块】：${sections[(post.id || 0) % sections.length]}
+【严格输出格式】：
+[NPC身份]: [回复内容]`;
 
-  // 强制缓存机制：当API调用失败时，确保至少保存默认回复到缓存
-  React.useEffect(() => {
-    // 检查是否有缓存数据
-    const cachedState = loadPostStateFromCache();
-    if (!cachedState && npcReplies.length > 0) {
-      // 如果没有缓存但有回复数据，保存到缓存
-      console.log("强制保存回复数据到缓存:", npcReplies.length, "个回复");
-      const cacheKey = getPostCacheKey();
-      const postState = {
-        postLiked: false,
-        postLikes: post.likes || 0,
-        postComments: post.comments || 0,
-        npcReplies: npcReplies,
-        roleReplies: roleReplies,
-        userReplies: [],
-        page: 1,
-      };
-      localStorage.setItem(cacheKey, JSON.stringify(postState));
-      console.log("强制缓存保存完成");
-    }
-  }, [npcReplies, roleReplies, post]);
-
-  // 生成NPC回复和角色回复（缓存未命中时执行）
-  React.useEffect(() => {
-    const generateReplies = async () => {
-      try {
-        // 再次检查缓存，避免重复生成
-        const cachedState = loadPostStateFromCache();
-        if (cachedState) return;
-
-        setLoading(true);
-
-        // 定义局部变量来收集数据
-        let generatedNpcReplies = [];
-        let generatedRoleReplies = [];
-
-        // 构建NPC回复提示词
-        const sections = areaContent?.sections || [
-          "板块1",
-          "板块2",
-          "板块3",
-          "板块4",
-        ];
-        const npcPrompt = `
-                                                                                 你是一个论坛回复生成助手。请为以下帖子生成8-10个不同NPC的回复，每个回复应该：
-                                                                                 1. 来自不同身份的NPC（如普通用户、专家、爱好者、路人等）
-                                                                                 2. 风格各异，有的支持，有的反对，有的中立
-                                                                                 3. 内容符合真实论坛感，包含日常分享、求助、吐槽、闲聊等
-                                                                                 4. 适度融入背景世界观，保持真实感的同时符合设定
-                                                                                 5. 每个回复都要有明确的NPC身份标识
-
-
-                                                                                 【帖子标题】：${post.title}
-                                                                                 【帖子内容】：${post.content}
-                                                                                 【所属板块】：${sections[post.id % sections.length]}
-
-                                                                                 【严格输出格式】：
-                                                                                 [NPC身份1]: [回复内容1]
-                                                                                 [NPC身份2]: [回复内容2]
-                                                                                 [NPC身份3]: [回复内容3]
-                                                                                 [NPC身份4]: [回复内容4]
-                                                                                 [NPC身份5]: [回复内容5]
-                                                                                 `;
-
-        // 1. 调用 API 生成 NPC 回复
-        await new Promise((resolve) => {
-          const messages = [
-            {
-              role: "system",
-              content:
-                "你是一个论坛回复生成助手，擅长为各种帖子生成真实、多样的NPC回复。",
-            },
-            { role: "user", content: npcPrompt },
-          ];
-
+      await new Promise((resolve) => {
+        if (window.sendToLLM) {
           window.sendToLLM(
-            messages,
+            [{ role: "user", content: npcPrompt }],
             null,
-            (response) => {
-              console.log("NPC回复:", response);
-              const lines = response.split("\n");
-              lines.forEach((line) => {
-                const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
-                if (match && match[1] && match[2]) {
-                  generatedNpcReplies.push({
-                    id: generatedNpcReplies.length + 1,
+            (res) => {
+              res.split("\n").forEach((line) => {
+                const match = line.match(/^\\[?(.*?)\\]?[:：]\\s*(.*)$/);
+                if (match) {
+                  generatedNpc.push({
+                    id: Date.now() + Math.random(),
                     npc: match[1].trim(),
                     content: match[2].trim(),
-                    likes: Math.floor(Math.random() * 50),
+                    likes: Math.floor(Math.random() * 30),
+                    liked: false,
                   });
                 }
               });
-
-              // 兜底数据
-              if (generatedNpcReplies.length === 0) {
-                generatedNpcReplies = [
-                  {
-                    id: 1,
-                    npc: "普通用户",
-                    content: "这个帖子很有意思...",
-                    likes: 12,
-                  },
-                  { id: 2, npc: "路人", content: "围观一下。", likes: 5 },
-                  {
-                    id: 3,
-                    npc: "专家",
-                    content: "这种情况很常见。",
-                    likes: 8,
-                  },
-                ];
-              }
-
-              setNpcReplies(generatedNpcReplies); // 更新 UI
+              setNpcReplies(generatedNpc);
               resolve();
             },
-            (error) => {
-              console.error("生成NPC回复失败:", error);
-              generatedNpcReplies = [
-                {
-                  id: 1,
-                  npc: "普通用户",
-                  content: "加载失败，请重试。",
-                  likes: 0,
-                },
-              ];
-              setNpcReplies(generatedNpcReplies);
-              resolve();
-            },
+            () => resolve()
           );
-        });
+        } else {
+          // 本地兜底模拟回复
+          generatedNpc = [
+            { id: 1, npc: "广陵探微官", content: "此言极是，江左近日亦有此类传闻。", likes: 12, liked: false },
+            { id: 2, npc: "隐鸢阁奉侍", content: "楼主所言颇有深意，且容我细细品读一番。", likes: 8, liked: false },
+            { id: 3, npc: "绣衣掌簿吏", content: "已记录在案，甚合心意。", likes: 15, liked: false },
+          ];
+          setNpcReplies(generatedNpc);
+          resolve();
+        }
+      });
 
-        // 2. 生成角色回复
-        const generateRoleReplies = async () => {
-          try {
-            const currentAreaConfig =
-              savedAreas.find((area) => area.id === selectedArea?.id) ||
-              savedAreas[0];
-            if (
-              !currentAreaConfig ||
-              !currentAreaConfig.formData.roles ||
-              currentAreaConfig.formData.roles.length === 0
-            ) {
-              return;
-            }
-
-            const associatedRoles = userRoles.filter((role) =>
-              currentAreaConfig.formData.roles.includes(role.id),
-            );
-
-            for (const role of associatedRoles) {
-              // 构建角色回复提示词
-              // 获取角色详细设定，优先从profile字段读取
-              const roleProfile = role.profile || {};
-              // 获取用户在当前版块的身份
-              const userIdentity = activePersona?.name || "路人";
-              const rolePrompt = `
-                                                                                     你是一个论坛回复生成助手。请为以下帖子生成一个符合特定角色设定的回复：
-
-                                                                                     【角色设定】：
-                                                                                     角色名称：${role.name}
-                                                                                     角色背景：${roleProfile.background || role.background || "无"}
-                                                                                     角色性格：${roleProfile.personality || role.personality || "无"}
-                                                                                     角色身份：${roleProfile.identity || role.identity || "无"}
-                                                                                     其他设定：${roleProfile.additionalSettings || role.additionalSettings || JSON.stringify(roleProfile) || "无"}
-
-                                                                                     【用户身份】：
-                                                                                     ${userIdentity}
-
-                                                                                     【帖子标题】：${post.title}
-                                                                                     【帖子内容】：${post.content}
-                                                                                     【所属板块】：${sections[post.id % sections.length]}
-
-                                                                                     要求：
-                                                                                     1. 回复内容必须符合角色的设定，包括背景、性格、身份等
-                                                                                     2. 内容符合真实论坛感，自然流畅
-                                                                                     3. 保持角色的独特性和一致性
-                                                                                     4. 回复要有明确的角色身份标识
-                                                                                     5. 回复时要将用户作为${userIdentity}来对待，根据用户的身份进行交流
-                                                                                     6. 回复字数必须在15-50字以内，简洁明了
-                                                                                     7. 例如，如果用户身份是广陵王，角色应该以对待广陵王的方式回复；如果用户身份是路人甲，角色应该以对待路人甲的方式回复
-
-                                                                                     【严格输出格式】：
-                                                                                     [${role.name}]: [回复内容]
-                                                                                     `;
-
-              // 调用API生成角色回复
-              await new Promise((resolve) => {
-                const messages = [
-                  {
-                    role: "system",
-                    content:
-                      "你是一个论坛回复生成助手，擅长为各种帖子生成符合特定角色设定的回复。",
-                  },
-                  { role: "user", content: rolePrompt },
-                ];
-
-                window.sendToLLM(
-                  messages,
-                  null,
-                  (response) => {
-                    console.log(`角色${role.name}回复:`, response);
-
-                    // 解析回复
-                    const lines = response.split("\n");
-                    lines.forEach((line) => {
-                      const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
-                      if (match && match[1] && match[2]) {
-                        generatedRoleReplies.push({
-                          id: Date.now() + generatedRoleReplies.length,
-                          role: match[1].trim(),
-                          content: match[2].trim(),
-                          likes: Math.floor(Math.random() * 30),
-                          roleId: role.id,
-                        });
-                      }
-                    });
-
-                    resolve();
-                  },
-                  (error) => {
-                    console.error(`生成角色${role.name}回复失败:`, error);
-                    resolve();
-                  },
-                );
-              });
-            }
-            setRoleReplies(generatedRoleReplies); // 更新 UI
-          } catch (error) {
-            console.error("生成角色回复失败:", error);
-          }
-        };
-
-        await generateRoleReplies();
-
-        // 【关键修复】直接使用局部变量 generatedNpcReplies 和 generatedRoleReplies 保存缓存
-        // 这样就不受 React 状态更新延迟的影响了
-        const cacheKey = getPostCacheKey();
-        const postState = {
+      localStorage.setItem(
+        getPostCacheKey(),
+        JSON.stringify({
           postLiked: false,
           postLikes: post.likes || 0,
           postComments: post.comments || 0,
-          npcReplies: generatedNpcReplies, // 使用局部变量
-          roleReplies: generatedRoleReplies, // 使用局部变量
+          npcReplies: generatedNpc,
+          roleReplies: generatedRoles,
           userReplies: [],
           page: 1,
-        };
-
-        console.log("保存完整数据到缓存:", postState);
-        localStorage.setItem(cacheKey, JSON.stringify(postState));
-
-        setLoading(false);
-      } catch (error) {
-        console.error("生成回复失败:", error);
-        setLoading(false);
-      }
+        })
+      );
+      setLoading(false);
     };
 
-    generateReplies();
-  }, [post, areaContent, selectedArea, userRoles, savedAreas, activePersona]);
+    initData();
+  }, [post]);
 
-  // 处理帖子点赞
   const handlePostLike = () => {
-    setPostLiked((prev) => !prev);
-    setPostLikes((prev) => (postLiked ? prev - 1 : prev + 1));
-    // 保存状态到缓存
+    const nextLiked = !postLiked;
+    setPostLiked(nextLiked);
+    setPostLikes((prev) => (nextLiked ? prev + 1 : prev - 1));
     setTimeout(savePostStateToCache, 0);
   };
 
-  // 处理评论点赞
+  const handleToggleFavorite = () => {
+    const nextFav = !postFavorited;
+    setPostFavorited(nextFav);
+    localStorage.setItem(`post_favorite_${post.id}`, nextFav.toString());
+  };
+
   const handleReplyLike = (replyId) => {
-    // 更新NPC回复的点赞状态
-    setNpcReplies((prev) =>
-      prev.map((reply) => {
-        if (reply.id === replyId) {
-          return {
-            ...reply,
-            liked: !reply.liked,
-            likes: reply.liked ? reply.likes - 1 : reply.likes + 1,
-          };
-        }
-        return reply;
-      }),
-    );
-
-    // 更新角色回复的点赞状态
-    setRoleReplies((prev) =>
-      prev.map((reply) => {
-        if (reply.id === replyId) {
-          return {
-            ...reply,
-            liked: !reply.liked,
-            likes: reply.liked ? reply.likes - 1 : reply.likes + 1,
-          };
-        }
-        return reply;
-      }),
-    );
-
-    // 更新用户回复的点赞状态
-    setUserReplies((prev) =>
-      prev.map((reply) => {
-        if (reply.id === replyId) {
-          return {
-            ...reply,
-            liked: !reply.liked,
-            likes: reply.liked ? reply.likes - 1 : reply.likes + 1,
-          };
-        }
-        return reply;
-      }),
-    );
-
-    // 保存状态到缓存
+    const update = (prev) =>
+      prev.map((r) =>
+        r.id === replyId
+          ? { ...r, liked: !r.liked, likes: r.liked ? r.likes - 1 : r.likes + 1 }
+          : r
+      );
+    setNpcReplies(update);
+    setRoleReplies(update);
+    setUserReplies(update);
     setTimeout(savePostStateToCache, 0);
   };
 
-  // 处理回复提交
-  const handleReplySubmit = async () => {
-    if (!replyContent.trim() || !replyingTo) return;
+  const handleReplySubmit = async (customTargetId, customContent) => {
+    const targetId = customTargetId || replyingTo || "post";
+    const textToSend = (customContent !== undefined ? customContent : replyContent).trim();
+    if (!textToSend) return;
 
-    try {
-      // 创建用户回复
-      const newUserReply = {
-        id: Date.now(),
-        userId: "user",
-        userName: "你",
-        content: replyContent,
-        likes: 0,
-        liked: false,
-        repliedTo: replyingTo,
-        timestamp: new Date().toLocaleString(),
-      };
+    const newUserReply = {
+      id: Date.now(),
+      userId: "user",
+      userName: activePersona?.name || "广陵王",
+      content: textToSend,
+      likes: 0,
+      liked: false,
+      repliedTo: targetId,
+      timestamp: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
 
-      // 添加到用户回复列表
-      setUserReplies((prev) => [...prev, newUserReply]);
-      // 更新评论数
-      setPostComments((prev) => prev + 1);
-
-      // 获取被回复的人的名称，用于 Prompt
-      const targetName =
-        npcReplies.find((r) => r.id === replyingTo)?.npc ||
-        roleReplies.find((r) => r.id === replyingTo)?.role ||
-        "对方";
-
-      // 获取被回复的角色信息
-      const repliedRole = roleReplies.find((r) => r.id === replyingTo);
-      const role = repliedRole
-        ? userRoles.find((r) => r.id === repliedRole.roleId)
-        : null;
-      const roleProfile = role?.profile || {};
-      // 获取用户在当前版块的身份
-      const userIdentity = activePersona?.name || "路人";
-
-      // 清空回复状态
-      setReplyContent("");
-      setReplyingTo(null);
-
-      // 100%生成对方回应，让用户立刻看到反馈
-      const prompt = `
-      你是一个论坛回复生成助手。请为以下用户回复生成一个回应，必须是刚才被回复的角色进行的追评：
-      1. 必须来自刚才被回复的同一身份（${targetName}）
-      2. 内容符合真实论坛感，对用户的回复（内容："${newUserReply.content}"）做出最直接的语言回应。
-      3. 适度融入背景世界观，保持真实感的同时符合设定。
-      4. 要有明确的身份标识。
-
-      【帖子标题】：${post.title}
-      【帖子内容】：${post.content}
-      【被回复的对象】：${targetName}
-      【用户回复】：${newUserReply.content}
-
-      ${
-        role
-          ? `【角色设定】：
-      角色名称：${role.name}
-      角色背景：${roleProfile.background || role.background || "无"}
-      角色性格：${roleProfile.personality || role.personality || "无"}
-      角色身份：${roleProfile.identity || role.identity || "无"}
-      其他设定：${roleProfile.additionalSettings || role.additionalSettings || JSON.stringify(roleProfile) || "无"}`
-          : ""
-      }
-
-      要求：
-      1. 回复内容必须符合角色的设定，包括背景、性格、身份等
-      2. 内容符合真实论坛感，自然流畅
-      3. 保持角色的独特性和一致性
-      4. 回复要有明确的角色身份标识
-      5. 回复时要将用户作为${userIdentity}来对待，根据用户的身份进行交流
-
-      【严格输出格式】：
-      [${targetName}]: [回复内容]
-                  `;
-
-      // 调用API
-      await new Promise((resolve) => {
-        const messages = [
-          {
-            role: "system",
-            content:
-              "你是一个论坛回复生成助手，擅长为用户回复生成真实、多样的互动回应。",
-          },
-          { role: "user", content: prompt },
-        ];
-
-        window.sendToLLM(
-          messages,
-          (chunk) => {},
-          (response) => {
-            console.log("互动回应:", response);
-            const lines = response.split("\n");
-            let newResponse = null;
-            lines.forEach((line) => {
-              const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
-              if (match && match[1] && match[2]) {
-                newResponse = {
-                  id: Date.now() + 1,
-                  npc: match[1].trim(), // 统一推入 npcReplies 方便下文渲染为新楼层
-                  content: match[2].trim(),
-                  likes: Math.floor(Math.random() * 20),
-                  liked: false,
-                };
-              }
-            });
-
-            if (newResponse) {
-              setNpcReplies((prev) => [...prev, newResponse]);
-              setTimeout(savePostStateToCache, 0);
-            }
-            resolve();
-          },
-          (error) => {
-            console.error("生成NPC回应失败:", error);
-            resolve();
-          },
-        );
-      });
-    } catch (error) {
-      console.error("提交回复失败:", error);
-    }
-  };
-
-  // 处理回复对象选择
-  const handleReplyTo = (replyId) => {
-    setReplyingTo((prev) => (prev === replyId ? null : replyId));
+    setUserReplies((prev) => [...prev, newUserReply]);
+    setPostComments((prev) => prev + 1);
     setReplyContent("");
-  };
+    setReplyingTo(null);
+    setBottomReplyText("");
+    setTimeout(savePostStateToCache, 0);
 
-  // 处理刷新回复
-  const handleRefreshReplies = async () => {
-    try {
-      setLoading(true);
-
-      // 清除现有回复
-      setNpcReplies([]);
-      setRoleReplies([]);
-      setPage(1);
-
-      // 重新生成回复
-      const generateReplies = async () => {
-        // 构建NPC回复提示词
-        const npcPrompt = `
-                                                                                 你是一个论坛回复生成助手。请为以下帖子生成3-5个不同NPC的回复，每个回复应该：
-                                                                                 1. 来自不同身份的NPC（如普通用户、专家、爱好者、路人等）
-                                                                                 2. 风格各异，有的支持，有的反对，有的中立
-                                                                                 3. 内容符合真实论坛感，包含日常分享、求助、吐槽、闲聊等
-                                                                                 4. 适度融入背景世界观，保持真实感的同时符合设定
-                                                                                 5. 每个回复都要有明确的NPC身份标识
-
-                                                                                 【帖子标题】：${post.title}
-                                                                                 【帖子内容】：${post.content}
-                                                                                 【所属板块】：${areaContent.sections[post.id % areaContent.sections.length]}
-
-                                                                                 【严格输出格式】：
-                                                                                 [NPC身份1]: [回复内容1]
-                                                                                 [NPC身份2]: [回复内容2]
-                                                                                 [NPC身份3]: [回复内容3]
-                                                                                 [NPC身份4]: [回复内容4]
-                                                                                 [NPC身份5]: [回复内容5]
-                                                                                 `;
-
-        // 调用API生成NPC回复
-        await new Promise((resolve) => {
-          const messages = [
-            {
-              role: "system",
-              content:
-                "你是一个论坛回复生成助手，擅长为各种帖子生成真实、多样的NPC回复。",
-            },
-            { role: "user", content: npcPrompt },
-          ];
-
-          window.sendToLLM(
-            messages,
-            null,
-            (response) => {
-              console.log("NPC回复:", response);
-
-              // 解析回复
-              const npcReplies = [];
-              const lines = response.split("\n");
-              lines.forEach((line) => {
-                const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
-                if (match && match[1] && match[2]) {
-                  npcReplies.push({
-                    id: npcReplies.length + 1,
-                    npc: match[1].trim(),
-                    content: match[2].trim(),
-                    likes: Math.floor(Math.random() * 50),
-                  });
-                }
-              });
-
-              // 如果没有解析到回复，生成默认回复
-              if (npcReplies.length === 0) {
-                npcReplies.push(
-                  {
-                    id: 1,
-                    npc: "普通用户",
-                    content: "这个帖子很有意思，我也有类似的经历...",
-                    likes: Math.floor(Math.random() * 50),
-                  },
-                  {
-                    id: 2,
-                    npc: "专家",
-                    content: "从专业角度来看，这个问题需要...",
-                    likes: Math.floor(Math.random() * 50),
-                  },
-                  {
-                    id: 3,
-                    npc: "爱好者",
-                    content: "作为一名爱好者，我认为...",
-                    likes: Math.floor(Math.random() * 50),
-                  },
-                );
-              }
-
-              setNpcReplies(npcReplies);
-              resolve();
-            },
-            (error) => {
-              console.error("生成NPC回复失败:", error);
-              // 生成默认回复
-              const defaultReplies = [
-                {
-                  id: 1,
-                  npc: "普通用户",
-                  content: "这个帖子很有意思，我也有类似的经历...",
-                  likes: Math.floor(Math.random() * 50),
-                },
-                {
-                  id: 2,
-                  npc: "专家",
-                  content: "从专业角度来看，这个问题需要...",
-                  likes: Math.floor(Math.random() * 50),
-                },
-                {
-                  id: 3,
-                  npc: "爱好者",
-                  content: "作为一名爱好者，我认为...",
-                  likes: Math.floor(Math.random() * 50),
-                },
-              ];
-              setNpcReplies(defaultReplies);
-              resolve();
-            },
-          );
-        });
-
-        // 生成角色回复
-        const generateRoleReplies = async () => {
-          try {
-            // 获取当前区域的配置
-            const currentAreaConfig =
-              savedAreas.find((area) => area.id === selectedArea?.id) ||
-              savedAreas[0];
-            if (
-              !currentAreaConfig ||
-              !currentAreaConfig.formData.roles ||
-              currentAreaConfig.formData.roles.length === 0
-            ) {
-              setRoleReplies([]);
-              return;
-            }
-
-            // 获取关联角色的详细信息
-            const associatedRoles = userRoles.filter((role) =>
-              currentAreaConfig.formData.roles.includes(role.id),
-            );
-
-            if (associatedRoles.length === 0) {
-              setRoleReplies([]);
-              return;
-            }
-
-            // 为每个关联角色生成回复
-            const roleReplies = [];
-            for (const role of associatedRoles) {
-              // 构建角色回复提示词
-              const roleProfile = role.profile || {};
-              const userIdentity = activePersona?.name || "路人";
-              const rolePrompt = `
-                                                                                     你是一个论坛回复生成助手。请为以下帖子生成一个符合特定角色设定的回复：
-
-                                                                                     【角色设定】：
-                                                                                     角色名称：${role.name}
-                                                                                     角色背景：${roleProfile.background || role.background || "无"}
-                                                                                     角色性格：${roleProfile.personality || role.personality || "无"}
-                                                                                     角色身份：${roleProfile.identity || role.identity || "无"}
-                                                                                     其他设定：${roleProfile.additionalSettings || role.additionalSettings || JSON.stringify(roleProfile) || "无"}
-
-                                                                                     【用户身份】：
-                                                                                     ${userIdentity}
-
-                                                                                     【帖子标题】：${post.title}
-                                                                                     【帖子内容】：${post.content}
-                                                                                     【所属板块】：${areaContent.sections[post.id % areaContent.sections.length]}
-
-                                                                                     要求：
-                                                                                     1. 回复内容必须符合角色的设定，包括背景、性格、身份等
-                                                                                     2. 内容符合真实论坛感，自然流畅
-                                                                                     3. 保持角色的独特性和一致性
-                                                                                     4. 回复要有明确的角色身份标识
-                                                                                     5. 回复时要将用户作为${userIdentity}来对待，根据用户的身份进行交流
-                                                                                     6. 回复字数必须在15-50字以内，简洁明了
-                                                                                     7. 例如，如果用户身份是广陵王，角色应该以对待广陵王的方式回复；如果用户身份是路人甲，角色应该以对待路人甲的方式回复
-
-                                                                                     【严格输出格式】：
-                                                                                     [${role.name}]: [回复内容]
-                                                                                     `;
-
-              // 调用API生成角色回复
-              await new Promise((resolve) => {
-                const messages = [
-                  {
-                    role: "system",
-                    content:
-                      "你是一个论坛回复生成助手，擅长为各种帖子生成符合特定角色设定的回复。",
-                  },
-                  { role: "user", content: rolePrompt },
-                ];
-
-                window.sendToLLM(
-                  messages,
-                  null,
-                  (response) => {
-                    console.log(`角色${role.name}回复:`, response);
-
-                    // 解析回复
-                    const lines = response.split("\n");
-                    lines.forEach((line) => {
-                      const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
-                      if (match && match[1] && match[2]) {
-                        roleReplies.push({
-                          id: Date.now() + roleReplies.length,
-                          role: match[1].trim(),
-                          content: match[2].trim(),
-                          likes: Math.floor(Math.random() * 30),
-                          roleId: role.id,
-                        });
-                      }
-                    });
-
-                    resolve();
-                  },
-                  (error) => {
-                    console.error(`生成角色${role.name}回复失败:`, error);
-                    resolve();
-                  },
-                );
-              });
-            }
-
-            setRoleReplies(roleReplies);
-          } catch (error) {
-            console.error("生成角色回复失败:", error);
-            setRoleReplies([]);
-          }
-        };
-
-        await generateRoleReplies();
-        // 保存状态到缓存
-        savePostStateToCache();
-        setLoading(false);
-      };
-
-      await generateReplies();
-    } catch (error) {
-      console.error("刷新回复失败:", error);
-      setLoading(false);
-    }
-  };
-
-  // 加载更多NPC回复
-  const loadMoreReplies = async () => {
-    if (loadingMore || loading || isApiRequesting) return;
-
-    // 请求节流：检查上次请求时间，确保至少间隔2秒
-    const now = Date.now();
-    if (now - lastRequestTime < 2000) {
-      setTimeout(loadMoreReplies, 2000 - (now - lastRequestTime));
-      return;
-    }
-
-    try {
-      setLoadingMore(true);
-      setIsApiRequesting(true);
-      setLastRequestTime(now);
-
-      // 构建提示词，要求生成更多回复
-      const prompt = `
-                                                                                 你是一个论坛回复生成助手。请为以下帖子生成8-10个新的不同NPC的回复，每个回复应该：
-                                                                                 1. 来自不同身份的NPC（如普通用户、专家、爱好者、路人等）
-                                                                                 2. 风格各异，有的支持，有的反对，有的中立
-                                                                                 3. 内容符合真实论坛感，包含日常分享、求助、吐槽、闲聊等
-                                                                                 4. 适度融入背景世界观，保持真实感的同时符合设定
-                                                                                 5. 每个回复都要有明确的NPC身份标识
-
-
-                                                                                 【帖子标题】：${post.title}
-                                                                                 【帖子内容】：${post.content}
-                                                                                 【所属板块】：${areaContent.sections[post.id % areaContent.sections.length]}
-
-                                                                                 【严格输出格式】：
-                                                                                 [NPC身份1]: [回复内容1]
-                                                                                 [NPC身份2]: [回复内容2]
-                                                                                 [NPC身份3]: [回复内容3]
-                                                                                 [NPC身份4]: [回复内容4]
-                                                                                 [NPC身份5]: [回复内容5]
-                                                                                 [NPC身份6]: [回复内容6]
-                                                                                 [NPC身份7]: [回复内容7]
-                                                                                 [NPC身份8]: [回复内容8]
-                                                                                 [NPC身份9]: [回复内容9]
-                                                                                 [NPC身份10]: [回复内容10]
-                                                                                 `;
-
-      // 调用API
-      await new Promise((resolve) => {
-        // 构建正确的messages参数，包含system和user消息
-        const messages = [
+    // AI 互动回应
+    if (window.sendToLLM && targetId !== "post") {
+      const targetName =
+        npcReplies.find((r) => r.id === targetId)?.npc ||
+        roleReplies.find((r) => r.id === targetId)?.role ||
+        "对方";
+      window.sendToLLM(
+        [
           {
-            role: "system",
-            content:
-              "你是一个论坛回复生成助手，擅长为帖子生成真实、多样的NPC回复。",
+            role: "user",
+            content: `以【${targetName}】的身份，针对用户【${newUserReply.userName}】的回复："${textToSend}"，给出简短且贴合设定的互动反应（15-40字）。格式：[${targetName}]: [内容]`,
           },
-          { role: "user", content: prompt },
-        ];
-
-        window.sendToLLM(
-          messages,
-          (chunk) => {},
-          (response) => {
-            console.log("加载更多NPC回复:", response);
-
-            // 解析回复
-            const newReplies = [];
-            const lines = response.split("\n");
-            lines.forEach((line) => {
-              const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
-              if (match && match[1] && match[2]) {
-                newReplies.push({
-                  id: Date.now() + newReplies.length,
-                  npc: match[1].trim(),
-                  content: match[2].trim(),
-                  likes: Math.floor(Math.random() * 50),
-                  liked: false,
-                });
-              }
-            });
-
-            // 如果没有解析到回复，生成默认回复
-            if (newReplies.length === 0) {
-              newReplies.push(
-                {
-                  id: Date.now(),
-                  npc: "普通用户",
-                  content: "这个帖子很有意思，我也有类似的经历...",
-                  likes: Math.floor(Math.random() * 50),
-                  liked: false,
-                },
-                {
-                  id: Date.now() + 1,
-                  npc: "专家",
-                  content: "从专业角度来看，这个问题需要...",
-                  likes: Math.floor(Math.random() * 50),
-                  liked: false,
-                },
-                {
-                  id: Date.now() + 2,
-                  npc: "爱好者",
-                  content: "作为一名爱好者，我认为...",
-                  likes: Math.floor(Math.random() * 50),
-                  liked: false,
-                },
-              );
-            }
-
-            // 更新状态
-            setNpcReplies((prev) => [...prev, ...newReplies]);
-            setPage((prev) => prev + 1);
-            setLoadingMore(false);
-            setIsApiRequesting(false);
-            setRetryCount(0);
-            // 保存状态到缓存
-            setTimeout(savePostStateToCache, 0);
-            resolve();
-          },
-          (error) => {
-            console.error("加载更多回复失败:", error);
-
-            // 检查是否是429错误
-            if (error.includes("429")) {
-              // 指数退避重试
-              const maxRetries = 3;
-              if (retryCount < maxRetries) {
-                const backoffTime = Math.pow(2, retryCount) * 1000; // 1s, 2s, 4s
-                console.log(
-                  `遇到429错误，${backoffTime}ms后重试 (${retryCount + 1}/${maxRetries})`,
-                );
-
-                setRetryCount((prev) => prev + 1);
-                setIsApiRequesting(false);
-                setLoadingMore(false);
-
-                // 延迟重试
-                setTimeout(() => {
-                  loadMoreReplies();
-                }, backoffTime);
-                return;
-              }
-            }
-
-            // 生成默认回复
-            const defaultReplies = [
-              {
-                id: Date.now(),
-                npc: "普通用户",
-                content: "这个帖子很有意思，我也有类似的经历...",
-                likes: Math.floor(Math.random() * 50),
-                liked: false,
-              },
+        ],
+        null,
+        (res) => {
+          const match = res.match(/^\\[?(.*?)\\]?[:：]\\s*(.*)$/);
+          if (match) {
+            setNpcReplies((prev) => [
+              ...prev,
               {
                 id: Date.now() + 1,
-                npc: "专家",
-                content: "从专业角度来看，这个问题需要...",
-                likes: Math.floor(Math.random() * 50),
+                npc: match[1].trim(),
+                content: match[2].trim(),
+                likes: 0,
                 liked: false,
               },
-              {
-                id: Date.now() + 2,
-                npc: "爱好者",
-                content: "作为一名爱好者，我认为...",
-                likes: Math.floor(Math.random() * 50),
-                liked: false,
-              },
-            ];
-            setNpcReplies((prev) => [...prev, ...defaultReplies]);
-            setLoadingMore(false);
-            setIsApiRequesting(false);
-            setRetryCount(0);
-            // 不保存默认状态到缓存，以便下次重新调用API
-            // setTimeout(savePostStateToCache, 0);
-            resolve();
-          },
-        );
-      });
-    } catch (error) {
-      console.error("加载更多回复失败:", error);
-      // 生成默认回复
-      const defaultReplies = [
-        {
-          id: Date.now(),
-          npc: "普通用户",
-          content: "这个帖子很有意思，我也有类似的经历...",
-          likes: Math.floor(Math.random() * 50),
-          liked: false,
-        },
-        {
-          id: Date.now() + 1,
-          npc: "专家",
-          content: "从专业角度来看，这个问题需要...",
-          likes: Math.floor(Math.random() * 50),
-          liked: false,
-        },
-        {
-          id: Date.now() + 2,
-          npc: "爱好者",
-          content: "作为一名爱好者，我认为...",
-          likes: Math.floor(Math.random() * 50),
-          liked: false,
-        },
-      ];
-      setNpcReplies((prev) => [...prev, ...defaultReplies]);
-      setLoadingMore(false);
-      setIsApiRequesting(false);
-      setRetryCount(0);
-      // 不保存默认状态到缓存，以便下次重新调用API
-      // setTimeout(savePostStateToCache, 0);
+            ]);
+            setTimeout(savePostStateToCache, 0);
+          }
+        }
+      );
     }
   };
 
-  // 滚动事件监听
-  React.useEffect(() => {
-    let debounceTimer;
+  const handleRefreshReplies = () => {
+    localStorage.removeItem(getPostCacheKey());
+    setLoading(true);
+    setNpcReplies([]);
+    setRoleReplies([]);
+    setUserReplies([]);
+    setTimeout(() => {
+      setLoading(false);
+    }, 400);
+  };
 
-    const handleScroll = () => {
-      // 清除之前的定时器
-      clearTimeout(debounceTimer);
+  const author = {
+    name: post.authorName || "广陵密探",
+    badge: post.authorBadge || "楼主",
+    avatar: post.authorAvatar || "",
+    color: "#D6724B",
+  };
 
-      // 设置新的定时器，实现防抖
-      debounceTimer = setTimeout(() => {
-        // 使用更具体的选择器，确保找到当前页面的滚动容器
-        const scrollContainer = document.querySelector(
-          ".post-detail-container .ad-scroll-content",
-        );
-        if (!scrollContainer) return;
-
-        const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-        // 当滚动到底部150px时加载更多，增加阈值减少触发频率
-        if (scrollHeight - scrollTop - clientHeight < 150 && !loadingMore) {
-          loadMoreReplies();
-        }
-      }, 300); // 300ms的防抖延迟
-    };
-
-    const scrollContainer = document.querySelector(
-      ".post-detail-container .ad-scroll-content",
-    );
-    if (scrollContainer) {
-      scrollContainer.addEventListener("scroll", handleScroll);
-    }
-
-    return () => {
-      if (scrollContainer) {
-        scrollContainer.removeEventListener("scroll", handleScroll);
-      }
-      clearTimeout(debounceTimer);
-    };
-  }, [loadingMore, loadMoreReplies]);
+  const sectionName =
+    post.section ||
+    (areaContent.sections &&
+      areaContent.sections[(post.id || 0) % areaContent.sections.length]) ||
+    "综合";
 
   if (loading) {
     return (
-      <div
-        className="post-detail-container"
-        style={{ animation: "fadeIn 0.4s ease-out" }}
-      >
-        {/* 顶部导航 */}
+      <div className="post-detail-container" style={{ animation: "fadeIn 0.3s ease-out" }}>
         <div className="ad-nav">
-          <div onClick={onBack} style={{ cursor: "pointer", padding: "10px" }}>
-            <svg
-              width="24"
-              height="24"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#333"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <polyline points="15 18 9 12 15 6"></polyline>
-            </svg>
-          </div>
-          <div
-            style={{
-              flex: 1,
-              textAlign: "center",
-              fontSize: "16px",
-              fontWeight: "500",
-              color: "#8c917b",
-            }}
+          <button
+            onClick={onBack}
+            className="w-9 h-9 rounded-full flex items-center justify-center bg-white/80 shadow-sm border border-black/5 active:scale-95 transition-transform"
           >
+            <i className="ph-bold ph-arrow-left text-lg text-[#333]"></i>
+          </button>
+          <div className="flex-1 text-center font-bold text-[#333] text-base">
             帖子详情
           </div>
-          <div style={{ width: "40px" }}></div>
+          <div className="w-9 h-9"></div>
         </div>
-
-        <div
-          className="ad-scroll-content no-scrollbar"
-          style={{
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            height: "80vh",
-          }}
-        >
-          <div style={{ textAlign: "center" }}>
-            <div style={{ fontSize: "24px", marginBottom: "16px" }}>
-              加载中...
+        <div className="ad-scroll-content no-scrollbar p-4">
+          <div className="pd-main-card ad-skeleton-card">
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-full bg-[#EAE6DE]"></div>
+              <div className="flex-1">
+                <div className="ad-skeleton-line mb-1.5" style={{ width: "30%" }}></div>
+                <div className="ad-skeleton-line" style={{ width: "20%" }}></div>
+              </div>
             </div>
-            <div
-              style={{
-                width: "40px",
-                height: "40px",
-                border: "4px solid #f3f3f3",
-                borderTop: "4px solid #3498db",
-                borderRadius: "50%",
-                animation: "spin 1s linear infinite",
-                margin: "0 auto",
-              }}
-            ></div>
+            <div className="ad-skeleton-line my-2" style={{ width: "80%", height: "20px" }}></div>
+            <div className="ad-skeleton-line" style={{ width: "100%" }}></div>
+            <div className="ad-skeleton-line" style={{ width: "95%" }}></div>
+            <div className="ad-skeleton-line" style={{ width: "60%" }}></div>
           </div>
         </div>
       </div>
     );
   }
 
+  // 区分针对主帖的直接回复与针对评论的回复
+  const directPostReplies = userReplies.filter((r) => r.repliedTo === "post" || !r.repliedTo);
+
   return (
-    <div
-      className="post-detail-container"
-      style={{ animation: "fadeIn 0.4s ease-out" }}
-    >
+    <div className="post-detail-container" style={{ animation: "fadeIn 0.3s ease-out" }}>
       {/* 顶部导航 */}
       <div className="ad-nav">
-        <div onClick={onBack} style={{ cursor: "pointer", padding: "10px" }}>
-          <svg
-            width="24"
-            height="24"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#333"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <polyline points="15 18 9 12 15 6"></polyline>
-          </svg>
-        </div>
-        <div
-          style={{
-            flex: 1,
-            textAlign: "center",
-            fontSize: "16px",
-            fontWeight: "500",
-            color: "#8c917b",
-          }}
+        <button
+          onClick={onBack}
+          className="w-9 h-9 rounded-full flex items-center justify-center bg-white/80 shadow-sm border border-black/5 active:scale-95 transition-transform"
         >
+          <i className="ph-bold ph-arrow-left text-lg text-[#333]"></i>
+        </button>
+        <div className="flex-1 text-center font-bold text-[#333] text-base">
           帖子详情
         </div>
-        <div style={{ width: "40px" }}></div>
+        <button
+          onClick={handleRefreshReplies}
+          className="w-9 h-9 rounded-full flex items-center justify-center bg-white/80 shadow-sm border border-black/5 active:scale-95 transition-transform"
+          title="刷新回复"
+        >
+          <i className="ph-bold ph-arrow-clockwise text-base text-[#555]"></i>
+        </button>
       </div>
 
-      <div className="ad-scroll-content no-scrollbar">
-        {/* 帖子内容 */}
-        <div style={{ padding: "24px" }}>
-          {/* 帖子标题 */}
-          <h1
-            style={{
-              fontSize: "24px",
-              fontWeight: "600",
-              color: "#5a5f4d",
-              marginBottom: "16px",
-              lineHeight: "1.4",
-            }}
-          >
-            {post.title}
-          </h1>
+      <div className="ad-scroll-content no-scrollbar pb-24">
+        {/* 帖子核心内容卡片 */}
+        <div className="pd-main-card">
+          {/* 作者栏 */}
+          <div className="pd-header">
+            <div className="pd-author-info">
+              <div className="pd-author-avatar" style={{ background: author.color }}>
+                {author.name[0]}
+              </div>
+              <div>
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-bold text-gray-900">{author.name}</span>
+                  <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#FFF0E6] text-[#D6724B] font-semibold border border-[#FFD8C7]">
+                    {author.badge}
+                  </span>
+                </div>
+                <div className="text-[11px] text-gray-400 font-medium">
+                  {post.date || "刚刚"}
+                </div>
+              </div>
+            </div>
 
-          {/* 帖子元信息 */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "20px",
-              fontSize: "12px",
-              color: "#8c917b",
-            }}
-          >
-            <span>
-              #
-              {
-                areaContent.sections[
-                  (post.id || 0) % areaContent.sections.length
-                ]
-              }
+            <span className="text-[11px] font-semibold text-[#8C7B6C] bg-[#F5EFEB] px-2.5 py-1 rounded-full">
+              #{sectionName}
             </span>
-            <span>{post.date}</span>
           </div>
+
+          {/* 帖子标题 */}
+          <h1 className="pd-title m-0">{post.title}</h1>
 
           {/* 帖子正文 */}
-          <div
-            style={{
-              fontSize: "16px",
-              lineHeight: "1.8",
-              color: "#5a5f4d",
-              marginBottom: "32px",
-              whiteSpace: "pre-wrap",
-            }}
-          >
-            {post.content || "该帖子暂无详细内容"}
-          </div>
+          <div className="pd-content">{post.content || "该帖子暂无详细内容"}</div>
 
-          {/* 互动元素 */}
-          <div
-            style={{
-              display: "flex",
-              gap: "24px",
-              padding: "16px",
-              backgroundColor: "#f2f0e4",
-              borderRadius: "12px",
-              marginBottom: "32px",
-            }}
-          >
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                cursor: "pointer",
-                color: postLiked ? "#d6724b" : "#8c917b",
-                transition: "color 0.2s ease",
-              }}
+          {/* 互动数据栏 */}
+          <div className="pd-interaction-bar">
+            {/* 点赞 */}
+            <button
               onClick={handlePostLike}
+              className={`flex items-center gap-1.5 text-xs font-bold bg-transparent border-none cursor-pointer active-press ${
+                postLiked ? "text-red-500" : "text-gray-500"
+              }`}
             >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill={postLiked ? "currentColor" : "none"}
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-              </svg>
-              <span>{postLikes}</span>
-            </div>
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "6px",
-                cursor: "pointer",
-                color: "#8c917b",
-                transition: "color 0.2s ease",
-              }}
-              onClick={() => setReplyingTo("post")}
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              >
-                <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-              </svg>
-              <span>{postComments}</span>
-            </div>
-          </div>
+              <i className={`ph${postLiked ? "-fill ph-heart text-red-500" : " ph-heart"} text-base`}></i>
+              <span>{postLikes} 赞</span>
+            </button>
 
-          {/* 回复区 */}
-          <div>
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                marginBottom: "20px",
-              }}
-            >
-              <h2
-                style={{
-                  fontSize: "18px",
-                  fontWeight: "600",
-                  color: "#5a5f4d",
-                  margin: 0,
-                }}
-              >
-                回复区
-              </h2>
-              <button
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: "8px",
-                  border: "1px solid #8c917b",
-                  backgroundColor: "#fff",
-                  color: "#8c917b",
-                  fontSize: "14px",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "6px",
-                }}
-                onClick={handleRefreshReplies}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M21 12a9 9 0 1 1-9-9c2.52 0 4.93 1 6.74 2.74L21 8"></path>
-                  <path d="M21 3v5h-5"></path>
-                </svg>
-                刷新回复
-              </button>
+            {/* 评论数 */}
+            <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
+              <i className="ph ph-chat-circle-text text-base"></i>
+              <span>{postComments} 回复</span>
             </div>
 
-            <div
-              style={{
-                gap: "20px",
-                display: "flex",
-                flexDirection: "column",
-              }}
+            {/* 收藏 */}
+            <button
+              onClick={handleToggleFavorite}
+              className={`flex items-center gap-1 text-xs font-bold bg-transparent border-none cursor-pointer active-press ${
+                postFavorited ? "text-amber-500" : "text-gray-400"
+              }`}
             >
-              {/* 渲染角色回复及其嵌套的用户回复 */}
-              {roleReplies.map((roleReply, index) => (
-                <div
-                  key={roleReply.id}
-                  style={{
-                    animation: "fadeIn 0.4s ease-out",
-                    animationDelay: `${index * 0.1}s`,
-                  }}
-                >
-                  {/* 角色回复 */}
-                  <div
-                    style={{
-                      backgroundColor: "#e6f2f0",
-                      borderRadius: "16px",
-                      padding: "20px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "12px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: "600",
-                          color: "#6a9c95",
-                        }}
-                      >
-                        {roleReply.role}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          color: "#6a9c95",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill={roleReply.liked ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          style={{ cursor: "pointer" }}
-                          onClick={() => handleReplyLike(roleReply.id)}
-                        >
-                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                        </svg>
-                        {roleReply.likes}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        lineHeight: "1.6",
-                        color: "#5a5f4d",
-                        marginBottom: "16px",
-                      }}
-                    >
-                      {roleReply.content}
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "16px",
-                        justifyContent: "flex-end",
-                      }}
-                    >
-                      <button
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: "8px",
-                          border: "1px solid #6a9c95",
-                          backgroundColor: "#fff",
-                          color: "#6a9c95",
-                          fontSize: "12px",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                        }}
-                        onClick={() => handleReplyTo(roleReply.id)}
-                      >
-                        回复
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 嵌套显示回复该角色的用户回复，微信朋友圈评论区风 */}
-                  <div
-                    style={{
-                      marginLeft: "40px",
-                      marginTop: "8px",
-                      padding: "10px 12px",
-                      background: "#F5F5F5",
-                      borderRadius: "8px",
-                      gap: "8px",
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    {userReplies
-                      .filter(
-                        (userReply) => userReply.repliedTo === roleReply.id,
-                      )
-                      .map((userReply, userIndex, filteredArr) => (
-                        <div
-                          key={userReply.id}
-                          style={{
-                            animation: "fadeIn 0.3s ease-out",
-                            borderBottom:
-                              userIndex < filteredArr.length - 1
-                                ? "1px solid #EAEAEA"
-                                : "none",
-                            paddingBottom:
-                              userIndex < filteredArr.length - 1 ? "8px" : "0",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontSize: "13px",
-                                lineHeight: "1.5",
-                                color: "#333",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontWeight: "bold",
-                                  color: "#6a9c95",
-                                  marginRight: "4px",
-                                }}
-                              >
-                                {userReply.userName}:
-                              </span>
-                              {userReply.content}
-                            </div>
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "6px",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontSize: "11px",
-                                  color: "#999",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {userReply.timestamp.split(" ")[1] ||
-                                  userReply.timestamp}
-                              </span>
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill={userReply.liked ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                style={{
-                                  cursor: "pointer",
-                                  color: "#6a9c95",
-                                }}
-                                onClick={() => handleReplyLike(userReply.id)}
-                              >
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                              </svg>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                    {/* [新增] 在当前角色评论卡片内联显示的回复输入框 */}
-                    {replyingTo === roleReply.id && (
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "8px",
-                          marginTop: "4px",
-                          alignItems: "center",
-                          animation: "fadeIn 0.2s",
-                        }}
-                      >
-                        <input
-                          autoFocus
-                          type="text"
-                          value={replyContent}
-                          onChange={(e) => setReplyContent(e.target.value)}
-                          placeholder={`回复 ${roleReply.role}...`}
-                          style={{
-                            flex: 1,
-                            padding: "8px 12px",
-                            borderRadius: "16px",
-                            border: "1px solid #E0E0E0",
-                            fontSize: "13px",
-                            outline: "none",
-                            background: "#fff",
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleReplySubmit();
-                          }}
-                        />
-                        <button
-                          onClick={handleReplySubmit}
-                          disabled={!replyContent.trim()}
-                          style={{
-                            padding: "6px 14px",
-                            borderRadius: "16px",
-                            border: "none",
-                            background: replyContent.trim()
-                              ? "#6a9c95"
-                              : "#CCC",
-                            color: "#FFF",
-                            fontSize: "13px",
-                            fontWeight: "bold",
-                            cursor: replyContent.trim()
-                              ? "pointer"
-                              : "not-allowed",
-                            transition: "all 0.2s",
-                          }}
-                        >
-                          发送
-                        </button>
-                        <button
-                          onClick={() => {
-                            setReplyingTo(null);
-                            setReplyContent("");
-                          }}
-                          style={{
-                            padding: "6px",
-                            borderRadius: "50%",
-                            border: "none",
-                            background: "transparent",
-                            color: "#999",
-                            fontSize: "18px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {/* 渲染NPC回复及其嵌套的用户回复 */}
-              {npcReplies.map((npcReply, index) => (
-                <div
-                  key={npcReply.id}
-                  style={{
-                    animation: "fadeIn 0.4s ease-out",
-                    animationDelay: `${roleReplies.length * 0.1 + index * 0.1}s`,
-                  }}
-                >
-                  {/* NPC回复 */}
-                  <div
-                    style={{
-                      backgroundColor: "#f2f0e4",
-                      borderRadius: "16px",
-                      padding: "20px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        marginBottom: "12px",
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: "14px",
-                          fontWeight: "600",
-                          color: "#8c917b",
-                        }}
-                      >
-                        {npcReply.npc}
-                      </span>
-                      <span
-                        style={{
-                          fontSize: "12px",
-                          color: "#8c917b",
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "4px",
-                        }}
-                      >
-                        <svg
-                          width="14"
-                          height="14"
-                          viewBox="0 0 24 24"
-                          fill={npcReply.liked ? "currentColor" : "none"}
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          style={{ cursor: "pointer" }}
-                          onClick={() => handleReplyLike(npcReply.id)}
-                        >
-                          <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                        </svg>
-                        {npcReply.likes}
-                      </span>
-                    </div>
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        lineHeight: "1.6",
-                        color: "#5a5f4d",
-                        marginBottom: "16px",
-                      }}
-                    >
-                      {npcReply.content}
-                    </div>
-                    <div
-                      style={{
-                        display: "flex",
-                        gap: "16px",
-                        justifyContent: "flex-end",
-                      }}
-                    >
-                      <button
-                        style={{
-                          padding: "6px 12px",
-                          borderRadius: "8px",
-                          border: "1px solid #8c917b",
-                          backgroundColor: "#fff",
-                          color: "#8c917b",
-                          fontSize: "12px",
-                          cursor: "pointer",
-                          transition: "all 0.2s ease",
-                        }}
-                        onClick={() => handleReplyTo(npcReply.id)}
-                      >
-                        回复
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* 嵌套显示回复该NPC的用户回复，微信朋友圈评论区风 */}
-                  <div
-                    style={{
-                      marginLeft: "40px",
-                      marginTop: "8px",
-                      padding: "10px 12px",
-                      background: "#F5F5F5",
-                      borderRadius: "8px",
-                      gap: "8px",
-                      display: "flex",
-                      flexDirection: "column",
-                    }}
-                  >
-                    {userReplies
-                      .filter(
-                        (userReply) => userReply.repliedTo === npcReply.id,
-                      )
-                      .map((userReply, userIndex, filteredArr) => (
-                        <div
-                          key={userReply.id}
-                          style={{
-                            animation: "fadeIn 0.3s ease-out",
-                            borderBottom:
-                              userIndex < filteredArr.length - 1
-                                ? "1px solid #EAEAEA"
-                                : "none",
-                            paddingBottom:
-                              userIndex < filteredArr.length - 1 ? "8px" : "0",
-                          }}
-                        >
-                          <div
-                            style={{
-                              display: "flex",
-                              justifyContent: "space-between",
-                              alignItems: "flex-start",
-                            }}
-                          >
-                            <div
-                              style={{
-                                fontSize: "13px",
-                                lineHeight: "1.5",
-                                color: "#333",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontWeight: "bold",
-                                  color: "#8c917b",
-                                  marginRight: "4px",
-                                }}
-                              >
-                                {userReply.userName}:
-                              </span>
-                              {userReply.content}
-                            </div>
-                            <div
-                              style={{
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "6px",
-                              }}
-                            >
-                              <span
-                                style={{
-                                  fontSize: "11px",
-                                  color: "#999",
-                                  whiteSpace: "nowrap",
-                                }}
-                              >
-                                {userReply.timestamp.split(" ")[1] ||
-                                  userReply.timestamp}
-                              </span>
-                              <svg
-                                width="14"
-                                height="14"
-                                viewBox="0 0 24 24"
-                                fill={userReply.liked ? "currentColor" : "none"}
-                                stroke="currentColor"
-                                strokeWidth="2"
-                                strokeLinecap="round"
-                                strokeLinejoin="round"
-                                style={{
-                                  cursor: "pointer",
-                                  color: "#8c917b",
-                                }}
-                                onClick={() => handleReplyLike(userReply.id)}
-                              >
-                                <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"></path>
-                              </svg>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-
-                    {/* [新增] 在当前NPC评论卡片内联显示的回复输入框 */}
-                    {replyingTo === npcReply.id && (
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "8px",
-                          marginTop: "4px",
-                          alignItems: "center",
-                          animation: "fadeIn 0.2s",
-                        }}
-                      >
-                        <input
-                          autoFocus
-                          type="text"
-                          value={replyContent}
-                          onChange={(e) => setReplyContent(e.target.value)}
-                          placeholder={`回复 ${npcReply.npc}...`}
-                          style={{
-                            flex: 1,
-                            padding: "8px 12px",
-                            borderRadius: "16px",
-                            border: "1px solid #E0E0E0",
-                            fontSize: "13px",
-                            outline: "none",
-                            background: "#fff",
-                          }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleReplySubmit();
-                          }}
-                        />
-                        <button
-                          onClick={handleReplySubmit}
-                          disabled={!replyContent.trim()}
-                          style={{
-                            padding: "6px 14px",
-                            borderRadius: "16px",
-                            border: "none",
-                            background: replyContent.trim()
-                              ? "#8c917b"
-                              : "#CCC",
-                            color: "#FFF",
-                            fontSize: "13px",
-                            fontWeight: "bold",
-                            cursor: replyContent.trim()
-                              ? "pointer"
-                              : "not-allowed",
-                            transition: "all 0.2s",
-                          }}
-                        >
-                          发送
-                        </button>
-                        <button
-                          onClick={() => {
-                            setReplyingTo(null);
-                            setReplyContent("");
-                          }}
-                          style={{
-                            padding: "6px",
-                            borderRadius: "50%",
-                            border: "none",
-                            background: "transparent",
-                            color: "#999",
-                            fontSize: "18px",
-                            cursor: "pointer",
-                            display: "flex",
-                            alignItems: "center",
-                            justifyContent: "center",
-                          }}
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-
-              {/* 加载更多指示器 */}
-              {loadingMore && (
-                <div
-                  style={{
-                    padding: "20px",
-                    textAlign: "center",
-                    fontSize: "14px",
-                    color: "#8c917b",
-                  }}
-                >
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "center",
-                      alignItems: "center",
-                      gap: "10px",
-                    }}
-                  >
-                    <div
-                      style={{
-                        width: "20px",
-                        height: "20px",
-                        border: "2px solid #f3f3f3",
-                        borderTop: "2px solid #3498db",
-                        borderRadius: "50%",
-                        animation: "spin 1s linear infinite",
-                      }}
-                    ></div>
-                    <span>加载更多回复...</span>
-                  </div>
-                </div>
-              )}
-            </div>
+              <i className={`ph${postFavorited ? "-fill ph-star text-amber-500" : " ph-star"} text-base`}></i>
+              <span>{postFavorited ? "已收藏" : "收藏"}</span>
+            </button>
           </div>
         </div>
+
+        {/* 回复列表区域 */}
+        <div className="pd-reply-section px-1">
+          <div className="pd-reply-section-header">
+            <div className="pd-reply-title">
+              <i className="ph-bold ph-chat-centered-text text-[#D6724B]"></i>
+              <span>回复讨论 ({roleReplies.length + npcReplies.length + userReplies.length})</span>
+            </div>
+            <button
+              onClick={handleRefreshReplies}
+              className="text-xs text-[#D6724B] font-semibold bg-transparent border-none cursor-pointer active-press flex items-center gap-1"
+            >
+              <i className="ph-bold ph-arrows-clockwise"></i>
+              刷新讨论
+            </button>
+          </div>
+
+          <div className="flex flex-col gap-3.5">
+            {/* 1. 直接针对主帖的用户回复 */}
+            {directPostReplies.map((reply) => (
+              <div
+                key={reply.id}
+                className="bg-white rounded-2xl p-3.5 border border-gray-100 shadow-xs"
+              >
+                <div className="flex items-center justify-between mb-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs font-bold text-gray-800">{reply.userName}</span>
+                    <span className="text-[10px] px-1.5 py-0.2 rounded bg-amber-50 text-amber-700 font-medium">
+                      你
+                    </span>
+                  </div>
+                  <span className="text-[10px] text-gray-400">{reply.timestamp}</span>
+                </div>
+                <div className="text-xs text-gray-700 leading-relaxed">{reply.content}</div>
+              </div>
+            ))}
+
+            {/* 2. 角色回复卡片 */}
+            {roleReplies.map((roleReply) => (
+              <div key={roleReply.id} className="pd-role-card">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-[#4E8C7E] text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                      {roleReply.role[0]}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-[#2A5C50]">{roleReply.role}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#D6E8E3] text-[#2A5C50] font-semibold">
+                        密友
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleReplyLike(roleReply.id)}
+                    className={`flex items-center gap-1 text-xs bg-transparent border-none cursor-pointer ${
+                      roleReply.liked ? "text-red-500 font-bold" : "text-gray-400"
+                    }`}
+                  >
+                    <i className={`ph${roleReply.liked ? "-fill ph-heart text-red-500" : " ph-heart"}`}></i>
+                    <span>{roleReply.likes || 0}</span>
+                  </button>
+                </div>
+
+                <div className="text-xs text-gray-800 leading-relaxed mb-2.5">
+                  {roleReply.content}
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => {
+                      setReplyingTo(replyingTo === roleReply.id ? null : roleReply.id);
+                      setReplyContent("");
+                    }}
+                    className="text-[11px] font-bold text-[#4E8C7E] bg-white px-2.5 py-1 rounded-full border border-[#D6E8E3] cursor-pointer active-press shadow-xs"
+                  >
+                    {replyingTo === roleReply.id ? "收起" : "回复"}
+                  </button>
+                </div>
+
+                {/* 嵌套回复与内联输入框 */}
+                <div className="pd-nested-thread">
+                  {userReplies
+                    .filter((r) => r.repliedTo === roleReply.id)
+                    .map((nested) => (
+                      <div key={nested.id} className="text-xs leading-relaxed py-1 border-b border-black/5 last:border-none">
+                        <span className="font-bold text-[#4E8C7E] mr-1.5">{nested.userName}:</span>
+                        <span className="text-gray-700">{nested.content}</span>
+                      </div>
+                    ))}
+
+                  {replyingTo === roleReply.id && (
+                    <div className="flex gap-2 mt-2 pt-2 border-t border-black/5">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={replyContent}
+                        onChange={(e) => setReplyContent(e.target.value)}
+                        placeholder={`回复 @${roleReply.role}...`}
+                        className="flex-1 text-xs px-3 py-1.5 rounded-xl border border-gray-200 outline-none bg-white"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleReplySubmit(roleReply.id);
+                        }}
+                      />
+                      <button
+                        onClick={() => handleReplySubmit(roleReply.id)}
+                        disabled={!replyContent.trim()}
+                        className="px-3 py-1.5 bg-[#4E8C7E] text-white text-xs font-bold rounded-xl border-none cursor-pointer disabled:opacity-50"
+                      >
+                        发送
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+
+            {/* 3. NPC 回复卡片 */}
+            {npcReplies.map((npcReply) => (
+              <div key={npcReply.id} className="pd-npc-card">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-[#8C7B6C] text-white flex items-center justify-center text-xs font-bold shadow-xs">
+                      {npcReply.npc[0]}
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-xs font-bold text-gray-800">{npcReply.npc}</span>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#F5EFEB] text-[#8C7B6C] font-semibold">
+                        客官
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleReplyLike(npcReply.id)}
+                    className={`flex items-center gap-1 text-xs bg-transparent border-none cursor-pointer ${
+                      npcReply.liked ? "text-red-500 font-bold" : "text-gray-400"
+                    }`}
+                  >
+                    <i className={`ph${npcReply.liked ? "-fill ph-heart text-red-500" : " ph-heart"}`}></i>
+                    <span>{npcReply.likes || 0}</span>
+                  </button>
+                </div>
+
+                <div className="text-xs text-gray-700 leading-relaxed mb-2.5">
+                  {npcReply.content}
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={() => {
+                      setReplyingTo(replyingTo === npcReply.id ? null : npcReply.id);
+                      setReplyContent("");
+                    }}
+                    className="text-[11px] font-bold text-[#8C7B6C] bg-[#FDFBF7] px-2.5 py-1 rounded-full border border-[#EFEAE1] cursor-pointer active-press shadow-xs"
+                  >
+                    {replyingTo === npcReply.id ? "收起" : "回复"}
+                  </button>
+                </div>
+
+                {/* 嵌套回复与内联输入框 */}
+                <div className="pd-nested-thread">
+                  {userReplies
+                    .filter((r) => r.repliedTo === npcReply.id)
+                    .map((nested) => (
+                      <div key={nested.id} className="text-xs leading-relaxed py-1 border-b border-black/5 last:border-none">
+                        <span className="font-bold text-[#8C7B6C] mr-1.5">{nested.userName}:</span>
+                        <span className="text-gray-700">{nested.content}</span>
+                      </div>
+                    ))}
+
+                  {replyingTo === npcReply.id && (
+                    <div className="flex gap-2 mt-2 pt-2 border-t border-black/5">
+                      <input
+                        autoFocus
+                        type="text"
+                        value={replyContent}
+                        onChange={(e) => setReplyContent(e.target.value)}
+                        placeholder={`回复 @${npcReply.npc}...`}
+                        className="flex-1 text-xs px-3 py-1.5 rounded-xl border border-gray-200 outline-none bg-white"
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleReplySubmit(npcReply.id);
+                        }}
+                      />
+                      <button
+                        onClick={() => handleReplySubmit(npcReply.id)}
+                        disabled={!replyContent.trim()}
+                        className="px-3 py-1.5 bg-[#8C7B6C] text-white text-xs font-bold rounded-xl border-none cursor-pointer disabled:opacity-50"
+                      >
+                        发送
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* 底部常驻评论输入栏 */}
+      <div className="pd-bottom-bar">
+        <input
+          type="text"
+          value={bottomReplyText}
+          onChange={(e) => setBottomReplyText(e.target.value)}
+          placeholder="写下你的看法，参与讨论..."
+          className="flex-1 text-xs px-3.5 py-2.5 rounded-full border border-gray-200 outline-none bg-white/90 shadow-inner"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && bottomReplyText.trim()) {
+              handleReplySubmit("post", bottomReplyText);
+            }
+          }}
+        />
+        <button
+          onClick={() => handleReplySubmit("post", bottomReplyText)}
+          disabled={!bottomReplyText.trim()}
+          style={{
+            padding: "8px 16px",
+            borderRadius: "20px",
+            background: bottomReplyText.trim()
+              ? "linear-gradient(135deg, #D6724B 0%, #B85832 100%)"
+              : "#E2E8F0",
+            color: bottomReplyText.trim() ? "#FFF" : "#A0AEC0",
+            border: "none",
+            fontSize: "12px",
+            fontWeight: "700",
+            cursor: bottomReplyText.trim() ? "pointer" : "not-allowed",
+            boxShadow: bottomReplyText.trim()
+              ? "0 2px 8px rgba(214, 114, 75, 0.3)"
+              : "none",
+          }}
+          className="active-press"
+        >
+          发送
+        </button>
       </div>
     </div>
   );
