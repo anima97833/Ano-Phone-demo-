@@ -66,23 +66,20 @@ window.buildSystemPrompt = (charProfile) => {
                                                                                                                      姓名：${charProfile.name}
                                                                                                                      性别：${charProfile.gender || "未知"}
                                                                                                                      年龄：${charProfile.age || "未知"}
-                                                                                                                     ${
-                                                                                                                       charProfile.mbtiEnabled
-                                                                                                                         ? `MBTI：${charProfile.mbti || "未知"}
-                                                                                                                     ${
-                                                                                                                       charProfile.enneagram
-                                                                                                                         ? `九型人格：${charProfile.enneagram || "未知"}
+                                                                                                                     ${charProfile.mbtiEnabled
+      ? `MBTI：${charProfile.mbti || "未知"}
+                                                                                                                     ${charProfile.enneagram
+        ? `九型人格：${charProfile.enneagram || "未知"}
                                                                                                                      `
-                                                                                                                         : ``
-                                                                                                                     }`
-                                                                                                                         : ``
-                                                                                                                     }
-                                                                                                                     ${
-                                                                                                                       charProfile.constellationEnabled
-                                                                                                                         ? `星座：${charProfile.constellation || "未知"}
+        : ``
+      }`
+      : ``
+    }
+                                                                                                                     ${charProfile.constellationEnabled
+      ? `星座：${charProfile.constellation || "未知"}
                                                                                                                      `
-                                                                                                                         : ``
-                                                                                                                     }
+      : ``
+    }
                                                                                                                      性格：${charProfile.personality || "未知"}
                                                                                                                      背景：${charProfile.background || "未知"}
                                                                                                                      语言风格：${charProfile.style || "未知"}
@@ -432,7 +429,7 @@ const WeatherPage = () => {
         };
         localStorage.setItem("homepage_weather_advice", JSON.stringify(weatherAdviceObj));
         window.dispatchEvent(new Event("homepage_weather_advice_updated"));
-      } catch (e) {}
+      } catch (e) { }
     }
   };
 
@@ -473,7 +470,7 @@ const WeatherPage = () => {
           const activeUser = savedPersonas.find((p) => String(p.id) === String(activeId));
           if (activeUser) userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 身份:绣衣楼楼主`;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 提取角色设定
       let biosMap = {};
@@ -481,7 +478,7 @@ const WeatherPage = () => {
         if (window.settingsStore?.getCharacterNotes) {
           biosMap = (await window.settingsStore.getCharacterNotes()) || {};
         }
-      } catch (e) {}
+      } catch (e) { }
       const charProfile = selectedChar.profile?.personality || biosMap[selectedChar.name] || selectedChar.profile || "";
 
       // 准备LLM大模型的提示词
@@ -679,7 +676,7 @@ ${userContext ? `${userContext}\n` : ""}
         const parsed = JSON.parse(savedWeather);
         setMyLoc((prev) => ({ ...prev, ...parsed.myLoc }));
         setTheirLoc((prev) => ({ ...prev, ...parsed.theirLoc }));
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // 尝试从IndexedDB加载聊天角色
@@ -930,11 +927,10 @@ ${userContext ? `${userContext}\n` : ""}
           </span>
         </div>
         <div
-          className={`circle-mod ${
-            isLoadingSuggestions
+          className={`circle-mod ${isLoadingSuggestions
               ? "animate-pulse shadow-md"
               : "animate-breathe active-press"
-          }`}
+            }`}
           style={{
             background: isLoadingSuggestions
               ? "linear-gradient(135deg, #9FB7CC 0%, #7E9BB5 100%)"
@@ -1143,7 +1139,7 @@ ${userContext ? `${userContext}\n` : ""}
       {/* 建议弹窗 */}
       {/* 加载动画 */}
       {isLoadingSuggestions && (
-        <div className="weather-modal-mask" onClick={() => {}}>
+        <div className="weather-modal-mask" onClick={() => { }}>
           <div
             className="weather-modal-box"
             onClick={(e) => e.stopPropagation()}
@@ -1976,7 +1972,7 @@ const CalendarPage = () => {
           window.dispatchEvent(
             new CustomEvent("calendar_tasks_updated", { detail: tasks }),
           );
-        } catch (e) {}
+        } catch (e) { }
 
         const calendarStore = window.calendarStore;
         if (calendarStore) {
@@ -3812,13 +3808,13 @@ const T10Page = ({ onPrescribe }) => {
       prev.map((block) =>
         block.id === blockId
           ? {
-              ...block,
-              isDragging: true,
-              dragStartX: x,
-              dragStartY: y,
-              initialX: block.x,
-              initialY: block.y,
-            }
+            ...block,
+            isDragging: true,
+            dragStartX: x,
+            dragStartY: y,
+            initialX: block.x,
+            initialY: block.y,
+          }
           : block,
       ),
     );
@@ -3859,11 +3855,11 @@ const T10Page = ({ onPrescribe }) => {
       prev.map((block) =>
         block.id === blockId
           ? {
-              ...block,
-              isDragging: false,
-              dragStartX: undefined,
-              dragStartY: undefined,
-            }
+            ...block,
+            isDragging: false,
+            dragStartX: undefined,
+            dragStartY: undefined,
+          }
           : block,
       ),
     );
@@ -4417,11 +4413,11 @@ const T10Page = ({ onPrescribe }) => {
             </div>
             {(activeConflict.type === "guojia" ||
               activeConflict.type === "zhangmiao") && (
-              <div
-                className="t10-timer-bar"
-                style={{ animation: "timerShrink 3s linear forwards" }}
-              ></div>
-            )}
+                <div
+                  className="t10-timer-bar"
+                  style={{ animation: "timerShrink 3s linear forwards" }}
+                ></div>
+              )}
           </div>
         </div>
       )}
@@ -7821,9 +7817,8 @@ const VerticalCarousel = ({ onCharacterClick }) => {
               className="carousel-card"
               style={{
                 background: item.themeColor,
-                transform: `translateY(${
-                  index === activeIndex ? 0 : index > activeIndex ? 160 : -160
-                }px)`,
+                transform: `translateY(${index === activeIndex ? 0 : index > activeIndex ? 160 : -160
+                  }px)`,
                 opacity: index === activeIndex ? 1 : 0,
                 zIndex: index === activeIndex ? 10 : 1,
                 pointerEvents: index === activeIndex ? "auto" : "none", // 防止点击看不见的卡片
@@ -7968,19 +7963,19 @@ const HotTrackingList = ({ onPostClick }) => {
   const listData =
     hotPosts.length > 0
       ? hotPosts.slice(0, 8).map((post, i) => ({
-          ...post, // 保存完整的帖子数据
-          views: post.hotScore.toLocaleString(),
-          iconBg: i % 2 === 0 ? "#D8E6D8" : "#F0F0F0",
-        }))
+        ...post, // 保存完整的帖子数据
+        views: post.hotScore.toLocaleString(),
+        iconBg: i % 2 === 0 ? "#D8E6D8" : "#F0F0F0",
+      }))
       : Array.from({ length: 8 }).map((_, i) => ({
-          id: i,
-          title: i === 0 ? "五年绣衣 三年特训" : `热门话题追踪 No.${i + 1}`,
-          views: (28312.22 - i * 1000).toLocaleString("en-US", {
-            minimumFractionDigits: 2,
-            maximumFractionDigits: 2,
-          }),
-          iconBg: i % 2 === 0 ? "#D8E6D8" : "#F0F0F0",
-        }));
+        id: i,
+        title: i === 0 ? "五年绣衣 三年特训" : `热门话题追踪 No.${i + 1}`,
+        views: (28312.22 - i * 1000).toLocaleString("en-US", {
+          minimumFractionDigits: 2,
+          maximumFractionDigits: 2,
+        }),
+        iconBg: i % 2 === 0 ? "#D8E6D8" : "#F0F0F0",
+      }));
 
   return (
     <div className="hotlist-container">
@@ -8181,8 +8176,8 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
         const worldBookContext =
           targetWorldBooks.length > 0
             ? targetWorldBooks
-                .map((book) => `- ${book.title}: ${book.content}`)
-                .join("\n")
+              .map((book) => `- ${book.title}: ${book.content}`)
+              .join("\n")
             : "无特定世界书，请根据区域名称自由发挥";
 
         // 3. 构建提示词
@@ -8237,7 +8232,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
         await new Promise((resolve, reject) => {
           window.sendToLLM(
             [{ role: "user", content: prompt }],
-            (chunk) => {},
+            (chunk) => { },
             (response) => {
               console.log("AI响应:", response);
 
@@ -8749,8 +8744,8 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
       const worldBookContext =
         targetWorldBooks.length > 0
           ? targetWorldBooks
-              .map((book) => `- ${book.title}: ${book.content}`)
-              .join("\n")
+            .map((book) => `- ${book.title}: ${book.content}`)
+            .join("\n")
           : "无特定世界书，请根据区域名称自由发挥";
 
       // 构建提示词，要求生成更多列表项
@@ -8797,7 +8792,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
       await new Promise((resolve) => {
         window.sendToLLM(
           [{ role: "user", content: prompt }],
-          (chunk) => {},
+          (chunk) => { },
           (response) => {
             console.log("加载更多响应:", response);
 
@@ -8969,8 +8964,8 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
         const worldBookContext =
           targetWorldBooks.length > 0
             ? targetWorldBooks
-                .map((book) => `- ${book.title}: ${book.content}`)
-                .join("\n")
+              .map((book) => `- ${book.title}: ${book.content}`)
+              .join("\n")
             : "无特定世界书，请根据区域名称自由发挥";
 
         // 3. 构建提示词
@@ -9025,7 +9020,7 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
         await new Promise((resolve, reject) => {
           window.sendToLLM(
             [{ role: "user", content: prompt }],
-            (chunk) => {},
+            (chunk) => { },
             (response) => {
               console.log("AI响应:", response);
 
@@ -9452,8 +9447,8 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
       typeof postId === "number"
         ? postId
         : String(postId)
-            .split("")
-            .reduce((acc, c) => acc + c.charCodeAt(0), 0) + index;
+          .split("")
+          .reduce((acc, c) => acc + c.charCodeAt(0), 0) + index;
     return authors[Math.abs(hash) % authors.length];
   };
 
@@ -9759,14 +9754,12 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
                             ),
                           }));
                         }}
-                        className={`flex items-center gap-1 text-xs ${
-                          isLiked ? "text-red-500 font-bold" : "text-gray-400"
-                        }`}
+                        className={`flex items-center gap-1 text-xs ${isLiked ? "text-red-500 font-bold" : "text-gray-400"
+                          }`}
                       >
                         <i
-                          className={`ph${
-                            isLiked ? "-fill ph-heart text-red-500" : " ph-heart"
-                          } text-sm`}
+                          className={`ph${isLiked ? "-fill ph-heart text-red-500" : " ph-heart"
+                            } text-sm`}
                         ></i>
                         <span>{(item.likes || 0) + (isLiked ? 1 : 0)}</span>
                       </button>
@@ -9791,14 +9784,12 @@ const AreaDetailPage = ({ onBack, selectedArea }) => {
                             nextFav.toString()
                           );
                         }}
-                        className={`flex items-center text-sm ${
-                          isFavorited ? "text-amber-500" : "text-gray-300"
-                        }`}
+                        className={`flex items-center text-sm ${isFavorited ? "text-amber-500" : "text-gray-300"
+                          }`}
                       >
                         <i
-                          className={`ph${
-                            isFavorited ? "-fill ph-star text-amber-500" : " ph-star"
-                          }`}
+                          className={`ph${isFavorited ? "-fill ph-star text-amber-500" : " ph-star"
+                            }`}
                         ></i>
                       </button>
                     </div>
@@ -10017,8 +10008,8 @@ const PostDetailPage = ({
 }) => {
   const areaContent = propAreaContent ||
     post.areaContent || {
-      sections: ["综合", "热议", "闲聊"],
-    };
+    sections: ["综合", "热议", "闲聊"],
+  };
 
   const [loading, setLoading] = React.useState(true);
   const [npcReplies, setNpcReplies] = React.useState([]);
@@ -10189,7 +10180,7 @@ const PostDetailPage = ({
               const active = personas.find((p) => String(p.id) === String(activeId));
               if (isMounted) setActivePersona(active);
             }
-          } catch (e) {}
+          } catch (e) { }
         }
 
         if (window.chatCharacterStore) {
@@ -10314,7 +10305,7 @@ const PostDetailPage = ({
                 () => resolve()
               );
             });
-          } catch (e) {}
+          } catch (e) { }
         }
       }
 
@@ -10608,9 +10599,8 @@ const PostDetailPage = ({
             {/* 点赞 */}
             <button
               onClick={handlePostLike}
-              className={`flex items-center gap-1.5 text-xs font-bold bg-transparent border-none cursor-pointer active-press ${
-                postLiked ? "text-red-500" : "text-gray-500"
-              }`}
+              className={`flex items-center gap-1.5 text-xs font-bold bg-transparent border-none cursor-pointer active-press ${postLiked ? "text-red-500" : "text-gray-500"
+                }`}
             >
               <i className={`ph${postLiked ? "-fill ph-heart text-red-500" : " ph-heart"} text-base`}></i>
               <span>{postLikes} 赞</span>
@@ -10625,9 +10615,8 @@ const PostDetailPage = ({
             {/* 收藏 */}
             <button
               onClick={handleToggleFavorite}
-              className={`flex items-center gap-1 text-xs font-bold bg-transparent border-none cursor-pointer active-press ${
-                postFavorited ? "text-amber-500" : "text-gray-400"
-              }`}
+              className={`flex items-center gap-1 text-xs font-bold bg-transparent border-none cursor-pointer active-press ${postFavorited ? "text-amber-500" : "text-gray-400"
+                }`}
             >
               <i className={`ph${postFavorited ? "-fill ph-star text-amber-500" : " ph-star"} text-base`}></i>
               <span>{postFavorited ? "已收藏" : "收藏"}</span>
@@ -10688,9 +10677,8 @@ const PostDetailPage = ({
                   </div>
                   <button
                     onClick={() => handleReplyLike(roleReply.id)}
-                    className={`flex items-center gap-1 text-xs bg-transparent border-none cursor-pointer ${
-                      roleReply.liked ? "text-red-500 font-bold" : "text-gray-400"
-                    }`}
+                    className={`flex items-center gap-1 text-xs bg-transparent border-none cursor-pointer ${roleReply.liked ? "text-red-500 font-bold" : "text-gray-400"
+                      }`}
                   >
                     <i className={`ph${roleReply.liked ? "-fill ph-heart text-red-500" : " ph-heart"}`}></i>
                     <span>{roleReply.likes || 0}</span>
@@ -10767,9 +10755,8 @@ const PostDetailPage = ({
                   </div>
                   <button
                     onClick={() => handleReplyLike(npcReply.id)}
-                    className={`flex items-center gap-1 text-xs bg-transparent border-none cursor-pointer ${
-                      npcReply.liked ? "text-red-500 font-bold" : "text-gray-400"
-                    }`}
+                    className={`flex items-center gap-1 text-xs bg-transparent border-none cursor-pointer ${npcReply.liked ? "text-red-500 font-bold" : "text-gray-400"
+                      }`}
                   >
                     <i className={`ph${npcReply.liked ? "-fill ph-heart text-red-500" : " ph-heart"}`}></i>
                     <span>{npcReply.likes || 0}</span>
@@ -14853,11 +14840,11 @@ const ForumPage = () => {
   // 如果显示加入我们页面，用 Portal 渲染到 body，绕过 forum-overlay 的 transform 约束
   const joinUsPortal = showJoinPage
     ? ReactDOM.createPortal(
-        <JoinUsErrorBoundary onBack={() => setShowJoinPage(false)}>
-          <JoinUsPage onBack={() => setShowJoinPage(false)} />
-        </JoinUsErrorBoundary>,
-        document.body,
-      )
+      <JoinUsErrorBoundary onBack={() => setShowJoinPage(false)}>
+        <JoinUsPage onBack={() => setShowJoinPage(false)} />
+      </JoinUsErrorBoundary>,
+      document.body,
+    )
     : null;
 
   // 如果显示帖子详情页面
@@ -14905,11 +14892,11 @@ const ForumPage = () => {
             </div>
           ) : activeTab === "topics" ? (
             <div className="pb-[80px]">
-              <TopicCelebrityPage onBack={() => {}} />
+              <TopicCelebrityPage onBack={() => { }} />
             </div>
           ) : activeTab === "profile" ? (
             <div className="pb-[80px]">
-              <UserProfileDetailPage onBack={() => {}} />
+              <UserProfileDetailPage onBack={() => { }} />
             </div>
           ) : null}
         </div>
@@ -15875,7 +15862,7 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
           userAvatar = activeUser.avatar || "";
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const parsedPrice = parseInt(publishForm.price.replace(/[^0-9]/g, '')) || 50;
 
@@ -16322,11 +16309,10 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
             <div className="text-right flex flex-col items-end">
               <button
                 onClick={handleSignInClick}
-                className={`px-4 py-2 rounded-full font-bold text-xs shadow-sm transition-all flex items-center gap-1 ${
-                  hasSignedToday
+                className={`px-4 py-2 rounded-full font-bold text-xs shadow-sm transition-all flex items-center gap-1 ${hasSignedToday
                     ? "bg-[#EAEAEA] text-[#888] cursor-default"
                     : "bg-gradient-to-r from-[#FF5722] to-[#E64A19] text-white active:scale-95 shadow-[0_3px_10px_rgba(230,74,25,0.3)]"
-                }`}
+                  }`}
               >
                 <i className="ph-bold ph-coins"></i>
                 <span>{hasSignedToday ? "明日再来" : "立即领金"}</span>
@@ -16567,11 +16553,10 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
                     <div
                       key={idx}
                       onClick={() => setSelectedBackpackItem(item)}
-                      className={`p-2.5 rounded-xl border text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-2 ${
-                        selectedBackpackItem?.id === item.id
+                      className={`p-2.5 rounded-xl border text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-2 ${selectedBackpackItem?.id === item.id
                           ? "bg-[#FFF4ED] border-[#D6724B] shadow-xs text-[#D6724B] font-bold"
                           : "bg-[#FDFCF8] border-[#EEE] text-[#555]"
-                      }`}
+                        }`}
                     >
                       <span className="text-base">🎁</span>
                       <div className="truncate flex-1">
@@ -16693,17 +16678,15 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
             <div className="flex gap-2 p-1 bg-[#EFECE6] rounded-xl">
               <button
                 onClick={() => setMyAuctionTab("bids")}
-                className={`flex-1 py-2 rounded-lg font-bold text-xs transition-all ${
-                  myAuctionTab === "bids" ? "bg-white text-[#D6724B] shadow-xs" : "text-[#777]"
-                }`}
+                className={`flex-1 py-2 rounded-lg font-bold text-xs transition-all ${myAuctionTab === "bids" ? "bg-white text-[#D6724B] shadow-xs" : "text-[#777]"
+                  }`}
               >
                 🔨 竞价记录 ({showMyAuctionDetail.bids?.length || 0})
               </button>
               <button
                 onClick={() => setMyAuctionTab("messages")}
-                className={`flex-1 py-2 rounded-lg font-bold text-xs transition-all ${
-                  myAuctionTab === "messages" ? "bg-white text-[#D6724B] shadow-xs" : "text-[#777]"
-                }`}
+                className={`flex-1 py-2 rounded-lg font-bold text-xs transition-all ${myAuctionTab === "messages" ? "bg-white text-[#D6724B] shadow-xs" : "text-[#777]"
+                  }`}
               >
                 💬 买家私聊砍价 ({showMyAuctionDetail.messages?.length || 0})
               </button>
@@ -16817,9 +16800,8 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
                 {tradeItems.map((trade, idx) => (
                   <div
                     key={idx}
-                    className={`bg-white rounded-2xl p-3 shadow-sm border flex flex-col relative overflow-hidden active:scale-[0.98] transition-transform cursor-pointer ${
-                      trade.isMe ? "border-[#FFB299] ring-2 ring-[#FFD8C7]" : "border-[#F2EFDE]"
-                    }`}
+                    className={`bg-white rounded-2xl p-3 shadow-sm border flex flex-col relative overflow-hidden active:scale-[0.98] transition-transform cursor-pointer ${trade.isMe ? "border-[#FFB299] ring-2 ring-[#FFD8C7]" : "border-[#F2EFDE]"
+                      }`}
                     onClick={() => handleTradeClick(trade)}
                   >
                     {trade.isMe && (
@@ -17648,7 +17630,7 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
               </h5>
               <div className="flex flex-col gap-2.5">
                 {selectedProduct.variants &&
-                selectedProduct.variants.length > 0 ? (
+                  selectedProduct.variants.length > 0 ? (
                   selectedProduct.variants.map((variant, vIdx) => (
                     <div
                       key={vIdx}
@@ -17878,9 +17860,8 @@ const T12BottomBar = ({ activeTab, onTabChange, onSettlementClick }) => {
             className="flex flex-col items-center gap-1 w-14 active-press"
           >
             <i
-              className={`ph ${
-                isActive ? tab.icon + "-fill" : tab.icon
-              } text-2xl transition-colors duration-300`}
+              className={`ph ${isActive ? tab.icon + "-fill" : tab.icon
+                } text-2xl transition-colors duration-300`}
               style={{
                 color: isActive
                   ? "var(--text-main)"
@@ -17989,11 +17970,10 @@ const T12DeliveryView = ({ onClose, onGoBackToShopping }) => {
       <div className="px-5 pt-3 pb-2 bg-white flex gap-4 border-b border-[#F5F5F5] sticky top-[57px] z-10">
         <button
           onClick={() => setActiveTab("pending")}
-          className={`flex-1 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-            activeTab === "pending"
+          className={`flex-1 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeTab === "pending"
               ? "bg-[#FFF4ED] text-[#D6724B] border border-[#FFD8C7] shadow-sm"
               : "bg-[#F8F9FA] text-[#666]"
-          }`}
+            }`}
         >
           <i className="ph-fill ph-moped text-lg"></i>
           <span>待收货</span>
@@ -18006,11 +17986,10 @@ const T12DeliveryView = ({ onClose, onGoBackToShopping }) => {
 
         <button
           onClick={() => setActiveTab("completed")}
-          className={`flex-1 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${
-            activeTab === "completed"
+          className={`flex-1 py-2.5 rounded-xl font-bold text-sm flex items-center justify-center gap-2 transition-all ${activeTab === "completed"
               ? "bg-[#EBF7F2] text-[#3D8C68] border border-[#BDE7D3] shadow-sm"
               : "bg-[#F8F9FA] text-[#666]"
-          }`}
+            }`}
         >
           <i className="ph-fill ph-check-circle text-lg"></i>
           <span>已收货</span>
@@ -18173,11 +18152,10 @@ const T12DeliveryView = ({ onClose, onGoBackToShopping }) => {
                     {/* 确认收货操作大按钮 */}
                     <button
                       onClick={() => handleConfirmReceive(order.id)}
-                      className={`w-full mt-3.5 py-3 rounded-xl text-white font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 ${
-                        isArrived
+                      className={`w-full mt-3.5 py-3 rounded-xl text-white font-bold text-sm shadow-md active:scale-95 transition-all flex items-center justify-center gap-2 ${isArrived
                           ? "bg-gradient-to-r from-[#2ECC71] to-[#27AE60] shadow-[0_4px_12px_rgba(46,204,113,0.3)]"
                           : "bg-gradient-to-r from-[#D6724B] to-[#C05D36] shadow-[0_4px_12px_rgba(214,114,75,0.3)]"
-                      }`}
+                        }`}
                     >
                       <i className="ph-bold ph-package text-lg"></i>
                       <span>{isArrived ? "立即签收并放入背包" : "提前签收并存入背包"}</span>
@@ -18584,7 +18562,7 @@ const T12Page = () => {
                       const activeUser = savedPersonas.find((p) => p.id == activeId);
                       if (activeUser && activeUser.name) userAddr = `${activeUser.name}府邸·正殿`;
                     }
-                  } catch (e) {}
+                  } catch (e) { }
 
                   const couriers = [
                     { name: "太疾驰快马骑手·戴宗", vehicle: "神行千里马", rating: 4.98, phone: "传讯灵佩 #9527", avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=DaiZong" },
@@ -18789,7 +18767,7 @@ const T12Page = () => {
           const activeUser = savedPersonas.find((p) => p.id == activeId);
           if (activeUser && activeUser.name) userAddr = `${activeUser.name}府邸·正殿`;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 随机生成快马外卖骑手
       const couriers = [
@@ -19334,15 +19312,15 @@ const T12Page = () => {
                             setSelectedItems((prev) =>
                               e.target.checked
                                 ? {
-                                    ...prev,
-                                    settlement: [...prev.settlement, item.id],
-                                  }
+                                  ...prev,
+                                  settlement: [...prev.settlement, item.id],
+                                }
                                 : {
-                                    ...prev,
-                                    settlement: prev.settlement.filter(
-                                      (id) => id !== item.id,
-                                    ),
-                                  },
+                                  ...prev,
+                                  settlement: prev.settlement.filter(
+                                    (id) => id !== item.id,
+                                  ),
+                                },
                             )
                           }
                           className="w-5 h-5 accent-[var(--primary)]"
@@ -19387,15 +19365,15 @@ const T12Page = () => {
                             setSelectedItems((prev) =>
                               e.target.checked
                                 ? {
-                                    ...prev,
-                                    shopping: [...prev.shopping, item.id],
-                                  }
+                                  ...prev,
+                                  shopping: [...prev.shopping, item.id],
+                                }
                                 : {
-                                    ...prev,
-                                    shopping: prev.shopping.filter(
-                                      (id) => id !== item.id,
-                                    ),
-                                  },
+                                  ...prev,
+                                  shopping: prev.shopping.filter(
+                                    (id) => id !== item.id,
+                                  ),
+                                },
                             )
                           }
                           className="w-5 h-5 accent-[var(--primary)]"
@@ -19437,15 +19415,15 @@ const T12Page = () => {
                             setSelectedItems((prev) =>
                               e.target.checked
                                 ? {
-                                    ...prev,
-                                    secondHand: [...prev.secondHand, item.id],
-                                  }
+                                  ...prev,
+                                  secondHand: [...prev.secondHand, item.id],
+                                }
                                 : {
-                                    ...prev,
-                                    secondHand: prev.secondHand.filter(
-                                      (id) => id !== item.id,
-                                    ),
-                                  },
+                                  ...prev,
+                                  secondHand: prev.secondHand.filter(
+                                    (id) => id !== item.id,
+                                  ),
+                                },
                             )
                           }
                           className="w-5 h-5 accent-[var(--primary)]"
@@ -19486,15 +19464,15 @@ const T12Page = () => {
                             setSelectedItems((prev) =>
                               e.target.checked
                                 ? {
-                                    ...prev,
-                                    ticket: [...prev.ticket, item.id],
-                                  }
+                                  ...prev,
+                                  ticket: [...prev.ticket, item.id],
+                                }
                                 : {
-                                    ...prev,
-                                    ticket: prev.ticket.filter(
-                                      (id) => id !== item.id,
-                                    ),
-                                  },
+                                  ...prev,
+                                  ticket: prev.ticket.filter(
+                                    (id) => id !== item.id,
+                                  ),
+                                },
                             )
                           }
                           className="w-5 h-5 accent-[var(--primary)]"
@@ -20702,89 +20680,89 @@ const T11FooterList = ({ notices }) => {
       </div>
       {randomNotices.length > 0
         ? randomNotices.map((notice, index) => (
+          <div
+            key={notice.id || index}
+            className="t11-simple-list-item click-effect"
+          >
             <div
-              key={notice.id || index}
-              className="t11-simple-list-item click-effect"
+              style={{
+                width: "36px",
+                height: "36px",
+                background: "#F2F4F7",
+                borderRadius: "10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: "12px",
+                flexShrink: 0,
+              }}
             >
+              <i
+                className="ph ph-file-text"
+                style={{ color: "#8FA4B5", fontSize: "18px" }}
+              ></i>
+            </div>
+            <div style={{ flex: 1, overflow: "hidden" }}>
               <div
                 style={{
-                  width: "36px",
-                  height: "36px",
-                  background: "#F2F4F7",
-                  borderRadius: "10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: "12px",
-                  flexShrink: 0,
+                  fontSize: "14px",
+                  color: "#4A4F55",
+                  fontWeight: "500",
+                  marginBottom: "4px",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
               >
-                <i
-                  className="ph ph-file-text"
-                  style={{ color: "#8FA4B5", fontSize: "18px" }}
-                ></i>
+                {notice.title}
               </div>
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    color: "#4A4F55",
-                    fontWeight: "500",
-                    marginBottom: "4px",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  {notice.title}
-                </div>
-                <div style={{ fontSize: "12px", color: "#9DA3AE" }}>
-                  更新于 {notice.time}
-                </div>
+              <div style={{ fontSize: "12px", color: "#9DA3AE" }}>
+                更新于 {notice.time}
               </div>
             </div>
-          ))
+          </div>
+        ))
         : // 当没有公告数据时显示默认内容
-          [1, 2, 3].map((i) => (
-            <div key={i} className="t11-simple-list-item click-effect">
+        [1, 2, 3].map((i) => (
+          <div key={i} className="t11-simple-list-item click-effect">
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                background: "#F2F4F7",
+                borderRadius: "10px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                marginRight: "12px",
+                flexShrink: 0,
+              }}
+            >
+              <i
+                className="ph ph-file-text"
+                style={{ color: "#8FA4B5", fontSize: "18px" }}
+              ></i>
+            </div>
+            <div style={{ flex: 1, overflow: "hidden" }}>
               <div
                 style={{
-                  width: "36px",
-                  height: "36px",
-                  background: "#F2F4F7",
-                  borderRadius: "10px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  marginRight: "12px",
-                  flexShrink: 0,
+                  fontSize: "14px",
+                  color: "#4A4F55",
+                  fontWeight: "500",
+                  marginBottom: "4px",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
                 }}
               >
-                <i
-                  className="ph ph-file-text"
-                  style={{ color: "#8FA4B5", fontSize: "18px" }}
-                ></i>
+                关于各部考勤和请假的暂行规定 {i}
               </div>
-              <div style={{ flex: 1, overflow: "hidden" }}>
-                <div
-                  style={{
-                    fontSize: "14px",
-                    color: "#4A4F55",
-                    fontWeight: "500",
-                    marginBottom: "4px",
-                    whiteSpace: "nowrap",
-                    overflow: "hidden",
-                    textOverflow: "ellipsis",
-                  }}
-                >
-                  关于各部考勤和请假的暂行规定 {i}
-                </div>
-                <div style={{ fontSize: "12px", color: "#9DA3AE" }}>
-                  更新于 10:00 AM
-                </div>
+              <div style={{ fontSize: "12px", color: "#9DA3AE" }}>
+                更新于 10:00 AM
               </div>
             </div>
-          ))}
+          </div>
+        ))}
     </div>
   );
 };
@@ -20807,11 +20785,10 @@ const T11TabBar = ({ activeTab, setActiveTab }) => {
           onClick={() => setActiveTab(tab.value)}
         >
           <i
-            className={`ph ${
-              activeTab === tab.value
+            className={`ph ${activeTab === tab.value
                 ? "ph-" + tab.icon + "-fill"
                 : "ph-" + tab.icon
-            }`}
+              }`}
           ></i>
           <span>{tab.name}</span>
         </div>
@@ -21197,7 +21174,7 @@ ${JSON.stringify(questions, null, 2)}
       const db = await openDB();
       const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
       const store = transaction.objectStore(STORES.USER_SETTINGS);
-      
+
       const newHistory = [record, ...historyList].slice(0, 10);
       await store.put({
         key: "xiuyi_location_survey_history",
@@ -22151,7 +22128,7 @@ ${JSON.stringify(questions, null, 2)}
       const db = await openDB();
       const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
       const store = transaction.objectStore(STORES.USER_SETTINGS);
-      
+
       const newHistory = [record, ...historyList].slice(0, 10); // 保留最近10条
       await store.put({
         key: "xiuyi_satisfaction_survey_history",
@@ -23290,7 +23267,7 @@ ${JSON.stringify(questions, null, 2)}
       const db = await openDB();
       const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
       const store = transaction.objectStore(STORES.USER_SETTINGS);
-      
+
       const newHistory = [record, ...historyList].slice(0, 10);
       await store.put({
         key: "xiuyi_activity_survey_history",
@@ -24247,7 +24224,7 @@ ${JSON.stringify(questions, null, 2)}
       const db = await openDB();
       const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
       const store = transaction.objectStore(STORES.USER_SETTINGS);
-      
+
       const newHistory = [record, ...historyList].slice(0, 10);
       await store.put({
         key: "xiuyi_gala_survey_history",
@@ -25204,7 +25181,7 @@ ${JSON.stringify(questions, null, 2)}
       const db = await openDB();
       const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
       const store = transaction.objectStore(STORES.USER_SETTINGS);
-      
+
       const newHistory = [record, ...historyList].slice(0, 10);
       await store.put({
         key: "xiuyi_spring_survey_history",
@@ -26584,7 +26561,7 @@ const T11AttendanceSubPage = ({ onBack, onOpenChat }) => {
     try {
       const savedAvatars = localStorage.getItem("绣衣楼头像");
       if (savedAvatars) setAvatars(JSON.parse(savedAvatars));
-    } catch (e) {}
+    } catch (e) { }
 
     // 2. 从 IndexedDB 加载人物介绍
     const loadBios = async () => {
@@ -30585,11 +30562,11 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
       {/* 请假申请弹窗 */}
       {showLeaveModal && (
         <div className="t11-modal-mask">
-          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
-              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>请假申请</div>
+          <div style={{ background: "#fdfcf8", width: "100%", maxHeight: "70%", borderRadius: "24px", padding: "24px", overflowY: "auto", boxShadow: "0 10px 40px rgba(0,0,0,0.1)", animation: "elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: "#5a5f4d" }}>请假申请</div>
               <div
-                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
+                style={{ cursor: "pointer", color: "#999", fontSize: "20px" }}
                 onClick={() => setShowLeaveModal(false)}
               >
                 <i className="ph ph-x"></i>
@@ -30600,18 +30577,18 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentLeaveRequests.map((req) => (
-                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
-                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
-                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
-                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
+                <div key={req.id} style={{ background: "#fff", border: "1px solid #eee", borderRadius: "16px", padding: "16px", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", color: "#5a5f4d", marginBottom: "6px" }}>{req.char}</div>
+                  <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.5", marginBottom: "12px" }}>{req.desc}</div>
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "1px solid #ddd", background: "#fff", color: "#999", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleLeaveAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)", color: "#fff", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleLeaveAction(req.id, "approve")}
                     >
                       准了
@@ -30627,11 +30604,11 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
       {/* 经费申请弹窗 */}
       {showFundModal && (
         <div className="t11-modal-mask">
-          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
-              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>经费申请</div>
+          <div style={{ background: "#fdfcf8", width: "100%", maxHeight: "70%", borderRadius: "24px", padding: "24px", overflowY: "auto", boxShadow: "0 10px 40px rgba(0,0,0,0.1)", animation: "elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: "#5a5f4d" }}>经费申请</div>
               <div
-                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
+                style={{ cursor: "pointer", color: "#999", fontSize: "20px" }}
                 onClick={() => setShowFundModal(false)}
               >
                 <i className="ph ph-x"></i>
@@ -30642,18 +30619,18 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentFundRequests.map((req) => (
-                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
-                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
-                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
-                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
+                <div key={req.id} style={{ background: "#fff", border: "1px solid #eee", borderRadius: "16px", padding: "16px", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", color: "#5a5f4d", marginBottom: "6px" }}>{req.char}</div>
+                  <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.5", marginBottom: "12px" }}>{req.desc}</div>
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "1px solid #ddd", background: "#fff", color: "#999", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleFundAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)", color: "#fff", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleFundAction(req.id, "approve")}
                     >
                       准了
@@ -30669,11 +30646,11 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
       {/* 外出申请弹窗 */}
       {showOutingModal && (
         <div className="t11-modal-mask">
-          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
-              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>外出申请</div>
+          <div style={{ background: "#fdfcf8", width: "100%", maxHeight: "70%", borderRadius: "24px", padding: "24px", overflowY: "auto", boxShadow: "0 10px 40px rgba(0,0,0,0.1)", animation: "elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: "#5a5f4d" }}>外出申请</div>
               <div
-                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
+                style={{ cursor: "pointer", color: "#999", fontSize: "20px" }}
                 onClick={() => setShowOutingModal(false)}
               >
                 <i className="ph ph-x"></i>
@@ -30684,18 +30661,18 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentOutingRequests.map((req) => (
-                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
-                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
-                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
-                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
+                <div key={req.id} style={{ background: "#fff", border: "1px solid #eee", borderRadius: "16px", padding: "16px", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", color: "#5a5f4d", marginBottom: "6px" }}>{req.char}</div>
+                  <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.5", marginBottom: "12px" }}>{req.desc}</div>
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "1px solid #ddd", background: "#fff", color: "#999", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleOutingAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)", color: "#fff", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleOutingAction(req.id, "approve")}
                     >
                       准了
@@ -30711,11 +30688,11 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
       {/* 费用报销弹窗 */}
       {showExpenseModal && (
         <div className="t11-modal-mask">
-          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
-              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>费用报销</div>
+          <div style={{ background: "#fdfcf8", width: "100%", maxHeight: "70%", borderRadius: "24px", padding: "24px", overflowY: "auto", boxShadow: "0 10px 40px rgba(0,0,0,0.1)", animation: "elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: "#5a5f4d" }}>费用报销</div>
               <div
-                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
+                style={{ cursor: "pointer", color: "#999", fontSize: "20px" }}
                 onClick={() => setShowExpenseModal(false)}
               >
                 <i className="ph ph-x"></i>
@@ -30726,18 +30703,18 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentExpenseRequests.map((req) => (
-                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
-                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
-                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
-                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
+                <div key={req.id} style={{ background: "#fff", border: "1px solid #eee", borderRadius: "16px", padding: "16px", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", color: "#5a5f4d", marginBottom: "6px" }}>{req.char}</div>
+                  <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.5", marginBottom: "12px" }}>{req.desc}</div>
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "1px solid #ddd", background: "#fff", color: "#999", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleExpenseAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)", color: "#fff", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleExpenseAction(req.id, "approve")}
                     >
                       准了
@@ -30753,11 +30730,11 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
       {/* 采购申请弹窗 */}
       {showPurchaseModal && (
         <div className="t11-modal-mask">
-          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
-              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>采购申请</div>
+          <div style={{ background: "#fdfcf8", width: "100%", maxHeight: "70%", borderRadius: "24px", padding: "24px", overflowY: "auto", boxShadow: "0 10px 40px rgba(0,0,0,0.1)", animation: "elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: "#5a5f4d" }}>采购申请</div>
               <div
-                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
+                style={{ cursor: "pointer", color: "#999", fontSize: "20px" }}
                 onClick={() => setShowPurchaseModal(false)}
               >
                 <i className="ph ph-x"></i>
@@ -30768,18 +30745,18 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentPurchaseRequests.map((req) => (
-                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
-                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
-                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
-                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
+                <div key={req.id} style={{ background: "#fff", border: "1px solid #eee", borderRadius: "16px", padding: "16px", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", color: "#5a5f4d", marginBottom: "6px" }}>{req.char}</div>
+                  <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.5", marginBottom: "12px" }}>{req.desc}</div>
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "1px solid #ddd", background: "#fff", color: "#999", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handlePurchaseAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)", color: "#fff", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handlePurchaseAction(req.id, "approve")}
                     >
                       准了
@@ -30795,11 +30772,11 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
       {/* 入职申请弹窗 */}
       {showHireModal && (
         <div className="t11-modal-mask">
-          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
-              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>入职申请</div>
+          <div style={{ background: "#fdfcf8", width: "100%", maxHeight: "70%", borderRadius: "24px", padding: "24px", overflowY: "auto", boxShadow: "0 10px 40px rgba(0,0,0,0.1)", animation: "elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: "#5a5f4d" }}>入职申请</div>
               <div
-                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
+                style={{ cursor: "pointer", color: "#999", fontSize: "20px" }}
                 onClick={() => setShowHireModal(false)}
               >
                 <i className="ph ph-x"></i>
@@ -30810,18 +30787,18 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentHireRequests.map((req) => (
-                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
-                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
-                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
-                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
+                <div key={req.id} style={{ background: "#fff", border: "1px solid #eee", borderRadius: "16px", padding: "16px", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", color: "#5a5f4d", marginBottom: "6px" }}>{req.char}</div>
+                  <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.5", marginBottom: "12px" }}>{req.desc}</div>
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "1px solid #ddd", background: "#fff", color: "#999", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleHireAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)", color: "#fff", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleHireAction(req.id, "approve")}
                     >
                       准了
@@ -30837,11 +30814,11 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
       {/* 物品领用弹窗 */}
       {showItemModal && (
         <div className="t11-modal-mask">
-          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
-              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>物品领用</div>
+          <div style={{ background: "#fdfcf8", width: "100%", maxHeight: "70%", borderRadius: "24px", padding: "24px", overflowY: "auto", boxShadow: "0 10px 40px rgba(0,0,0,0.1)", animation: "elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: "#5a5f4d" }}>物品领用</div>
               <div
-                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
+                style={{ cursor: "pointer", color: "#999", fontSize: "20px" }}
                 onClick={() => setShowItemModal(false)}
               >
                 <i className="ph ph-x"></i>
@@ -30852,18 +30829,18 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentItemRequests.map((req) => (
-                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
-                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
-                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
-                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
+                <div key={req.id} style={{ background: "#fff", border: "1px solid #eee", borderRadius: "16px", padding: "16px", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", color: "#5a5f4d", marginBottom: "6px" }}>{req.char}</div>
+                  <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.5", marginBottom: "12px" }}>{req.desc}</div>
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "1px solid #ddd", background: "#fff", color: "#999", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleItemAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)", color: "#fff", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleItemAction(req.id, "approve")}
                     >
                       准了
@@ -30879,11 +30856,11 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
       {/* 培训申请弹窗 */}
       {showTrainingModal && (
         <div className="t11-modal-mask">
-          <div style={{background:"#fdfcf8",width:"100%",maxHeight:"70%",borderRadius:"24px",padding:"24px",overflowY:"auto",boxShadow:"0 10px 40px rgba(0,0,0,0.1)",animation:"elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)"}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:"20px"}}>
-              <div style={{fontSize:"18px",fontWeight:"bold",color:"#5a5f4d"}}>培训申请</div>
+          <div style={{ background: "#fdfcf8", width: "100%", maxHeight: "70%", borderRadius: "24px", padding: "24px", overflowY: "auto", boxShadow: "0 10px 40px rgba(0,0,0,0.1)", animation: "elasticPop 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div style={{ fontSize: "18px", fontWeight: "bold", color: "#5a5f4d" }}>培训申请</div>
               <div
-                style={{cursor:"pointer",color:"#999",fontSize:"20px"}}
+                style={{ cursor: "pointer", color: "#999", fontSize: "20px" }}
                 onClick={() => setShowTrainingModal(false)}
               >
                 <i className="ph ph-x"></i>
@@ -30894,18 +30871,18 @@ ${worldBookContext || "东汉末年乱世，广陵王（女主）兼任绣衣楼
               style={{ maxHeight: "60vh", overflowY: "auto" }}
             >
               {currentTrainingRequests.map((req) => (
-                <div key={req.id} style={{background:"#fff",border:"1px solid #eee",borderRadius:"16px",padding:"16px",marginBottom:"12px"}}>
-                  <div style={{fontSize:"16px",fontWeight:"bold",color:"#5a5f4d",marginBottom:"6px"}}>{req.char}</div>
-                  <div style={{fontSize:"13px",color:"#888",lineHeight:"1.5",marginBottom:"12px"}}>{req.desc}</div>
-                  <div style={{display:"flex",gap:"10px",justifyContent:"flex-end"}}>
+                <div key={req.id} style={{ background: "#fff", border: "1px solid #eee", borderRadius: "16px", padding: "16px", marginBottom: "12px" }}>
+                  <div style={{ fontSize: "16px", fontWeight: "bold", color: "#5a5f4d", marginBottom: "6px" }}>{req.char}</div>
+                  <div style={{ fontSize: "13px", color: "#888", lineHeight: "1.5", marginBottom: "12px" }}>{req.desc}</div>
+                  <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"1px solid #ddd",background:"#fff",color:"#999",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "1px solid #ddd", background: "#fff", color: "#999", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleTrainingAction(req.id, "reject")}
                     >
                       驳回
                     </button>
                     <button
-                      style={{padding:"8px 18px",borderRadius:"14px",border:"none",background:"linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)",color:"#fff",fontSize:"13px",fontWeight:"bold",cursor:"pointer"}}
+                      style={{ padding: "8px 18px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg,#A8C8BA 0%,#8FA99D 100%)", color: "#fff", fontSize: "13px", fontWeight: "bold", cursor: "pointer" }}
                       onClick={() => handleTrainingAction(req.id, "approve")}
                     >
                       准了
@@ -32726,7 +32703,7 @@ const T11TelegramChatPage = ({ character, characterBio, avatar, onBack }) => {
 - 性格特征：${activeUser.personality || "果敢睿智，心思缜密，统领谍报"}
 - 身份背景描述：${activeUser.description || activeUser.background || "汉室宗亲，执掌绣衣楼大权，也是你誓死效忠/打交道的楼主"}`;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. 角色系统 Prompt
       const systemPrompt = `你正在《代号鸢》与绣衣楼古代谍报世界中，扮演角色【${character}】。
@@ -33458,7 +33435,7 @@ const T11MessageListPage = ({ onBack, directChatChar, onClearDirectChatChar }) =
     try {
       const savedAvatars = localStorage.getItem("绣衣楼头像");
       if (savedAvatars) setAvatars(JSON.parse(savedAvatars));
-    } catch (e) {}
+    } catch (e) { }
 
     // 2. 人物介绍
     const loadBiosAndChats = async () => {
@@ -33788,7 +33765,7 @@ const T11InsideContactsPage = ({ onBack }) => {
     if (savedAvatars) {
       try {
         setAvatars(JSON.parse(savedAvatars));
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // 从 IndexedDB 加载人物介绍
@@ -36665,9 +36642,9 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
           {taCharacter ? (
             taCharacter.avatar ? (
               typeof taCharacter.avatar === "string" &&
-              (taCharacter.avatar.startsWith("data:image") ||
-                taCharacter.avatar.startsWith("http") ||
-                taCharacter.avatar.startsWith("/")) ? (
+                (taCharacter.avatar.startsWith("data:image") ||
+                  taCharacter.avatar.startsWith("http") ||
+                  taCharacter.avatar.startsWith("/")) ? (
                 <img
                   src={taCharacter.avatar}
                   style={{
@@ -37060,9 +37037,9 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
                     >
                       {char.avatar ? (
                         typeof char.avatar === "string" &&
-                        (char.avatar.startsWith("data:image") ||
-                          char.avatar.startsWith("http") ||
-                          char.avatar.startsWith("/")) ? (
+                          (char.avatar.startsWith("data:image") ||
+                            char.avatar.startsWith("http") ||
+                            char.avatar.startsWith("/")) ? (
                           <img
                             src={char.avatar}
                             style={{
@@ -37661,12 +37638,12 @@ const T9Page = () => {
       }
 
       if (recentRedPackets.length > 0 || recentGifts.length > 0) {
-        const rpTexts = recentRedPackets.slice(-3).map((rp) => 
-          `【收到${mePersona?.name || '广陵王'}专属红包】：金额 ${rp.content.amount} 铢，寄语：“${rp.content.blessing || '一点心意' }”`
+        const rpTexts = recentRedPackets.slice(-3).map((rp) =>
+          `【收到${mePersona?.name || '广陵王'}专属红包】：金额 ${rp.content.amount} 铢，寄语：“${rp.content.blessing || '一点心意'}”`
         ).join("；");
 
         const giftTexts = recentGifts.slice(-3).map((g) =>
-          `【收到${mePersona?.name || '广陵王'}心意佳礼】：【${g.content.itemName}】（来源:${g.content.merchant}），赠言：“${g.content.blessing || '见字如晤' }”`
+          `【收到${mePersona?.name || '广陵王'}心意佳礼】：【${g.content.itemName}】（来源:${g.content.merchant}），赠言：“${g.content.blessing || '见字如晤'}”`
         ).join("；");
 
         redPacketContext = `
@@ -37713,7 +37690,7 @@ ${rpTexts ? rpTexts + '\n' : ''}${giftTexts ? giftTexts + '\n' : ''}
 
                 // 兜底保障：若有红包记录且AI未生成红包相关账目，自动置顶插入最新红包账目
                 if (recentRedPackets.length > 0) {
-                  const hasRpBill = formatted.some(b => 
+                  const hasRpBill = formatted.some(b =>
                     b.category && (b.category.includes("红包") || b.category.includes("心意") || b.category.includes("红封"))
                   );
                   if (!hasRpBill) {
@@ -37957,7 +37934,7 @@ ${rpTexts ? rpTexts + '\n' : ''}${giftTexts ? giftTexts + '\n' : ''}
         if (window.settingsStore?.getCharacterNotes) {
           biosMap = (await window.settingsStore.getCharacterNotes()) || {};
         }
-      } catch (e) {}
+      } catch (e) { }
       const charProfile = taCharacter.profile?.personality || biosMap[taCharacter.name] || taCharacter.profile || "";
       const charContext = `【角色设定】\n姓名:${taCharacter.name}\n人设口吻与背景:${typeof charProfile === "string" ? charProfile : JSON.stringify(charProfile)}`;
 
@@ -38393,9 +38370,9 @@ JSON 格式示例：
                   >
                     {taCharacter.avatar ? (
                       typeof taCharacter.avatar === "string" &&
-                      (taCharacter.avatar.startsWith("data:image") ||
-                        taCharacter.avatar.startsWith("http") ||
-                        taCharacter.avatar.startsWith("/")) ? (
+                        (taCharacter.avatar.startsWith("data:image") ||
+                          taCharacter.avatar.startsWith("http") ||
+                          taCharacter.avatar.startsWith("/")) ? (
                         <img
                           src={taCharacter.avatar}
                           style={{
@@ -38543,89 +38520,89 @@ JSON 格式示例：
 
       {/* ================== 任务拆解弹窗 ================== */}
       {showTaskModal &&
-      ReactDOM.createPortal(
-        React.createElement(
-          React.Fragment,
-          null,
-          React.createElement("div", {
-            style: {
-              position: "fixed",
-              top: 0,
-              left: 0,
-              right: 0,
-              bottom: 0,
-              backgroundColor: "rgba(0, 0, 0, 0.5)",
-              zIndex: 99998,
-              backdropFilter: "blur(2px)",
-            },
-            onClick: () => setShowTaskModal(false),
-          }),
+        ReactDOM.createPortal(
           React.createElement(
-            "div",
-            {
-              className: "no-scrollbar",
+            React.Fragment,
+            null,
+            React.createElement("div", {
               style: {
                 position: "fixed",
-                bottom: 0,
+                top: 0,
                 left: 0,
                 right: 0,
-                maxHeight: "80vh",
-                overflowY: "auto",
-                backgroundColor: "#F5F6F8",
-                borderTopLeftRadius: "24px",
-                borderTopRightRadius: "24px",
-                padding: "24px",
-                boxShadow: "0 -10px 40px rgba(0, 0, 0, 0.2)",
-                zIndex: 99999,
-                display: "flex",
-                flexDirection: "column",
-                animation: "slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)",
+                bottom: 0,
+                backgroundColor: "rgba(0, 0, 0, 0.5)",
+                zIndex: 99998,
+                backdropFilter: "blur(2px)",
               },
-            },
+              onClick: () => setShowTaskModal(false),
+            }),
             React.createElement(
               "div",
               {
+                className: "no-scrollbar",
                 style: {
+                  position: "fixed",
+                  bottom: 0,
+                  left: 0,
+                  right: 0,
+                  maxHeight: "80vh",
+                  overflowY: "auto",
+                  backgroundColor: "#F5F6F8",
+                  borderTopLeftRadius: "24px",
+                  borderTopRightRadius: "24px",
+                  padding: "24px",
+                  boxShadow: "0 -10px 40px rgba(0, 0, 0, 0.2)",
+                  zIndex: 99999,
                   display: "flex",
-                  justifyContent: "space-between",
-                  alignItems: "center",
-                  marginBottom: "20px",
+                  flexDirection: "column",
+                  animation: "slideUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)",
                 },
               },
               React.createElement(
-                "h2",
+                "div",
                 {
                   style: {
-                    fontSize: "20px",
-                    fontWeight: "bold",
-                    color: "#5a5f4d",
                     display: "flex",
+                    justifyContent: "space-between",
                     alignItems: "center",
-                    gap: "6px",
+                    marginBottom: "20px",
                   },
                 },
-                React.createElement("i", {
-                  className: "ph-fill ph-list-checks",
-                  style: { color: "#8fa99d" },
-                }),
-                `与 ${taCharacter?.name || "TA"} 的任务拆解`,
-              ),
-              React.createElement(
-                "button",
-                {
-                  onClick: () => setShowTaskModal(false),
-                  style: {
-                    background: "none",
-                    border: "none",
-                    fontSize: "24px",
-                    color: "#999",
-                    cursor: "pointer",
+                React.createElement(
+                  "h2",
+                  {
+                    style: {
+                      fontSize: "20px",
+                      fontWeight: "bold",
+                      color: "#5a5f4d",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    },
                   },
-                },
-                "×",
+                  React.createElement("i", {
+                    className: "ph-fill ph-list-checks",
+                    style: { color: "#8fa99d" },
+                  }),
+                  `与 ${taCharacter?.name || "TA"} 的任务拆解`,
+                ),
+                React.createElement(
+                  "button",
+                  {
+                    onClick: () => setShowTaskModal(false),
+                    style: {
+                      background: "none",
+                      border: "none",
+                      fontSize: "24px",
+                      color: "#999",
+                      cursor: "pointer",
+                    },
+                  },
+                  "×",
+                ),
               ),
-            ),
-            taskFeedback &&
+              taskFeedback &&
               React.createElement(
                 "div",
                 {
@@ -38642,8 +38619,8 @@ JSON 格式示例：
                 },
                 taskFeedback,
               ),
-            !currentBreakdown
-              ? React.createElement(
+              !currentBreakdown
+                ? React.createElement(
                   "div",
                   {
                     className:
@@ -38715,7 +38692,7 @@ JSON 格式示例：
                       : `呼叫 ${taCharacter?.name || "TA"} 拆解`,
                   ),
                 )
-              : React.createElement(
+                : React.createElement(
                   "div",
                   { className: "animate-fadeIn" },
                   React.createElement(
@@ -38847,23 +38824,23 @@ JSON 格式示例：
                     "放弃该任务",
                   ),
                 ),
-            React.createElement(
-              "div",
-              { style: { marginTop: "30px" } },
               React.createElement(
                 "div",
-                {
-                  style: {
-                    fontSize: "14px",
-                    fontWeight: "bold",
-                    color: "#8c917b",
-                    marginBottom: "12px",
+                { style: { marginTop: "30px" } },
+                React.createElement(
+                  "div",
+                  {
+                    style: {
+                      fontSize: "14px",
+                      fontWeight: "bold",
+                      color: "#8c917b",
+                      marginBottom: "12px",
+                    },
                   },
-                },
-                `与 ${taCharacter?.name || "TA"} 的归档履历`,
-              ),
-              breakdownHistory.length === 0
-                ? React.createElement(
+                  `与 ${taCharacter?.name || "TA"} 的归档履历`,
+                ),
+                breakdownHistory.length === 0
+                  ? React.createElement(
                     "div",
                     {
                       style: {
@@ -38875,7 +38852,7 @@ JSON 格式示例：
                     },
                     "尚未有任何拆解记录",
                   )
-                : React.createElement(
+                  : React.createElement(
                     "div",
                     {
                       style: {
@@ -38929,23 +38906,23 @@ JSON 格式示例：
                         ),
                         record.hasFlower
                           ? React.createElement(
-                              "div",
-                              { style: { fontSize: "24px" } },
-                              "🌸",
-                            )
+                            "div",
+                            { style: { fontSize: "24px" } },
+                            "🌸",
+                          )
                           : React.createElement(
-                              "div",
-                              { style: { fontSize: "12px", color: "#ccc" } },
-                              "已放弃",
-                            ),
+                            "div",
+                            { style: { fontSize: "12px", color: "#ccc" } },
+                            "已放弃",
+                          ),
                       ),
                     ),
                   ),
+              ),
             ),
           ),
-        ),
-        document.body,
-      )}
+          document.body,
+        )}
 
       {/* ================== 共同记账弹窗 ================== */}
       {showBillingModal && (
@@ -40767,17 +40744,15 @@ const T13TabSection = ({ activeTab, setActiveTab }) => (
             className={`
                                                                                                                                         flex-1 h-14 rounded-2xl flex items-center justify-center gap-2 text-sm font-medium shadow-[var(--shadow-soft)]
                                                                                                                                         active-press transition-all duration-300 border border-white/50
-                                                                                                                                        ${
-                                                                                                                                          isActive
-                                                                                                                                            ? "bg-[var(--accent-primary)] text-white shadow-[var(--shadow-button)] transform -translate-y-1"
-                                                                                                                                            : "bg-white text-[var(--text-main)]"
-                                                                                                                                        }
+                                                                                                                                        ${isActive
+                ? "bg-[var(--accent-primary)] text-white shadow-[var(--shadow-button)] transform -translate-y-1"
+                : "bg-white text-[var(--text-main)]"
+              }
                                                                                                                                       `}
           >
             <i
-              className={`ph ${tab.icon} text-lg ${
-                isActive ? "opacity-100" : "opacity-60"
-              }`}
+              className={`ph ${tab.icon} text-lg ${isActive ? "opacity-100" : "opacity-60"
+                }`}
             ></i>
             {tab.name}
           </button>
@@ -40841,11 +40816,9 @@ const T13BottomNav = () => {
             className="flex flex-col items-center justify-center gap-1 w-16 h-full active-press relative"
           >
             <i
-              className={`ph ${
-                isActive ? item.icon + "-fill" : item.icon
-              } text-2xl transition-colors ${
-                isActive ? "text-[var(--accent-primary)]" : "text-gray-400"
-              }`}
+              className={`ph ${isActive ? item.icon + "-fill" : item.icon
+                } text-2xl transition-colors ${isActive ? "text-[var(--accent-primary)]" : "text-gray-400"
+                }`}
             ></i>
             {isActive && (
               <span className="absolute -bottom-1 w-1 h-1 bg-[var(--accent-primary)] rounded-full"></span>
@@ -43466,7 +43439,7 @@ const T13MapPage = ({ onBack }) => {
                 style={{
                   background:
                     routeData.feasible.includes("否") ||
-                    routeData.feasible.includes("危险")
+                      routeData.feasible.includes("危险")
                       ? "#F2D0D0"
                       : "#D6EAD6",
                   color: "#5A5F4D",
@@ -43593,57 +43566,57 @@ const T13MapPage = ({ onBack }) => {
             </div>
           </div>
         ) : /* 情况B：点击地图区域显示的默认详情 */
-        activeRegion && !showCountyModal ? (
-          <>
-            <div className="map-info-title">
-              <span
+          activeRegion && !showCountyModal ? (
+            <>
+              <div className="map-info-title">
+                <span
+                  style={{
+                    fontSize: "32px",
+                    fontFamily: '"Zhi Mang Xing", serif',
+                    color: activeRegion.color,
+                    filter: "saturate(0.8) brightness(0.6)",
+                  }}
+                >
+                  {activeRegion.name}
+                </span>
+                <span className="map-info-tag">汉十三州</span>
+              </div>
+              <div
                 style={{
-                  fontSize: "32px",
-                  fontFamily: '"Zhi Mang Xing", serif',
-                  color: activeRegion.color,
-                  filter: "saturate(0.8) brightness(0.6)",
+                  fontSize: "15px",
+                  color: "#8C917B",
+                  lineHeight: "1.8",
+                  marginTop: "16px",
                 }}
               >
-                {activeRegion.name}
-              </span>
-              <span className="map-info-tag">汉十三州</span>
-            </div>
-            <div
-              style={{
-                fontSize: "15px",
-                color: "#8C917B",
-                lineHeight: "1.8",
-                marginTop: "16px",
-              }}
-            >
-              {activeRegion.desc}
-            </div>
+                {activeRegion.desc}
+              </div>
 
-            <div style={{ marginTop: "20px" }}>
-              <button
-                onClick={() => setShowCountyModal(true)}
-                style={{
-                  padding: "12px 24px",
-                  borderRadius: "12px",
-                  background: activeRegion.color,
-                  color: "#fff",
-                  border: "none",
-                  fontWeight: "bold",
-                  fontSize: "14px",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                  transition: "all 0.3s ease",
-                }}
-                onMouseEnter={(e) => (e.target.style.transform = "scale(1.05)")}
-                onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}
-                onMouseDown={(e) => (e.target.style.transform = "scale(0.95)")}
-                onMouseUp={(e) => (e.target.style.transform = "scale(1.05)")}
-              >
-                查看郡县
-              </button>
-            </div>
-          </>
-        ) : null}
+              <div style={{ marginTop: "20px" }}>
+                <button
+                  onClick={() => setShowCountyModal(true)}
+                  style={{
+                    padding: "12px 24px",
+                    borderRadius: "12px",
+                    background: activeRegion.color,
+                    color: "#fff",
+                    border: "none",
+                    fontWeight: "bold",
+                    fontSize: "14px",
+                    cursor: "pointer",
+                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                    transition: "all 0.3s ease",
+                  }}
+                  onMouseEnter={(e) => (e.target.style.transform = "scale(1.05)")}
+                  onMouseLeave={(e) => (e.target.style.transform = "scale(1)")}
+                  onMouseDown={(e) => (e.target.style.transform = "scale(0.95)")}
+                  onMouseUp={(e) => (e.target.style.transform = "scale(1.05)")}
+                >
+                  查看郡县
+                </button>
+              </div>
+            </>
+          ) : null}
       </div>
 
       {isGeneratingMap && (
@@ -43790,7 +43763,7 @@ const T13FortunePage = ({ onBack }) => {
             userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "无"}, 背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const profile = char.profile || {};
       const charContext = `【角色设定】\n姓名:${char.name}\n性别:${profile.gender || "未知"}\nMBTI:${profile.mbti || "无"}\n星座:${profile.constellation || "无"}\n性格:${profile.personality || "无"}\n背景:${profile.background || "无"}\n说话风格:${profile.style || "无"}`;
@@ -44987,7 +44960,7 @@ const T13EmperorPage = ({ onBack }) => {
             userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "无"}, 背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const profile = char.profile || {};
       const charContext = `【传信角色设定】\n姓名:${char.name}\n性别:${profile.gender || "未知"}\nMBTI:${profile.mbti || "无"}\n星座:${profile.constellation || "无"}\n性格:${profile.personality || "无"}\n背景:${profile.background || "无"}\n说话风格:${profile.style || "无"}`;
@@ -45455,17 +45428,17 @@ const T13EmperorPage = ({ onBack }) => {
               border: "1px solid #8c917b",
               background:
                 politicalNews.length > 0 &&
-                currentNewsIndex < politicalNews.length - 1
+                  currentNewsIndex < politicalNews.length - 1
                   ? "#fff"
                   : "rgba(255,255,255,0.5)",
               color:
                 politicalNews.length > 0 &&
-                currentNewsIndex < politicalNews.length - 1
+                  currentNewsIndex < politicalNews.length - 1
                   ? "#8c917b"
                   : "rgba(140,145,123,0.5)",
               cursor:
                 politicalNews.length > 0 &&
-                currentNewsIndex < politicalNews.length - 1
+                  currentNewsIndex < politicalNews.length - 1
                   ? "pointer"
                   : "not-allowed",
               display: "flex",
@@ -45846,7 +45819,7 @@ const T13GamblingPage = ({ onBack }) => {
 const JumpGameChatDB = {
   dbName: "jump_game_db",
   dbVersion: 1,
-  getDB: function() {
+  getDB: function () {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion);
       request.onupgradeneeded = (e) => {
@@ -45859,7 +45832,7 @@ const JumpGameChatDB = {
       request.onerror = (e) => reject(e.target.error);
     });
   },
-  getMessages: async function(charId) {
+  getMessages: async function (charId) {
     if (!charId) return [];
     try {
       const db = await this.getDB();
@@ -45875,7 +45848,7 @@ const JumpGameChatDB = {
       return [];
     }
   },
-  saveMessage: async function(charId, message) {
+  saveMessage: async function (charId, message) {
     if (!charId) return;
     try {
       const db = await this.getDB();
@@ -45892,7 +45865,7 @@ const JumpGameChatDB = {
       console.warn("Failed to save in-game chat message:", e);
     }
   },
-  clearMessages: async function(charId) {
+  clearMessages: async function (charId) {
     if (!charId) return;
     try {
       const db = await this.getDB();
@@ -45983,7 +45956,7 @@ const JumpGamePage = ({ onBack }) => {
     try {
       const savedHigh = parseInt(localStorage.getItem("jump_game_highest_level") || "1", 10);
       if (!isNaN(savedHigh)) setHighestLevel(savedHigh);
-    } catch (e) {}
+    } catch (e) { }
 
     const loadCharacters = async () => {
       let chars = [];
@@ -46219,7 +46192,7 @@ const JumpGamePage = ({ onBack }) => {
           `木桩训练 · 第${lvl}关${tag}汇总 (+${coinsToCommit}铢)`
         );
       }
-    } catch (e) {}
+    } catch (e) { }
   };
 
   const checkLanding = (finalX) => {
@@ -46367,7 +46340,7 @@ const JumpGamePage = ({ onBack }) => {
             userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const profile = selectedChar.profile || {};
       const charContext = `【代打角色设定】
@@ -46387,12 +46360,12 @@ MBTI: ${profile.mbti || "无"}`;
 累计收集五铢钱: +${sessionCoins} 铢
 剩余气力: ${retries} 次
 最新战况: ${lastFailureContext ? (
-  isAuto
-    ? `你在第 ${lastFailureContext.level} 关第 ${lastFailureContext.subStage} 桩失误落水了（${lastFailureContext.reason}），衣裳可能都湿了`
-    : `主控在第 ${lastFailureContext.level} 关第 ${lastFailureContext.subStage} 桩失误落水了（${lastFailureContext.reason}）`
-) : (
-  isAuto ? `你正在木桩上稳稳跳跃前进` : `主控正在木桩上稳稳跳跃前进`
-)}`;
+          isAuto
+            ? `你在第 ${lastFailureContext.level} 关第 ${lastFailureContext.subStage} 桩失误落水了（${lastFailureContext.reason}），衣裳可能都湿了`
+            : `主控在第 ${lastFailureContext.level} 关第 ${lastFailureContext.subStage} 桩失误落水了（${lastFailureContext.reason}）`
+        ) : (
+          isAuto ? `你正在木桩上稳稳跳跃前进` : `主控正在木桩上稳稳跳跃前进`
+        )}`;
 
       const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
 ${worldContext}
@@ -47228,7 +47201,7 @@ ${isAuto ? `
 const CujuGameChatDB = {
   dbName: "cuju_game_db",
   dbVersion: 1,
-  getDB: function() {
+  getDB: function () {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion);
       request.onupgradeneeded = (e) => {
@@ -47241,7 +47214,7 @@ const CujuGameChatDB = {
       request.onerror = (e) => reject(e.target.error);
     });
   },
-  getMessages: async function(charId) {
+  getMessages: async function (charId) {
     if (!charId) return [];
     try {
       const db = await this.getDB();
@@ -47257,7 +47230,7 @@ const CujuGameChatDB = {
       return [];
     }
   },
-  saveMessage: async function(charId, message) {
+  saveMessage: async function (charId, message) {
     if (!charId) return;
     try {
       const db = await this.getDB();
@@ -47274,7 +47247,7 @@ const CujuGameChatDB = {
       console.warn("Failed to save in-game cuju chat message:", e);
     }
   },
-  clearMessages: async function(charId) {
+  clearMessages: async function (charId) {
     if (!charId) return;
     try {
       const db = await this.getDB();
@@ -47635,7 +47608,7 @@ const CujuGamePage = ({ onBack }) => {
     try {
       const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
       localStorage.setItem("farm_coins", (currentCoins + reward).toString());
-    } catch (e) {}
+    } catch (e) { }
 
     if (window.addTransactionRecord) {
       window.addTransactionRecord(
@@ -47878,7 +47851,7 @@ const CujuGamePage = ({ onBack }) => {
             userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const profile = selectedChar.profile || {};
       const charContext = `【代打角色设定】
@@ -47897,16 +47870,16 @@ MBTI: ${profile.mbti || "无"}`;
 累计通关赏金: +${sessionCoins} 铢
 剩余击球机会: ${retries} 次
 最新战况: ${lastFailureContext ? (
-  isAuto
-    ? (lastFailureContext.isWin
-        ? `你刚踢出了一记神仙球，蹴鞠漂亮地飞入红旗坑洞破关成功！`
-        : `你在第 ${lastFailureContext.stage} 关未能将球踢进洞（${lastFailureContext.reason}），差了点运气`)
-    : (lastFailureContext.isWin
-        ? `主控刚才一记妙射，球漂亮进洞破关！`
-        : `主控在第 ${lastFailureContext.stage} 关未能将球踢进洞（${lastFailureContext.reason}）`)
-) : (
-  isAuto ? `你正在蹴鞠场上观察围栏与坑洞角度，准备出脚` : `主控正在蹴鞠场上瞄准准备出脚`
-)}`;
+          isAuto
+            ? (lastFailureContext.isWin
+              ? `你刚踢出了一记神仙球，蹴鞠漂亮地飞入红旗坑洞破关成功！`
+              : `你在第 ${lastFailureContext.stage} 关未能将球踢进洞（${lastFailureContext.reason}），差了点运气`)
+            : (lastFailureContext.isWin
+              ? `主控刚才一记妙射，球漂亮进洞破关！`
+              : `主控在第 ${lastFailureContext.stage} 关未能将球踢进洞（${lastFailureContext.reason}）`)
+        ) : (
+          isAuto ? `你正在蹴鞠场上观察围栏与坑洞角度，准备出脚` : `主控正在蹴鞠场上瞄准准备出脚`
+        )}`;
 
       const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
 ${worldContext}
@@ -48594,7 +48567,7 @@ ${isAuto ? `
 const ArcheryGameChatDB = {
   dbName: "archery_game_db",
   dbVersion: 1,
-  getDB: function() {
+  getDB: function () {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion);
       request.onupgradeneeded = (e) => {
@@ -48607,7 +48580,7 @@ const ArcheryGameChatDB = {
       request.onerror = (e) => reject(e.target.error);
     });
   },
-  getMessages: async function(charId) {
+  getMessages: async function (charId) {
     if (!charId) return [];
     try {
       const db = await this.getDB();
@@ -48623,7 +48596,7 @@ const ArcheryGameChatDB = {
       return [];
     }
   },
-  saveMessage: async function(charId, message) {
+  saveMessage: async function (charId, message) {
     if (!charId) return;
     try {
       const db = await this.getDB();
@@ -48640,7 +48613,7 @@ const ArcheryGameChatDB = {
       console.warn("Failed to save in-game archery chat message:", e);
     }
   },
-  clearMessages: async function(charId) {
+  clearMessages: async function (charId) {
     if (!charId) return;
     try {
       const db = await this.getDB();
@@ -48982,7 +48955,7 @@ const ArcheryGamePage = ({ onBack }) => {
     try {
       const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
       localStorage.setItem("farm_coins", (currentCoins + reward).toString());
-    } catch (e) {}
+    } catch (e) { }
 
     if (window.addTransactionRecord) {
       window.addTransactionRecord(
@@ -49453,7 +49426,7 @@ const ArcheryGamePage = ({ onBack }) => {
             userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const profile = selectedChar.profile || {};
       const charContext = `【代打角色设定】
@@ -49474,16 +49447,16 @@ MBTI: ${profile.mbti || "无"}`;
 当前战绩: 积分 ${curScore}分, 剩余生命 ${curLives}心, 剩余时间 ${timeLeft}秒
 累计递增赏金: +${sessionCoins} 铢 (本关通关可得 +${stage * 2} 铢)
 最新战况: ${lastBattleContext ? (
-  isAuto
-    ? (lastBattleContext.isWin
-        ? `你刚才百步穿杨连发神准，以 ${lastBattleContext.score} 分成功突破第 ${lastBattleContext.stage} 关！`
-        : `你在第 ${lastBattleContext.stage} 关未能破关（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
-    : (lastBattleContext.isWin
-        ? `主控刚才箭无虚发，以 ${lastBattleContext.score} 分漂亮突破第 ${lastBattleContext.stage} 关！`
-        : `主控在第 ${lastBattleContext.stage} 关挑战未竟（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
-) : (
-  isAuto ? `你正在弯弓搭箭瞄准空中飞掠的靶标` : `主控正在靶场屏息瞄准`
-)}`;
+          isAuto
+            ? (lastBattleContext.isWin
+              ? `你刚才百步穿杨连发神准，以 ${lastBattleContext.score} 分成功突破第 ${lastBattleContext.stage} 关！`
+              : `你在第 ${lastBattleContext.stage} 关未能破关（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
+            : (lastBattleContext.isWin
+              ? `主控刚才箭无虚发，以 ${lastBattleContext.score} 分漂亮突破第 ${lastBattleContext.stage} 关！`
+              : `主控在第 ${lastBattleContext.stage} 关挑战未竟（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
+        ) : (
+          isAuto ? `你正在弯弓搭箭瞄准空中飞掠的靶标` : `主控正在靶场屏息瞄准`
+        )}`;
 
       const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
 ${worldContext}
@@ -50159,7 +50132,7 @@ ${isAuto ? `
 const AgilityGameChatDB = {
   dbName: "agility_game_db",
   dbVersion: 1,
-  getDB: function() {
+  getDB: function () {
     return new Promise((resolve, reject) => {
       const request = indexedDB.open(this.dbName, this.dbVersion);
       request.onupgradeneeded = (e) => {
@@ -50172,7 +50145,7 @@ const AgilityGameChatDB = {
       request.onerror = (e) => reject(e.target.error);
     });
   },
-  getMessages: async function(charId) {
+  getMessages: async function (charId) {
     if (!charId) return [];
     try {
       const db = await this.getDB();
@@ -50188,7 +50161,7 @@ const AgilityGameChatDB = {
       return [];
     }
   },
-  saveMessage: async function(charId, message) {
+  saveMessage: async function (charId, message) {
     if (!charId) return;
     try {
       const db = await this.getDB();
@@ -50205,7 +50178,7 @@ const AgilityGameChatDB = {
       console.warn("Failed to save in-game agility chat message:", e);
     }
   },
-  clearMessages: async function(charId) {
+  clearMessages: async function (charId) {
     if (!charId) return;
     try {
       const db = await this.getDB();
@@ -50538,7 +50511,7 @@ const AgilityGamePage = ({ onBack }) => {
     try {
       const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
       localStorage.setItem("farm_coins", (currentCoins + reward).toString());
-    } catch (e) {}
+    } catch (e) { }
 
     if (window.addTransactionRecord) {
       window.addTransactionRecord(
@@ -50866,7 +50839,7 @@ const AgilityGamePage = ({ onBack }) => {
             userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const profile = selectedChar.profile || {};
       const charContext = `【代打角色设定】
@@ -50885,16 +50858,16 @@ MBTI: ${profile.mbti || "无"}`;
 当前战绩: 积分 ${score}分, 剩余生命 ${lives}心, 剩余时间 ${timeLeft}秒
 累计递增赏金: +${sessionCoins} 铢 (本关通关可得 +${stage * 2} 铢)
 最新战况: ${lastBattleContext ? (
-  isAuto
-    ? (lastBattleContext.isWin
-        ? `你刚才身手敏捷棒打硕鼠，以 ${lastBattleContext.score} 分成功突破第 ${lastBattleContext.stage} 关！`
-        : `你在第 ${lastBattleContext.stage} 关未能成功守住农田（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
-    : (lastBattleContext.isWin
-        ? `主控刚才手速极快，以 ${lastBattleContext.score} 分漂亮突破第 ${lastBattleContext.stage} 关！`
-        : `主控在第 ${lastBattleContext.stage} 关守卫未竟（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
-) : (
-  isAuto ? `你正在田间全神贯注巡视冒头的窃贼` : `主控正在田间全神贯注巡视`
-)}`;
+          isAuto
+            ? (lastBattleContext.isWin
+              ? `你刚才身手敏捷棒打硕鼠，以 ${lastBattleContext.score} 分成功突破第 ${lastBattleContext.stage} 关！`
+              : `你在第 ${lastBattleContext.stage} 关未能成功守住农田（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
+            : (lastBattleContext.isWin
+              ? `主控刚才手速极快，以 ${lastBattleContext.score} 分漂亮突破第 ${lastBattleContext.stage} 关！`
+              : `主控在第 ${lastBattleContext.stage} 关守卫未竟（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
+        ) : (
+          isAuto ? `你正在田间全神贯注巡视冒头的窃贼` : `主控正在田间全神贯注巡视`
+        )}`;
 
       const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
 ${worldContext}
@@ -52033,7 +52006,7 @@ const RowingGamePage = ({ onBack }) => {
     try {
       const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
       localStorage.setItem("farm_coins", (currentCoins + reward).toString());
-    } catch (e) {}
+    } catch (e) { }
 
     if (window.addTransactionRecord) {
       window.addTransactionRecord(
@@ -52284,7 +52257,7 @@ const RowingGamePage = ({ onBack }) => {
     ctx.clearRect(0, 0, 360, 640);
 
     // BG scrolling with horizontal parallax
-    if (imgs.bg && imgs.bg.complete) {
+    if (imgs.bg && imgs.bg.complete && imgs.bg.naturalWidth !== 0) {
       const bgX = -(state.boatX % 360);
       for (let i = -1; i <= 2; i++) {
         ctx.drawImage(imgs.bg, bgX + i * 360, state.bgOffsetY - 640, 360, 640);
@@ -52313,7 +52286,7 @@ const RowingGamePage = ({ onBack }) => {
       ctx.save();
       ctx.translate(obs.x - state.boatX, obs.y);
       ctx.rotate(obs.angle);
-      
+
       let drawSize = obs.size;
       if (obs.type !== 'log') {
         const timeAlive = state.lastTime - (obs.spawnTime || state.lastTime);
@@ -52322,7 +52295,7 @@ const RowingGamePage = ({ onBack }) => {
       }
 
       const img = imgs[obs.type];
-      if (img && img.complete) {
+      if (img && img.complete && img.naturalWidth !== 0) {
         ctx.drawImage(img, -drawSize / 2, -drawSize / 2, drawSize, drawSize);
       } else {
         ctx.fillStyle = obs.type === 'log' ? '#795548' : '#4CAF50';
@@ -52343,7 +52316,7 @@ const RowingGamePage = ({ onBack }) => {
       ctx.shadowBlur = 20;
     }
 
-    if (imgs.boat && imgs.boat.complete) {
+    if (imgs.boat && imgs.boat.complete && imgs.boat.naturalWidth !== 0) {
       const bw = imgs.boat.naturalWidth || 80;
       const bh = imgs.boat.naturalHeight || 160;
       const targetHeight = 220;
@@ -52361,14 +52334,14 @@ const RowingGamePage = ({ onBack }) => {
     ctx.shadowBlur = 0;
 
     // Paddles
-    if (imgs.paddle_p2 && imgs.paddle_p2.complete) {
+    if (imgs.paddle_p2 && imgs.paddle_p2.complete && imgs.paddle_p2.naturalWidth !== 0) {
       ctx.save();
       ctx.translate(-35, -20);
       ctx.rotate(state.p2PaddleTimer > 0 ? -0.5 : 0);
       ctx.drawImage(imgs.paddle_p2, -30, -10, 60, 20);
       ctx.restore();
     }
-    if (imgs.paddle_p1 && imgs.paddle_p1.complete) {
+    if (imgs.paddle_p1 && imgs.paddle_p1.complete && imgs.paddle_p1.naturalWidth !== 0) {
       ctx.save();
       ctx.translate(35, 20);
       ctx.rotate(state.p1PaddleTimer > 0 ? 0.5 : 0);
@@ -52394,7 +52367,8 @@ const RowingGamePage = ({ onBack }) => {
         }
         ctx.drawImage(img2, -dw / 2, -45 - dh / 2, dw, dh);
       } else {
-        ctx.drawImage(img2, -22, -67, 44, 44);
+        ctx.fillStyle = '#CCC';
+        ctx.fillRect(-22, -67, 44, 44);
       }
       ctx.restore();
       ctx.strokeStyle = '#8D6E63'; ctx.lineWidth = 2;
@@ -52416,7 +52390,8 @@ const RowingGamePage = ({ onBack }) => {
         }
         ctx.drawImage(img1, -dw / 2, 5 - dh / 2, dw, dh);
       } else {
-        ctx.drawImage(img1, -22, -17, 44, 44);
+        ctx.fillStyle = '#CCC';
+        ctx.fillRect(-22, -17, 44, 44);
       }
       ctx.restore();
       ctx.strokeStyle = '#8D6E63'; ctx.lineWidth = 2;
@@ -52502,7 +52477,7 @@ const RowingGamePage = ({ onBack }) => {
           const active = (activeId ? personas.find(p => p.id == activeId) : null) || personas.find(p => p.isActive) || personas[0];
           if (active) userProfile = active;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       let worldContext = "";
       if (window.getWorldBookContext) {
@@ -52515,15 +52490,15 @@ const RowingGamePage = ({ onBack }) => {
 
       const gameBattleDetail = lastBattleContext
         ? (isAuto
-            ? (lastBattleContext.isWon
-                ? `你刚才在舟上身手矫健破浪疾行，采莲达标（采集: ${lastBattleContext.collectedCount}/${lastBattleContext.targetCount}朵，耗时${lastBattleContext.timeLeft}秒），突破第${lastBattleContext.stage}关！`
-                : `你在第${lastBattleContext.stage}关未能达标（${lastBattleContext.reason}）`)
-            : (lastBattleContext.isWon
-                ? `主控与你配合默契顺流而下，采莲达标（采集: ${lastBattleContext.collectedCount}/${lastBattleContext.targetCount}朵，耗时${lastBattleContext.timeLeft}秒），突破第${lastBattleContext.stage}关！`
-                : `主控与你在第${lastBattleContext.stage}关未能达标（${lastBattleContext.reason}）`))
+          ? (lastBattleContext.isWon
+            ? `你刚才在舟上身手矫健破浪疾行，采莲达标（采集: ${lastBattleContext.collectedCount}/${lastBattleContext.targetCount}朵，耗时${lastBattleContext.timeLeft}秒），突破第${lastBattleContext.stage}关！`
+            : `你在第${lastBattleContext.stage}关未能达标（${lastBattleContext.reason}）`)
+          : (lastBattleContext.isWon
+            ? `主控与你配合默契顺流而下，采莲达标（采集: ${lastBattleContext.collectedCount}/${lastBattleContext.targetCount}朵，耗时${lastBattleContext.timeLeft}秒），突破第${lastBattleContext.stage}关！`
+            : `主控与你在第${lastBattleContext.stage}关未能达标（${lastBattleContext.reason}）`))
         : (isAuto
-            ? `你正在舟上全神贯注掌舵巡视水面荷花`
-            : `主控与你正在舟上全神贯注划行`);
+          ? `你正在舟上全神贯注掌舵巡视水面荷花`
+          : `主控与你正在舟上全神贯注划行`);
 
       const systemPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${charName}】。
 ${worldContext ? '【世界观与背景知识】\n' + worldContext : ''}
@@ -53231,7 +53206,7 @@ const MusicGamePage = ({ onBack }) => {
     return () => {
       clearInterval(timer);
       if (sourceRef.current) {
-        try { sourceRef.current.stop(); } catch (e) {}
+        try { sourceRef.current.stop(); } catch (e) { }
       }
     };
   }, []);
@@ -53924,7 +53899,7 @@ const T13TrainingPage = ({ onBack }) => {
         {trainingPageNum > 0 && (
           <div onClick={() => setTrainingPageNum(p => p - 1)} style={{ position: 'absolute', left: 0, top: '50%', transform: 'translateY(-50%)', padding: '20px 15px', cursor: 'pointer', zIndex: 10, fontSize: '2.5rem', color: '#aaa', userSelect: 'none' }}>‹</div>
         )}
-        
+
         <div style={{ flex: 1, padding: '20px', overflowY: 'auto', paddingLeft: '45px', paddingRight: '45px' }}>
           {trainingPageNum === 0 && (
             <>
@@ -54976,7 +54951,7 @@ const T13LearningPage = ({ onBack }) => {
             userContext = `姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. 获取传讯列表中的角色
       let allChars = [];
@@ -55094,9 +55069,8 @@ const T13LearningPage = ({ onBack }) => {
 
       {/* --- 莫兰迪色侧边栏 --- */}
       <div
-        className={`fixed top-0 right-0 h-full w-64 bg-[#FDFCF8] shadow-[-10px_0_30px_rgba(0,0,0,0.1)] z-[70] transition-transform duration-300 ${
-          isSidebarOpen ? "translate-x-0" : "translate-x-full"
-        } border-l border-[#EAE6D6] flex flex-col`}
+        className={`fixed top-0 right-0 h-full w-64 bg-[#FDFCF8] shadow-[-10px_0_30px_rgba(0,0,0,0.1)] z-[70] transition-transform duration-300 ${isSidebarOpen ? "translate-x-0" : "translate-x-full"
+          } border-l border-[#EAE6D6] flex flex-col`}
       >
         <div className="p-5 flex justify-between items-center border-b border-[#EAE6D6] bg-white">
           <span className="font-bold text-[#5A5F4D] text-lg tracking-widest">
@@ -56906,9 +56880,8 @@ const StarChartPage = ({ onBack }) => {
         {showText && !isGenerating && (
           <div className="absolute bottom-20 left-0 right-0 text-center pointer-events-none">
             <div
-              className={`text-white font-serif text-lg transition-all duration-1000 ease-in-out ${
-                showText ? "opacity-100 blur-0" : "opacity-0 blur-md"
-              }`}
+              className={`text-white font-serif text-lg transition-all duration-1000 ease-in-out ${showText ? "opacity-100 blur-0" : "opacity-0 blur-md"
+                }`}
             >
               {displayText}
             </div>
@@ -58045,10 +58018,10 @@ const SandTablePage = ({ onBack }) => {
       prev.map((el) =>
         el.id === id
           ? {
-              ...el,
-              x: (clientX - 20) * scale,
-              y: (clientY - 80) * scale,
-            }
+            ...el,
+            x: (clientX - 20) * scale,
+            y: (clientY - 80) * scale,
+          }
           : el,
       ),
     );
@@ -58978,7 +58951,7 @@ const safeParseLLMJson = (raw) => {
           if (c === '\n') out += '\\n';
           else if (c === '\r') out += '\\r';
           else if (c === '\t') out += '\\t';
-          else if (c.charCodeAt(0) < 32) {}
+          else if (c.charCodeAt(0) < 32) { }
           else out += c;
         } else {
           out += c;
@@ -59112,7 +59085,7 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
           messages = hist;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     // 2. 尝试 chatHistoryStore (支持 id 或 name)
     if (messages.length === 0 && window.chatHistoryStore) {
@@ -59129,7 +59102,7 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
             messages = res.messages;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     // 3. 尝试 localStorage 各种备用 key
@@ -59153,7 +59126,7 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
               break;
             }
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -59190,7 +59163,7 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
           };
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const chatHistoryContext = await getUserChatHistory();
     const userContext = `【当前用户(主公/楼主设定)】姓名:${activeUser.name}，身份:${activeUser.role}，性格:${activeUser.personality}，背景:${activeUser.background || "无"}`;
@@ -59209,7 +59182,7 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
             setSecretMessages(parsed);
             return;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -59370,7 +59343,7 @@ ${chatHistoryContext}
             setAssets(parsed.assets);
             return;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -59498,7 +59471,7 @@ ${chatHistoryContext}
             setSixSkills(parsed.sixSkills);
             return;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -59611,7 +59584,7 @@ ${chatHistoryContext}
             setOrders(parsed);
             return;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
     }
 
@@ -60598,14 +60571,14 @@ const T13WaterMirrorPage = ({ onBack }) => {
         let avatarMap = {};
         try {
           avatarMap = JSON.parse(localStorage.getItem("绣衣楼头像") || "{}");
-        } catch (e) {}
+        } catch (e) { }
 
         let biosMap = {};
         try {
           if (window.settingsStore?.getCharacterNotes) {
             biosMap = await window.settingsStore.getCharacterNotes() || {};
           }
-        } catch (e) {}
+        } catch (e) { }
 
         const mapped = validChars.map((c) => {
           const charName = c.name;
@@ -60943,7 +60916,7 @@ const T13WaterMirrorPage = ({ onBack }) => {
 const TaibaiMysteryPage = ({ onBack }) => {
   // 阶段状态: "lobby" (选人与准备) | "generating" (AI生成中) | "reading" (阅读剧本) | "playing" (辩驳推演) | "voting" (投票揭凶) | "review" (结案复盘)
   const [stage, setStage] = React.useState("lobby");
-  
+
   // 选人状态
   const [userPersona, setUserPersona] = React.useState({ name: "广陵王", role: "楼主", personality: "机警果决", avatar: "" });
   const [characterPool, setCharacterPool] = React.useState([]);
@@ -60959,7 +60932,7 @@ const TaibaiMysteryPage = ({ onBack }) => {
   const [showClues, setShowClues] = React.useState(false);
   const [selectedSuspect, setSelectedSuspect] = React.useState(null);
   const [votes, setVotes] = React.useState({});
-  
+
   // 金钱系统与金库记账状态
   const ENTRY_FEE = 10;
   const WIN_REWARD = 20;
@@ -61013,7 +60986,7 @@ const TaibaiMysteryPage = ({ onBack }) => {
             });
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. 传讯密探列表
       try {
@@ -61031,14 +61004,14 @@ const TaibaiMysteryPage = ({ onBack }) => {
         let avatarMap = {};
         try {
           avatarMap = JSON.parse(localStorage.getItem("绣衣楼头像") || "{}");
-        } catch (e) {}
+        } catch (e) { }
 
         let biosMap = {};
         try {
           if (window.settingsStore?.getCharacterNotes) {
             biosMap = (await window.settingsStore.getCharacterNotes()) || {};
           }
-        } catch (e) {}
+        } catch (e) { }
 
         const mapped = validChars.map((c) => {
           const charName = c.name;
@@ -61099,7 +61072,7 @@ const TaibaiMysteryPage = ({ onBack }) => {
     try {
       localStorage.setItem("farm_coins", newCoins.toString());
       setUserCoins(newCoins);
-    } catch (e) {}
+    } catch (e) { }
 
     if (window.addTransactionRecord) {
       window.addTransactionRecord(
@@ -61148,16 +61121,16 @@ ${playerList.map((p, idx) => `${idx + 1}. 【${p.name}】(${p.isUser ? "玩家�
       "isKiller": false
     },
     ${selectedChars
-      .map(
-        (c, idx) => `"${c.name}": {
+        .map(
+          (c, idx) => `"${c.name}": {
       "roleTitle": "在本次剧本杀中所饰角色与身份",
       "alibi": "案发当晚的时间线与公开口径",
       "secret": "不可告人的隐秘秘密与动机",
       "goal": "本局核心策略与获胜目标",
       "isKiller": ${idx === 0 ? "true" : "false"}
     }`
-      )
-      .join(",\n    ")}
+        )
+        .join(",\n    ")}
   },
   "solution": {
     "killer": "${selectedChars[0].name}",
@@ -61300,7 +61273,7 @@ ${playerList.map((p, idx) => `${idx + 1}. 【${p.name}】(${p.isUser ? "玩家�
     setIsAiSpeaking(true);
 
     const charSheet = mysteryData.characterSheets[speaker.name] || {};
-    
+
     // 构建最近 10 条真实上下文，保证 AI 100% 看到全场所有人的发言
     const recentChatText = currentLog
       .slice(-12)
@@ -61435,7 +61408,7 @@ ${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说�
     });
 
     setVotes(simVotes);
-    
+
     // 破案成功赏金结算 (+20 铢)
     const isUserWin = selectedSuspect === mysteryData.solution.killer;
     if (isUserWin && !rewardAwarded) {
@@ -61446,7 +61419,7 @@ ${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说�
         const winCoins = curCoins + WIN_REWARD;
         localStorage.setItem("farm_coins", winCoins.toString());
         setUserCoins(winCoins);
-      } catch (e) {}
+      } catch (e) { }
 
       if (window.addTransactionRecord) {
         window.addTransactionRecord(
@@ -62741,7 +62714,7 @@ const LyingRulesGhostPage = ({ onBack }) => {
             setUserAvatar(found.avatar || "");
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. 读取传讯密探
       try {
@@ -62759,14 +62732,14 @@ const LyingRulesGhostPage = ({ onBack }) => {
         let avatarMap = {};
         try {
           avatarMap = JSON.parse(localStorage.getItem("绣衣楼头像") || "{}");
-        } catch (e) {}
+        } catch (e) { }
 
         let biosMap = {};
         try {
           if (window.settingsStore?.getCharacterNotes) {
             biosMap = (await window.settingsStore.getCharacterNotes()) || {};
           }
-        } catch (e) {}
+        } catch (e) { }
 
         const mapped = validChars.map((c) => {
           const charName = c.name;
@@ -62949,7 +62922,7 @@ ${selectedChars.map((c, idx) => `${idx + 1}. 【${c.name}】: 性格与说话口
     setCurrentRules(turnData.rules || []);
     setCurrentStory(turnData.story || "");
     setCurrentDialogues(turnData.dialogues || []);
-    
+
     const rawOptions = turnData.options || [];
     const sanitizedOptions = rawOptions.map((opt, idx) => {
       let text = String(opt.text || "").trim();
@@ -64565,7 +64538,7 @@ const RelativeDeductionPage = ({ onBack }) => {
             userContext = `【用户/导演设定】\n姓名:${activeUser.name}\n性格:${activeUser.personality || "未知"}\n背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. 获取演员设定
       const actorsInfo = selectedActors
@@ -64656,7 +64629,7 @@ const RelativeDeductionPage = ({ onBack }) => {
                           }
                         `;
 
-            // 6. 调用 LLM
+      // 6. 调用 LLM
       if (window.sendToLLM) {
         window.sendToLLM(
           [
@@ -65216,11 +65189,10 @@ const RelativeDeductionPage = ({ onBack }) => {
                   allActors.map((actor) => (
                     <label
                       key={actor.id}
-                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${
-                        selectedActors.some((a) => a.id === actor.id)
+                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${selectedActors.some((a) => a.id === actor.id)
                           ? "bg-[#F2F7F4] border-[#89A89A] shadow-sm"
                           : "bg-white border-[#EAEAEA]"
-                      }`}
+                        }`}
                     >
                       <input
                         type="checkbox"
@@ -65850,7 +65822,7 @@ const OddFarmPage = ({ onBack }) => {
 
   return (
     <div className="farm-overlay open animate-fadeIn">
-            {/* 顶部清晰返回导航按钮 */}
+      {/* 顶部清晰返回导航按钮 */}
       <div
         className="active-press"
         onClick={onBack}
@@ -66745,7 +66717,7 @@ const OddFarmPage = ({ onBack }) => {
                               if (farmSubs.length > 0) {
                                 const savedProjects = JSON.parse(
                                   (await dbManager.get("charity_projects")) ||
-                                    "[]",
+                                  "[]",
                                 );
                                 let updatedProjects = [...savedProjects];
 
@@ -66830,11 +66802,10 @@ const OddFarmPage = ({ onBack }) => {
                             );
                           }
                         }}
-                        className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 ${
-                          (inventory[order.itemId] || 0) >= order.quantity
+                        className={`px-5 py-2.5 rounded-xl font-bold text-sm transition-all active:scale-95 ${(inventory[order.itemId] || 0) >= order.quantity
                             ? "bg-gradient-to-r from-[#A8C8BA] to-[#8FA99D] text-white shadow-[0_4px_10px_rgba(168,200,186,0.4)]"
                             : "bg-[#F5F5F5] text-[#B0B0B0] cursor-not-allowed border border-[#EAEAEA]"
-                        }`}
+                          }`}
                       >
                         {(inventory[order.itemId] || 0) >= order.quantity
                           ? "交付物资"
@@ -68067,7 +68038,7 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
                     >
                       {member.avatar ? (
                         typeof member.avatar === "string" &&
-                        member.avatar.startsWith("data:image/") ? (
+                          member.avatar.startsWith("data:image/") ? (
                           <img
                             src={member.avatar}
                             style={{
@@ -68379,7 +68350,7 @@ const GroupChatSettingsModal = ({
         localStorage.getItem("t8_memory_config") || "{}",
       );
       setMemoriesList(savedMem.memories || []);
-    } catch (e) {}
+    } catch (e) { }
   }, []);
 
   const toggleMemoryMount = (memId) => {
@@ -68679,9 +68650,8 @@ const GroupChatSettingsModal = ({
                     : "选择记忆"}
                 </span>
                 <i
-                  className={`ph-bold ${
-                    showMemoryDropdown ? "ph-caret-up" : "ph-caret-down"
-                  }`}
+                  className={`ph-bold ${showMemoryDropdown ? "ph-caret-up" : "ph-caret-down"
+                    }`}
                   style={{ fontSize: "14px" }}
                 ></i>
               </button>
@@ -69065,7 +69035,7 @@ const ChatSettingsModal = ({
         localStorage.getItem("t8_memory_config") || "{}",
       );
       setMemoriesList(savedMem.memories || []);
-    } catch (e) {}
+    } catch (e) { }
   }, []);
 
   const toggleMemoryMount = (memId) => {
@@ -69157,7 +69127,7 @@ const ChatSettingsModal = ({
             userContext = `【用户身份】\n姓名:${activeUser.name}\n性格:${activeUser.personality || "无"}\n背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. 获取世界书信息
       const worldContext = window.getWorldBookContext
@@ -69176,7 +69146,7 @@ const ChatSettingsModal = ({
           const recentMessages = chatHistory.slice(-5);
           conversationContext = `【最近对话】\n${recentMessages.map((msg) => `${msg.sender}: ${msg.content}`).join("\n")}`;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 5. 构建Prompt
       const prompt = `
@@ -69450,9 +69420,8 @@ const ChatSettingsModal = ({
                     : "选择记忆"}
                 </span>
                 <i
-                  className={`ph-bold ${
-                    showMemoryDropdown ? "ph-caret-up" : "ph-caret-down"
-                  }`}
+                  className={`ph-bold ${showMemoryDropdown ? "ph-caret-up" : "ph-caret-down"
+                    }`}
                   style={{ fontSize: "14px" }}
                 ></i>
               </button>
@@ -71958,7 +71927,7 @@ const T8ChatDetail = ({
           setUserAvatar(activeUser.avatar);
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   }, [isOpen]);
 
   React.useEffect(() => {
@@ -73028,7 +72997,7 @@ const T8ChatDetail = ({
                 if (avatarItem && avatarItem.avatarData) {
                   groupStyles += `.chat-${chatData.id} .role-avatar-member-${member.id} { background-image: url(${avatarItem.avatarData}) !important; background-size: cover; background-position: center; color: transparent !important; background-color: transparent !important; }\n`;
                 }
-              } catch (e) {}
+              } catch (e) { }
             }
 
             // 2. 读取单聊头像框样式
@@ -73342,7 +73311,7 @@ const T8ChatDetail = ({
                               Math.min(
                                 120,
                                 prev.currentHeartRate +
-                                  (analysisData.heartRateChange || 0),
+                                (analysisData.heartRateChange || 0),
                               ),
                             );
                             const updatedSettings = {
@@ -73367,7 +73336,7 @@ const T8ChatDetail = ({
                                 Math.min(
                                   120,
                                   prev.currentHeartRate +
-                                    Math.floor(Math.random() * 10 - 5),
+                                  Math.floor(Math.random() * 10 - 5),
                                 ),
                               ),
                               currentMood: ["开心", "害羞", "沉思", "激动"][
@@ -73396,7 +73365,7 @@ const T8ChatDetail = ({
                               Math.min(
                                 120,
                                 prev.currentHeartRate +
-                                  Math.floor(Math.random() * 4 - 2),
+                                Math.floor(Math.random() * 4 - 2),
                               ),
                             ),
                             currentMood: ["开心", "害羞", "沉思", "激动"][
@@ -73489,7 +73458,7 @@ const T8ChatDetail = ({
                                     Math.min(
                                       120,
                                       prev.currentHeartRate +
-                                        (analysisData.heartRateChange || 0),
+                                      (analysisData.heartRateChange || 0),
                                     ),
                                   );
                                   return {
@@ -73512,7 +73481,7 @@ const T8ChatDetail = ({
                                     Math.min(
                                       120,
                                       prev.currentHeartRate +
-                                        Math.floor(Math.random() * 10 - 5),
+                                      Math.floor(Math.random() * 10 - 5),
                                     ),
                                   ),
                                   currentMood: ["开心", "害羞", "沉思", "激动"][
@@ -73537,7 +73506,7 @@ const T8ChatDetail = ({
                                   Math.min(
                                     120,
                                     prev.currentHeartRate +
-                                      Math.floor(Math.random() * 4 - 2),
+                                    Math.floor(Math.random() * 4 - 2),
                                   ),
                                 ),
                                 currentMood: ["开心", "害羞", "沉思", "激动"][
@@ -73899,7 +73868,7 @@ const T8ChatDetail = ({
             .join("\n");
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const currentHistory = customHistory || messages;
     let historyForPrompt = [...currentHistory];
@@ -73941,7 +73910,7 @@ const T8ChatDetail = ({
             userContext = `【玩家设定】原名：${activeUser.name}，目前在本群的昵称为：【${groupNickname}】。性格：${activeUser.personality || "未知"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const membersInfo = chatData.profile.members
         .map(
@@ -75559,7 +75528,7 @@ const T8ChatDetail = ({
           </div>
         </div>
       )}
-      
+
       {/* ==== [新增] 心意送礼与红包弹窗 ==== */}
       {showGiftModal && (
         <div
@@ -75590,22 +75559,20 @@ const T8ChatDetail = ({
             <div className="flex p-2 bg-[#F7F5F0] gap-2 border-b border-[#EAE6DE]">
               <button
                 onClick={() => setGiftTab("red_packet")}
-                className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                  giftTab === "red_packet"
+                className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${giftTab === "red_packet"
                     ? "bg-gradient-to-r from-[#FF5722] to-[#E64A19] text-white shadow-md"
                     : "bg-white text-[#777] border border-[#EAEAEA]"
-                }`}
+                  }`}
               >
                 <span>🧧</span>
                 <span>发五铢钱红包</span>
               </button>
               <button
                 onClick={() => setGiftTab("gift")}
-                className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
-                  giftTab === "gift"
+                className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${giftTab === "gift"
                     ? "bg-gradient-to-r from-[#D6724B] to-[#C05D36] text-white shadow-md"
                     : "bg-white text-[#777] border border-[#EAEAEA]"
-                }`}
+                  }`}
               >
                 <span>🎁</span>
                 <span>赠送背包礼物</span>
@@ -75653,11 +75620,10 @@ const T8ChatDetail = ({
                         key={amt}
                         type="button"
                         onClick={() => setRedPacketAmount(amt)}
-                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
-                          redPacketAmount === amt
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${redPacketAmount === amt
                             ? "bg-[#FFE0B2] text-[#D6724B] border border-[#FFB74D]"
                             : "bg-white text-[#666] border border-[#EEE]"
-                        }`}
+                          }`}
                       >
                         {amt} 铢
                       </button>
@@ -75713,11 +75679,10 @@ const T8ChatDetail = ({
                           <div
                             key={idx}
                             onClick={() => setSelectedGiftItem(item)}
-                            className={`p-2.5 rounded-xl border text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-2 ${
-                              selectedGiftItem?.id === item.id
+                            className={`p-2.5 rounded-xl border text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-2 ${selectedGiftItem?.id === item.id
                                 ? "bg-[#FFF4ED] border-[#D6724B] shadow-xs text-[#D6724B] font-bold"
                                 : "bg-[#FDFCF8] border-[#EEE] text-[#555]"
-                            }`}
+                              }`}
                           >
                             <span className="text-xl shrink-0">🎁</span>
                             <div className="truncate flex-1">
@@ -75766,11 +75731,10 @@ const T8ChatDetail = ({
                   <button
                     onClick={handleSendGift}
                     disabled={!selectedGiftItem}
-                    className={`w-full py-4 font-bold rounded-2xl shadow-lg transition-transform text-sm mt-2 flex items-center justify-center gap-2 ${
-                      selectedGiftItem
+                    className={`w-full py-4 font-bold rounded-2xl shadow-lg transition-transform text-sm mt-2 flex items-center justify-center gap-2 ${selectedGiftItem
                         ? "bg-gradient-to-r from-[#D6724B] to-[#C05D36] text-white active:scale-95"
                         : "bg-[#EAEAEA] text-[#999] cursor-not-allowed"
-                    }`}
+                      }`}
                   >
                     <span>🎁</span>
                     <span>赠送【{selectedGiftItem ? selectedGiftItem.name : "请选择物品"}】并送达府邸</span>
@@ -76091,7 +76055,7 @@ const T8ChatDetail = ({
                   <input
                     type="checkbox"
                     checked={selectedMsgIds.includes(msg.id)}
-                    onChange={() => {}}
+                    onChange={() => { }}
                     style={{
                       transform: "scale(1.2)",
                       pointerEvents: "none",
@@ -76604,12 +76568,12 @@ const T8ChatDetail = ({
                                 e.stopPropagation();
                                 if (msg.content) {
                                   /* 原来的播放逻辑 */ setMessages((prev) =>
-                                    prev.map((m) =>
-                                      m.id === msg.id
-                                        ? { ...m, showText: true }
-                                        : m,
-                                    ),
-                                  );
+                                  prev.map((m) =>
+                                    m.id === msg.id
+                                      ? { ...m, showText: true }
+                                      : m,
+                                  ),
+                                );
                                 }
                               }}
                             >
@@ -77143,8 +77107,8 @@ const T8ChatDetail = ({
                       justifyContent: "center",
                     }}
                     onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor =
-                        "rgba(255, 255, 255, 0.9)")
+                    (e.currentTarget.style.backgroundColor =
+                      "rgba(255, 255, 255, 0.9)")
                     }
                     onMouseLeave={(e) =>
                       (e.currentTarget.style.backgroundColor = "transparent")
@@ -77199,8 +77163,8 @@ const T8ChatDetail = ({
                       justifyContent: "center",
                     }}
                     onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor =
-                        "rgba(255, 255, 255, 0.9)")
+                    (e.currentTarget.style.backgroundColor =
+                      "rgba(255, 255, 255, 0.9)")
                     }
                     onMouseLeave={(e) =>
                       (e.currentTarget.style.backgroundColor = "transparent")
@@ -77234,8 +77198,8 @@ const T8ChatDetail = ({
                       justifyContent: "center",
                     }}
                     onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor =
-                        "rgba(255, 255, 255, 0.9)")
+                    (e.currentTarget.style.backgroundColor =
+                      "rgba(255, 255, 255, 0.9)")
                     }
                     onMouseLeave={(e) =>
                       (e.currentTarget.style.backgroundColor = "transparent")
@@ -77267,8 +77231,8 @@ const T8ChatDetail = ({
                       justifyContent: "center",
                     }}
                     onMouseEnter={(e) =>
-                      (e.currentTarget.style.backgroundColor =
-                        "rgba(255, 255, 255, 0.9)")
+                    (e.currentTarget.style.backgroundColor =
+                      "rgba(255, 255, 255, 0.9)")
                     }
                     onMouseLeave={(e) =>
                       (e.currentTarget.style.backgroundColor = "transparent")
@@ -78393,9 +78357,9 @@ const T8ChatDetail = ({
         )}
       </div>
 
-      
 
-      
+
+
     </div>
   );
 };
@@ -78588,7 +78552,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
             userContext = `【用户/导演设定】\n姓名:${activeUser.name}\n性格:${activeUser.personality || "未知"}\n背景:${activeUser.background || "无"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       let universeSetup = "";
       if (universeParams) {
@@ -79894,7 +79858,7 @@ const BellsPage = ({ onBack, chatData }) => {
           setMyPersona(activeUser);
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   }, []);
 
   const [inputValues, setInputValues] = React.useState({
@@ -81394,7 +81358,7 @@ const T8CharacterSpacePage = ({ character, onBack, onNavigateChat }) => {
             if (found) full = { ...found, ...character, ...full };
           }
         }
-      } catch (e) {}
+      } catch (e) { }
       setCurrentChar(full);
     };
     resolveChar();
@@ -81488,14 +81452,14 @@ const T8CharacterSpacePage = ({ character, onBack, onNavigateChat }) => {
         try {
           const found = await window.chatCharacterStore.get(fullChar.id);
           if (found) fullChar = { ...fullChar, ...found };
-        } catch (e) {}
+        } catch (e) { }
       }
       if ((!fullChar.profile || !fullChar.avatar) && window.chatCharacterStore && fullChar.name) {
         try {
           const allItems = await window.chatCharacterStore.getAll();
           const found = allItems.find((c) => c.name === fullChar.name);
           if (found) fullChar = { ...found, ...fullChar };
-        } catch (e) {}
+        } catch (e) { }
       }
 
       // 1. 用户面具设定
@@ -81507,7 +81471,7 @@ const T8CharacterSpacePage = ({ character, onBack, onNavigateChat }) => {
           const active = savedPersonas.find((p) => p.id == activeId);
           if (active) userPersona = active;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. 世界书开启条目
       let worldBookContext = "";
@@ -81521,7 +81485,7 @@ const T8CharacterSpacePage = ({ character, onBack, onNavigateChat }) => {
               .join("\n\n");
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. 私聊历史
       let privateChatContext = "";
@@ -81539,7 +81503,7 @@ const T8CharacterSpacePage = ({ character, onBack, onNavigateChat }) => {
               .join("\n");
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 4. 群聊发言
       let groupChatContext = "";
@@ -81562,17 +81526,17 @@ const T8CharacterSpacePage = ({ character, onBack, onNavigateChat }) => {
               if (relevant.length > 0) {
                 speeches.push(
                   `【群聊《${grp.name}》发言】:\n` +
-                    relevant
-                      .slice(-5)
-                      .map((m) => `${m.senderName || "群友"}: ${m.content || m.text || ""}`)
-                      .join("\n"),
+                  relevant
+                    .slice(-5)
+                    .map((m) => `${m.senderName || "群友"}: ${m.content || m.text || ""}`)
+                    .join("\n"),
                 );
               }
             }
           }
           groupChatContext = speeches.join("\n\n");
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 5. 用户近5条已发朋友圈
       let userMomentsList = [];
@@ -81591,7 +81555,7 @@ const T8CharacterSpacePage = ({ character, onBack, onNavigateChat }) => {
           time: m.time || "近期",
           likes: m.likes || 0,
         }));
-      } catch (e) {}
+      } catch (e) { }
 
       // 6. 构造 Prompt
       const systemPrompt = `你是一个熟悉古风/三国密探背景（如《代号鸢》隐鸢阁背景）的角色主页生成引擎。
@@ -81614,11 +81578,10 @@ MBTI：${fullChar.profile?.mbti || "未知"}
 ${worldBookContext ? `【已开启世界书设定】\n${worldBookContext}\n` : ""}
 ${privateChatContext ? `【该角色与用户的近期私聊记录】\n${privateChatContext}\n` : ""}
 ${groupChatContext ? `【该角色的近期群聊发言】\n${groupChatContext}\n` : ""}
-${
-  userMomentsList.length > 0
-    ? `【用户最近发表的5条朋友圈动态】\n${JSON.stringify(userMomentsList, null, 2)}\n`
-    : ""
-}
+${userMomentsList.length > 0
+          ? `【用户最近发表的5条朋友圈动态】\n${JSON.stringify(userMomentsList, null, 2)}\n`
+          : ""
+        }
 
 【严格生成要求】
 请严格按照以下 JSON 格式返回该角色的专属空间数据：
@@ -81924,7 +81887,7 @@ ${
               >
                 {character.avatar ? (
                   typeof character.avatar === "string" &&
-                  character.avatar.startsWith("data:image/") ? (
+                    character.avatar.startsWith("data:image/") ? (
                     <img
                       src={character.avatar}
                       style={{
@@ -82526,19 +82489,19 @@ ${
 
               {(!spaceData?.guestbookMessages ||
                 spaceData.guestbookMessages.length === 0) && (
-                <div
-                  style={{
-                    textAlign: "center",
-                    padding: "30px",
-                    color: "#A0AEC0",
-                    fontSize: "13px",
-                    background: "#FFF",
-                    borderRadius: "14px",
-                  }}
-                >
-                  留言板空空如也，快来留下第一条纸条吧！
-                </div>
-              )}
+                  <div
+                    style={{
+                      textAlign: "center",
+                      padding: "30px",
+                      color: "#A0AEC0",
+                      fontSize: "13px",
+                      background: "#FFF",
+                      borderRadius: "14px",
+                    }}
+                  >
+                    留言板空空如也，快来留下第一条纸条吧！
+                  </div>
+                )}
 
               {spaceData?.guestbookMessages?.map((gb) => (
                 <div
@@ -82647,7 +82610,7 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
         const activeUser = savedPersonas.find((p) => p.id == activeId);
         if (activeUser?.name) defaultName = activeUser.name;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     try {
       const saved = localStorage.getItem("t8_space_profile");
@@ -82662,7 +82625,7 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
           avatar: parsed.avatar || "",
         };
       }
-    } catch (e) {}
+    } catch (e) { }
     return {
       title: "广陵密探 · 浮生录",
       subtitle: "隐鸢阁密探秘闻与日常分享",
@@ -82704,7 +82667,7 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
     setUserAvatar(newAvatar);
     try {
       localStorage.setItem("t8_space_profile", JSON.stringify(updated));
-    } catch (e) {}
+    } catch (e) { }
 
     // 保存头像到 IndexedDB 与系统设置
     if (newAvatar) {
@@ -82712,7 +82675,7 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
       if (window.settingsStore?.setUserAvatar) {
         try {
           await window.settingsStore.setUserAvatar(newAvatar);
-        } catch (err) {}
+        } catch (err) { }
       }
     }
 
@@ -82730,7 +82693,7 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
         try {
           const av = await window.settingsStore.getUserAvatar();
           if (av) setUserAvatar(av);
-        } catch (e) {}
+        } catch (e) { }
       }
     };
     fetchUserAvatar();
@@ -82818,13 +82781,13 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
             const up = { ...prev, avatar: result };
             try {
               localStorage.setItem("t8_space_profile", JSON.stringify(up));
-            } catch (err) {}
+            } catch (err) { }
             return up;
           });
           if (window.settingsStore?.setUserAvatar) {
             try {
               await window.settingsStore.setUserAvatar(result);
-            } catch (err) {}
+            } catch (err) { }
           }
         }
         // 保存到IndexedDB
@@ -82926,7 +82889,7 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
           if (activeUser)
             userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality}`;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. 收集角色设定和最近聊天记录
       let charsInfo = "";
@@ -82992,9 +82955,9 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
               data.map(async (item, idx) => {
                 const char = validChars.find((c) => c.id == item.charId) ||
                   selectedChars[0] || {
-                    name: "未知角色",
-                    avatarColor: "#C9C9C1",
-                  };
+                  name: "未知角色",
+                  avatarColor: "#C9C9C1",
+                };
                 let imageUrl = null;
 
                 // 如果有Pixabay API密钥，搜索图片
@@ -83363,7 +83326,7 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
             userContext = `【当前玩家/用户(我)】姓名:${currentUserName}, 性格:${activeUser.personality || "沉稳机智"}, 身份:广陵王/绣衣楼楼主`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 4. 收集现有评论
       const existingComments = momentData.comments || [];
@@ -83379,19 +83342,19 @@ ${userContext}
 
 【本次参与评论的角色名单】
 ${selectedChars
-  .map(
-    (char, index) => {
-      const profile = char.profile || {};
-      return `角色${index + 1}:
+          .map(
+            (char, index) => {
+              const profile = char.profile || {};
+              return `角色${index + 1}:
 姓名:${char.name}
 MBTI:${profile.mbti || "无"}
 星座:${profile.constellation || "无"}
 语言风格:${profile.languageStyle || "无"}
 性格特点:${profile.personality || "无"}
 个人背景:${profile.background || "无"}`;
-    },
-  )
-  .join("\n\n")}
+            },
+          )
+          .join("\n\n")}
 
 【动态基本信息】
 发布者:${momentData.char.name}
@@ -84145,7 +84108,7 @@ ${commentsContext}
                   {item.char.avatar ? (
                     // 检查 avatar 是否是字符串类型且是 Base64 编码的图片数据（用户身份的头像）
                     typeof item.char.avatar === "string" &&
-                    item.char.avatar.startsWith("data:image/") ? (
+                      item.char.avatar.startsWith("data:image/") ? (
                       <img
                         src={item.char.avatar}
                         style={{
@@ -85484,16 +85447,16 @@ const T8Page = () => {
             prevChats.map((chat) =>
               chat.id === activeChatId
                 ? {
-                    ...chat,
-                    msg: latestMessage,
-                    time: new Date().toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }),
-                    // 当用户在聊天详情页时，消息已读，清除未读状态
-                    unread: 0,
-                    status: "read",
-                  }
+                  ...chat,
+                  msg: latestMessage,
+                  time: new Date().toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                  // 当用户在聊天详情页时，消息已读，清除未读状态
+                  unread: 0,
+                  status: "read",
+                }
                 : chat,
             ),
           );
@@ -85892,16 +85855,16 @@ const T8Page = () => {
                       chat.msg.toLowerCase().includes(searchLower)
                     );
                   }).length === 0 && (
-                    <div
-                      style={{
-                        padding: "40px 20px",
-                        textAlign: "center",
-                        color: "#999",
-                      }}
-                    >
-                      未找到匹配的消息
-                    </div>
-                  )}
+                      <div
+                        style={{
+                          padding: "40px 20px",
+                          textAlign: "center",
+                          color: "#999",
+                        }}
+                      >
+                        未找到匹配的消息
+                      </div>
+                    )}
                 </div>
               ) : (
                 <>
@@ -86338,9 +86301,8 @@ const APISettingsPage = () => {
             style={{
               flex: 1,
               padding: "12px",
-              border: `2px solid ${
-                currentConfig.type === "official" ? "#4a90e2" : "#ddd"
-              }`,
+              border: `2px solid ${currentConfig.type === "official" ? "#4a90e2" : "#ddd"
+                }`,
               borderRadius: "8px",
               backgroundColor:
                 currentConfig.type === "official" ? "#e8f4ff" : "white",
@@ -86360,9 +86322,8 @@ const APISettingsPage = () => {
             style={{
               flex: 1,
               padding: "12px",
-              border: `2px solid ${
-                currentConfig.type === "public" ? "#4a90e2" : "#ddd"
-              }`,
+              border: `2px solid ${currentConfig.type === "public" ? "#4a90e2" : "#ddd"
+                }`,
               borderRadius: "8px",
               backgroundColor:
                 currentConfig.type === "public" ? "#e8f4ff" : "white",
@@ -86741,9 +86702,8 @@ const APISettingsPage = () => {
                 onClick={() => selectConfig(index)}
                 style={{
                   padding: "16px",
-                  border: `2px solid ${
-                    selectedConfigIndex === index ? "#4a90e2" : "#f0f0f0"
-                  }`,
+                  border: `2px solid ${selectedConfigIndex === index ? "#4a90e2" : "#f0f0f0"
+                    }`,
                   borderRadius: "12px",
                   backgroundColor:
                     selectedConfigIndex === index ? "#f0f8ff" : "#fafafa",
@@ -86752,12 +86712,12 @@ const APISettingsPage = () => {
                   position: "relative",
                 }}
                 onMouseOver={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    selectedConfigIndex === index ? "#e8f4ff" : "#f5f5f5")
+                (e.currentTarget.style.backgroundColor =
+                  selectedConfigIndex === index ? "#e8f4ff" : "#f5f5f5")
                 }
                 onMouseOut={(e) =>
-                  (e.currentTarget.style.backgroundColor =
-                    selectedConfigIndex === index ? "#f0f8ff" : "#fafafa")
+                (e.currentTarget.style.backgroundColor =
+                  selectedConfigIndex === index ? "#f0f8ff" : "#fafafa")
                 }
               >
                 <div
@@ -87653,9 +87613,8 @@ const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
               personas.map((p) => (
                 <div
                   key={p.id}
-                  className={`persona-card ${
-                    activeId === p.id ? "active" : ""
-                  }`}
+                  className={`persona-card ${activeId === p.id ? "active" : ""
+                    }`}
                   onClick={() => handleSelect(p.id)}
                   // [修改点1] 给右侧留出足够的安全距离，防止文字和编辑按钮重叠
                   style={{
@@ -88112,15 +88071,13 @@ const ReaderDetailPage = ({
       userPrompt = `
                                                                                                                      【当前情境】你正在陪用户阅读书籍《${book.title}》。
                                                                                                                      【正文片段】“${textSnippet.substring(0, 500)}...”
-                                                                                                                     【用户刚才说】“${
-                                                                                                                       userBubble ===
-                                                                                                                       "点击输入感想..."
-                                                                                                                         ? "(用户沉默)"
-                                                                                                                         : userBubble
-                                                                                                                     }”
-                                                                                                                     【指令】请根据正文和用户感想，以“${
-                                                                                                                       activeChar.name
-                                                                                                                     }”的身份发表简短评论。50字以内。
+                                                                                                                     【用户刚才说】“${userBubble ===
+          "点击输入感想..."
+          ? "(用户沉默)"
+          : userBubble
+        }”
+                                                                                                                     【指令】请根据正文和用户感想，以“${activeChar.name
+        }”的身份发表简短评论。50字以内。
                                                                                                                      `;
     }
 
@@ -88211,9 +88168,8 @@ const ReaderDetailPage = ({
 
   return (
     <div
-      className={`reader-detail-overlay ${isOpen ? "open" : ""} ${
-        showMenu ? "reader-menu-visible" : ""
-      }`}
+      className={`reader-detail-overlay ${isOpen ? "open" : ""} ${showMenu ? "reader-menu-visible" : ""
+        }`}
     >
       {/* 1. 顶部菜单 */}
       <div className="reader-menu-bar menu-top">
@@ -88886,9 +88842,8 @@ const AIBookRecommender = ({ books, onConfirm }) => {
                         {r.charName[0]}
                       </div>
                       <div
-                        className={`reaction-content ${
-                          r.isWinner ? "winner" : "loser"
-                        }`}
+                        className={`reaction-content ${r.isWinner ? "winner" : "loser"
+                          }`}
                       >
                         {r.content}
                         {r.isWinner && (
@@ -89072,7 +89027,7 @@ const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission
       acquisitionType: "borrow",
       price: 0,
       color: selectedArtist.avatarColor || "#59685a",
-      fullText: `【第一回 · ${masterpiece.title}】\n\n作者：${selectedArtist.name}\n\n${masterpiece.summary}\n\n“${masterpiece.highlightQuote || "" }”\n\n（借阅手稿已收录至天下书城【藏书阁】，可随时研读或发起名家续写）`,
+      fullText: `【第一回 · ${masterpiece.title}】\n\n作者：${selectedArtist.name}\n\n${masterpiece.summary}\n\n“${masterpiece.highlightQuote || ""}”\n\n（借阅手稿已收录至天下书城【藏书阁】，可随时研读或发起名家续写）`,
     };
 
     const saved = JSON.parse(localStorage.getItem("custom_commission_books") || "[]");
@@ -89122,7 +89077,7 @@ const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission
       acquisitionType: "purchased",
       price: price,
       color: selectedArtist.avatarColor || "#D6724B",
-      fullText: `【第一回 · ${masterpiece.title}】\n\n作者：${selectedArtist.name}\n\n${masterpiece.summary}\n\n“${masterpiece.highlightQuote || "" }”\n\n（楼主已斥资 ${price} 铢永久购入此典藏手稿，已收录至【藏书阁】，可随时研读或发起名家续写）`,
+      fullText: `【第一回 · ${masterpiece.title}】\n\n作者：${selectedArtist.name}\n\n${masterpiece.summary}\n\n“${masterpiece.highlightQuote || ""}”\n\n（楼主已斥资 ${price} 铢永久购入此典藏手稿，已收录至【藏书阁】，可随时研读或发起名家续写）`,
     };
 
     const saved = JSON.parse(localStorage.getItem("custom_commission_books") || "[]");
@@ -89139,10 +89094,10 @@ const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission
   const [artists, setArtists] = React.useState([]);
   const [isLoading, setIsLoading] = React.useState(false);
   const [loadingText, setLoadingText] = React.useState("正在排定天机榜...");
-  
+
   // 书评加载状态
   const [isLoadingComments, setIsLoadingComments] = React.useState(false);
-  
+
   // 用户新增书评输入
   const [userCommentText, setUserCommentText] = React.useState("");
   const [isSubmittingComment, setIsSubmittingComment] = React.useState(false);
@@ -89163,7 +89118,7 @@ const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission
           setArtists(parsed);
           return;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     generateArtistRanking(activeTimeframe);
   }, [isOpen, activeTimeframe]);
@@ -89184,7 +89139,7 @@ const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission
           return fullContext.slice(0, 800); // 截取前800字，避免Prompt过长超时
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return "东汉末年，文人墨客借笔抒怀，藏书阁中奇书辈出。";
   };
 
@@ -89199,7 +89154,7 @@ const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission
           return `【用户】姓名:${activeUser.name || "楼主"}，身份:${activeUser.occupation || activeUser.role || "绣衣楼楼主"}`;
         }
       }
-    } catch (e) {}
+    } catch (e) { }
     return "【用户】绣衣楼楼主";
   };
 
@@ -89211,13 +89166,13 @@ const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission
         try {
           const stored = await window.chatCharacterStore.getAll();
           if (stored && Array.isArray(stored)) allChars = stored;
-        } catch (e) {}
+        } catch (e) { }
       }
       if (allChars.length === 0) {
         try {
           const localStored = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
           if (Array.isArray(localStored)) allChars = localStored;
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (allChars.length > 0) {
@@ -89226,7 +89181,7 @@ const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission
           .map((c) => {
             const charName = String(c.name || c.nickname || "密探").trim();
             const charRole = String(c.profile?.role || c.role || c.title || (charName === "傅融" ? "绣衣楼副官" : charName === "刘辩" ? "汉少帝" : charName === "袁基" ? "太仆/世家公子" : charName === "左慈" ? "仙长" : charName === "孙策" ? "江东小霸王" : "密探同僚"));
-            
+
             // 提取详尽性格人设
             let personalityText = "";
             if (c.profile?.personality) personalityText = c.profile.personality;
@@ -89256,7 +89211,7 @@ const ArtistRankingPage = ({ isOpen, onClose, onAddToBookshelf, onOpenCommission
           });
         if (valid.length > 0) return valid.slice(0, 8);
       }
-    } catch (e) {}
+    } catch (e) { }
     return [
       { name: "傅融", role: "绣衣楼副官", personality: "精打细算、计较五铢钱开销、嘴硬心软、务实负责", style: "常提账本与买书钱，爱算计稿酬，口是心非但处处为绣衣楼着想", bio: "掌管绣衣楼财政大权" },
       { name: "刘辩", role: "汉少帝", personality: "天真热烈、爱喝酒、依恋楼主、任性直率", style: "直球任性，少年帝王的委屈与依赖，爱找楼主一起看书", bio: "深宫少主，唯信任楼主" },
@@ -89506,7 +89461,7 @@ ${charsDetailedBlock}
           userRole = activeUser.occupation || activeUser.role || "绣衣楼楼主";
         }
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const newCommentId = "user_" + Date.now();
     const newCommentItem = {
@@ -89544,12 +89499,12 @@ ${charsDetailedBlock}
             comments: updatedSelectedArtist.comments.map((c) =>
               c.id === newCommentId
                 ? {
-                    ...c,
-                    authorReply: {
-                      replyContent: authorReplyText,
-                      replyTime: "刚刚",
-                    },
-                  }
+                  ...c,
+                  authorReply: {
+                    replyContent: authorReplyText,
+                    replyTime: "刚刚",
+                  },
+                }
                 : c
             ),
           };
@@ -89808,20 +89763,18 @@ ${charsDetailedBlock}
                     return (
                       <div
                         key={comment.id}
-                        className={`p-4 rounded-2xl border transition-all ${
-                          comment.isCharacter
+                        className={`p-4 rounded-2xl border transition-all ${comment.isCharacter
                             ? "bg-gradient-to-br from-[#FFF9F3] to-[#FFF4EA] dark:from-[#2B231E] dark:to-[#221B17] border-[#E8C5AF]/60 dark:border-[#4D3A2F] shadow-sm"
                             : "bg-white/90 dark:bg-[#231F1C]/90 border-[#EFE8DF] dark:border-[#332D28]"
-                        }`}
+                          }`}
                       >
                         <div className="flex items-start justify-between">
                           <div className="flex items-center gap-2.5">
                             <div
-                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-serif font-bold ${
-                                comment.isCharacter
+                              className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-serif font-bold ${comment.isCharacter
                                   ? "bg-[#D6724B] text-white ring-2 ring-[#D6724B]/30"
                                   : "bg-[#EAE4DC] dark:bg-[#38312B] text-[#59685a] dark:text-[#A3B1A4]"
-                              }`}
+                                }`}
                             >
                               {(comment?.user || "读").slice(0, 1)}
                             </div>
@@ -89845,11 +89798,10 @@ ${charsDetailedBlock}
 
                           <button
                             onClick={() => toggleLike(comment.id)}
-                            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-all active:scale-90 ${
-                              isLiked
+                            className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full transition-all active:scale-90 ${isLiked
                                 ? "text-[#D6724B] bg-[#D6724B]/10 font-bold"
                                 : "text-[#A39282] hover:text-[#59685a]"
-                            }`}
+                              }`}
                           >
                             <span className="material-symbols-outlined text-sm">
                               {isLiked ? "favorite" : "favorite_border"}
@@ -89905,11 +89857,10 @@ ${charsDetailedBlock}
                 <button
                   onClick={handleAddUserComment}
                   disabled={!userCommentText.trim() || isSubmittingComment}
-                  className={`px-4 py-2.5 rounded-full text-xs font-medium flex items-center gap-1 transition-all active:scale-95 ${
-                    userCommentText.trim() && !isSubmittingComment
+                  className={`px-4 py-2.5 rounded-full text-xs font-medium flex items-center gap-1 transition-all active:scale-95 ${userCommentText.trim() && !isSubmittingComment
                       ? "bg-[#D6724B] text-white shadow-md cursor-pointer"
                       : "bg-[#EAE4DC] text-[#A39282] cursor-not-allowed"
-                  }`}
+                    }`}
                 >
                   <span className="material-symbols-outlined text-sm">
                     {isSubmittingComment ? "sync" : "send"}
@@ -89929,11 +89880,10 @@ ${charsDetailedBlock}
                   <button
                     key={tf}
                     onClick={() => setActiveTimeframe(tf)}
-                    className={`px-6 py-2 rounded-xl text-xs font-medium font-serif tracking-wider transition-all active:scale-95 ${
-                      activeTimeframe === tf
+                    className={`px-6 py-2 rounded-xl text-xs font-medium font-serif tracking-wider transition-all active:scale-95 ${activeTimeframe === tf
                         ? "bg-[#D6724B] text-white shadow-md font-bold"
                         : "text-[#8C7A6B] dark:text-[#9E9185] hover:text-[#2C2420]"
-                    }`}
+                      }`}
                   >
                     {tf}
                   </button>
@@ -89947,11 +89897,10 @@ ${charsDetailedBlock}
                 <button
                   key={cat}
                   onClick={() => setActiveCategory(cat)}
-                  className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 ${
-                    activeCategory === cat
+                  className={`flex-shrink-0 px-4 py-1.5 rounded-full text-xs font-medium transition-all active:scale-95 ${activeCategory === cat
                       ? "bg-[#59685a] text-white shadow-sm"
                       : "bg-white/80 dark:bg-[#231F1C]/80 text-[#7A6B5E] dark:text-[#9E9185] border border-[#E8E0D5] dark:border-[#38312B]"
-                  }`}
+                    }`}
                 >
                   {cat}
                 </button>
@@ -89970,15 +89919,14 @@ ${charsDetailedBlock}
                     <div className="flex items-start gap-4">
                       <div className="flex flex-col items-center justify-center pt-1">
                         <div
-                          className={`w-9 h-9 rounded-2xl flex items-center justify-center font-serif font-bold text-sm shadow-sm ${
-                            artist.rank === 1
+                          className={`w-9 h-9 rounded-2xl flex items-center justify-center font-serif font-bold text-sm shadow-sm ${artist.rank === 1
                               ? "bg-gradient-to-b from-[#F5D061] to-[#E5A823] text-[#4A3200] ring-2 ring-[#F5D061]/50"
                               : artist.rank === 2
-                              ? "bg-gradient-to-b from-[#D8DCE3] to-[#A0A6B2] text-[#2C3340] ring-2 ring-[#D8DCE3]/50"
-                              : artist.rank === 3
-                              ? "bg-gradient-to-b from-[#E6B08A] to-[#BD7949] text-[#3D1E08] ring-2 ring-[#E6B08A]/50"
-                              : "bg-[#EFE8DF] dark:bg-[#2E2824] text-[#8C7A6B] dark:text-[#A39282]"
-                          }`}
+                                ? "bg-gradient-to-b from-[#D8DCE3] to-[#A0A6B2] text-[#2C3340] ring-2 ring-[#D8DCE3]/50"
+                                : artist.rank === 3
+                                  ? "bg-gradient-to-b from-[#E6B08A] to-[#BD7949] text-[#3D1E08] ring-2 ring-[#E6B08A]/50"
+                                  : "bg-[#EFE8DF] dark:bg-[#2E2824] text-[#8C7A6B] dark:text-[#A39282]"
+                            }`}
                         >
                           {artist.rank}
                         </div>
@@ -90148,7 +90096,7 @@ const ArtistCommissionModal = ({
           const fullContext = await window.getWorldBookContext();
           if (fullContext && fullContext.trim()) worldContext = fullContext.slice(0, 600);
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. 读取用户身份
       let userContext = "【用户身份】楼主/主公";
@@ -90161,7 +90109,7 @@ const ArtistCommissionModal = ({
             userContext = `【当前用户身份】姓名:${activeUser.name || "楼主"}，身份:${activeUser.occupation || activeUser.role || "绣衣楼楼主"}，性格:${activeUser.personality || "未知"}`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. 选定角色人设
       const charName = selectedChar.name;
@@ -90396,18 +90344,16 @@ ${customReqStr}
                       <button
                         key={char.id || char.name}
                         onClick={() => setSelectedChar(char)}
-                        className={`flex-shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-2xl border transition-all active:scale-95 snap-start ${
-                          isSelected
+                        className={`flex-shrink-0 flex items-center gap-2 px-3.5 py-2 rounded-2xl border transition-all active:scale-95 snap-start ${isSelected
                             ? "bg-[#D6724B] text-white border-[#D6724B] shadow-md"
                             : "bg-white dark:bg-[#2A2420] text-[#5C5047] dark:text-[#C4B7AA] border-[#E8DFD3] dark:border-[#3D352E] hover:border-[#D6724B]/50"
-                        }`}
+                          }`}
                       >
                         <div
-                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${
-                            isSelected
+                          className={`w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold ${isSelected
                               ? "bg-white text-[#D6724B]"
                               : "bg-[#EFE8DF] dark:bg-[#3D352E] text-[#695c51]"
-                          }`}
+                            }`}
                         >
                           {(char?.name || "角").slice(0, 1)}
                         </div>
@@ -90431,11 +90377,10 @@ ${customReqStr}
                       <button
                         key={tag}
                         onClick={() => toggleTag(tag)}
-                        className={`px-3 py-1.5 rounded-full text-xs transition-all active:scale-95 ${
-                          isSelected
+                        className={`px-3 py-1.5 rounded-full text-xs transition-all active:scale-95 ${isSelected
                             ? "bg-[#59685a] text-white font-medium shadow-sm"
                             : "bg-[#FAF5EE] dark:bg-[#28231E] text-[#7A6B5E] dark:text-[#A39587] border border-[#E8DFD3] dark:border-[#3D352E]"
-                        }`}
+                          }`}
                       >
                         {isSelected ? "✓ " : "# "}{tag}
                       </button>
@@ -90468,11 +90413,10 @@ ${customReqStr}
             <button
               onClick={handleStartWriting}
               disabled={isGenerating || !selectedChar}
-              className={`w-full py-3.5 rounded-2xl text-white text-xs font-bold tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all active:scale-98 ${
-                isGenerating || !selectedChar
+              className={`w-full py-3.5 rounded-2xl text-white text-xs font-bold tracking-wider shadow-lg flex items-center justify-center gap-2 transition-all active:scale-98 ${isGenerating || !selectedChar
                   ? "bg-[#A39282] cursor-not-allowed"
                   : "bg-gradient-to-r from-[#D6724B] to-[#B85832] hover:opacity-95"
-              }`}
+                }`}
             >
               <span className={`material-symbols-outlined text-base ${isGenerating ? "animate-spin" : ""}`}>
                 {isGenerating ? "draw" : "history_edu"}
@@ -90870,7 +90814,7 @@ const WeChatReadingProfileModal = ({
           if (window.settingsStore) {
             try {
               userAv = await window.settingsStore.getUserAvatar();
-            } catch (e) {}
+            } catch (e) { }
           }
           if (!userAv) {
             userAv = localStorage.getItem("user_avatar");
@@ -90886,12 +90830,12 @@ const WeChatReadingProfileModal = ({
         if (window.chatCharacterStore) {
           try {
             allChars = await window.chatCharacterStore.getAll();
-          } catch (e) {}
+          } catch (e) { }
         }
         if (!allChars || allChars.length === 0) {
           try {
             allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
-          } catch (e) {}
+          } catch (e) { }
         }
 
         const match = (allChars || []).find(
@@ -90920,7 +90864,7 @@ const WeChatReadingProfileModal = ({
         setProfileData(parsed);
         setLikesCount(parsed.receivedLikes || 0);
         return;
-      } catch (e) {}
+      } catch (e) { }
     }
 
     generateProfileData();
@@ -90938,7 +90882,7 @@ const WeChatReadingProfileModal = ({
           const fullContext = await window.getWorldBookContext();
           if (fullContext && fullContext.trim()) worldContext = fullContext.slice(0, 400);
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 2. 读取用户身份
       let userContext = "楼主/主公";
@@ -90951,7 +90895,7 @@ const WeChatReadingProfileModal = ({
             userContext = `${activeUser.name || "楼主"}(${activeUser.occupation || activeUser.role || "绣衣楼主"})`;
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       // 3. 读取该角色与用户的近期聊天历史（核心上下文）
       let recentChatSnippet = "暂无近期深度对话";
@@ -90976,7 +90920,7 @@ const WeChatReadingProfileModal = ({
             }
           }
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const charName = character.name || "传讯好友";
       const charGender = character.gender || (charName === "傅融" || charName === "刘辩" || charName === "袁基" || charName === "左慈" || charName === "孙策" ? "男" : "女");
@@ -91276,11 +91220,10 @@ ${recentChatSnippet}
               <div className="w-full mt-6">
                 <button
                   onClick={() => setIsFollowed(!isFollowed)}
-                  className={`w-full py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98] ${
-                    isFollowed
+                  className={`w-full py-3 rounded-2xl text-sm font-semibold flex items-center justify-center gap-1.5 transition-all shadow-sm active:scale-[0.98] ${isFollowed
                       ? "bg-[#EAECEF] dark:bg-stone-800 text-stone-700 dark:text-stone-300"
                       : "bg-[#1B72E8] text-white hover:bg-[#1558B0]"
-                  }`}
+                    }`}
                 >
                   <span className="text-base">{isFollowed ? "⇄" : "+"}</span>
                   <span>{isFollowed ? "互相关注" : "关注 Ta"}</span>
@@ -91294,11 +91237,10 @@ ${recentChatSnippet}
                   <div className="flex items-center gap-6">
                     <button
                       onClick={() => setActiveTab("shelf")}
-                      className={`relative text-base font-bold transition-colors ${
-                        activeTab === "shelf"
+                      className={`relative text-base font-bold transition-colors ${activeTab === "shelf"
                           ? "text-[#1B72E8] dark:text-[#4B96FF]"
                           : "text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-                      }`}
+                        }`}
                     >
                       书架
                       {activeTab === "shelf" && (
@@ -91307,11 +91249,10 @@ ${recentChatSnippet}
                     </button>
                     <button
                       onClick={() => setActiveTab("finished")}
-                      className={`relative text-base font-bold transition-colors flex items-center gap-1 ${
-                        activeTab === "finished"
+                      className={`relative text-base font-bold transition-colors flex items-center gap-1 ${activeTab === "finished"
                           ? "text-[#1B72E8] dark:text-[#4B96FF]"
                           : "text-stone-400 hover:text-stone-600 dark:hover:text-stone-300"
-                      }`}
+                        }`}
                     >
                       <span>读完</span>
                       <span className="text-xs opacity-70">
@@ -91446,7 +91387,7 @@ const WeChatReadingLeaderboardModal = ({
           calculateUserRank(parsed);
           return;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
     // 缓存无效或不含 characterObj，清除并重新生成
     localStorage.removeItem("reader_wechat_ranking_cache");
@@ -91484,14 +91425,14 @@ const WeChatReadingLeaderboardModal = ({
           if (allChars && Array.isArray(allChars)) {
             contactChars = allChars;
           }
-        } catch (e) {}
+        } catch (e) { }
       }
 
       if (contactChars.length === 0) {
         try {
           const saved = localStorage.getItem("t8_chat_list");
           if (saved) contactChars = JSON.parse(saved);
-        } catch (e) {}
+        } catch (e) { }
       }
 
       const formattedChars = contactChars
@@ -91533,7 +91474,7 @@ const WeChatReadingLeaderboardModal = ({
           const active = savedPersonas.find((p) => String(p.id) === String(activeId));
           if (active && active.name) userName = `${active.name}(你)`;
         }
-      } catch (e) {}
+      } catch (e) { }
 
       const charsNames = formattedChars.map((c) => c.name).join("、");
 
@@ -91790,11 +91731,10 @@ const WeChatReadingLeaderboardModal = ({
                       onOpenProfile(item.characterObj || { name: item.name });
                     }
                   }}
-                  className={`p-3.5 rounded-2xl border transition-all flex items-center gap-3.5 cursor-pointer active:scale-[0.98] ${
-                    item.isUser
+                  className={`p-3.5 rounded-2xl border transition-all flex items-center gap-3.5 cursor-pointer active:scale-[0.98] ${item.isUser
                       ? "bg-[#1B72E8]/5 dark:bg-[#1B72E8]/10 border-[#1B72E8]/30 shadow-sm"
                       : "bg-white dark:bg-[#202023] border-stone-100 dark:border-stone-800/80 shadow-[0_2px_10px_rgba(0,0,0,0.02)] hover:border-[#1B72E8]/40"
-                  }`}
+                    }`}
                 >
                   {/* 排名奖牌 / 数字 */}
                   <div className="w-6 flex items-center justify-center text-center">
@@ -91844,9 +91784,8 @@ const WeChatReadingLeaderboardModal = ({
                     {/* 点赞按钮 */}
                     <button
                       onClick={(e) => handleLike(e, index)}
-                      className={`flex items-center gap-1 text-[11px] mt-1 ml-auto transition-transform active:scale-125 ${
-                        item.hasLiked ? "text-red-500 font-bold" : "text-stone-400 hover:text-red-400"
-                      }`}
+                      className={`flex items-center gap-1 text-[11px] mt-1 ml-auto transition-transform active:scale-125 ${item.hasLiked ? "text-red-500 font-bold" : "text-stone-400 hover:text-red-400"
+                        }`}
                     >
                       <span>{item.hasLiked ? "❤️" : "🤍"}</span>
                       <span>{item.likes || 0}</span>
@@ -92199,10 +92138,10 @@ const LongTermMemoryPage = () => {
                             ).map((m) =>
                               m.id === mem.id
                                 ? {
-                                    ...m,
-                                    title: editTitle,
-                                    content: editContent,
-                                  }
+                                  ...m,
+                                  title: editTitle,
+                                  content: editContent,
+                                }
                                 : m,
                             );
                             saveConfig({
@@ -94263,11 +94202,11 @@ ${worldContext}
           const speed =
             Math.abs(
               current.x +
-                current.y +
-                current.z -
-                lastAccel.current.x -
-                lastAccel.current.y -
-                lastAccel.current.z,
+              current.y +
+              current.z -
+              lastAccel.current.x -
+              lastAccel.current.y -
+              lastAccel.current.z,
             ) /
             diffTime *
             10000;
@@ -98431,7 +98370,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
           setUserAvatar(activeUser.avatar);
         }
       }
-    } catch (e) {}
+    } catch (e) { }
   }, [chatId]);
 
   // 【新增】内部拦截 "太疾驰" 发出的购买事件，转入悬浮窗内消化，不再抛给全局主聊天
@@ -98607,7 +98546,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
         if (activeUser)
           userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}`;
       }
-    } catch (e) {}
+    } catch (e) { }
 
     const pageContext = window.currentT12Data
       ? `【用户当前在页面上看到的太疾驰商品/剧目详情】：\n${window.currentT12Data}`
@@ -98621,9 +98560,9 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
                   ${pageContext}
                   【最近对话】
                   ${messages
-                    .slice(-4)
-                    .map((m) => `${m.isMe ? "我" : character.name}: ${m.text}`)
-                    .join("\n")}
+        .slice(-4)
+        .map((m) => `${m.isMe ? "我" : character.name}: ${m.text}`)
+        .join("\n")}
                   我: ${myMsg.text}
                   【指令】请结合上述页面中正在卖的商品，回复用户刚才的话。字数控制在40字以内，语气必须符合人设。直接输出回复。
                 `;
@@ -98841,7 +98780,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
               >
                 {character.avatar ? (
                   typeof character.avatar === "string" &&
-                  character.avatar.startsWith("data:image") ? (
+                    character.avatar.startsWith("data:image") ? (
                     <img
                       src={character.avatar}
                       style={{
@@ -99936,7 +99875,7 @@ const MasterApp = () => {
           );
           const lrcData = await lrcRes.json();
           if (lrcData.lyric) parsedLyrics = parseLRC(lrcData.lyric);
-        } catch (e) {}
+        } catch (e) { }
 
         const artistName = Array.isArray(song.artist)
           ? song.artist.join("/")
@@ -100456,7 +100395,7 @@ const MasterApp = () => {
     if (savedCommission) {
       try {
         setCustomCommissionBooks(JSON.parse(savedCommission));
-      } catch (e) {}
+      } catch (e) { }
     }
   }, []);
 
@@ -101230,9 +101169,8 @@ const MasterApp = () => {
           </div>
           <div className="stage-container">
             <div
-              className={`upload-placeholder ${
-                images.length > 0 ? "no-border" : ""
-              }`}
+              className={`upload-placeholder ${images.length > 0 ? "no-border" : ""
+                }`}
               onClick={triggerUpload}
             >
               {images.length === 0 ? (
@@ -102699,9 +102637,8 @@ const MasterApp = () => {
                 return (
                   <div
                     key={book.id}
-                    className={`book-card absolute w-full max-w-sm rounded-3xl p-6 flex flex-row items-center justify-between ${
-                      index === activeBookIndex ? "active-card" : ""
-                    }`}
+                    className={`book-card absolute w-full max-w-sm rounded-3xl p-6 flex flex-row items-center justify-between ${index === activeBookIndex ? "active-card" : ""
+                      }`}
                     style={{
                       backgroundColor: book.color,
                       transform: `translateY(${translateY}px) rotateX(${rotateX}deg) scale(${scale})`,
@@ -102792,277 +102729,275 @@ const MasterApp = () => {
                 }}
               />
             ) : (
-            <main className="flex-1 overflow-y-auto pb-24">
-              {/* Search Field */}
-              <div className="mt-8 mb-12">
-                <div className="relative">
-                  <input
-                    className="w-full bg-transparent border-none border-b border-outline/30 focus:ring-0 focus:border-secondary py-3 px-2 font-body text-on-surface-variant placeholder:text-outline italic"
-                    placeholder="寻找心仪书目..."
-                    type="text"
-                  />
-                  <i
-                    data-lucide="search"
-                    className="absolute right-2 top-3"
-                    style={{
-                      color: "var(--outline)",
-                      opacity: "0.6",
-                      width: "20px",
-                      height: "20px",
-                    }}
-                  ></i>
-                </div>
-              </div>
-              {/* Hero Section */}
-              <header className="mb-16">
-                <h1 className="text-5xl font-headline font-semibold text-primary leading-tight tracking-tight italic">
-                  他山之石，
-                  <br />
-                  <span className="not-italic font-bold tracking-tighter">
-                    可以攻玉
-                  </span>
-                </h1>
-                <p className="text-on-surface-variant mt-4 font-body max-w-[280px] leading-relaxed">
-                  愿与天下好文之士，共沐百家风骨，古韵书香.
-                </p>
-              </header>
-              {/* [修改] 动态生成 书架 1 */}
-              <section className="mb-20">
-                <div className="flex justify-between items-end mb-8">
-                  <h2 className="text-2xl font-headline italic text-primary">
-                    为你推荐
-                  </h2>
-                  <span
-                    className="text-[0.6875rem] font-label uppercase tracking-[0.2em] text-outline cursor-pointer active:scale-95 transition-transform"
-                    onClick={() => handleGenerateBookstore("recommend")}
-                  >
-                    {isGeneratingRecommend ? "正在整理书架..." : "换一批"}
-                  </span>
-                </div>
-                <div className="relative pt-4">
-                  <div className="absolute bottom-0 left-[-24px] right-[-24px] h-12 bg-secondary-container/50 backdrop-blur-[16px] z-10 rounded-t-xl"></div>
-                  <div className="flex gap-6 overflow-x-auto pb-12 snap-x no-scrollbar">
-                    {storeRecommendBooks.length > 0 ? (
-                      storeRecommendBooks.map((book) => (
-                        <div
-                          key={book.id}
-                          onClick={() => handleOpenStoreBook(book)}
-                          className="flex-shrink-0 w-36 snap-center book-card z-20 cursor-pointer"
-                        >
-                          <div
-                            className="aspect-[2/3] shadow-xl overflow-hidden rounded-sm mb-4 relative flex items-center justify-center p-4"
-                            style={{ backgroundColor: book.color }}
-                          >
-                            {/* 书皮纹理 */}
-                            <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPgo8cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMSI+PC9yZWN0Pgo8cGF0aCBkPSJNMCAwaDh2OEgweiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utb3BhY2l0eT0iMC4wNSIvPgo8L3N2Zz4=')]"></div>
-                            <span
-                              className="font-serif font-bold text-xl text-center text-white mix-blend-overlay drop-shadow-md z-10"
-                              style={{
-                                writingMode: "vertical-rl",
-                                letterSpacing: "4px",
-                              }}
-                            >
-                              {book.title}
-                            </span>
-                          </div>
-                          <h3 className="text-sm font-medium font-body leading-tight text-on-surface truncate">
-                            {book.title}
-                          </h3>
-                          <p className="text-[0.6875rem] font-label text-outline uppercase tracking-wider mt-1 truncate flex justify-between">
-                            <span>{book.author}</span>
-                            <span className="opacity-50">{book.category}</span>
-                          </p>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="w-full text-center py-10 text-gray-400 text-sm">
-                        点击上方“换一批”获取书籍
-                      </div>
-                    )}
+              <main className="flex-1 overflow-y-auto pb-24">
+                {/* Search Field */}
+                <div className="mt-8 mb-12">
+                  <div className="relative">
+                    <input
+                      className="w-full bg-transparent border-none border-b border-outline/30 focus:ring-0 focus:border-secondary py-3 px-2 font-body text-on-surface-variant placeholder:text-outline italic"
+                      placeholder="寻找心仪书目..."
+                      type="text"
+                    />
+                    <i
+                      data-lucide="search"
+                      className="absolute right-2 top-3"
+                      style={{
+                        color: "var(--outline)",
+                        opacity: "0.6",
+                        width: "20px",
+                        height: "20px",
+                      }}
+                    ></i>
                   </div>
                 </div>
-              </section>
-
-              {/* [修改] 动态生成 书架 2 */}
-              <section className="mb-20">
-                <div className="flex justify-between items-end mb-8">
-                  <h2 className="text-2xl font-headline italic text-primary">
-                    好评如潮
-                  </h2>
-                  <span
-                    className="text-[0.6875rem] font-label uppercase tracking-[0.2em] text-outline cursor-pointer active:scale-95 transition-transform"
-                    onClick={() => handleGenerateBookstore("popular")}
-                  >
-                    {isGeneratingPopular ? "正在整理书架..." : "换一批"}
-                  </span>
-                </div>
-                <div className="relative pt-4">
-                  <div className="absolute bottom-0 left-[-24px] right-[-24px] h-12 bg-secondary-container/50 backdrop-blur-[16px] z-10 rounded-t-xl"></div>
-                  <div className="flex gap-6 overflow-x-auto pb-12 snap-x no-scrollbar">
-                    {storePopularBooks.length > 0 ? (
-                      storePopularBooks.map((book) => (
-                        <div
-                          key={book.id}
-                          onClick={() => handleOpenStoreBook(book)}
-                          className="flex-shrink-0 w-44 snap-center book-card z-20 cursor-pointer"
-                        >
-                          <div
-                            className="aspect-[2/3] shadow-xl overflow-hidden rounded-sm mb-4 relative flex items-center justify-center p-4"
-                            style={{ backgroundColor: book.color }}
-                          >
-                            {/* 书皮纹理 */}
-                            <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPgo8cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMSI+PC9yZWN0Pgo8cGF0aCBkPSJNMCAwaDh2OEgweiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utb3BhY2l0eT0iMC4wNSIvPgo8L3N2Zz4=')]"></div>
-                            <span
-                              className="font-serif font-bold text-xl text-center text-white mix-blend-overlay drop-shadow-md z-10"
-                              style={{
-                                writingMode: "vertical-rl",
-                                letterSpacing: "4px",
-                              }}
-                            >
-                              {book.title}
-                            </span>
-                          </div>
-                          <h3 className="text-sm font-medium font-body leading-tight text-on-surface truncate">
-                            {book.title}
-                          </h3>
-                          <p className="text-[0.6875rem] font-label text-outline uppercase tracking-wider mt-1 truncate flex justify-between">
-                            <span>{book.author}</span>
-                            <span className="opacity-50">{book.category}</span>
-                          </p>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="w-full text-center py-10 text-gray-400 text-sm">
-                        点击上方“换一批”获取书籍
-                      </div>
-                    )}
+                {/* Hero Section */}
+                <header className="mb-16">
+                  <h1 className="text-5xl font-headline font-semibold text-primary leading-tight tracking-tight italic">
+                    他山之石，
+                    <br />
+                    <span className="not-italic font-bold tracking-tighter">
+                      可以攻玉
+                    </span>
+                  </h1>
+                  <p className="text-on-surface-variant mt-4 font-body max-w-[280px] leading-relaxed">
+                    愿与天下好文之士，共沐百家风骨，古韵书香.
+                  </p>
+                </header>
+                {/* [修改] 动态生成 书架 1 */}
+                <section className="mb-20">
+                  <div className="flex justify-between items-end mb-8">
+                    <h2 className="text-2xl font-headline italic text-primary">
+                      为你推荐
+                    </h2>
+                    <span
+                      className="text-[0.6875rem] font-label uppercase tracking-[0.2em] text-outline cursor-pointer active:scale-95 transition-transform"
+                      onClick={() => handleGenerateBookstore("recommend")}
+                    >
+                      {isGeneratingRecommend ? "正在整理书架..." : "换一批"}
+                    </span>
                   </div>
-                </div>
-              </section>
-              {/* 本周阅读 */}
-              <section className="mb-32">
-                <div className="grid grid-cols-2 gap-4">
-                  <div
-                    className="col-span-2 p-8 rounded-3xl relative overflow-hidden"
-                    style={{
-                      backgroundColor: "var(--primary-container)",
-                    }}
-                  >
-                    <div className="relative z-10">
-                      <span className="text-[0.6875rem] font-label uppercase tracking-widest text-on-primary-container/70 mb-2 block">
-                        本周阅读
-                      </span>
-                      <h4 className="text-3xl font-headline italic text-on-primary-container mb-6">
-                        阅读计划
-                      </h4>
-                      {/* 微信读书风格的透明小方块 - 动态真实打卡 */}
-                      <div className="flex flex-wrap gap-3 mt-4">
-                        {["一", "二", "三", "四", "五", "六", "日"].map(
-                          (dayName, idx) => {
-                            const dayIndex = idx + 1; // 1代表周一，7代表周日
-                            const today = new Date();
-                            let currentDayIndex = today.getDay();
-                            if (currentDayIndex === 0) currentDayIndex = 7; // 转换周日
-
-                            // 计算本周每天的具体日期字符串，用来比对是否打过卡
-                            const dayDiff = dayIndex - currentDayIndex;
-                            const targetDate = new Date(today);
-                            targetDate.setDate(today.getDate() + dayDiff);
-                            const targetDateStr =
-                              targetDate.toLocaleDateString();
-
-                            const isPunched =
-                              readerWeeklyPunch.includes(targetDateStr);
-                            const isToday = dayIndex === currentDayIndex;
-
-                            return (
-                              <button
-                                key={idx}
-                                onClick={() =>
-                                  handleReaderWeeklyPunch(dayIndex)
-                                }
-                                className={`w-12 h-12 backdrop-blur-sm rounded-lg flex items-center justify-center transition-all hover:bg-white/50 active:scale-95 ${
-                                  isPunched
-                                    ? "bg-white/90 shadow-md"
-                                    : "bg-white/30"
-                                }`}
+                  <div className="relative pt-4">
+                    <div className="absolute bottom-0 left-[-24px] right-[-24px] h-12 bg-secondary-container/50 backdrop-blur-[16px] z-10 rounded-t-xl"></div>
+                    <div className="flex gap-6 overflow-x-auto pb-12 snap-x no-scrollbar">
+                      {storeRecommendBooks.length > 0 ? (
+                        storeRecommendBooks.map((book) => (
+                          <div
+                            key={book.id}
+                            onClick={() => handleOpenStoreBook(book)}
+                            className="flex-shrink-0 w-36 snap-center book-card z-20 cursor-pointer"
+                          >
+                            <div
+                              className="aspect-[2/3] shadow-xl overflow-hidden rounded-sm mb-4 relative flex items-center justify-center p-4"
+                              style={{ backgroundColor: book.color }}
+                            >
+                              {/* 书皮纹理 */}
+                              <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPgo8cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMSI+PC9yZWN0Pgo8cGF0aCBkPSJNMCAwaDh2OEgweiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utb3BhY2l0eT0iMC4wNSIvPgo8L3N2Zz4=')]"></div>
+                              <span
+                                className="font-serif font-bold text-xl text-center text-white mix-blend-overlay drop-shadow-md z-10"
                                 style={{
-                                  border:
-                                    isToday && !isPunched
-                                      ? "2px solid rgba(255,255,255,0.9)"
-                                      : "none",
+                                  writingMode: "vertical-rl",
+                                  letterSpacing: "4px",
                                 }}
                               >
-                                <span
-                                  className={`text-sm ${
-                                    isPunched
-                                      ? "text-[#D6724B] font-bold text-lg"
-                                      : "text-on-primary-container"
-                                  }`}
+                                {book.title}
+                              </span>
+                            </div>
+                            <h3 className="text-sm font-medium font-body leading-tight text-on-surface truncate">
+                              {book.title}
+                            </h3>
+                            <p className="text-[0.6875rem] font-label text-outline uppercase tracking-wider mt-1 truncate flex justify-between">
+                              <span>{book.author}</span>
+                              <span className="opacity-50">{book.category}</span>
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="w-full text-center py-10 text-gray-400 text-sm">
+                          点击上方“换一批”获取书籍
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                {/* [修改] 动态生成 书架 2 */}
+                <section className="mb-20">
+                  <div className="flex justify-between items-end mb-8">
+                    <h2 className="text-2xl font-headline italic text-primary">
+                      好评如潮
+                    </h2>
+                    <span
+                      className="text-[0.6875rem] font-label uppercase tracking-[0.2em] text-outline cursor-pointer active:scale-95 transition-transform"
+                      onClick={() => handleGenerateBookstore("popular")}
+                    >
+                      {isGeneratingPopular ? "正在整理书架..." : "换一批"}
+                    </span>
+                  </div>
+                  <div className="relative pt-4">
+                    <div className="absolute bottom-0 left-[-24px] right-[-24px] h-12 bg-secondary-container/50 backdrop-blur-[16px] z-10 rounded-t-xl"></div>
+                    <div className="flex gap-6 overflow-x-auto pb-12 snap-x no-scrollbar">
+                      {storePopularBooks.length > 0 ? (
+                        storePopularBooks.map((book) => (
+                          <div
+                            key={book.id}
+                            onClick={() => handleOpenStoreBook(book)}
+                            className="flex-shrink-0 w-44 snap-center book-card z-20 cursor-pointer"
+                          >
+                            <div
+                              className="aspect-[2/3] shadow-xl overflow-hidden rounded-sm mb-4 relative flex items-center justify-center p-4"
+                              style={{ backgroundColor: book.color }}
+                            >
+                              {/* 书皮纹理 */}
+                              <div className="absolute inset-0 opacity-10 bg-[url('data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSI4IiBoZWlnaHQ9IjgiPgo8cmVjdCB3aWR0aD0iOCIgaGVpZ2h0PSI4IiBmaWxsPSIjZmZmIiBmaWxsLW9wYWNpdHk9IjAuMSI+PC9yZWN0Pgo8cGF0aCBkPSJNMCAwaDh2OEgweiIgZmlsbD0ibm9uZSIgc3Ryb2tlPSIjMDAwIiBzdHJva2Utb3BhY2l0eT0iMC4wNSIvPgo8L3N2Zz4=')]"></div>
+                              <span
+                                className="font-serif font-bold text-xl text-center text-white mix-blend-overlay drop-shadow-md z-10"
+                                style={{
+                                  writingMode: "vertical-rl",
+                                  letterSpacing: "4px",
+                                }}
+                              >
+                                {book.title}
+                              </span>
+                            </div>
+                            <h3 className="text-sm font-medium font-body leading-tight text-on-surface truncate">
+                              {book.title}
+                            </h3>
+                            <p className="text-[0.6875rem] font-label text-outline uppercase tracking-wider mt-1 truncate flex justify-between">
+                              <span>{book.author}</span>
+                              <span className="opacity-50">{book.category}</span>
+                            </p>
+                          </div>
+                        ))
+                      ) : (
+                        <div className="w-full text-center py-10 text-gray-400 text-sm">
+                          点击上方“换一批”获取书籍
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+                {/* 本周阅读 */}
+                <section className="mb-32">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div
+                      className="col-span-2 p-8 rounded-3xl relative overflow-hidden"
+                      style={{
+                        backgroundColor: "var(--primary-container)",
+                      }}
+                    >
+                      <div className="relative z-10">
+                        <span className="text-[0.6875rem] font-label uppercase tracking-widest text-on-primary-container/70 mb-2 block">
+                          本周阅读
+                        </span>
+                        <h4 className="text-3xl font-headline italic text-on-primary-container mb-6">
+                          阅读计划
+                        </h4>
+                        {/* 微信读书风格的透明小方块 - 动态真实打卡 */}
+                        <div className="flex flex-wrap gap-3 mt-4">
+                          {["一", "二", "三", "四", "五", "六", "日"].map(
+                            (dayName, idx) => {
+                              const dayIndex = idx + 1; // 1代表周一，7代表周日
+                              const today = new Date();
+                              let currentDayIndex = today.getDay();
+                              if (currentDayIndex === 0) currentDayIndex = 7; // 转换周日
+
+                              // 计算本周每天的具体日期字符串，用来比对是否打过卡
+                              const dayDiff = dayIndex - currentDayIndex;
+                              const targetDate = new Date(today);
+                              targetDate.setDate(today.getDate() + dayDiff);
+                              const targetDateStr =
+                                targetDate.toLocaleDateString();
+
+                              const isPunched =
+                                readerWeeklyPunch.includes(targetDateStr);
+                              const isToday = dayIndex === currentDayIndex;
+
+                              return (
+                                <button
+                                  key={idx}
+                                  onClick={() =>
+                                    handleReaderWeeklyPunch(dayIndex)
+                                  }
+                                  className={`w-12 h-12 backdrop-blur-sm rounded-lg flex items-center justify-center transition-all hover:bg-white/50 active:scale-95 ${isPunched
+                                      ? "bg-white/90 shadow-md"
+                                      : "bg-white/30"
+                                    }`}
+                                  style={{
+                                    border:
+                                      isToday && !isPunched
+                                        ? "2px solid rgba(255,255,255,0.9)"
+                                        : "none",
+                                  }}
                                 >
-                                  {isPunched ? "✓" : dayName}
-                                </span>
-                              </button>
-                            );
-                          },
-                        )}
+                                  <span
+                                    className={`text-sm ${isPunched
+                                        ? "text-[#D6724B] font-bold text-lg"
+                                        : "text-on-primary-container"
+                                      }`}
+                                  >
+                                    {isPunched ? "✓" : dayName}
+                                  </span>
+                                </button>
+                              );
+                            },
+                          )}
+                        </div>
+                      </div>
+                      <div
+                        className="absolute right-[-20px] bottom-[-20px] w-40 h-40"
+                        style={{ opacity: "0.2" }}
+                      >
+                        <span
+                          className="material-symbols-outlined"
+                          style={{ fontSize: "10rem" }}
+                        >
+                          auto_stories
+                        </span>
                       </div>
                     </div>
                     <div
-                      className="absolute right-[-20px] bottom-[-20px] w-40 h-40"
-                      style={{ opacity: "0.2" }}
+                      onClick={() => setIsArtistRankOpen(true)}
+                      className="p-6 rounded-3xl flex flex-col justify-between cursor-pointer active:scale-95 transition-all hover:shadow-md"
+                      style={{
+                        backgroundColor: "var(--surface-container-high)",
+                      }}
                     >
                       <span
-                        className="material-symbols-outlined"
-                        style={{ fontSize: "10rem" }}
+                        className="material-symbols-outlined text-4xl"
+                        style={{ color: "var(--secondary)" }}
                       >
-                        auto_stories
+                        bookmark
                       </span>
+                      <p
+                        className="text-xs font-label uppercase tracking-wider mt-4 font-bold"
+                        style={{ color: "var(--secondary)" }}
+                      >
+                        心仪艺术家
+                      </p>
+                    </div>
+                    <div
+                      onClick={() => setIsReadingLeaderboardOpen(true)}
+                      className="p-6 rounded-3xl flex flex-col justify-between cursor-pointer active:scale-95 transition-all shadow-sm hover:shadow-md"
+                      style={{
+                        backgroundColor: "var(--tertiary-container)",
+                      }}
+                    >
+                      <span
+                        className="material-symbols-outlined text-4xl"
+                        style={{ color: "var(--on-tertiary-container)" }}
+                      >
+                        local_library
+                      </span>
+                      <p
+                        className="text-xs font-label uppercase tracking-wider mt-4 font-bold"
+                        style={{ color: "var(--on-tertiary-container)" }}
+                      >
+                        读书排行榜
+                      </p>
                     </div>
                   </div>
-                  <div
-                    onClick={() => setIsArtistRankOpen(true)}
-                    className="p-6 rounded-3xl flex flex-col justify-between cursor-pointer active:scale-95 transition-all hover:shadow-md"
-                    style={{
-                      backgroundColor: "var(--surface-container-high)",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined text-4xl"
-                      style={{ color: "var(--secondary)" }}
-                    >
-                      bookmark
-                    </span>
-                    <p
-                      className="text-xs font-label uppercase tracking-wider mt-4 font-bold"
-                      style={{ color: "var(--secondary)" }}
-                    >
-                      心仪艺术家
-                    </p>
-                  </div>
-                  <div
-                    onClick={() => setIsReadingLeaderboardOpen(true)}
-                    className="p-6 rounded-3xl flex flex-col justify-between cursor-pointer active:scale-95 transition-all shadow-sm hover:shadow-md"
-                    style={{
-                      backgroundColor: "var(--tertiary-container)",
-                    }}
-                  >
-                    <span
-                      className="material-symbols-outlined text-4xl"
-                      style={{ color: "var(--on-tertiary-container)" }}
-                    >
-                      local_library
-                    </span>
-                    <p
-                      className="text-xs font-label uppercase tracking-wider mt-4 font-bold"
-                      style={{ color: "var(--on-tertiary-container)" }}
-                    >
-                      读书排行榜
-                    </p>
-                  </div>
-                </div>
-              </section>
-            </main>
+                </section>
+              </main>
             )
           )}
 
@@ -103169,11 +103104,10 @@ const MasterApp = () => {
               {/* 首页 Tab */}
               <button
                 onClick={() => setBookstoreSubTab("home")}
-                className={`flex items-center gap-2 px-5 py-2.5 rounded-full transition-all duration-300 active:scale-90 ${
-                  bookstoreSubTab === "home"
+                className={`flex items-center gap-2 px-5 py-2.5 rounded-full transition-all duration-300 active:scale-90 ${bookstoreSubTab === "home"
                     ? "bg-[#695c51] text-[#fff6f1] shadow-md font-bold"
                     : "text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
-                }`}
+                  }`}
               >
                 <span
                   className="material-symbols-outlined text-xl"
@@ -103192,11 +103126,10 @@ const MasterApp = () => {
               {/* 约稿藏书阁 Tab */}
               <button
                 onClick={() => setBookstoreSubTab("custom_library")}
-                className={`relative flex items-center gap-2 px-5 py-2.5 rounded-full transition-all duration-300 active:scale-90 ${
-                  bookstoreSubTab === "custom_library"
+                className={`relative flex items-center gap-2 px-5 py-2.5 rounded-full transition-all duration-300 active:scale-90 ${bookstoreSubTab === "custom_library"
                     ? "bg-[#D6724B] text-white shadow-md font-bold"
                     : "text-stone-500 hover:text-stone-800 dark:text-stone-400 dark:hover:text-stone-200"
-                }`}
+                  }`}
               >
                 <span
                   className="material-symbols-outlined text-xl"
@@ -103682,14 +103615,14 @@ const MasterApp = () => {
               left:
                 ballState.x !== null
                   ? // 检查右侧空间是否足够，如果不够则显示在左侧
-                    ballState.x + 70 + 120 <= window.innerWidth
+                  ballState.x + 70 + 120 <= window.innerWidth
                     ? ballState.x + 70 + "px"
                     : Math.max(0, ballState.x - 130) + "px"
                   : "auto",
               top:
                 ballState.y !== null
                   ? // 检查底部空间是否足够，如果不够则向上调整
-                    Math.min(ballState.y, window.innerHeight - 210) + "px"
+                  Math.min(ballState.y, window.innerHeight - 210) + "px"
                   : "auto",
               right: ballState.x === null ? "30px" : "auto",
               bottom: ballState.y === null ? "200px" : "auto",
@@ -103843,8 +103776,8 @@ const MasterApp = () => {
                 top:
                   ballState.y !== null
                     ? Math.min(ballState.y, window.innerHeight - 210) -
-                      80 +
-                      "px"
+                    80 +
+                    "px"
                     : "auto",
                 right: ballState.x === null ? "30px" : "auto",
                 bottom: ballState.y === null ? "360px" : "auto",
