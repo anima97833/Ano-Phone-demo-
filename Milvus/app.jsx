@@ -47045,7 +47045,74 @@ ${isAuto ? `
   );
 };
 
-// 蹴鞠训练 (弹射进洞 - 金钱累计系统 & 金库自动记账)
+// 独立的蹴鞠训练局内小窗聊天数据库 (IndexedDB)
+const CujuGameChatDB = {
+  dbName: "cuju_game_db",
+  dbVersion: 1,
+  getDB: function() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.dbVersion);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("char_chats")) {
+          db.createObjectStore("char_chats", { keyPath: "charId" });
+        }
+      };
+      request.onsuccess = (e) => resolve(e.target.result);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  },
+  getMessages: async function(charId) {
+    if (!charId) return [];
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readonly");
+        const store = tx.objectStore("char_chats");
+        const req = store.get(String(charId));
+        req.onsuccess = () => resolve(req.result ? (req.result.messages || []) : []);
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      console.warn("Failed to get in-game cuju chat messages:", e);
+      return [];
+    }
+  },
+  saveMessage: async function(charId, message) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      const messages = await this.getMessages(charId);
+      messages.push(message);
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.put({ charId: String(charId), lastUpdated: Date.now(), messages });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      console.warn("Failed to save in-game cuju chat message:", e);
+    }
+  },
+  clearMessages: async function(charId) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.delete(String(charId));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      console.warn("Failed to clear in-game cuju chat messages:", e);
+    }
+  }
+};
+
+// 蹴鞠训练 (弹射进洞 - 金钱累计系统 & 金库自动记账 &「看Ta操作」代打与局内AI小窗)
 const CujuGamePage = ({ onBack }) => {
   const { useState, useEffect, useRef } = React;
   const [visible, setVisible] = useState(false);
@@ -47053,13 +47120,36 @@ const CujuGamePage = ({ onBack }) => {
   const [retries, setRetries] = useState(5);
   const [gameState, setGameState] = useState('idle'); // idle, aiming, moving, result
   const [showRules, setShowRules] = useState(false);
-  const [avatarImg, setAvatarImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-VFqexSPovwtr3yIGoOEVx0yEHEwRgACNCkAAmsm2Fc0E3_MZ3vJwD0E.png");
+
+  // 模式切换: 'manual' (自己玩) | 'auto' (看Ta操作)
+  const [playMode, setPlayMode] = useState('manual');
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedChar, setSelectedChar] = useState(null);
+  const [showCharModal, setShowCharModal] = useState(false);
+
+  // 外观更换底部抽屉弹窗
+  const [showSkinModal, setShowSkinModal] = useState(false);
+
+  // 局内小窗聊天系统
+  const [showInGameChat, setShowInGameChat] = useState(false);
+  const [inGameChatMsgs, setInGameChatMsgs] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiReplying, setIsAiReplying] = useState(false);
+  const [lastFailureContext, setLastFailureContext] = useState(null);
+  const chatScrollRef = useRef(null);
+
+  // 默认外观
+  const DEFAULT_AVATAR_IMG = "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-VFqexSPovwtr3yIGoOEVx0yEHEwRgACNCkAAmsm2Fc0E3_MZ3vJwD0E.png";
+  const DEFAULT_BALL_IMG = "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-UpqexPs91Bp2UmZyRci4rZiUyxwzAACLCkAAmsm2Ff4fJ4G2EYsXj0E.png";
+  const [avatarImg, setAvatarImg] = useState(DEFAULT_AVATAR_IMG);
+  const [ballImg, setBallImg] = useState(DEFAULT_BALL_IMG);
 
   // 金钱累计系统 (通关一关 = 5 元 / 五铢钱)
   const [sessionCoins, setSessionCoins] = useState(0);
   const [hasAwardedThisStage, setHasAwardedThisStage] = useState(false);
 
   const canvasRef = useRef(null);
+  const autoPilotTimerRef = useRef(null);
 
   // 物理与状态
   const stateRef = useRef({
@@ -47160,11 +47250,37 @@ const CujuGamePage = ({ onBack }) => {
     stateRef.current.hole = { ...lvl.hole, r: 35 };
     stateRef.current.fences = lvl.fences;
     stateRef.current.aimAngle = -Math.PI / 2;
+    stateRef.current.isAiming = false;
     setHasAwardedThisStage(false);
     setGameState('idle');
   };
 
   useEffect(() => {
+    // 加载可用角色列表
+    const loadCharacters = async () => {
+      let chars = [];
+      try {
+        if (window.chatCharacterStore) {
+          chars = await window.chatCharacterStore.getAll();
+        } else {
+          chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const validChars = chars.filter(c => !String(c.id).startsWith("group") && c.type !== "decor");
+        setAvailableChars(validChars);
+
+        const savedAutoCharId = localStorage.getItem("cuju_game_auto_char_id");
+        if (savedAutoCharId) {
+          const found = validChars.find(c => String(c.id) === String(savedAutoCharId));
+          if (found) setSelectedChar(found);
+        } else if (validChars.length > 0) {
+          setSelectedChar(validChars[0]);
+        }
+      } catch (err) {
+        console.error("加载角色失败:", err);
+      }
+    };
+    loadCharacters();
+
     if (window.settingsStore) {
       window.settingsStore.getCujuGameAvatar().then(img => {
         if (img) setAvatarImg(img);
@@ -47175,6 +47291,71 @@ const CujuGamePage = ({ onBack }) => {
   }, []);
 
   useEffect(() => { loadLevel(stage); }, [stage]);
+
+  // 当选定代打角色时，载入专属局内小窗聊天记录
+  useEffect(() => {
+    if (selectedChar && selectedChar.id) {
+      CujuGameChatDB.getMessages(selectedChar.id).then(msgs => {
+        setInGameChatMsgs(msgs);
+      });
+    }
+  }, [selectedChar]);
+
+  // 自动滚动局内聊天小窗底部
+  useEffect(() => {
+    if (showInGameChat && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [inGameChatMsgs, showInGameChat, isAiReplying]);
+
+  // 直接击球底层函数
+  const performKick = (angle, power = 900) => {
+    setGameState('moving');
+    stateRef.current.isAiming = false;
+    stateRef.current.ball.vx = Math.cos(angle) * power;
+    stateRef.current.ball.vy = Math.sin(angle) * power;
+  };
+
+  // 拟真自动代打逻辑 (Auto-Pilot)
+  useEffect(() => {
+    if (playMode !== 'auto' || gameState !== 'idle' || retries <= 0 || showInGameChat || showCharModal || showSkinModal || showRules) {
+      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
+      return;
+    }
+
+    const thinkDelay = 750 + Math.random() * 300;
+    autoPilotTimerRef.current = setTimeout(() => {
+      if (gameState !== 'idle' || playMode !== 'auto') return;
+
+      const state = stateRef.current;
+      const targetX = state.hole.x;
+      const targetY = state.hole.y;
+      const startX = state.ball.x;
+      const startY = state.ball.y;
+
+      // 理想瞄准角
+      const idealAngle = Math.atan2(targetY - startY, targetX - startX);
+      // 轻微手感拟真抖动
+      const isSlip = Math.random() < 0.22;
+      const variance = (Math.random() - 0.5) * (isSlip ? 0.28 : 0.06);
+      const actualAngle = idealAngle + variance;
+
+      // 动画瞄准
+      state.isAiming = true;
+      state.aimAngle = actualAngle;
+      setGameState('aiming');
+
+      // 瞄准蓄力片刻后直接击球！
+      setTimeout(() => {
+        performKick(actualAngle, 900);
+      }, 400);
+
+    }, thinkDelay);
+
+    return () => {
+      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
+    };
+  }, [playMode, gameState, stage, retries, showInGameChat, showCharModal, showSkinModal, showRules]);
 
   const handleUploadAvatar = () => {
     const input = document.createElement("input");
@@ -47197,6 +47378,41 @@ const CujuGamePage = ({ onBack }) => {
     input.click();
   };
 
+  const handleResetAvatar = async () => {
+    setAvatarImg(DEFAULT_AVATAR_IMG);
+    if (window.settingsStore) {
+      await window.settingsStore.setCujuGameAvatar("");
+    }
+  };
+
+  const handleUploadBall = () => {
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "image/*";
+    input.onchange = (e) => {
+      const file = e.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e2) => {
+          const dataUrl = e2.target.result;
+          setBallImg(dataUrl);
+          if (assetsRef.current.ball) {
+            assetsRef.current.ball.src = dataUrl;
+          }
+        };
+        reader.readAsDataURL(file);
+      }
+    };
+    input.click();
+  };
+
+  const handleResetBall = () => {
+    setBallImg(DEFAULT_BALL_IMG);
+    if (assetsRef.current.ball) {
+      assetsRef.current.ball.src = DEFAULT_BALL_IMG;
+    }
+  };
+
   // 资源加载
   const assetsRef = useRef({});
   useEffect(() => {
@@ -47208,7 +47424,7 @@ const CujuGamePage = ({ onBack }) => {
     loadImg('bg', 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ZRqexq7oIWWDXhduvyU2yItA2tOQgAChCkAAmsm2FeWqoZnTDnEjz0E.png');
     loadImg('fence', 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-U9qexRGth-A7WJHozu50m_t8Vs8bgACMikAAmsm2FfVFD3AIsKDXj0E.png');
     loadImg('hole', 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-UtqexQhRSBJFnJcpy6PIhuZjKvr5gACLikAAmsm2FfztMHk5n0xjT0E.png');
-    loadImg('ball', 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-UpqexPs91Bp2UmZyRci4rZiUyxwzAACLCkAAmsm2Ff4fJ4G2EYsXj0E.png');
+    loadImg('ball', ballImg);
   }, []);
 
   // 游戏主循环
@@ -47237,13 +47453,11 @@ const CujuGamePage = ({ onBack }) => {
     const reward = 5;
     setSessionCoins(prev => prev + reward);
 
-    // 1. 同步金库
     try {
       const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
       localStorage.setItem("farm_coins", (currentCoins + reward).toString());
     } catch (e) {}
 
-    // 2. 写入账本收支明细
     if (window.addTransactionRecord) {
       window.addTransactionRecord(
         "income",
@@ -47268,10 +47482,18 @@ const CujuGamePage = ({ onBack }) => {
       ball.vx = 0; ball.vy = 0;
       setGameState('idle');
       setRetries(r => {
-        if (r - 1 <= 0) return 0;
-        return r - 1;
+        const nextR = r - 1;
+        if (nextR <= 0) {
+          setLastFailureContext({
+            stage,
+            reason: "气力耗尽，球停在围栏边未能进洞",
+            isWin: false
+          });
+          setGameState('result');
+          return 0;
+        }
+        return nextR;
       });
-      if (retries - 1 <= 0) setGameState('result');
       return;
     }
 
@@ -47316,6 +47538,11 @@ const CujuGamePage = ({ onBack }) => {
     if (distToHole < state.hole.r - 5) {
       ball.vx = 0; ball.vy = 0;
       awardStageWin();
+      setLastFailureContext({
+        stage,
+        reason: "精彩绝伦，蹴鞠正中红旗坑洞！",
+        isWin: true
+      });
       setGameState('result');
     }
   };
@@ -47400,7 +47627,7 @@ const CujuGamePage = ({ onBack }) => {
   };
 
   const handleDown = (e) => {
-    if (gameState !== 'idle') return;
+    if (playMode === 'auto' || gameState !== 'idle') return;
     setGameState('aiming');
     stateRef.current.isAiming = true;
     const rect = canvasRef.current.getBoundingClientRect();
@@ -47410,7 +47637,7 @@ const CujuGamePage = ({ onBack }) => {
   };
 
   const handleMove = (e) => {
-    if (gameState !== 'aiming') return;
+    if (playMode === 'auto' || gameState !== 'aiming') return;
     const rect = canvasRef.current.getBoundingClientRect();
     const x = (e.touches ? e.touches[0].clientX : e.clientX) - rect.left;
     const y = (e.touches ? e.touches[0].clientY : e.clientY) - rect.top;
@@ -47423,19 +47650,165 @@ const CujuGamePage = ({ onBack }) => {
   };
 
   const handleUp = () => {
-    if (gameState !== 'aiming') return;
-    setGameState('moving');
-    stateRef.current.isAiming = false;
-
-    const power = 900;
-    stateRef.current.ball.vx = Math.cos(stateRef.current.aimAngle) * power;
-    stateRef.current.ball.vy = Math.sin(stateRef.current.aimAngle) * power;
+    if (playMode === 'auto' || gameState !== 'aiming') return;
+    performKick(stateRef.current.aimAngle, 900);
   };
 
   const isWin = () => {
     const state = stateRef.current;
     return Math.sqrt(distSq(state.ball.x, state.ball.y, state.hole.x, state.hole.y)) < state.hole.r;
   };
+
+  // 选择代打角色
+  const handleSelectAutoChar = (char) => {
+    setSelectedChar(char);
+    localStorage.setItem("cuju_game_auto_char_id", char.id);
+    if (char.avatar) {
+      setAvatarImg(char.avatar);
+    }
+    setShowCharModal(false);
+  };
+
+  // 局内小窗发送对话
+  const handleSendInGameMessage = async (msgText) => {
+    const textToSend = (msgText || chatInput).trim();
+    if (!textToSend || !selectedChar || isAiReplying) return;
+
+    setChatInput('');
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      role: 'user',
+      content: textToSend,
+      timestamp: Date.now()
+    };
+
+    const newMsgs = [...inGameChatMsgs, userMsg];
+    setInGameChatMsgs(newMsgs);
+    await CujuGameChatDB.saveMessage(selectedChar.id, userMsg);
+    setIsAiReplying(true);
+
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
+      let userContext = "【主控身份】姓名:主控, 性格:沉稳, 背景:隐秘阁主";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId) {
+          const activeUser = savedPersonas.find(p => p.id == activeId);
+          if (activeUser) {
+            userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
+          }
+        }
+      } catch (e) {}
+
+      const profile = selectedChar.profile || {};
+      const charContext = `【代打角色设定】
+姓名: ${selectedChar.name}
+性别: ${profile.gender || "未知"}
+性格: ${profile.personality || "未知"}
+说话风格: ${profile.style || "自然生动"}
+背景故事: ${profile.background || "暂无"}
+MBTI: ${profile.mbti || "无"}`;
+
+      const isAuto = playMode === 'auto';
+      const combatContext = `【局内蹴鞠训练战况】
+模式: ${isAuto ? `看Ta操作（由你【${selectedChar.name}】亲自在蹴鞠场上下场踢球，主控在场边看你操作）` : `自己玩（由主控亲自在场上下场踢球，你在场边观战/打气）`}
+踢球执行者: ${isAuto ? `是你本人【${selectedChar.name}】！` : '是主控本人！'}
+当前关卡: 第 ${stage} 关
+累计通关赏金: +${sessionCoins} 铢
+剩余击球机会: ${retries} 次
+最新战况: ${lastFailureContext ? (
+  isAuto
+    ? (lastFailureContext.isWin
+        ? `你刚踢出了一记神仙球，蹴鞠漂亮地飞入红旗坑洞破关成功！`
+        : `你在第 ${lastFailureContext.stage} 关未能将球踢进洞（${lastFailureContext.reason}），差了点运气`)
+    : (lastFailureContext.isWin
+        ? `主控刚才一记妙射，球漂亮进洞破关！`
+        : `主控在第 ${lastFailureContext.stage} 关未能将球踢进洞（${lastFailureContext.reason}）`)
+) : (
+  isAuto ? `你正在蹴鞠场上观察围栏与坑洞角度，准备出脚` : `主控正在蹴鞠场上瞄准准备出脚`
+)}`;
+
+      const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
+${worldContext}
+${userContext}
+${charContext}
+${combatContext}
+
+【交互情境与视角（极其重要）】
+${isAuto ? `
+- 【极其重要】：当前是【看Ta操作】模式！刚才【是你【${selectedChar.name}】本人】亲自上阵在蹴鞠场上下场踢球！主控是在场边观看你的操作！
+- 刚才无论是漂亮的弧线进洞，还是不小心撞上木栏/踢偏了，都是【你自己的亲身经历】！
+- 请务必以第一人称（如“我”、“本公子”等符合你身份的称呼）描述【你自己刚才在场上的踢球脚法与表现】。绝对不要误以为是主控在踢！
+- 面对主控在小窗里的打趣、关心或夸赞，你要给出极具个性的人设反应（例如：若是傲娇则称是场地风向不对、若是活泼则炫耀自己的脚法、若是温柔则拉着主控继续玩等）。
+` : `
+- 当前是【自己玩】模式，刚才【是主控本人】在蹴鞠场上踢球，你作为密探在场边陪伴与观战。
+- 请以场边陪伴者的视角，对主控刚才的脚法战况给予贴合人设的点评、鼓励或打趣。
+`}
+
+【核心要求】
+1. 必须完全使用【${selectedChar.name}】的独特口吻和性格说话（严禁出戏、严禁AI腔、严禁说自己是人工智能）。
+2. 字数控制在 25-70 字左右，言简意赅，生动传神。直接输出角色说的话，不要带角色名字前缀。`;
+
+      const recentDialogues = newMsgs.slice(-8).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
+
+      const apiMessages = [
+        { role: "system", content: sysPrompt },
+        ...recentDialogues
+      ];
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          apiMessages,
+          null,
+          async (reply) => {
+            const cleanReply = reply.trim();
+            const assistantMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: cleanReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, assistantMsg]);
+            await CujuGameChatDB.saveMessage(selectedChar.id, assistantMsg);
+            setIsAiReplying(false);
+          },
+          (err) => {
+            console.error("AI回复失败:", err);
+            const fallbackReply = isAuto
+              ? "（揉了揉脚踝）刚才那记折射角度有些刁钻……下一脚我定能正中红旗！"
+              : "（笑着递过水囊）刚才那一脚力道十足，只差寸许，下一球定能进洞。";
+            const fallbackMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: fallbackReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, fallbackMsg]);
+            setIsAiReplying(false);
+          }
+        );
+      } else {
+        setIsAiReplying(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsAiReplying(false);
+    }
+  };
+
+  const handleClearInGameChat = async () => {
+    if (!selectedChar) return;
+    if (confirm("确定要清空与该角色的蹴鞠局内对话记录吗？（不影响传讯页面正常聊天）")) {
+      await CujuGameChatDB.clearMessages(selectedChar.id);
+      setInGameChatMsgs([]);
+    }
+  };
+
+  const displayAvatar = (playMode === 'auto' && selectedChar && selectedChar.avatar) ? selectedChar.avatar : avatarImg;
 
   return (
     <div
@@ -47453,43 +47826,128 @@ const CujuGamePage = ({ onBack }) => {
         onPointerUp={handleUp} onPointerCancel={handleUp}
       />
 
-      {/* 顶部 Header UI */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 14, right: 14, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 10 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div onClick={onBack} style={{ width: 36, height: 36, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)' }}>←</div>
-          <div style={{ background: 'rgba(59, 66, 53, 0.75)', color: '#FFF', padding: '5px 12px', borderRadius: 16, fontSize: '0.82rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)' }}>
-            🚩 第 {stage} 关
+      {/* 顶部第一行：返回退出 + 模式切换胶囊 + 金库收益 */}
+      <div style={{ position: 'absolute', top: 'max(12px, env(safe-area-inset-top))', left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 }}>
+        {/* 左侧区域 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div onClick={onBack} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '5px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.85rem', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span>←</span>
+            <span>退出</span>
+          </div>
+
+          {/* 模式切换胶囊按钮 */}
+          <div style={{ background: 'rgba(255,255,255,0.88)', padding: '2px', borderRadius: 20, display: 'flex', border: '1px solid rgba(196,156,88,0.5)', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+            <div
+              onClick={(e) => { e.stopPropagation(); setPlayMode('manual'); }}
+              style={{
+                padding: '3px 9px', borderRadius: 16, fontSize: '0.74rem', fontWeight: 'bold', cursor: 'pointer',
+                background: playMode === 'manual' ? 'linear-gradient(135deg, #59685a 0%, #435044 100%)' : 'transparent',
+                color: playMode === 'manual' ? '#fff' : '#6E6055',
+                transition: 'all 0.2s'
+              }}
+            >
+              自己玩
+            </div>
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setPlayMode('auto');
+                if (!selectedChar && availableChars.length > 0) {
+                  setShowCharModal(true);
+                }
+              }}
+              style={{
+                padding: '3px 9px', borderRadius: 16, fontSize: '0.74rem', fontWeight: 'bold', cursor: 'pointer',
+                background: playMode === 'auto' ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : 'transparent',
+                color: playMode === 'auto' ? '#fff' : '#6E6055',
+                transition: 'all 0.2s'
+              }}
+            >
+              看Ta操作
+            </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          {/* 金库收益徽章 */}
-          <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.9) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.82rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-            <span>💰 金库收益:</span>
-            <span style={{ color: '#FFEB3B', fontSize: '0.92rem' }}>+{sessionCoins} 铢</span>
+        {/* 右侧：金库收益 */}
+        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.92) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span>💰 金库收益:</span>
+          <span style={{ color: '#FFEB3B', fontSize: '0.92rem' }}>+{sessionCoins} 铢</span>
+        </div>
+      </div>
+
+      {/* 顶部第二行：关卡徽章 + 换人/换外观 + 局内小窗入口 */}
+      <div style={{ position: 'absolute', top: 'max(48px, env(safe-area-inset-top) + 36px)', left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 95 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ background: 'rgba(59, 66, 53, 0.78)', backdropFilter: 'blur(4px)', color: '#FFF9F0', padding: '4px 10px', borderRadius: 14, fontSize: '0.78rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.2)' }}>
+            🚩 第 {stage} 关
           </div>
-          <div onClick={() => setShowRules(true)} style={{ background: 'rgba(0,0,0,0.5)', borderRadius: 20, padding: '5px 10px', color: '#fff', fontSize: '0.8rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)' }}>
-            ℹ️ 规则
+
+          {playMode === 'auto' && selectedChar && (
+            <div
+              onClick={(e) => { e.stopPropagation(); setShowCharModal(true); }}
+              style={{
+                background: 'rgba(255,255,255,0.92)', color: '#8C4A1E', padding: '3px 9px', borderRadius: 14,
+                fontSize: '0.75rem', fontWeight: 'bold', border: '1px solid #E6D7C3', cursor: 'pointer',
+                display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}
+              title="点击更换代打密探"
+            >
+              <span>👤 {selectedChar.name}</span>
+              <span style={{ color: '#B85630', fontSize: '0.68rem' }}>[换人]</span>
+            </div>
+          )}
+        </div>
+
+        {/* 右侧：换外观 & 局内小窗入口 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div
+            onClick={(e) => { e.stopPropagation(); setShowSkinModal(true); }}
+            style={{
+              background: 'rgba(255,255,255,0.92)', color: '#5D4037', padding: '4px 10px', borderRadius: 16,
+              cursor: 'pointer', fontSize: '0.76rem', fontWeight: 'bold', border: '1.5px solid #C49C58',
+              boxShadow: '0 2px 6px rgba(0,0,0,0.1)', display: 'flex', alignItems: 'center', gap: '3px'
+            }}
+          >
+            <span>🎨 换外观</span>
+          </div>
+
+          <div
+            onClick={(e) => { e.stopPropagation(); setShowInGameChat(true); }}
+            style={{
+              background: 'linear-gradient(135deg, #FFFDF8 0%, #F5E8D2 100%)',
+              color: '#5D4037', padding: '4px 11px', borderRadius: 16, cursor: 'pointer',
+              fontSize: '0.76rem', fontWeight: 'bold', border: '1.5px solid #C49C58',
+              boxShadow: '0 2px 8px rgba(0,0,0,0.15)', display: 'flex', alignItems: 'center', gap: '4px'
+            }}
+          >
+            <span>💬 小窗</span>
+            {inGameChatMsgs.length > 0 && (
+              <span style={{ background: '#D6724B', color: '#fff', fontSize: '0.65rem', padding: '0 4px', borderRadius: 8 }}>
+                {inGameChatMsgs.length}
+              </span>
+            )}
           </div>
         </div>
       </div>
 
       {/* 底部 Footer UI */}
-      <div style={{ position: 'absolute', bottom: '5%', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'none', zIndex: 10 }}>
+      <div style={{ position: 'absolute', bottom: '4%', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'none', zIndex: 10 }}>
         <div style={{ position: 'relative', pointerEvents: 'auto' }}>
           <img
-            src={avatarImg}
-            onClick={handleUploadAvatar}
-            style={{ width: 60, height: 60, borderRadius: '50%', border: '3px solid #fff', boxShadow: '0 4px 8px rgba(0,0,0,0.2)', marginBottom: 8, objectFit: 'cover', cursor: 'pointer' }}
-            title="点击更换蹴鞠球皮肤"
+            src={displayAvatar}
+            onClick={() => setShowSkinModal(true)}
+            style={{ width: 60, height: 60, borderRadius: '50%', border: '3px solid #fff', boxShadow: '0 4px 8px rgba(0,0,0,0.2)', marginBottom: 6, objectFit: 'cover', cursor: 'pointer' }}
+            title="点击更换蹴鞠皮肤"
           />
           <span style={{ position: 'absolute', right: -4, bottom: 6, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '9px', padding: '1px 5px', borderRadius: 8 }}>换皮</span>
         </div>
-        <div style={{ color: '#2C3528', fontSize: '1.05rem', fontWeight: 'bold', textShadow: '0 1px 3px rgba(255,255,255,0.8)', marginBottom: 3 }}>
+        <div style={{ color: '#2C3528', fontSize: '1.02rem', fontWeight: 'bold', textShadow: '0 1px 3px rgba(255,255,255,0.8)', marginBottom: 2 }}>
           还有 <span style={{ color: retries <= 2 ? '#D32F2F' : '#388E3C' }}>{retries}</span> 次踢球机会
         </div>
-        <div style={{ color: '#555', fontSize: '0.82rem', background: 'rgba(255,255,255,0.6)', padding: '2px 10px', borderRadius: 10 }}>
-          反向拖拽屏幕蓄力瞄准，踢入红旗坑洞即得 5 铢
+        <div style={{ color: '#555', fontSize: '0.8rem', background: 'rgba(255,255,255,0.65)', padding: '2px 10px', borderRadius: 10 }}>
+          {playMode === 'auto'
+            ? `🤖【${selectedChar ? selectedChar.name : '密探'}】正在观察折射角度准备踢球...`
+            : "反向拖拽屏幕蓄力瞄准，踢入红旗坑洞即得 5 铢"}
         </div>
       </div>
 
@@ -47497,41 +47955,47 @@ const CujuGamePage = ({ onBack }) => {
       {gameState === 'result' && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: 'linear-gradient(135deg, #FFFDF8 0%, #F5EFEB 100%)', padding: '36px 24px 28px 24px', borderRadius: 24, textAlign: 'center', position: 'relative', width: '100%', maxWidth: 330, boxShadow: '0 12px 36px rgba(0,0,0,0.5)', border: '2px solid #E2D8CC' }}>
-            <img src={avatarImg} style={{ width: 72, height: 72, borderRadius: '50%', position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', border: '4px solid #fff', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }} />
+            <img src={displayAvatar} style={{ width: 72, height: 72, borderRadius: '50%', position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', border: '4px solid #fff', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }} />
 
             {isWin() ? (
               <>
-                <h2 style={{ color: '#D84315', fontSize: '1.45rem', fontWeight: '800', margin: '20px 0 6px 0' }}>
+                <h2 style={{ color: '#D84315', fontSize: '1.4rem', fontWeight: '800', margin: '20px 0 6px 0' }}>
                   🎉 一击即中 · 突破第 {stage} 关！
                 </h2>
-                <div style={{ background: '#FFF', padding: '4px 14px', borderRadius: 16, color: '#6E6055', display: 'inline-block', marginBottom: 16, border: '1px solid #EAE3DA', fontSize: '0.82rem' }}>
+                <div style={{ background: '#FFF', padding: '4px 14px', borderRadius: 16, color: '#6E6055', display: 'inline-block', marginBottom: 14, border: '1px solid #EAE3DA', fontSize: '0.8rem' }}>
                   “百步穿杨，名不虚传！”
                 </div>
 
-                <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '20px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '10px 12px', borderRadius: '14px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '16px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
                     <span>💰 本关通关赏金：</span>
                     <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+5 五铢钱</span>
                   </div>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
                     <span>🏆 本局累计收益：</span>
                     <span style={{ color: '#8C4A1E', fontWeight: 'bold' }}>+{sessionCoins} 铢</span>
                   </div>
-                  <div style={{ fontSize: '0.74rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '4px', marginTop: '4px' }}>
+                  <div style={{ fontSize: '0.72rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '3px', marginTop: '3px' }}>
                     ✨ 赏金已实时存入【隐私与安全-我的金库】
                   </div>
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <button
                     onClick={() => { setStage(s => s + 1); setRetries(5); }}
-                    style={{ padding: '12px', background: 'linear-gradient(135deg, #D84315 0%, #BF360C 100%)', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.95rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(216,67,21,0.4)' }}
+                    style={{ padding: '11px', background: 'linear-gradient(135deg, #D84315 0%, #BF360C 100%)', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.92rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 12px rgba(216,67,21,0.4)' }}
                   >
                     进入第 {stage + 1} 关 ➔
                   </button>
                   <button
+                    onClick={() => setShowInGameChat(true)}
+                    style={{ padding: '9px', borderRadius: 16, border: '1.5px solid #C49C58', background: '#FFFDF9', color: '#8C4A1E', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 'bold' }}
+                  >
+                    💬 局内小窗复盘交流
+                  </button>
+                  <button
                     onClick={onBack}
-                    style={{ padding: '10px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.85rem', cursor: 'pointer' }}
+                    style={{ padding: '8px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.8rem', cursor: 'pointer' }}
                   >
                     见好就收，返回休整
                   </button>
@@ -47539,34 +48003,391 @@ const CujuGamePage = ({ onBack }) => {
               </>
             ) : (
               <>
-                <h2 style={{ color: '#455A64', fontSize: '1.35rem', fontWeight: '800', margin: '20px 0 10px 0' }}>
+                <h2 style={{ color: '#455A64', fontSize: '1.3rem', fontWeight: '800', margin: '20px 0 8px 0' }}>
                   😔 气力耗竭
                 </h2>
-                <p style={{ color: '#78909C', fontSize: '0.82rem', marginBottom: 16 }}>
+                <p style={{ color: '#78909C', fontSize: '0.8rem', marginBottom: 14 }}>
                   未能将球踢入坑洞，第 {stage} 关试炼失败
                 </p>
 
-                <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '20px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
+                <div style={{ background: '#FFF', padding: '10px 12px', borderRadius: '14px', border: '1px solid #EAE3DA', marginBottom: '16px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
                   <span>💰 本局已得收益：</span>
                   <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+{sessionCoins} 铢</span>（已入金库）
                 </div>
 
-                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
                   <button
                     onClick={() => { setRetries(5); loadLevel(stage); }}
-                    style={{ padding: '12px', background: '#455A64', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.92rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(69,90,100,0.3)' }}
+                    style={{ padding: '11px', background: '#455A64', color: '#fff', border: 'none', borderRadius: 16, fontSize: '0.88rem', fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 10px rgba(69,90,100,0.3)' }}
                   >
                     重试本关
                   </button>
                   <button
+                    onClick={() => setShowInGameChat(true)}
+                    style={{ padding: '9px', borderRadius: 16, border: '1.5px solid #C49C58', background: '#FFFDF9', color: '#8C4A1E', cursor: 'pointer', fontSize: '0.82rem', fontWeight: 'bold' }}
+                  >
+                    💬 局内小窗复盘吐槽
+                  </button>
+                  <button
                     onClick={onBack}
-                    style={{ padding: '10px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.85rem', cursor: 'pointer' }}
+                    style={{ padding: '8px', background: '#FAF7F2', color: '#6E6055', border: '1px solid #DDD', borderRadius: 16, fontSize: '0.8rem', cursor: 'pointer' }}
                   >
                     返回修武扬文
                   </button>
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* 🎨 底部弹出外观更换卡片 */}
+      {showSkinModal && (
+        <div
+          onClick={() => setShowSkinModal(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            zIndex: 520, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5E8D2 100%)',
+              borderRadius: '24px 24px 0 0', padding: '18px 16px max(24px, env(safe-area-inset-bottom)) 16px',
+              borderTop: '3px solid #C49C58', maxHeight: '80%', overflowY: 'auto'
+            }}
+          >
+            <div style={{ width: 36, height: 4, background: '#D7CCC8', borderRadius: 2, margin: '0 auto 10px auto' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#4E342E' }}>
+                  🎨 蹴鞠外观与角色设置
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#8D6E63', marginTop: 2 }}>
+                  自定义踢球角色立绘头像与蹴鞠球皮肤
+                </div>
+              </div>
+              <div
+                onClick={() => setShowSkinModal(false)}
+                style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {/* 卡片 1: 角色立绘/头像 */}
+              <div style={{ background: '#FFFDF9', borderRadius: 16, padding: '14px', border: '1.5px solid #E6D7C3', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ width: 60, height: 60, borderRadius: '50%', overflow: 'hidden', border: '2px solid #ECE0D1', flexShrink: 0 }}>
+                  <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 2 }}>
+                    踢球角色头像
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#8D6E63', marginBottom: 8 }}>
+                    页面下方与结算时显示的角色形象
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={handleUploadAvatar}
+                      style={{ padding: '6px 12px', background: 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      上传自定义头像
+                    </button>
+                    {avatarImg !== DEFAULT_AVATAR_IMG && (
+                      <button
+                        onClick={handleResetAvatar}
+                        style={{ padding: '6px 10px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer' }}
+                      >
+                        恢复默认
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* 卡片 2: 蹴鞠球皮肤 */}
+              <div style={{ background: '#FFFDF9', borderRadius: 16, padding: '14px', border: '1.5px solid #E6D7C3', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
+                <div style={{ width: 60, height: 60, borderRadius: '50%', overflow: 'hidden', border: '2px solid #ECE0D1', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <img src={ballImg} style={{ width: '80%', height: '80%', objectFit: 'contain' }} />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ fontSize: '0.88rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 2 }}>
+                    蹴鞠球外观
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#8D6E63', marginBottom: 8 }}>
+                    场上滚动的蹴鞠球样式
+                  </div>
+                  <div style={{ display: 'flex', gap: 6 }}>
+                    <button
+                      onClick={handleUploadBall}
+                      style={{ padding: '6px 12px', background: 'linear-gradient(135deg, #59685a 0%, #435044 100%)', color: '#fff', border: 'none', borderRadius: 12, fontSize: '0.75rem', fontWeight: 'bold', cursor: 'pointer' }}
+                    >
+                      上传自定义球皮
+                    </button>
+                    {ballImg !== DEFAULT_BALL_IMG && (
+                      <button
+                        onClick={handleResetBall}
+                        style={{ padding: '6px 10px', background: '#ECEFF1', color: '#607D8B', border: 'none', borderRadius: 12, fontSize: '0.72rem', cursor: 'pointer' }}
+                      >
+                        恢复默认
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 🎭 角色选择抽屉 (用于「看Ta操作」) */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5E8D2 100%)',
+              borderRadius: '24px 24px 0 0', padding: '20px 16px max(24px, env(safe-area-inset-bottom)) 16px',
+              borderTop: '3px solid #C49C58', maxHeight: '75%', overflowY: 'auto'
+            }}
+          >
+            <div style={{ width: 36, height: 4, background: '#D7CCC8', borderRadius: 2, margin: '0 auto 10px auto' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#4E342E' }}>
+                  🎯 选择代打密探
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#8D6E63', marginTop: 2 }}>
+                  读取自【传讯-角色配置库】，选择后由其下场踢球与局内小窗互动
+                </div>
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {availableChars.length === 0 ? (
+              <div style={{ padding: '30px 0', textAlign: 'center', color: '#8D6E63', fontSize: '0.85rem' }}>
+                暂未在【传讯】中配置密探角色，请先前往传讯添加。
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {availableChars.map(char => {
+                  const isCur = selectedChar && String(selectedChar.id) === String(char.id);
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => handleSelectAutoChar(char)}
+                      style={{
+                        background: isCur ? '#FFF3E0' : '#FFFDF9',
+                        borderRadius: 14, padding: '12px 6px',
+                        border: isCur ? '2px solid #D6724B' : '1px solid #E6D7C3',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.06)'
+                      }}
+                    >
+                      <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #D6724B' : '1px solid #DDD', marginBottom: 6 }}>
+                        <img src={char.avatar || DEFAULT_AVATAR_IMG} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#D6724B' : '#4E342E', textAlign: 'center' }}>
+                        {char.name}
+                      </div>
+                      {isCur && (
+                        <span style={{ fontSize: '0.65rem', color: '#D6724B', marginTop: 2, fontWeight: 'bold' }}>
+                          ✓ 代打中
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 💬 局内专属悬浮小窗聊天 (IndexedDB 独立存储，对接【设置-API设置】) */}
+      {showInGameChat && (
+        <div
+          onClick={() => setShowInGameChat(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(5px)',
+            zIndex: 550, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5EADB 100%)',
+              borderRadius: '24px 24px 0 0', padding: '16px 14px max(18px, env(safe-area-inset-bottom)) 14px',
+              borderTop: '3px solid #C49C58', height: '82%', maxHeight: 600,
+              display: 'flex', flexDirection: 'column', boxShadow: '0 -10px 30px rgba(0,0,0,0.4)'
+            }}
+          >
+            {/* 小窗头部 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #E6D7C3' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #C49C58' }}>
+                  <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>{selectedChar ? selectedChar.name : "密探"}</span>
+                    <span style={{ fontSize: '0.68rem', background: 'rgba(214,114,75,0.15)', color: '#D6724B', padding: '1px 6px', borderRadius: 8 }}>
+                      {playMode === 'auto' ? '代打中 · 局内复盘' : '观战中 · 局内复盘'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#8D6E63' }}>
+                    🚩 第 {stage} 关 | 累计赏金 +{sessionCoins} 铢
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  onClick={handleClearInGameChat}
+                  style={{ fontSize: '0.72rem', color: '#A08070', background: 'rgba(0,0,0,0.05)', padding: '3px 8px', borderRadius: 10, cursor: 'pointer' }}
+                  title="清空局内对话"
+                >
+                  清空记录
+                </div>
+                <div
+                  onClick={() => setShowInGameChat(false)}
+                  style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  ✕
+                </div>
+              </div>
+            </div>
+
+            {/* 消息滚动流 */}
+            <div
+              ref={chatScrollRef}
+              style={{
+                flex: 1, overflowY: 'auto', padding: '12px 4px', display: 'flex', flexDirection: 'column', gap: 10
+              }}
+            >
+              {inGameChatMsgs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 10px', color: '#8D6E63', fontSize: '0.82rem', lineHeight: '1.6' }}>
+                  {playMode === 'auto'
+                    ? `⚽ 刚才【${selectedChar ? selectedChar.name : '密探'}】这一脚踢得如何？在下方点击快捷话题或输入文字，跟Ta复盘刚才的脚法吧！`
+                    : `⚽ 刚才这一脚踢得如何？在下方点击快捷话题或输入文字，与【${selectedChar ? selectedChar.name : '密探'}】小窗复盘蹴鞠战况吧！`}
+                </div>
+              ) : (
+                inGameChatMsgs.map((msg) => {
+                  const isUser = msg.role === 'user';
+                  return (
+                    <div
+                      key={msg.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: isUser ? 'flex-end' : 'flex-start',
+                        gap: 8
+                      }}
+                    >
+                      {!isUser && (
+                        <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginTop: 2 }}>
+                          <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          maxWidth: '75%',
+                          padding: '8px 12px',
+                          borderRadius: isUser ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
+                          background: isUser ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : '#FFF',
+                          color: isUser ? '#FFF' : '#3E2723',
+                          fontSize: '0.85rem',
+                          lineHeight: '1.45',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                          border: isUser ? 'none' : '1px solid #EAE0D5',
+                          wordBreak: 'break-word'
+                        }}
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+
+              {isAiReplying && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+                    <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <div style={{ background: '#FFF', padding: '8px 14px', borderRadius: '16px 16px 16px 2px', fontSize: '0.8rem', color: '#8D6E63', border: '1px solid #EAE0D5' }}>
+                    {selectedChar?.name} 正在思考回复中... ✍️
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 快捷话题气泡 */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '6px 0', marginBottom: 6 }}>
+              {(playMode === 'auto' ? [
+                "你刚才那一脚脚法太帅啦！",
+                "差一点就进啦，没撞疼脚吧？",
+                "下一把我们一定进洞！",
+                "刚才那记折射太神了！"
+              ] : [
+                "我刚才踢得太用力了！",
+                "刚才那一脚好险啊！",
+                "你觉得我刚才踢得怎样？",
+                "下一把一定进！"
+              ]).map((pill, idx) => (
+                <div
+                  key={idx}
+                  onClick={() => handleSendInGameMessage(pill)}
+                  style={{
+                    padding: '4px 10px', borderRadius: 14, background: 'rgba(255,255,255,0.9)',
+                    border: '1px solid #E0D0BE', fontSize: '0.72rem', color: '#6E5244',
+                    whiteSpace: 'nowrap', cursor: 'pointer', flexShrink: 0
+                  }}
+                >
+                  {pill}
+                </div>
+              ))}
+            </div>
+
+            {/* 输入与发送栏 */}
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSendInGameMessage(); }}
+                placeholder={`对 ${selectedChar ? selectedChar.name : '密探'} 说点什么...`}
+                style={{
+                  flex: 1, padding: '10px 14px', borderRadius: 20, border: '1.5px solid #D7C7B2',
+                  background: '#FFF', fontSize: '0.85rem', color: '#333', outline: 'none'
+                }}
+              />
+              <button
+                onClick={() => handleSendInGameMessage()}
+                disabled={isAiReplying || !chatInput.trim()}
+                style={{
+                  padding: '10px 18px', borderRadius: 20, border: 'none',
+                  background: (isAiReplying || !chatInput.trim()) ? '#CCC' : 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)',
+                  color: '#fff', fontSize: '0.85rem', fontWeight: 'bold', cursor: (isAiReplying || !chatInput.trim()) ? 'default' : 'pointer',
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.15)'
+                }}
+              >
+                发送
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -47578,7 +48399,7 @@ const CujuGamePage = ({ onBack }) => {
             <h3 style={{ margin: '0 0 14px 0', color: '#333', fontSize: '1.15rem', fontWeight: 'bold' }}>📜 蹴鞠训练玩法</h3>
             <p style={{ textAlign: 'left', lineHeight: 1.65, color: '#5A4638', margin: '0 0 20px 0', fontSize: '0.84rem' }}>
               1. 观察围栏，寻找反弹与折射角度。<br />
-              2. 触摸屏幕并<strong style={{ color: '#D84315' }}>反向拖拽</strong>调整瞄准箭头，松开踢出蹴鞠。<br />
+              2. 触摸屏幕并<strong style={{ color: '#D84315' }}>反向拖拽</strong>调整瞄准箭头，松开踢出蹴鞠；或开启【看Ta操作】由密探托管自动击球。<br />
               3. 在规定次数内将球踢入终点红旗坑洞即可破关。<br />
               4. 💰 <strong style={{ color: '#D6724B' }}>通关赏金</strong>：每成功突破一关，立得 <strong>5 元五铢钱</strong>，自动同步并记入【我的金库】！
             </p>
