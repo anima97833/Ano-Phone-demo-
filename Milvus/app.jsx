@@ -64656,7 +64656,7 @@ const RelativeDeductionPage = ({ onBack }) => {
                           }
                         `;
 
-      // 6. 调用 LLM
+            // 6. 调用 LLM
       if (window.sendToLLM) {
         window.sendToLLM(
           [
@@ -64666,18 +64666,94 @@ const RelativeDeductionPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              // 1. 清洗 Markdown 代码块并提取最外层的 JSON
+              let raw = reply.trim();
+              raw = raw.replace(/\`\`\`json/gi, "").replace(/\`\`\`/g, "").trim();
 
-              if (data.lines && data.choices) {
-                setScriptPages((prev) => {
-                  const newPages = [...prev, data];
-                  setCurrentScriptPage(newPages.length - 1); // 自动跳到最新一页
-                  return newPages;
-                });
-              } else {
-                throw new Error("JSON 缺少 lines 或 choices 字段");
+              const firstBrace = raw.indexOf("{");
+              const lastBrace = raw.lastIndexOf("}");
+              if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+                raw = raw.slice(firstBrace, lastBrace + 1);
               }
+
+              const data = JSON.parse(raw);
+
+              // 2. 提取与规范化 lines 和 choices
+              let normalizedLines = [];
+              let normalizedChoices = [];
+
+              if (Array.isArray(data)) {
+                normalizedLines = data;
+              } else if (data && typeof data === "object") {
+                normalizedLines =
+                  data.lines || data.dialogues || data.script || data.scenes || [];
+                normalizedChoices =
+                  data.choices || data.options || data.branches || data.nextChoices || [];
+              }
+
+              // 3. 检查 lines 数组内部是否混入了 choices 对象（例如 { type: "choices", choices: [...] }）
+              if (Array.isArray(normalizedLines)) {
+                const choiceItemIndex = normalizedLines.findIndex(
+                  (item) =>
+                    item &&
+                    (item.type === "choices" ||
+                      item.type === "choice" ||
+                      (Array.isArray(item.choices) && item.choices.length > 0))
+                );
+
+                if (choiceItemIndex !== -1) {
+                  const choiceItem = normalizedLines[choiceItemIndex];
+                  const extracted = choiceItem.choices || choiceItem.options || [];
+                  if (
+                    Array.isArray(extracted) &&
+                    extracted.length > 0 &&
+                    normalizedChoices.length === 0
+                  ) {
+                    normalizedChoices = extracted;
+                  }
+                  // 从台词列表中剔除 choices 项
+                  normalizedLines = normalizedLines.filter((_, idx) => idx !== choiceItemIndex);
+                }
+              }
+
+              // 4. 如果没有解析出 choices，提供默认趣味走向
+              if (!Array.isArray(normalizedChoices) || normalizedChoices.length === 0) {
+                normalizedChoices = [
+                  "顺应当前局势，探查幕后隐藏的玄机与线索。",
+                  "出其不意，另辟蹊径打乱对方的阵脚。",
+                  "暂且隐忍不发，暗中观察局势变化。"
+                ];
+              }
+
+              // 5. 校验 lines 必须是非空数组
+              if (!Array.isArray(normalizedLines) || normalizedLines.length === 0) {
+                throw new Error("未能解析出有效的剧本台词内容");
+              }
+
+              // 6. 格式化每一行台词，确保 speaker/text/emotion/bgKeyword 字段安全
+              normalizedLines = normalizedLines.map((line) => {
+                if (typeof line === "string") {
+                  return { type: "narration", text: line, bgKeyword: "" };
+                }
+                return {
+                  type: line.type || (line.speaker ? "dialogue" : "narration"),
+                  speaker: line.speaker || "",
+                  text: line.text || line.content || line.dialogue || "",
+                  emotion: line.emotion || "",
+                  bgKeyword: line.bgKeyword || line.bg || "",
+                };
+              });
+
+              const safeData = {
+                lines: normalizedLines,
+                choices: normalizedChoices,
+              };
+
+              setScriptPages((prev) => {
+                const newPages = [...prev, safeData];
+                setCurrentScriptPage(newPages.length - 1); // 自动跳到最新一页
+                return newPages;
+              });
             } catch (e) {
               console.error("剧本解析失败:", e, reply);
               alert("剧本生成出现了分歧，演员们忘词了，请重试！");
