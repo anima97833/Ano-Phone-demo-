@@ -82234,9 +82234,1257 @@ const BambooDiaryPage = ({
   );
 };
 
-// ==================== T8 朋友圈复刻页面 (AI 动态生成版) ====================
-const T8MomentsPage = ({ pixabayApiKey }) => {
+
+// ==================== 角色专属个人主页 (AI空间) ====================
+const T8CharacterSpacePage = ({ character, onBack, onNavigateChat }) => {
   const { useState, useEffect } = React;
+  const [activeTab, setActiveTab] = useState("posts"); // 'posts' (说说), 'guestbook' (留言), 'dm' (私信)
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [spaceData, setSpaceData] = useState(null);
+  const [userCommentInputs, setUserCommentInputs] = useState({});
+  const [newGuestbookText, setNewGuestbookText] = useState("");
+  const [likedPosts, setLikedPosts] = useState({});
+  const [currentChar, setCurrentChar] = useState(character || {});
+
+  // 自动根据角色ID或姓名拉取完整的角色资料 (包括头像、设定等)
+  useEffect(() => {
+    const resolveChar = async () => {
+      let full = character || {};
+      try {
+        if (window.chatCharacterStore) {
+          if (character?.id) {
+            const found = await window.chatCharacterStore.get(character.id);
+            if (found) full = { ...character, ...found };
+          }
+          if ((!full.profile || !full.avatar) && character?.name) {
+            const allItems = await window.chatCharacterStore.getAll();
+            const found = allItems.find((c) => c.name === character.name);
+            if (found) full = { ...found, ...character, ...full };
+          }
+        }
+      } catch (e) {}
+      setCurrentChar(full);
+    };
+    resolveChar();
+  }, [character?.id, character?.name]);
+
+  // 默认降级空间数据构建函数
+  const buildFallbackSpaceData = (char, userMomentsList = []) => {
+    const charName = char?.name || "密探";
+    return {
+      spaceTitle: `${charName} · 隐鸢档案室`,
+      customNickname: char?.profile?.nickname || charName,
+      badge: char?.profile?.identity || "隐鸢阁密探",
+      bio: char?.profile?.personality || "浮生寄语，风雨同舟。山河远阔，唯卿共谋。",
+      themeColor: char?.avatarColor || "#D6724B",
+      posts: [
+        {
+          id: "post_1",
+          time: "15分钟前",
+          content: `近来隐鸢阁事务繁杂，不过观星台微风正好。诸君切莫疏忽了巡查。`,
+          likes: 8,
+          comments: [
+            { author: "同僚", text: "今日轮值之人已在路上，大人放心。" },
+            { author: "贾诩", text: "阁主所言极是，巡防万不可松懈。" }
+          ]
+        },
+        {
+          id: "post_2",
+          time: "昨天 21:30",
+          content: `夜色渐浓，案前烛火犹温。见字如晤，愿长安常安。`,
+          likes: 15,
+          comments: [
+            { author: "张仲景", text: "夜深多露寒，大人切忌贪凉。" }
+          ]
+        }
+      ],
+      userMomentsComments: userMomentsList.map((m, idx) => ({
+        momentIndex: idx,
+        socialCircleComments: [
+          { author: charName, text: "此言甚妙，待明日我前去查验一番。" },
+          { author: "隐鸢阁副使", text: "已记入密卷备案。" }
+        ]
+      })),
+      guestbookMessages: [
+        {
+          id: "gb_1",
+          author: "贾诩",
+          avatarColor: "#4F46E5",
+          time: "前天 18:20",
+          content: "上次呈上的情报已归档，望大人过目。"
+        },
+        {
+          id: "gb_2",
+          author: "郭嘉",
+          avatarColor: "#059669",
+          time: "3天前",
+          content: "听说珍馐肆新出了杜康佳酿，改日可同去浅酌。"
+        }
+      ],
+      userMoments: userMomentsList
+    };
+  };
+
+  // 加载或生成空间数据
+  const loadOrGenerateSpaceData = async (forceRegenerate = false) => {
+    const targetChar = currentChar?.name ? currentChar : character;
+    if (!targetChar) return;
+    const cacheKey = `t8_char_space_${targetChar.id || targetChar.name}`;
+    if (!forceRegenerate) {
+      try {
+        const cached = localStorage.getItem(cacheKey);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed && parsed.spaceTitle) {
+            setSpaceData(parsed);
+            return;
+          }
+        }
+      } catch (e) {
+        console.error("读取角色空间缓存失败:", e);
+      }
+    }
+
+    await generateSpaceWithAI(targetChar);
+  };
+
+  const generateSpaceWithAI = async (charParam) => {
+    setIsGenerating(true);
+    try {
+      let fullChar = charParam || currentChar || character;
+      if (window.chatCharacterStore && fullChar.id) {
+        try {
+          const found = await window.chatCharacterStore.get(fullChar.id);
+          if (found) fullChar = { ...fullChar, ...found };
+        } catch (e) {}
+      }
+      if ((!fullChar.profile || !fullChar.avatar) && window.chatCharacterStore && fullChar.name) {
+        try {
+          const allItems = await window.chatCharacterStore.getAll();
+          const found = allItems.find((c) => c.name === fullChar.name);
+          if (found) fullChar = { ...found, ...fullChar };
+        } catch (e) {}
+      }
+
+      // 1. 用户面具设定
+      let userPersona = { name: "广陵王" };
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId && savedPersonas.length > 0) {
+          const active = savedPersonas.find((p) => p.id == activeId);
+          if (active) userPersona = active;
+        }
+      } catch (e) {}
+
+      // 2. 世界书开启条目
+      let worldBookContext = "";
+      try {
+        if (window.worldBookStore) {
+          const wbData = await window.worldBookStore.getData();
+          if (wbData && Array.isArray(wbData.books)) {
+            const activeBooks = wbData.books.filter((b) => b.enable);
+            worldBookContext = activeBooks
+              .map((b) => `【世界设定：${b.title}】\n${b.content}`)
+              .join("\n\n");
+          }
+        }
+      } catch (e) {}
+
+      // 3. 私聊历史
+      let privateChatContext = "";
+      try {
+        if (window.chatHistoryStore && fullChar.id) {
+          const res = await window.chatHistoryStore.getMessages(fullChar.id, 1, 20);
+          const msgs = res && res.messages ? res.messages : Array.isArray(res) ? res : [];
+          if (msgs.length > 0) {
+            privateChatContext = msgs
+              .slice(-15)
+              .map(
+                (m) =>
+                  `[${m.isMe ? userPersona.name : fullChar.name}]: ${m.text || m.content || ""}`,
+              )
+              .join("\n");
+          }
+        }
+      } catch (e) {}
+
+      // 4. 群聊发言
+      let groupChatContext = "";
+      try {
+        if (window.chatCharacterStore) {
+          const allItems = await window.chatCharacterStore.getAll();
+          const groupChats = allItems.filter(
+            (c) => String(c.id).startsWith("group") || c.type === "group",
+          );
+          const speeches = [];
+          for (const grp of groupChats.slice(0, 3)) {
+            if (window.chatHistoryStore) {
+              const res = await window.chatHistoryStore.getMessages(grp.id, 1, 15);
+              const msgs = res && res.messages ? res.messages : Array.isArray(res) ? res : [];
+              const relevant = msgs.filter(
+                (m) =>
+                  m.senderName === fullChar.name ||
+                  (m.content && m.content.includes(fullChar.name)),
+              );
+              if (relevant.length > 0) {
+                speeches.push(
+                  `【群聊《${grp.name}》发言】:\n` +
+                    relevant
+                      .slice(-5)
+                      .map((m) => `${m.senderName || "群友"}: ${m.content || m.text || ""}`)
+                      .join("\n"),
+                );
+              }
+            }
+          }
+          groupChatContext = speeches.join("\n\n");
+        }
+      } catch (e) {}
+
+      // 5. 用户近5条已发朋友圈
+      let userMomentsList = [];
+      try {
+        const rawMoments = JSON.parse(localStorage.getItem("t8_moments") || "[]");
+        const userOrRecent = rawMoments.filter(
+          (m) =>
+            m.isUserPost ||
+            m.char?.name === userPersona.name ||
+            m.char?.name === "广陵王",
+        );
+        const listToUse = userOrRecent.length > 0 ? userOrRecent : rawMoments;
+        userMomentsList = listToUse.slice(0, 5).map((m, idx) => ({
+          index: idx,
+          content: m.content || m.text || "",
+          time: m.time || "近期",
+          likes: m.likes || 0,
+        }));
+      } catch (e) {}
+
+      // 6. 构造 Prompt
+      const systemPrompt = `你是一个熟悉古风/三国密探背景（如《代号鸢》隐鸢阁背景）的角色主页生成引擎。
+现在需要为角色【${fullChar.name}】生成一个专属个人空间主页（类似QQ空间/朋友圈空间主页）。
+
+【角色详细设定】
+姓名：${fullChar.name}
+性别：${fullChar.profile?.gender || "未知"}
+年龄：${fullChar.profile?.age || "未知"}
+性格：${fullChar.profile?.personality || "未知"}
+背景：${fullChar.profile?.background || "未知"}
+语言风格：${fullChar.profile?.style || "未知"}
+MBTI：${fullChar.profile?.mbti || "未知"}
+
+【玩家(当前用户)设定】
+姓名：${userPersona.name || "广陵王"}
+身份背景：${userPersona.background || "无"}
+性格风格：${userPersona.personality || userPersona.style || "无"}
+
+${worldBookContext ? `【已开启世界书设定】\n${worldBookContext}\n` : ""}
+${privateChatContext ? `【该角色与用户的近期私聊记录】\n${privateChatContext}\n` : ""}
+${groupChatContext ? `【该角色的近期群聊发言】\n${groupChatContext}\n` : ""}
+${
+  userMomentsList.length > 0
+    ? `【用户最近发表的5条朋友圈动态】\n${JSON.stringify(userMomentsList, null, 2)}\n`
+    : ""
+}
+
+【严格生成要求】
+请严格按照以下 JSON 格式返回该角色的专属空间数据：
+{
+  "spaceTitle": "文艺且符合人设的空间主标语（如：夜雨寄北 · 广陵密探档案室）",
+  "customNickname": "角色给自己起的个性空间昵称/代号",
+  "badge": "角色的称号徽章（如：天机密使、绣衣楼常客、毒舌神医等）",
+  "bio": "个性签名/心情寄语（符合近期经历与心绪）",
+  "themeColor": "贴合角色气质的十六进制主题色（如 #D6724B、#7C3AED、#2563EB、#059669 等）",
+  "posts": [
+    {
+      "id": "post_1",
+      "time": "15分钟前",
+      "content": "角色自己的生活感悟、吐槽、工作记录或对玩家的暗中记挂",
+      "likes": 10,
+      "comments": [
+        { "author": "同僚或朋友名", "text": "评论内容" }
+      ]
+    }
+  ],
+  "userMomentsComments": [
+    {
+      "momentIndex": 0,
+      "socialCircleComments": [
+        { "author": "该角色社交圈人物A", "text": "针对用户动态的精彩幽默/关心评论" }
+      ]
+    }
+  ],
+  "guestbookMessages": [
+    {
+      "id": "gb_1",
+      "author": "社交圈人物（如贾诩、华佗、同僚、下属等）",
+      "avatarColor": "#4F46E5",
+      "time": "昨天 20:15",
+      "content": "留言板留言内容"
+    }
+  ]
+}
+
+重要：仅返回合法 JSON，不要包含任何 markdown 代码块标记，不要添加任何额外开场白或解释。`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [{ role: "user", content: systemPrompt }],
+          null,
+          (response) => {
+            try {
+              let clean = response.trim();
+              if (clean.startsWith("```")) {
+                clean = clean.replace(/^```(json)?\n?/, "").replace(/\n?```$/, "");
+              }
+              const parsed = JSON.parse(clean);
+              const finalData = {
+                spaceTitle: parsed.spaceTitle || `${fullChar.name}的密探空间`,
+                customNickname: parsed.customNickname || fullChar.name,
+                badge: parsed.badge || "隐鸢阁密探",
+                bio: parsed.bio || "浮生寄语，风雨同舟。",
+                themeColor: parsed.themeColor || fullChar.avatarColor || "#D6724B",
+                posts: Array.isArray(parsed.posts) ? parsed.posts : [],
+                userMomentsComments: Array.isArray(parsed.userMomentsComments)
+                  ? parsed.userMomentsComments
+                  : [],
+                guestbookMessages: Array.isArray(parsed.guestbookMessages)
+                  ? parsed.guestbookMessages
+                  : [],
+                userMoments: userMomentsList,
+              };
+              setSpaceData(finalData);
+              const cacheKey = `t8_char_space_${fullChar.id || fullChar.name}`;
+              localStorage.setItem(cacheKey, JSON.stringify(finalData));
+              setIsGenerating(false);
+            } catch (err) {
+              console.error("解析AI空间数据失败，使用降级数据:", err);
+              const fallback = buildFallbackSpaceData(fullChar, userMomentsList);
+              setSpaceData(fallback);
+              setIsGenerating(false);
+            }
+          },
+          (error) => {
+            console.error("生成角色空间失败:", error);
+            const fallback = buildFallbackSpaceData(fullChar, userMomentsList);
+            setSpaceData(fallback);
+            setIsGenerating(false);
+          },
+        );
+      } else {
+        const fallback = buildFallbackSpaceData(fullChar, userMomentsList);
+        setSpaceData(fallback);
+        setIsGenerating(false);
+      }
+    } catch (e) {
+      console.error("生成空间失败:", e);
+      setIsGenerating(false);
+    }
+  };
+
+  useEffect(() => {
+    loadOrGenerateSpaceData(false);
+  }, [character?.id, character?.name]);
+
+  // 处理用户点赞
+  const handleToggleLike = (postId) => {
+    setLikedPosts((prev) => ({
+      ...prev,
+      [postId]: !prev[postId],
+    }));
+  };
+
+  // 处理用户在角色说说下的评论
+  const handleAddPostComment = (postId) => {
+    const text = userCommentInputs[postId];
+    if (!text || !text.trim()) return;
+
+    setSpaceData((prev) => {
+      if (!prev) return prev;
+      const updatedPosts = (prev.posts || []).map((post) => {
+        if (post.id === postId) {
+          const newComments = [
+            ...(post.comments || []),
+            { author: "我", text: text.trim() },
+          ];
+          return { ...post, comments: newComments };
+        }
+        return post;
+      });
+      const updated = { ...prev, posts: updatedPosts };
+      const cacheKey = `t8_char_space_${character.id || character.name}`;
+      localStorage.setItem(cacheKey, JSON.stringify(updated));
+      return updated;
+    });
+
+    setUserCommentInputs((prev) => ({ ...prev, [postId]: "" }));
+  };
+
+  // 处理用户留言
+  const handleAddGuestbookMessage = () => {
+    if (!newGuestbookText.trim()) return;
+
+    const newMsg = {
+      id: "gb_user_" + Date.now(),
+      author: "我 (广陵王)",
+      avatarColor: "#D6724B",
+      time: "刚刚",
+      content: newGuestbookText.trim(),
+    };
+
+    setSpaceData((prev) => {
+      if (!prev) return prev;
+      const updatedMessages = [newMsg, ...(prev.guestbookMessages || [])];
+      const updated = { ...prev, guestbookMessages: updatedMessages };
+      const cacheKey = `t8_char_space_${character.id || character.name}`;
+      localStorage.setItem(cacheKey, JSON.stringify(updated));
+      return updated;
+    });
+
+    setNewGuestbookText("");
+  };
+
+  const themeColor = spaceData?.themeColor || character?.avatarColor || "#D6724B";
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        height: "100%",
+        display: "flex",
+        flexDirection: "column",
+        background: "#F7F8FA",
+        overflow: "hidden",
+        position: "relative",
+      }}
+    >
+      {/* 1. 顶部导航与返回栏 */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "12px 16px",
+          background: "#FFF",
+          borderBottom: "1px solid #EDF2F7",
+          boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+          zIndex: 20,
+        }}
+      >
+        <button
+          onClick={onBack}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            background: "none",
+            border: "none",
+            color: "#4A5568",
+            fontSize: "14px",
+            fontWeight: "600",
+            cursor: "pointer",
+          }}
+          className="active-press"
+        >
+          <i className="ph-bold ph-arrow-left text-lg"></i>
+          <span>返回</span>
+        </button>
+
+        <span
+          style={{
+            fontSize: "15px",
+            fontWeight: "700",
+            color: "#2D3748",
+            maxWidth: "160px",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {spaceData?.customNickname || character?.name} 的空间
+        </span>
+
+        <button
+          onClick={() => loadOrGenerateSpaceData(true)}
+          disabled={isGenerating}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            background: `${themeColor}15`,
+            border: `1px solid ${themeColor}40`,
+            color: themeColor,
+            padding: "5px 10px",
+            borderRadius: "12px",
+            fontSize: "12px",
+            fontWeight: "600",
+            cursor: isGenerating ? "not-allowed" : "pointer",
+            opacity: isGenerating ? 0.6 : 1,
+          }}
+          className="active-press"
+          title="重新调用 AI 生成主页设定与动态"
+        >
+          <i
+            className="ph-bold ph-arrows-clockwise text-sm"
+            style={{
+              animation: isGenerating ? "spin 1s linear infinite" : "none",
+              display: "inline-block",
+            }}
+          ></i>
+          <span>{isGenerating ? "生成中" : "AI重构"}</span>
+        </button>
+      </div>
+
+      {/* 2. 主体滚动容器 */}
+      <div
+        className="no-scrollbar"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          paddingBottom: "80px",
+        }}
+      >
+        {/* 顶部空间背景墙与资料卡片 */}
+        <div
+          style={{
+            background: `linear-gradient(180deg, ${themeColor}33 0%, #FFF 100%)`,
+            padding: "20px 16px 16px",
+            position: "relative",
+            borderBottom: "1px solid #EDF2F7",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "flex-start",
+              gap: "14px",
+              marginBottom: "14px",
+            }}
+          >
+            {/* 头像 */}
+            <div
+              style={{
+                width: "68px",
+                height: "68px",
+                borderRadius: "20px",
+                padding: "3px",
+                background: `linear-gradient(135deg, ${themeColor} 0%, #FFF 100%)`,
+                boxShadow: "0 6px 16px rgba(0,0,0,0.12)",
+                flexShrink: 0,
+              }}
+            >
+              <div
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  borderRadius: "17px",
+                  background:
+                    character.avatarBg || character.avatarColor || themeColor,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#FFF",
+                  fontSize: "24px",
+                  fontWeight: "bold",
+                  overflow: "hidden",
+                }}
+              >
+                {character.avatar ? (
+                  typeof character.avatar === "string" &&
+                  character.avatar.startsWith("data:image/") ? (
+                    <img
+                      src={character.avatar}
+                      style={{
+                        width: "100%",
+                        height: "100%",
+                        objectFit: "cover",
+                      }}
+                    />
+                  ) : (
+                    <T8AvatarLoader
+                      avatarId={character.avatar}
+                      fallbackColor={character.avatarBg || character.avatarColor}
+                    />
+                  )
+                ) : (
+                  character.name?.[0] || "?"
+                )}
+              </div>
+            </div>
+
+            {/* 昵称、标语、称号 */}
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                  flexWrap: "wrap",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "18px",
+                    fontWeight: "800",
+                    color: "#1A202C",
+                  }}
+                >
+                  {spaceData?.customNickname || character.name}
+                </span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    padding: "2px 8px",
+                    borderRadius: "8px",
+                    background: `${themeColor}18`,
+                    color: themeColor,
+                    border: `1px solid ${themeColor}40`,
+                    fontWeight: "700",
+                  }}
+                >
+                  {spaceData?.badge || "密探"}
+                </span>
+              </div>
+
+              {/* 空间主标语 */}
+              <div
+                style={{
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "#4A5568",
+                  marginTop: "4px",
+                  fontStyle: "italic",
+                }}
+              >
+                "{spaceData?.spaceTitle || `${character.name}的私密空间`}"
+              </div>
+
+              {/* 个性签名 */}
+              <div
+                style={{
+                  fontSize: "11px",
+                  color: "#718096",
+                  marginTop: "4px",
+                  lineHeight: "1.4",
+                }}
+              >
+                {spaceData?.bio || "山河远阔，唯卿共谋。"}
+              </div>
+            </div>
+          </div>
+
+          {/* 3. 空间三大导航 Tab */}
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              background: "#F1F5F9",
+              padding: "4px",
+              borderRadius: "12px",
+            }}
+          >
+            <button
+              onClick={() => setActiveTab("posts")}
+              style={{
+                flex: 1,
+                padding: "8px 0",
+                borderRadius: "10px",
+                border: "none",
+                background: activeTab === "posts" ? "#FFF" : "transparent",
+                color: activeTab === "posts" ? themeColor : "#64748B",
+                fontWeight: activeTab === "posts" ? "700" : "500",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                cursor: "pointer",
+                boxShadow:
+                  activeTab === "posts" ? "0 2px 6px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.2s",
+              }}
+            >
+              <i className="ph-bold ph-newspaper-clipping text-sm"></i>
+              <span>说说 ({spaceData?.posts?.length || 0})</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab("guestbook")}
+              style={{
+                flex: 1,
+                padding: "8px 0",
+                borderRadius: "10px",
+                border: "none",
+                background: activeTab === "guestbook" ? "#FFF" : "transparent",
+                color: activeTab === "guestbook" ? themeColor : "#64748B",
+                fontWeight: activeTab === "guestbook" ? "700" : "500",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                cursor: "pointer",
+                boxShadow:
+                  activeTab === "guestbook"
+                    ? "0 2px 6px rgba(0,0,0,0.06)"
+                    : "none",
+                transition: "all 0.2s",
+              }}
+            >
+              <i className="ph-bold ph-chat-circle-dots text-sm"></i>
+              <span>留言 ({spaceData?.guestbookMessages?.length || 0})</span>
+            </button>
+
+            <button
+              onClick={() => {
+                if (onNavigateChat) {
+                  onNavigateChat(character.id);
+                }
+              }}
+              style={{
+                flex: 1,
+                padding: "8px 0",
+                borderRadius: "10px",
+                border: "none",
+                background: "linear-gradient(135deg, #D6724B 0%, #B85832 100%)",
+                color: "#FFF",
+                fontWeight: "700",
+                fontSize: "13px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "5px",
+                cursor: "pointer",
+                boxShadow: "0 2px 6px rgba(214,114,75,0.2)",
+              }}
+              className="active-press"
+            >
+              <i className="ph-bold ph-paper-plane-tilt text-sm"></i>
+              <span>私信</span>
+            </button>
+          </div>
+        </div>
+
+        {/* 4. Tab 内容区 */}
+        <div style={{ padding: "16px" }}>
+          {/* TAB 1: 说说 */}
+          {activeTab === "posts" && (
+            <div>
+              {/* A. 角色自身发布的动态 */}
+              <div
+                style={{
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  color: "#4A5568",
+                  marginBottom: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <i
+                  className="ph-fill ph-sparkle"
+                  style={{ color: themeColor }}
+                ></i>
+                <span>密探随笔动态</span>
+              </div>
+
+              {(!spaceData?.posts || spaceData.posts.length === 0) && (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "30px",
+                    color: "#A0AEC0",
+                    fontSize: "13px",
+                    background: "#FFF",
+                    borderRadius: "14px",
+                  }}
+                >
+                  暂无说说动态，点击上方 "AI重构" 即可生成。
+                </div>
+              )}
+
+              {spaceData?.posts?.map((post) => (
+                <div
+                  key={post.id}
+                  style={{
+                    background: "#FFF",
+                    borderRadius: "16px",
+                    padding: "16px",
+                    marginBottom: "14px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                    border: "1px solid #F0F0F0",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: "700",
+                          color: "#2D3748",
+                        }}
+                      >
+                        {spaceData?.customNickname || character.name}
+                      </span>
+                      <span style={{ fontSize: "11px", color: "#A0AEC0" }}>
+                        {post.time}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => handleToggleLike(post.id)}
+                      style={{
+                        background: "none",
+                        border: "none",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        color: likedPosts[post.id] ? "#EF4444" : "#94A3B8",
+                        fontSize: "12px",
+                      }}
+                    >
+                      <i
+                        className={
+                          likedPosts[post.id]
+                            ? "ph-fill ph-heart text-base text-red-500"
+                            : "ph-bold ph-heart text-base"
+                        }
+                      ></i>
+                      <span>{(post.likes || 0) + (likedPosts[post.id] ? 1 : 0)}</span>
+                    </button>
+                  </div>
+
+                  <div
+                    style={{
+                      fontSize: "14px",
+                      color: "#2D3748",
+                      lineHeight: "1.6",
+                      marginBottom: "12px",
+                      whiteSpace: "pre-wrap",
+                    }}
+                  >
+                    {post.content}
+                  </div>
+
+                  {/* 评论列表 */}
+                  {post.comments && post.comments.length > 0 && (
+                    <div
+                      style={{
+                        background: "#F8FAFC",
+                        borderRadius: "12px",
+                        padding: "10px 12px",
+                        marginBottom: "10px",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "6px",
+                      }}
+                    >
+                      {post.comments.map((c, cIdx) => (
+                        <div
+                          key={cIdx}
+                          style={{
+                            fontSize: "12px",
+                            lineHeight: "1.4",
+                            color: "#475569",
+                          }}
+                        >
+                          <span
+                            style={{
+                              fontWeight: "700",
+                              color: themeColor,
+                              marginRight: "6px",
+                            }}
+                          >
+                            {c.author}:
+                          </span>
+                          <span>{c.text}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* 用户评论输入框 */}
+                  <div
+                    style={{
+                      display: "flex",
+                      gap: "8px",
+                      marginTop: "6px",
+                    }}
+                  >
+                    <input
+                      type="text"
+                      placeholder="写下你的评论..."
+                      value={userCommentInputs[post.id] || ""}
+                      onChange={(e) =>
+                        setUserCommentInputs({
+                          ...userCommentInputs,
+                          [post.id]: e.target.value,
+                        })
+                      }
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") handleAddPostComment(post.id);
+                      }}
+                      style={{
+                        flex: 1,
+                        padding: "7px 12px",
+                        borderRadius: "10px",
+                        border: "1px solid #E2E8F0",
+                        fontSize: "12px",
+                        outline: "none",
+                        background: "#F8FAFC",
+                      }}
+                    />
+                    <button
+                      onClick={() => handleAddPostComment(post.id)}
+                      style={{
+                        padding: "7px 14px",
+                        borderRadius: "10px",
+                        border: "none",
+                        background: themeColor,
+                        color: "#FFF",
+                        fontSize: "12px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                      }}
+                      className="active-press"
+                    >
+                      发送
+                    </button>
+                  </div>
+                </div>
+              ))}
+
+              {/* B. 用户近5条动态 + 该角色社交圈专属评论 */}
+              <div
+                style={{
+                  marginTop: "24px",
+                  marginBottom: "10px",
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  color: "#4A5568",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <i className="ph-fill ph-users-three" style={{ color: themeColor }}></i>
+                <span>密友动态与圈内热议 (针对你的朋友圈)</span>
+              </div>
+
+              {(!spaceData?.userMoments || spaceData.userMoments.length === 0) && (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "20px",
+                    color: "#A0AEC0",
+                    fontSize: "12px",
+                    background: "#FFF",
+                    borderRadius: "14px",
+                  }}
+                >
+                  暂未读取到你在朋友圈发表的动态记录。
+                </div>
+              )}
+
+              {spaceData?.userMoments?.map((um, uIdx) => {
+                const commentGroup = (spaceData?.userMomentsComments || []).find(
+                  (c) => c.momentIndex === uIdx,
+                );
+                return (
+                  <div
+                    key={uIdx}
+                    style={{
+                      background: "#FFF",
+                      borderRadius: "16px",
+                      padding: "14px",
+                      marginBottom: "12px",
+                      border: "1px solid #F0F0F0",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+                    }}
+                  >
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                        marginBottom: "8px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "11px",
+                          background: "#F1F5F9",
+                          color: "#64748B",
+                          padding: "2px 6px",
+                          borderRadius: "6px",
+                          fontWeight: "600",
+                        }}
+                      >
+                        你的动态 #{uIdx + 1}
+                      </span>
+                      <span style={{ fontSize: "11px", color: "#A0AEC0" }}>
+                        {um.time}
+                      </span>
+                    </div>
+
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: "#334155",
+                        lineHeight: "1.5",
+                        marginBottom: "10px",
+                      }}
+                    >
+                      {um.content}
+                    </div>
+
+                    {/* 社交圈人物评论 */}
+                    {commentGroup?.socialCircleComments &&
+                      commentGroup.socialCircleComments.length > 0 && (
+                        <div
+                          style={{
+                            background: "#FFF9F5",
+                            borderRadius: "10px",
+                            padding: "8px 10px",
+                            border: "1px solid #FFEBE0",
+                            display: "flex",
+                            flexDirection: "column",
+                            gap: "5px",
+                          }}
+                        >
+                          <div
+                            style={{
+                              fontSize: "11px",
+                              color: "#D6724B",
+                              fontWeight: "700",
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "4px",
+                            }}
+                          >
+                            <i className="ph-bold ph-chat-teardrop-dots"></i>
+                            <span>{character.name}社交圈热议:</span>
+                          </div>
+                          {commentGroup.socialCircleComments.map((sc, sIdx) => (
+                            <div
+                              key={sIdx}
+                              style={{
+                                fontSize: "12px",
+                                color: "#475569",
+                                lineHeight: "1.4",
+                              }}
+                            >
+                              <span
+                                style={{
+                                  fontWeight: "700",
+                                  color: "#854D0E",
+                                  marginRight: "4px",
+                                }}
+                              >
+                                {sc.author}:
+                              </span>
+                              <span>{sc.text}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* TAB 2: 留言板 */}
+          {activeTab === "guestbook" && (
+            <div>
+              {/* 写留言输入框 */}
+              <div
+                style={{
+                  background: "#FFF",
+                  borderRadius: "16px",
+                  padding: "14px",
+                  marginBottom: "16px",
+                  border: "1px solid #EDF2F7",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: "700",
+                    color: "#2D3748",
+                    marginBottom: "8px",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <i className="ph-fill ph-note-pencil" style={{ color: themeColor }}></i>
+                  <span>给 {character.name} 留纸条</span>
+                </div>
+                <textarea
+                  rows={3}
+                  placeholder={`写下想对 ${character.name} 说的话...`}
+                  value={newGuestbookText}
+                  onChange={(e) => setNewGuestbookText(e.target.value)}
+                  style={{
+                    width: "100%",
+                    padding: "10px",
+                    borderRadius: "12px",
+                    border: "1px solid #E2E8F0",
+                    fontSize: "13px",
+                    outline: "none",
+                    background: "#F8FAFC",
+                    boxSizing: "border-box",
+                    resize: "none",
+                  }}
+                />
+                <div
+                  style={{
+                    display: "flex",
+                    justifyContent: "flex-end",
+                    marginTop: "8px",
+                  }}
+                >
+                  <button
+                    onClick={handleAddGuestbookMessage}
+                    style={{
+                      padding: "8px 18px",
+                      borderRadius: "10px",
+                      border: "none",
+                      background: themeColor,
+                      color: "#FFF",
+                      fontSize: "13px",
+                      fontWeight: "700",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+                    }}
+                    className="active-press"
+                  >
+                    发表留言
+                  </button>
+                </div>
+              </div>
+
+              {/* 留言列表 */}
+              <div
+                style={{
+                  fontSize: "12px",
+                  fontWeight: "700",
+                  color: "#4A5568",
+                  marginBottom: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <i className="ph-fill ph-chats-circle" style={{ color: themeColor }}></i>
+                <span>密探同僚与社交圈留言</span>
+              </div>
+
+              {(!spaceData?.guestbookMessages ||
+                spaceData.guestbookMessages.length === 0) && (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "30px",
+                    color: "#A0AEC0",
+                    fontSize: "13px",
+                    background: "#FFF",
+                    borderRadius: "14px",
+                  }}
+                >
+                  留言板空空如也，快来留下第一条纸条吧！
+                </div>
+              )}
+
+              {spaceData?.guestbookMessages?.map((gb) => (
+                <div
+                  key={gb.id}
+                  style={{
+                    background: "#FFF",
+                    borderRadius: "14px",
+                    padding: "12px 14px",
+                    marginBottom: "10px",
+                    border: "1px solid #F0F0F0",
+                    display: "flex",
+                    gap: "10px",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.02)",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      background: gb.avatarColor || themeColor,
+                      color: "#FFF",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "14px",
+                      fontWeight: "bold",
+                      flexShrink: 0,
+                    }}
+                  >
+                    {gb.author?.[0] || "友"}
+                  </div>
+                  <div style={{ flex: 1 }}>
+                    <div
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        marginBottom: "4px",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontSize: "13px",
+                          fontWeight: "700",
+                          color: "#2D3748",
+                        }}
+                      >
+                        {gb.author}
+                      </span>
+                      <span style={{ fontSize: "11px", color: "#A0AEC0" }}>
+                        {gb.time}
+                      </span>
+                    </div>
+                    <div
+                      style={{
+                        fontSize: "13px",
+                        color: "#4A5568",
+                        lineHeight: "1.5",
+                      }}
+                    >
+                      {gb.content}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== T8 朋友圈复刻页面 (AI 动态生成版) ====================
+const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
+  const { useState, useEffect } = React;
+  const [selectedCharForSpace, setSelectedCharForSpace] = useState(null);
   const [moments, setMoments] = useState([]);
   const [isLoading, setIsLoading] = useState(false);
   const [decorImages, setDecorImages] = React.useState({
@@ -82255,18 +83503,41 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
   // 按钮状态管理
   const [buttonStates, setButtonStates] = useState({});
 
-  // 空间自定义资料 (空间标语、称号徽章、个人姓名、个性签名)
+  // 空间自定义资料 (空间标语、称号徽章、个人姓名、个性签名、头像)
   const [spaceProfile, setSpaceProfile] = useState(() => {
+    let defaultName = "广陵王";
+    try {
+      const savedPersonas = JSON.parse(
+        localStorage.getItem("user_personas") || "[]",
+      );
+      const activeId = localStorage.getItem("active_persona_id");
+      if (activeId) {
+        const activeUser = savedPersonas.find((p) => p.id == activeId);
+        if (activeUser?.name) defaultName = activeUser.name;
+      }
+    } catch (e) {}
+
     try {
       const saved = localStorage.getItem("t8_space_profile");
-      if (saved) return JSON.parse(saved);
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        return {
+          title: parsed.title || "广陵密探 · 浮生录",
+          subtitle: parsed.subtitle || "隐鸢阁密探秘闻与日常分享",
+          userName: parsed.userName || defaultName,
+          badge: parsed.badge || "绣衣楼掌舵",
+          bio: parsed.bio || "山河远阔，人间烟火，听雨品茗",
+          avatar: parsed.avatar || "",
+        };
+      }
     } catch (e) {}
     return {
       title: "广陵密探 · 浮生录",
       subtitle: "隐鸢阁密探秘闻与日常分享",
-      userName: "广陵王",
+      userName: defaultName,
       badge: "绣衣楼掌舵",
       bio: "山河远阔，人间烟火，听雨品茗",
+      avatar: "",
     };
   });
   const [showEditProfileModal, setShowEditProfileModal] = useState(false);
@@ -82276,31 +83547,53 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
     userName: "广陵王",
     badge: "绣衣楼掌舵",
     bio: "山河远阔，人间烟火，听雨品茗",
+    avatar: "",
   });
 
   const handleOpenEditProfile = () => {
-    setEditProfileForm({ ...spaceProfile });
+    setEditProfileForm({
+      ...spaceProfile,
+      avatar: userAvatar || spaceProfile.avatar || "",
+    });
     setShowEditProfileModal(true);
   };
 
-  const handleSaveProfile = () => {
+  const handleSaveProfile = async () => {
+    const newAvatar = editProfileForm.avatar !== undefined ? editProfileForm.avatar : userAvatar;
     const updated = {
       title: editProfileForm.title?.trim() || "广陵密探 · 浮生录",
       subtitle: editProfileForm.subtitle?.trim() || "隐鸢阁密探秘闻与日常分享",
       userName: editProfileForm.userName?.trim() || "广陵王",
       badge: editProfileForm.badge?.trim() || "绣衣楼掌舵",
       bio: editProfileForm.bio?.trim() || "山河远阔，人间烟火，听雨品茗",
+      avatar: newAvatar,
     };
     setSpaceProfile(updated);
+    setUserAvatar(newAvatar);
     try {
       localStorage.setItem("t8_space_profile", JSON.stringify(updated));
     } catch (e) {}
+
+    // 保存头像到 IndexedDB 与系统设置
+    if (newAvatar) {
+      saveToIndexedDB("avatar", newAvatar);
+      if (window.settingsStore?.setUserAvatar) {
+        try {
+          await window.settingsStore.setUserAvatar(newAvatar);
+        } catch (err) {}
+      }
+    }
+
     setShowEditProfileModal(false);
   };
 
   // 加载用户头像
   React.useEffect(() => {
     const fetchUserAvatar = async () => {
+      if (spaceProfile.avatar) {
+        setUserAvatar(spaceProfile.avatar);
+        return;
+      }
       if (window.settingsStore) {
         try {
           const av = await window.settingsStore.getUserAvatar();
@@ -82348,8 +83641,14 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
             cover:
               decorItems.find((item) => item.position === "cover")?.imageData ||
               null,
+            avatar:
+              decorItems.find((item) => item.position === "avatar")?.imageData ||
+              null,
           };
           setDecorImages(loadedImages);
+          if (loadedImages.avatar) {
+            setUserAvatar(loadedImages.avatar);
+          }
 
           // 加载朋友圈内容
           const momentsItem = allItems.find((item) => item.type === "moments");
@@ -82377,11 +83676,27 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
     const file = event.target.files[0];
     if (file) {
       const reader = new FileReader();
-      reader.onload = (e) => {
-        const newImages = { ...decorImages, [position]: e.target.result };
+      reader.onload = async (e) => {
+        const result = e.target.result;
+        const newImages = { ...decorImages, [position]: result };
         setDecorImages(newImages);
+        if (position === "avatar") {
+          setUserAvatar(result);
+          setSpaceProfile((prev) => {
+            const up = { ...prev, avatar: result };
+            try {
+              localStorage.setItem("t8_space_profile", JSON.stringify(up));
+            } catch (err) {}
+            return up;
+          });
+          if (window.settingsStore?.setUserAvatar) {
+            try {
+              await window.settingsStore.setUserAvatar(result);
+            } catch (err) {}
+          }
+        }
         // 保存到IndexedDB
-        saveToIndexedDB(position, e.target.result);
+        saveToIndexedDB(position, result);
       };
       reader.readAsDataURL(file);
     }
@@ -82902,7 +84217,8 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
       const worldContext = window.getWorldBookContext
         ? await window.getWorldBookContext()
         : "";
-      let userContext = "";
+      let currentUserName = spaceProfile?.userName || "广陵王";
+      let userContext = `【当前玩家/用户(我)】姓名:${currentUserName}, 身份:广陵王/绣衣楼楼主`;
       try {
         const savedPersonas = JSON.parse(
           localStorage.getItem("user_personas") || "[]",
@@ -82910,8 +84226,10 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
         const activeId = localStorage.getItem("active_persona_id");
         if (activeId) {
           const activeUser = savedPersonas.find((p) => p.id == activeId);
-          if (activeUser)
-            userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality}`;
+          if (activeUser) {
+            currentUserName = activeUser.name || currentUserName;
+            userContext = `【当前玩家/用户(我)】姓名:${currentUserName}, 性格:${activeUser.personality || "沉稳机智"}, 身份:广陵王/绣衣楼楼主`;
+          }
         }
       } catch (e) {}
 
@@ -82919,62 +84237,53 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
       const existingComments = momentData.comments || [];
       const commentsContext =
         existingComments.length > 0
-          ? `【现有评论】\n${existingComments.map((comment) => `[${comment.author}]: ${comment.text}`).join("\n")}`
-          : "【现有评论】暂无评论";
+          ? `【现有历史评论区】\n${existingComments.map((comment) => `[${comment.author}]: ${comment.text}`).join("\n")}`
+          : "【现有历史评论区】暂无评论";
 
       // 5. 构建 Prompt 以生成多条互动评论
       const prompt = `
-                                                                                                                                ${worldContext}
-                                                                                                                                ${userContext}
+${worldContext}
+${userContext}
 
-                                                                                                                                【评论角色信息】
-                                                                                                                                ${selectedChars
-                                                                                                                                  .map(
-                                                                                                                                    (
-                                                                                                                                      char,
-                                                                                                                                      index,
-                                                                                                                                    ) => {
-                                                                                                                                      const profile =
-                                                                                                                                        char.profile ||
-                                                                                                                                        {};
-                                                                                                                                      return `角色${index + 1}:
-                                                                                                                                  姓名:${char.name}
-                                                                                                                                  MBTI:${profile.mbti || "无"}
-                                                                                                                                  星座:${profile.constellation || "无"}
-                                                                                                                                  语言风格:${profile.languageStyle || "无"}
-                                                                                                                                  性格特点:${profile.personality || "无"}
-                                                                                                                                  个人背景:${profile.background || "无"}`;
-                                                                                                                                    },
-                                                                                                                                  )
-                                                                                                                                  .join(
-                                                                                                                                    "\n\n",
-                                                                                                                                  )}
+【本次参与评论的角色名单】
+${selectedChars
+  .map(
+    (char, index) => {
+      const profile = char.profile || {};
+      return `角色${index + 1}:
+姓名:${char.name}
+MBTI:${profile.mbti || "无"}
+星座:${profile.constellation || "无"}
+语言风格:${profile.languageStyle || "无"}
+性格特点:${profile.personality || "无"}
+个人背景:${profile.background || "无"}`;
+    },
+  )
+  .join("\n\n")}
 
-                                                                                                                                【动态信息】
-                                                                                                                                发布者:${momentData.char.name}
-                                                                                                                                内容:${momentData.text}
+【动态基本信息】
+发布者:${momentData.char.name}
+动态正文:${momentData.text}
 
-                                                                                                                                ${commentsContext}
+${commentsContext}
 
-                                                                                                                                【任务】请为这条朋友圈动态生成2-5条评论，来自不同角色，角色之间要互相@并互动，同时要对用户的@回复做出反应。
-                                                                                                                                【要求】
-                                                                                                                                1. 语气必须贴合评论角色的性格和语言风格。
-                                                                                                                                2. 内容要针对动态内容和现有评论，不要偏离主题。
-                                                                                                                                3. 生成2-5条评论，来自不同角色。
-                                                                                                                                4. 角色之间要互相@，被@到的角色要给出互动。
-                                                                                                                                5. 特别重要：如果用户在评论中@了某个角色，被@的角色必须对用户的回复做出反应。
-                                                                                                                                6. 在东汉背景前提下，可以使用现代词汇，也可以使用口语。但是一定要符合本身人设。
-                                                                                                                                7. 特别重要：每个角色在发布评论前，必须先点击三个按钮中的一个（点赞、屏蔽、无语），然后再发布评论。
-                                                                                                                                8. 评论格式：[角色名]: <em>角色点了“{按钮图标}”</em> 评论内容
-                                                                                                                                9. 按钮图标说明：
-                                                                                                                                   - 点赞按钮：😊
-                                                                                                                                   - 屏蔽按钮：😞
-                                                                                                                                   - 无语按钮：❓
-                                                                                                                                10. 严格返回评论内容，每条评论占一行，格式为：[角色名]: <em>角色点了“{按钮图标}”</em> 评论内容
-                                                                                                                                11. 遵守东汉背景设定，完全参考世界书条目。
-                                                                                                                                12. 参考现有评论和其他角色的角色设置，确保评论之间有连贯性和互动性。
-                                                                                                                                13. 特别重要：请记住这条动态是由${momentData.char.name}发布的，评论者是其他角色，不要混淆发布者和评论者的身份。
-                                                                                                                                `;
+【生成任务】
+请为本条动态生成 2 到 4 条来自不同角色的精彩评论。
+
+【严格规则与逻辑规范】
+1. 【语气与人设】：必须严格贴合每个角色的性格、口吻、与发布者/玩家(${currentUserName})的亲疏关系。
+2. 【核心禁忌·严防抢答错乱】：
+   - 如果某个角色在评论中提到了玩家（@${currentUserName} 或对玩家说话/提问），**其他 NPC 角色绝对不能代替玩家第一人称回答**！
+   - 其他角色可以围观吐槽或发表对动态本身的见解，但绝不可冒领对玩家的提问进行回答。
+   - 只有当评论中明确“@了某个角色名”时，该被@的角色才可针对该话题进行回应互动。
+3. 【视角多元】：每位角色主要是针对这条动态本身发表自己的观点与态度，不需要强行把所有角色编成一条串联的流水戏。
+4. 【用户回复反应】：如果历史评论区中有玩家/用户(${currentUserName})发表的评论或@了某位角色，被@或相关的角色应当给出符合人设的自然回应。
+5. 【动作态度按钮】：每个角色在评论前必须先选择一个态度（点赞😊、屏蔽😞、无语❓）。
+6. 【输出格式规范】：每条评论独立占一行，严格按照如下格式输出，不要有其他解释：
+[角色名]: <em>角色点了“{按钮图标}”</em> 评论内容
+
+（按钮图标可选：😊 或 😞 或 ❓）
+`;
 
       // 5. 请求 LLM
       window.sendToLLM(
@@ -83082,6 +84391,16 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
       setIsGeneratingComment(false);
     }
   };
+
+  if (selectedCharForSpace) {
+    return (
+      <T8CharacterSpacePage
+        character={selectedCharForSpace}
+        onBack={() => setSelectedCharForSpace(null)}
+        onNavigateChat={onNavigateChat}
+      />
+    );
+  }
 
   return (
     <div
@@ -83554,12 +84873,16 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
             return uniqueChars.slice(0, 8).map((char, index) => (
               <div
                 key={index}
+                onClick={() => setSelectedCharForSpace(char)}
+                title={`点击查看 ${char.name} 的空间`}
+                className="active-press"
                 style={{
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
                   gap: "4px",
                   flexShrink: 0,
+                  cursor: "pointer",
                 }}
               >
                 <div
@@ -83670,7 +84993,11 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
               >
                 {/* 渲染头像 */}
                 <div
+                  onClick={() => setSelectedCharForSpace(item.char)}
+                  title={`点击查看 ${item.char?.name} 的空间`}
+                  className="active-press"
                   style={{
+                    cursor: "pointer",
                     width: "40px",
                     height: "40px",
                     borderRadius: "50%",
@@ -83711,7 +85038,11 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                   )}
                 </div>
                 <span
+                  onClick={() => setSelectedCharForSpace(item.char)}
+                  title={`点击查看 ${item.char?.name} 的空间`}
+                  className="active-press"
                   style={{
+                    cursor: "pointer",
                     fontWeight: "bold",
                     color: "#333",
                     fontSize: "15px",
@@ -84207,6 +85538,93 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
               >
                 ✕
               </button>
+            </div>
+
+            {/* 头像设置 */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "12px",
+                padding: "8px 12px",
+                background: "#F8F9FA",
+                borderRadius: "12px",
+                border: "1px solid #EDF2F7",
+              }}
+            >
+              <div
+                style={{
+                  width: "48px",
+                  height: "48px",
+                  borderRadius: "14px",
+                  background: editProfileForm.avatar || userAvatar
+                    ? `url(${editProfileForm.avatar || userAvatar}) center/cover no-repeat`
+                    : "#D6724B",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#FFF",
+                  fontWeight: "bold",
+                  fontSize: "18px",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.1)",
+                  overflow: "hidden",
+                  flexShrink: 0,
+                }}
+              >
+                {!(editProfileForm.avatar || userAvatar) &&
+                  (editProfileForm.userName?.[0] || "广")}
+              </div>
+              <div style={{ flex: 1 }}>
+                <div
+                  style={{
+                    fontSize: "12px",
+                    fontWeight: "600",
+                    color: "#2D3748",
+                  }}
+                >
+                  空间专属头像
+                </div>
+                <div style={{ fontSize: "11px", color: "#A0AEC0" }}>
+                  支持上传自定义头像图片
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() =>
+                  document.getElementById("modal-avatar-upload")?.click()
+                }
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "8px",
+                  background: "#FFF",
+                  border: "1px solid #CBD5E0",
+                  fontSize: "11px",
+                  fontWeight: "600",
+                  color: "#4A5568",
+                  cursor: "pointer",
+                }}
+              >
+                更换头像
+              </button>
+              <input
+                id="modal-avatar-upload"
+                type="file"
+                accept="image/*"
+                style={{ display: "none" }}
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (file) {
+                    const reader = new FileReader();
+                    reader.onload = (ev) => {
+                      setEditProfileForm((prev) => ({
+                        ...prev,
+                        avatar: ev.target.result,
+                      }));
+                    };
+                    reader.readAsDataURL(file);
+                  }
+                }}
+              />
             </div>
 
             {/* 个人姓名 */}
@@ -85416,7 +86834,7 @@ const T8Page = () => {
             </div>
           </React.Fragment>
         ) : (
-          <T8MomentsPage pixabayApiKey={pixabayApiKey} />
+          <T8MomentsPage pixabayApiKey={pixabayApiKey} onNavigateChat={(chatId) => { setSubTab("chat"); handleChatClick(chatId); }} />
         )}
 
         {/* 保持原有的安全距离和悬浮按钮逻辑 */}
