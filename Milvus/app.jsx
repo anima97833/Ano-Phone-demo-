@@ -519,49 +519,63 @@ ${userContext ? `${userContext}\n` : ""}
       ];
 
       console.log("使用window.sendToLLM调用API生成天气建议...");
-      window.sendToLLM(
-        messages,
-        null,
-        (reply) => {
-          console.log("API响应结果:", reply);
-          const aiSuggestions = reply
-            .trim()
-            .split("\n")
-            .map((line) => line.trim())
-            .filter((line) => line !== "");
+      await new Promise((resolve, reject) => {
+        window.sendToLLM(
+          messages,
+          null,
+          (reply) => {
+            try {
+              console.log("API响应结果:", reply);
+              const aiSuggestions = reply
+                .trim()
+                .split("\n")
+                .map((line) => line.trim())
+                .filter((line) => line !== "");
 
-          if (aiSuggestions.length === 0) {
-            throw new Error("AI生成的建议为空");
-          }
+              if (aiSuggestions.length === 0) {
+                const fallback = generateSuggestions(temp);
+                setSuggestionData({ temp, suggestions: fallback });
+                setShowSuggestionModal(true);
+                resolve();
+                return;
+              }
 
-          setSuggestionData({
-            temp,
-            suggestions: aiSuggestions,
-            isAI: true,
-            characterName: selectedChar.name,
-          });
-          setShowSuggestionModal(true);
+              setSuggestionData({
+                temp,
+                suggestions: aiSuggestions,
+                isAI: true,
+                characterName: selectedChar.name,
+              });
+              setShowSuggestionModal(true);
 
-          // 核心：同步保存到主页折叠卡片天气提醒中
-          try {
-            const weatherAdviceObj = {
-              characterName: selectedChar.name,
-              temp: temp,
-              date: `${new Date().getMonth() + 1}月${new Date().getDate()}日`,
-              timestamp: Date.now(),
-              suggestions: aiSuggestions,
-            };
-            localStorage.setItem("homepage_weather_advice", JSON.stringify(weatherAdviceObj));
-            window.dispatchEvent(new Event("homepage_weather_advice_updated"));
-          } catch (e) {
-            console.error("同步主页天气建议失败:", e);
-          }
-        },
-        (error) => {
-          console.error("API调用失败:", error);
-          throw new Error(`API调用失败: ${error}`);
-        },
-      );
+              // 核心：同步保存到主页折叠卡片天气提醒中
+              try {
+                const weatherAdviceObj = {
+                  characterName: selectedChar.name,
+                  temp: temp,
+                  date: `${new Date().getMonth() + 1}月${new Date().getDate()}日`,
+                  timestamp: Date.now(),
+                  suggestions: aiSuggestions,
+                };
+                localStorage.setItem("homepage_weather_advice", JSON.stringify(weatherAdviceObj));
+                window.dispatchEvent(new Event("homepage_weather_advice_updated"));
+              } catch (e) {
+                console.error("同步主页天气建议失败:", e);
+              }
+              resolve();
+            } catch (err) {
+              reject(err);
+            }
+          },
+          (error) => {
+            console.error("API调用失败:", error);
+            const fallback = generateSuggestions(temp);
+            setSuggestionData({ temp, suggestions: fallback });
+            setShowSuggestionModal(true);
+            resolve();
+          },
+        );
+      });
     } catch (error) {
       console.error("生成AI建议失败:", error);
       const suggestions = generateSuggestions(temp);
@@ -916,15 +930,83 @@ ${userContext ? `${userContext}\n` : ""}
           </span>
         </div>
         <div
-          className="circle-mod animate-breathe"
-          style={{ background: "#C2CED9", cursor: "pointer" }}
+          className={`circle-mod ${
+            isLoadingSuggestions
+              ? "animate-pulse shadow-md"
+              : "animate-breathe active-press"
+          }`}
+          style={{
+            background: isLoadingSuggestions
+              ? "linear-gradient(135deg, #9FB7CC 0%, #7E9BB5 100%)"
+              : "#C2CED9",
+            cursor: isLoadingSuggestions ? "wait" : "pointer",
+            position: "relative",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            transition: "all 0.3s ease",
+            overflow: "hidden",
+          }}
           onClick={() =>
-            myLoc.temp !== "--" && openSuggestionModal(myLoc.temp, true)
+            !isLoadingSuggestions &&
+            myLoc.temp !== "--" &&
+            openSuggestionModal(myLoc.temp, true)
+          }
+          title={
+            isLoadingSuggestions
+              ? "正在生成角色天气关怀..."
+              : "点击获取专属天气建议"
           }
         >
-          <span className="circle-val" style={{ color: "#fff" }}>
-            {myLoc.temp}°
-          </span>
+          {isLoadingSuggestions ? (
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "2px",
+                padding: "4px",
+              }}
+            >
+              <i
+                className="ph-bold ph-spinner"
+                style={{
+                  fontSize: "24px",
+                  color: "#FFF",
+                  animation: "spin 1s linear infinite",
+                }}
+              ></i>
+              <span
+                style={{
+                  fontSize: "10px",
+                  color: "#FFF",
+                  fontWeight: "bold",
+                  whiteSpace: "nowrap",
+                  letterSpacing: "0.5px",
+                }}
+              >
+                生成中...
+              </span>
+            </div>
+          ) : (
+            <>
+              <span className="circle-val" style={{ color: "#fff" }}>
+                {myLoc.temp}°
+              </span>
+              <span
+                style={{
+                  fontSize: "9px",
+                  color: "rgba(255,255,255,0.85)",
+                  fontWeight: "500",
+                  marginTop: "-2px",
+                }}
+              >
+                点击建议
+              </span>
+            </>
+          )}
         </div>
       </div>
 
@@ -7691,21 +7773,22 @@ const VerticalCarousel = ({ onCharacterClick }) => {
         <button
           onClick={refreshCelebrities}
           disabled={isLoading}
-          title="刷新话题名人"
-          className="active-press"
+          title={isLoading ? "正在生成话题名人..." : "刷新话题名人"}
+          className={`active-press ${isLoading ? "animate-pulse" : ""}`}
           style={{
             width: "32px",
             height: "32px",
             borderRadius: "50%",
-            background: "rgba(90, 95, 77, 0.08)",
+            background: isLoading
+              ? "rgba(214, 114, 75, 0.15)"
+              : "rgba(90, 95, 77, 0.08)",
             border: "none",
             cursor: isLoading ? "not-allowed" : "pointer",
-            opacity: isLoading ? 0.6 : 1,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "#5a5f4d",
-            transition: "all 0.2s ease",
+            color: isLoading ? "#D6724B" : "#5a5f4d",
+            transition: "all 0.25s ease",
           }}
         >
           <i
@@ -12246,21 +12329,22 @@ const TopicCelebrityPage = ({ onBack }) => {
         <button
           onClick={generateCelebrities}
           disabled={loading}
-          title="重新生成榜单"
-          className="active-press"
+          title={loading ? "正在生成榜单..." : "重新生成榜单"}
+          className={`active-press ${loading ? "animate-pulse" : ""}`}
           style={{
             width: "36px",
             height: "36px",
             borderRadius: "50%",
-            background: "rgba(0, 0, 0, 0.05)",
+            background: loading
+              ? "rgba(214, 114, 75, 0.15)"
+              : "rgba(0, 0, 0, 0.05)",
             border: "none",
             cursor: loading ? "not-allowed" : "pointer",
-            opacity: loading ? 0.6 : 1,
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            color: "#2C2C2C",
-            transition: "all 0.2s ease",
+            color: loading ? "#D6724B" : "#2C2C2C",
+            transition: "all 0.25s ease",
           }}
         >
           <i
