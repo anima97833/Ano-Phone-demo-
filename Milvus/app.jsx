@@ -49976,7 +49976,74 @@ ${isAuto ? `
   );
 };
 
-// 敏捷训练 (农田保卫战 - 关卡递增赏金系统: 2, 4, 6, 8, 10... 铢)
+// 独立的敏捷训练局内小窗聊天数据库 (IndexedDB)
+const AgilityGameChatDB = {
+  dbName: "agility_game_db",
+  dbVersion: 1,
+  getDB: function() {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.dbVersion);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("char_chats")) {
+          db.createObjectStore("char_chats", { keyPath: "charId" });
+        }
+      };
+      request.onsuccess = (e) => resolve(e.target.result);
+      request.onerror = (e) => reject(e.target.error);
+    });
+  },
+  getMessages: async function(charId) {
+    if (!charId) return [];
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readonly");
+        const store = tx.objectStore("char_chats");
+        const req = store.get(String(charId));
+        req.onsuccess = () => resolve(req.result ? (req.result.messages || []) : []);
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      console.warn("Failed to get in-game agility chat messages:", e);
+      return [];
+    }
+  },
+  saveMessage: async function(charId, message) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      const messages = await this.getMessages(charId);
+      messages.push(message);
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.put({ charId: String(charId), lastUpdated: Date.now(), messages });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      console.warn("Failed to save in-game agility chat message:", e);
+    }
+  },
+  clearMessages: async function(charId) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.delete(String(charId));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      console.warn("Failed to clear in-game agility chat messages:", e);
+    }
+  }
+};
+
+// 敏捷训练 (农田保卫战 - 关卡递增赏金系统 &「看Ta操作」代打与局内AI小窗)
 const AgilityGamePage = ({ onBack }) => {
   const { useState, useEffect, useRef } = React;
   const [visible, setVisible] = useState(false);
@@ -49987,10 +50054,24 @@ const AgilityGamePage = ({ onBack }) => {
   const targetScore = stage * 30 + 10;
   const [gameState, setGameState] = useState('playing'); // playing, result
 
+  // 模式切换: 'manual' (自己玩) | 'auto' (看Ta操作)
+  const [playMode, setPlayMode] = useState('manual');
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedChar, setSelectedChar] = useState(null);
+  const [showCharModal, setShowCharModal] = useState(false); // 密探选择抽屉
+  const [showSkinModal, setShowSkinModal] = useState(false); // 盗贼立绘更换抽屉
+
+  // 局内小窗聊天系统
+  const [showInGameChat, setShowInGameChat] = useState(false);
+  const [inGameChatMsgs, setInGameChatMsgs] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiReplying, setIsAiReplying] = useState(false);
+  const [lastBattleContext, setLastBattleContext] = useState(null);
+  const chatScrollRef = useRef(null);
+
   // 金钱累计系统 (每关递增: 第1关2铢，第2关4铢，第3关6铢，第N关 2*N 铢)
   const [sessionCoins, setSessionCoins] = useState(0);
   const [hasAwardedThisStage, setHasAwardedThisStage] = useState(false);
-  const [showCharModal, setShowCharModal] = useState(false);
   const [thief1IdleImg, setThief1IdleImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_iBqe9Gsm0GFagZ1TDPzgl4WB1QlagACPicAAkWI4FeNig-3o2880j0E.png");
   const [thief1HitImg, setThief1HitImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_iNqe9HOTh-UDIfYdb09UZCX6UeX0AACQScAAkWI4FeogY0oJaqQsz0E.png");
   const [thief2IdleImg, setThief2IdleImg] = useState("https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_hBqe9FQpPs92cXchkxwcu-8v7T7bgACKicAAkWI4FcRqK6HUSnb7D0E.png");
@@ -50016,6 +50097,7 @@ const AgilityGamePage = ({ onBack }) => {
     hammer: 'https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY_mdqe9OSSA_l7anAmKyDaXi4vFGrsgACiCcAAkWI4FeYEpjJDULLxT0E.png'
   };
 
+  const DEFAULT_AVATAR = "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ClqevymgmdqN8oAAbGwXpbrH5vAQ2cAArMnAAJrJthXTWQDSRPv8eA9BA.png";
   const imgsRef = useRef({});
 
   useEffect(() => {
@@ -50026,7 +50108,32 @@ const AgilityGamePage = ({ onBack }) => {
       imgsRef.current[key] = img;
     });
 
-    // 2. 加载用户持久化自定义立绘
+    // 2. 加载传讯中的可用角色库
+    const loadCharacters = async () => {
+      let chars = [];
+      try {
+        if (window.chatCharacterStore) {
+          chars = await window.chatCharacterStore.getAll();
+        } else {
+          chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const validChars = chars.filter(c => !String(c.id).startsWith("group") && c.type !== "decor");
+        setAvailableChars(validChars);
+
+        const savedAutoCharId = localStorage.getItem("agility_game_auto_char_id");
+        if (savedAutoCharId) {
+          const found = validChars.find(c => String(c.id) === String(savedAutoCharId));
+          if (found) setSelectedChar(found);
+        } else if (validChars.length > 0) {
+          setSelectedChar(validChars[0]);
+        }
+      } catch (err) {
+        console.error("加载角色失败:", err);
+      }
+    };
+    loadCharacters();
+
+    // 3. 加载用户持久化自定义立绘
     if (window.settingsStore) {
       if (window.settingsStore.getAgilityGameThief1IdleImage) {
         window.settingsStore.getAgilityGameThief1IdleImage().then(img => {
@@ -50076,6 +50183,29 @@ const AgilityGamePage = ({ onBack }) => {
 
     requestAnimationFrame(() => setVisible(true));
   }, []);
+
+  // 当选定代打角色时，载入其专属的局内小窗聊天记录
+  useEffect(() => {
+    if (selectedChar && selectedChar.id) {
+      AgilityGameChatDB.getMessages(selectedChar.id).then(msgs => {
+        setInGameChatMsgs(msgs);
+      });
+    }
+  }, [selectedChar]);
+
+  // 自动滚动局内聊天小窗底部
+  useEffect(() => {
+    if (showInGameChat && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [inGameChatMsgs, showInGameChat, isAiReplying]);
+
+  // 选择代打角色
+  const handleSelectAutoChar = (char) => {
+    setSelectedChar(char);
+    localStorage.setItem("agility_game_auto_char_id", char.id);
+    setShowCharModal(false);
+  };
 
   const handleUploadChar = (type) => {
     const input = document.createElement("input");
@@ -50150,24 +50280,73 @@ const AgilityGamePage = ({ onBack }) => {
     }
   };
 
+  // 拟真自动代打逻辑 (Auto-Pilot for 农田保卫战)
   useEffect(() => {
-    let reqId;
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
+    if (playMode !== 'auto' || gameState !== 'playing' || showInGameChat || showCharModal || showSkinModal) {
+      return;
+    }
 
-    let timer = setInterval(() => {
-      if (gameState === 'playing') {
-        setTimeLeft(t => {
-          if (t <= 1) {
-            setGameState('result');
-            return 0;
-          }
-          return t - 1;
+    const interval = setInterval(() => {
+      if (playMode !== 'auto' || gameState !== 'playing') return;
+      const state = stateRef.current;
+      if (!state) return;
+
+      // 寻找农田中冒头的窃贼
+      const poppingCells = [];
+      state.grid.forEach((cell, idx) => {
+        if (cell.state === 'popping' && cell.yOffset <= 30) {
+          poppingCells.push({ idx, cell, priority: cell.thiefType === 'thief2' ? 3 : 1 });
+        }
+      });
+
+      if (poppingCells.length === 0) return;
+
+      // 优先打击精英怪（+3分），次选普通怪
+      poppingCells.sort((a, b) => b.priority - a.priority);
+      const target = poppingCells[0];
+      const cell = target.cell;
+      const i = target.idx;
+
+      // 模拟人类失误率（约 12% 概率因反应未及而未击中）
+      if (Math.random() < 0.12) return;
+
+      const col = i % 3;
+      const row = Math.floor(i / 3);
+      const cx = 35 + col * 105 + 40;
+      const cy = 250 + row * 115 + 40 + cell.yOffset;
+
+      // 命中并击晕
+      cell.state = 'hit';
+      cell.timer = 0.3;
+
+      const points = cell.thiefType === 'thief2' ? 3 : 1;
+      setScore(s => s + points);
+
+      // 爆裂粒子与飘字特效
+      for (let k = 0; k < 8; k++) {
+        state.particles.push({
+          x: cx, y: cy,
+          vx: (Math.random() - 0.5) * 150,
+          vy: (Math.random() - 0.5) * 150,
+          life: 1.0,
+          radius: 5 + Math.random() * 8,
+          color: points === 3 ? '#a0e8af' : '#ffd54f'
         });
       }
-    }, 1000);
+      state.popups.push({
+        x: cx, y: cy - 30,
+        text: '+' + points,
+        color: points === 3 ? '#4CAF50' : '#FF9800',
+        life: 1.0
+      });
+      state.hammers.push({
+        x: cx + 20, y: cy - 20, timer: 0.2
+      });
 
-    stateRef.current.lastTime = performance.now();
+    }, 280 + Math.random() * 140);
+
+    return () => clearInterval(interval);
+  }, [playMode, gameState, showInGameChat, showCharModal, showSkinModal]);
 
   // 敏捷通关递增赏金结算 (第1关2铢, 第2关4铢, 第3关6铢...)
   const awardAgilityStageWin = (curStage) => {
@@ -50191,15 +50370,34 @@ const AgilityGamePage = ({ onBack }) => {
     }
   };
 
-  const loop = (time) => {
-    reqId = requestAnimationFrame(loop);
-    if (gameState !== 'playing') {
-      if (gameState === 'result' && stateRef.current && score >= targetScore && lives > 0) {
-        awardAgilityStageWin(stage);
+  useEffect(() => {
+    let reqId;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+
+    let timer = setInterval(() => {
+      if (gameState === 'playing') {
+        setTimeLeft(t => {
+          if (t <= 1) {
+            setGameState('result');
+            return 0;
+          }
+          return t - 1;
+        });
       }
-      render(ctx);
-      return;
-    }
+    }, 1000);
+
+    stateRef.current.lastTime = performance.now();
+
+    const loop = (time) => {
+      reqId = requestAnimationFrame(loop);
+      if (gameState !== 'playing') {
+        if (gameState === 'result' && stateRef.current && score >= targetScore && lives > 0) {
+          awardAgilityStageWin(stage);
+        }
+        render(ctx);
+        return;
+      }
       const dt = Math.min((time - stateRef.current.lastTime) / 1000, 0.05);
       stateRef.current.lastTime = time;
       update(dt);
@@ -50211,7 +50409,27 @@ const AgilityGamePage = ({ onBack }) => {
       cancelAnimationFrame(reqId);
       clearInterval(timer);
     };
-  }, [gameState]);
+  }, [gameState, score, targetScore, lives, stage, hasAwardedThisStage]);
+
+  // 监听输赢并记录战况上下文
+  useEffect(() => {
+    if (gameState === 'result') {
+      const isWin = score >= targetScore && lives > 0;
+      const reason = lives <= 0
+        ? "庄稼屡遭窃贼啃食，心心耗尽"
+        : (score >= targetScore ? `手速超群，以 ${score} 分成功破关` : `时间耗尽（最终得分: ${score}/${targetScore}）`);
+      setLastBattleContext({
+        stage,
+        score,
+        targetScore,
+        lives,
+        timeLeft,
+        sessionCoins,
+        isWin,
+        reason
+      });
+    }
+  }, [gameState, score, targetScore, lives, timeLeft, sessionCoins, stage]);
 
   const update = (dt) => {
     const state = stateRef.current;
@@ -50224,11 +50442,10 @@ const AgilityGamePage = ({ onBack }) => {
         const idx = idleCells[Math.floor(Math.random() * idleCells.length)];
         const cell = state.grid[idx];
         cell.state = 'popping';
-        cell.thiefType = Math.random() < 0.2 ? 'thief2' : 'thief1'; // thief2 is elite
-        // Stay duration is faster for later stages and less time
+        cell.thiefType = Math.random() < 0.2 ? 'thief2' : 'thief1';
         const duration = Math.max(0.6, 1.2 - (stage - 1) * 0.1 - (60 - timeLeft) / 60 * 0.3);
         cell.timer = cell.thiefType === 'thief2' ? duration * 0.8 : duration;
-        cell.yOffset = 50; // starts hidden
+        cell.yOffset = 50;
       }
       const requiredSpawns = (stage * 30 + 10) * 1.5;
       const avgInterval = 60 / requiredSpawns;
@@ -50240,7 +50457,7 @@ const AgilityGamePage = ({ onBack }) => {
     let escapedThisFrame = 0;
     state.grid.forEach(cell => {
       if (cell.state === 'popping') {
-        if (cell.yOffset > 0) cell.yOffset -= 250 * dt; // Pop up animation
+        if (cell.yOffset > 0) cell.yOffset -= 250 * dt;
         else cell.yOffset = 0;
 
         cell.timer -= dt;
@@ -50248,7 +50465,7 @@ const AgilityGamePage = ({ onBack }) => {
           cell.state = 'escaping';
         }
       } else if (cell.state === 'escaping') {
-        cell.yOffset += 200 * dt; // Hide animation
+        cell.yOffset += 200 * dt;
         if (cell.yOffset >= 50) {
           cell.state = 'idle';
           cell.yOffset = 0;
@@ -50257,7 +50474,7 @@ const AgilityGamePage = ({ onBack }) => {
       } else if (cell.state === 'hit') {
         cell.timer -= dt;
         if (cell.timer <= 0) {
-          cell.yOffset += 200 * dt; // Hide after hit
+          cell.yOffset += 200 * dt;
           if (cell.yOffset >= 50) {
             cell.state = 'idle';
             cell.yOffset = 0;
@@ -50303,7 +50520,7 @@ const AgilityGamePage = ({ onBack }) => {
   };
 
   const handlePointerDown = (e) => {
-    if (gameState !== 'playing') return;
+    if (gameState !== 'playing' || playMode === 'auto') return;
     const rect = canvasRef.current.getBoundingClientRect();
     const touch = e.touches ? e.touches[0] : e;
     const scaleX = 360 / rect.width;
@@ -50319,21 +50536,19 @@ const AgilityGamePage = ({ onBack }) => {
       if (cell.state === 'popping' || cell.state === 'escaping') {
         const col = i % 3;
         const row = Math.floor(i / 3);
-        const cx = 35 + col * 105 + 40; // 35 padding, 105 spacing, 40 center
+        const cx = 35 + col * 105 + 40;
         const cy = 250 + row * 115 + 40 + cell.yOffset;
 
         const dx = tx - cx;
         const dy = ty - cy;
         if (Math.abs(dx) < 45 && Math.abs(dy) < 55) {
-          // Hit!
           hit = true;
           cell.state = 'hit';
-          cell.timer = 0.3; // Stun duration
+          cell.timer = 0.3;
 
           const points = cell.thiefType === 'thief2' ? 3 : 1;
           setScore(s => s + points);
 
-          // FX
           for (let k = 0; k < 8; k++) {
             state.particles.push({
               x: cx, y: cy,
@@ -50371,7 +50586,6 @@ const AgilityGamePage = ({ onBack }) => {
 
     ctx.clearRect(0, 0, 360, 640);
 
-    // Bg
     if (imgs.bg && imgs.bg.complete) {
       ctx.drawImage(imgs.bg, 0, 0, 360, 640);
     } else {
@@ -50379,7 +50593,6 @@ const AgilityGamePage = ({ onBack }) => {
       ctx.fillRect(0, 0, 360, 640);
     }
 
-    // Grid
     for (let i = 0; i < 9; i++) {
       const cell = state.grid[i];
       const col = i % 3;
@@ -50387,7 +50600,6 @@ const AgilityGamePage = ({ onBack }) => {
       const cellX = 35 + col * 105;
       const cellY = 250 + row * 115;
 
-      // Draw Thief Behind Bush
       if (cell.state !== 'idle') {
         const thiefState = cell.state === 'hit' ? '_hit' : '_idle';
         const img = imgs[cell.thiefType + thiefState];
@@ -50396,10 +50608,8 @@ const AgilityGamePage = ({ onBack }) => {
         }
       }
 
-      // Draw Bush in Front with Breathing Effect
-      const breatheScale = 1 + Math.sin(state.lastTime / 400 + i * 0.7) * 0.03; // +/- 3%
+      const breatheScale = 1 + Math.sin(state.lastTime / 400 + i * 0.7) * 0.03;
       ctx.save();
-      // center point of the bush
       const bushCenterX = cellX + 45;
       const bushCenterY = cellY + 55;
       ctx.translate(bushCenterX, bushCenterY);
@@ -50416,7 +50626,6 @@ const AgilityGamePage = ({ onBack }) => {
       ctx.restore();
     }
 
-    // Particles
     for (const p of state.particles) {
       ctx.fillStyle = p.color || '#FFF';
       ctx.globalAlpha = p.life;
@@ -50426,7 +50635,6 @@ const AgilityGamePage = ({ onBack }) => {
       ctx.globalAlpha = 1;
     }
 
-    // Popups
     ctx.font = 'bold 24px Arial';
     ctx.textAlign = 'center';
     for (const p of state.popups) {
@@ -50438,17 +50646,157 @@ const AgilityGamePage = ({ onBack }) => {
       ctx.globalAlpha = 1;
     }
 
-    // Hammers
     if (imgs.hammer && imgs.hammer.complete) {
       for (const h of state.hammers) {
         ctx.save();
         ctx.translate(h.x, h.y);
-        ctx.rotate(h.timer > 0.1 ? -0.5 : 0.2); // Swing animation
+        ctx.rotate(h.timer > 0.1 ? -0.5 : 0.2);
         ctx.drawImage(imgs.hammer, -10, -40, 50, 50);
         ctx.restore();
       }
     }
   };
+
+  // 局内小窗发送对话
+  const handleSendInGameMessage = async (msgText) => {
+    const textToSend = (msgText || chatInput).trim();
+    if (!textToSend || !selectedChar || isAiReplying) return;
+
+    setChatInput('');
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      role: 'user',
+      content: textToSend,
+      timestamp: Date.now()
+    };
+
+    const newMsgs = [...inGameChatMsgs, userMsg];
+    setInGameChatMsgs(newMsgs);
+    await AgilityGameChatDB.saveMessage(selectedChar.id, userMsg);
+    setIsAiReplying(true);
+
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
+      let userContext = "【主控身份】姓名:主控, 性格:沉稳, 背景:隐秘阁主";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId) {
+          const activeUser = savedPersonas.find(p => p.id == activeId);
+          if (activeUser) {
+            userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
+          }
+        }
+      } catch (e) {}
+
+      const profile = selectedChar.profile || {};
+      const charContext = `【代打角色设定】
+姓名: ${selectedChar.name}
+性别: ${profile.gender || "未知"}
+性格: ${profile.personality || "未知"}
+说话风格: ${profile.style || "自然生动"}
+背景故事: ${profile.background || "暂无"}
+MBTI: ${profile.mbti || "无"}`;
+
+      const isAuto = playMode === 'auto';
+      const combatContext = `【局内敏捷训练战况】
+模式: ${isAuto ? `看Ta操作（由你【${selectedChar.name}】亲自在农田手持木锤击打盗贼守卫庄稼，主控在场边看你操作）` : `自己玩（由主控亲自在农田挥锤守卫庄稼，你在场边观战/打气）`}
+挥锤执行者: ${isAuto ? `是你本人【${selectedChar.name}】！` : '是主控本人！'}
+当前关卡: 第 ${stage} 关 (目标积分: ${targetScore}分)
+当前战绩: 积分 ${score}分, 剩余生命 ${lives}心, 剩余时间 ${timeLeft}秒
+累计递增赏金: +${sessionCoins} 铢 (本关通关可得 +${stage * 2} 铢)
+最新战况: ${lastBattleContext ? (
+  isAuto
+    ? (lastBattleContext.isWin
+        ? `你刚才身手敏捷棒打硕鼠，以 ${lastBattleContext.score} 分成功突破第 ${lastBattleContext.stage} 关！`
+        : `你在第 ${lastBattleContext.stage} 关未能成功守住农田（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
+    : (lastBattleContext.isWin
+        ? `主控刚才手速极快，以 ${lastBattleContext.score} 分漂亮突破第 ${lastBattleContext.stage} 关！`
+        : `主控在第 ${lastBattleContext.stage} 关守卫未竟（${lastBattleContext.reason}，得分: ${lastBattleContext.score}/${lastBattleContext.targetScore}）`)
+) : (
+  isAuto ? `你正在田间全神贯注巡视冒头的窃贼` : `主控正在田间全神贯注巡视`
+)}`;
+
+      const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
+${worldContext}
+${userContext}
+${charContext}
+${combatContext}
+
+【交互情境与视角（极其重要）】
+${isAuto ? `
+- 【极其重要】：当前是【看Ta操作】模式！刚才【是你【${selectedChar.name}】本人】亲自上阵在农田里手握木锤敲打盗贼！主控是在场边观看你的操作！
+- 刚才无论是眼明手快连击精英贼破关，还是不小心漏了怪被偷了庄稼丢了心心，都是【你自己的亲身经历】！
+- 请务必以第一人称（如“我”、“本公子”等符合你身份的称呼）描述【你自己刚才在田里的敏捷表现与挥锤情况】。绝对不要误以为是主控在打地鼠！
+- 面对主控在小窗里的打趣、关心、吐槽或夸赞，你要给出极具个性的人设反应（例如：若是傲娇则抱怨地鼠钻得太快/锤子太沉、若是潇洒则自信拍胸脯、若是温柔则内疚漏了庄稼等）。
+` : `
+- 当前是【自己玩】模式，刚才【是主控本人】在农田敲打盗贼，你作为密探在场边陪伴与观战。
+- 请以场边陪伴者的视角，对主控刚才的身手与表现给予贴合人设的点评、鼓励或打趣。
+`}
+
+【核心要求】
+1. 必须完全使用【${selectedChar.name}】的独特口吻和性格说话（严禁出戏、严禁AI腔、严禁说自己是人工智能）。
+2. 字数控制在 25-70 字左右，言简意赅，生动传神。直接输出角色说的话，不要带角色名字前缀。`;
+
+      const recentDialogues = newMsgs.slice(-8).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
+
+      const apiMessages = [
+        { role: "system", content: sysPrompt },
+        ...recentDialogues
+      ];
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          apiMessages,
+          null,
+          async (reply) => {
+            const cleanReply = reply.trim();
+            const assistantMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: cleanReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, assistantMsg]);
+            await AgilityGameChatDB.saveMessage(selectedChar.id, assistantMsg);
+            setIsAiReplying(false);
+          },
+          (err) => {
+            console.error("AI回复失败:", err);
+            const fallbackReply = isAuto
+              ? "（拄着木锤擦了擦汗）这田里的硕鼠狡猾得紧，方才差一隙……下一趟看我把它们一网打尽！"
+              : "（递上凉茶）刚才那几记木锤砸得极准，无妨，下一轮定能守住整片农田！";
+            const fallbackMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: fallbackReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, fallbackMsg]);
+            setIsAiReplying(false);
+          }
+        );
+      } else {
+        setIsAiReplying(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsAiReplying(false);
+    }
+  };
+
+  const handleClearInGameChat = async () => {
+    if (!selectedChar) return;
+    if (confirm("确定要清空与该角色的敏捷局内对话记录吗？（不影响传讯页面正常聊天）")) {
+      await AgilityGameChatDB.clearMessages(selectedChar.id);
+      setInGameChatMsgs([]);
+    }
+  };
+
+  const displayAvatar = selectedChar && selectedChar.avatar ? selectedChar.avatar : DEFAULT_AVATAR;
 
   return (
     <div
@@ -50465,45 +50813,160 @@ const AgilityGamePage = ({ onBack }) => {
         onPointerDown={handlePointerDown}
       />
 
-      {/* Header UI */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 12, zIndex: 10, display: 'flex', alignItems: 'center', gap: 6 }}>
-        <div onClick={onBack} style={{ width: 36, height: 36, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)' }}>←</div>
-        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.9) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.78rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span>💰 金库收益:</span>
-          <span style={{ color: '#FFEB3B', fontSize: '0.88rem' }}>+{sessionCoins} 铢</span>
+      {/* 顶部第一行：返回 + 模式切换胶囊 + 金库收益 */}
+      <div style={{ position: 'absolute', top: 'max(12px, env(safe-area-inset-top))', left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div onClick={onBack} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '5px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.85rem', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span>←</span>
+            <span>退出</span>
+          </div>
+
+          {/* 模式切换胶囊 */}
+          <div style={{ background: 'rgba(255,255,255,0.88)', padding: '2px', borderRadius: 20, display: 'flex', border: '1px solid rgba(196,156,88,0.5)', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+            <div
+              onClick={(e) => { e.stopPropagation(); setPlayMode('manual'); }}
+              style={{
+                padding: '3px 9px', borderRadius: 16, fontSize: '0.74rem', fontWeight: 'bold', cursor: 'pointer',
+                background: playMode === 'manual' ? 'linear-gradient(135deg, #59685a 0%, #435044 100%)' : 'transparent',
+                color: playMode === 'manual' ? '#fff' : '#6E6055',
+                transition: 'all 0.2s'
+              }}
+            >
+              自己玩
+            </div>
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setPlayMode('auto');
+                if (!selectedChar && availableChars.length > 0) {
+                  setShowCharModal(true);
+                }
+              }}
+              style={{
+                padding: '3px 9px', borderRadius: 16, fontSize: '0.74rem', fontWeight: 'bold', cursor: 'pointer',
+                background: playMode === 'auto' ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : 'transparent',
+                color: playMode === 'auto' ? '#fff' : '#6E6055',
+                transition: 'all 0.2s'
+              }}
+            >
+              看Ta操作
+            </div>
+          </div>
         </div>
-        <button
-          onClick={() => setShowCharModal(true)}
-          style={{
-            height: 32,
-            padding: '0 10px',
-            background: 'rgba(255, 255, 255, 0.92)',
-            border: '1.5px solid #C49C58',
-            borderRadius: 16,
-            color: '#5D4037',
-            fontSize: '0.75rem',
-            fontWeight: 'bold',
-            cursor: 'pointer',
-            boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
-            backdropFilter: 'blur(4px)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 3
-          }}
-        >
-          <span>🌾</span> 更换角色
-        </button>
+
+        {/* 右侧：金库收益 */}
+        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.92) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+          <span>💰 金库收益:</span>
+          <span style={{ color: '#FFEB3B', fontSize: '0.92rem' }}>+{sessionCoins} 铢</span>
+        </div>
+      </div>
+
+      {/* 顶部第二行：代打角色/立绘更换 + 局内小窗入口 */}
+      <div style={{ position: 'absolute', top: 'calc(max(12px, env(safe-area-inset-top)) + 42px)', left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 90 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {playMode === 'auto' ? (
+            <div
+              onClick={() => setShowCharModal(true)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.92)',
+                padding: '3px 10px 3px 4px',
+                borderRadius: 20,
+                border: '1.5px solid #D6724B',
+                boxShadow: '0 2px 8px rgba(214,114,75,0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', border: '1.5px solid #D6724B' }}>
+                <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <span style={{ fontSize: '0.76rem', fontWeight: 'bold', color: '#B85630' }}>
+                {selectedChar ? selectedChar.name : "选择密探"} ▾
+              </span>
+            </div>
+          ) : (
+            <button
+              onClick={() => setShowSkinModal(true)}
+              style={{
+                height: 32,
+                padding: '0 10px',
+                background: 'rgba(255, 255, 255, 0.92)',
+                border: '1.5px solid #C49C58',
+                borderRadius: 16,
+                color: '#5D4037',
+                fontSize: '0.75rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(0,0,0,0.15)',
+                backdropFilter: 'blur(4px)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 3
+              }}
+            >
+              <span>🌾</span> 更换立绘
+            </button>
+          )}
+
+          {playMode === 'auto' && (
+            <button
+              onClick={() => setShowSkinModal(true)}
+              style={{
+                height: 30,
+                padding: '0 8px',
+                background: 'rgba(255, 255, 255, 0.88)',
+                border: '1px solid #C49C58',
+                borderRadius: 15,
+                color: '#5D4037',
+                fontSize: '0.72rem',
+                cursor: 'pointer',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+              }}
+            >
+              🌾 立绘
+            </button>
+          )}
+        </div>
+
+        {/* 局内小窗悬浮入口 */}
+        {selectedChar && (
+          <div
+            onClick={() => setShowInGameChat(true)}
+            style={{
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(245,232,210,0.95) 100%)',
+              border: '1.5px solid #C49C58',
+              borderRadius: 20,
+              padding: '4px 10px 4px 6px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 5,
+              cursor: 'pointer',
+              boxShadow: '0 3px 10px rgba(0,0,0,0.15)',
+              position: 'relative'
+            }}
+          >
+            <div style={{ width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', border: '1px solid #C49C58' }}>
+              <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            </div>
+            <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#5D4037' }}>局内小窗</span>
+            {inGameChatMsgs.length > 0 && (
+              <span style={{ width: 7, height: 7, background: '#D84315', borderRadius: '50%' }} />
+            )}
+          </div>
+        )}
       </div>
 
       {/* Top Center Timer */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
+      <div style={{ position: 'absolute', top: 'calc(max(15px, env(safe-area-inset-top)) + 78px)', left: '50%', transform: 'translateX(-50%)', zIndex: 10 }}>
         <div style={{ fontSize: '2.5rem', color: '#D84315', textShadow: '0 2px 4px rgba(255,255,255,0.8)', fontWeight: 'bold' }}>
           {timeLeft}
         </div>
       </div>
 
       {/* Top Right Score & Lives UI */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 15, zIndex: 10, background: 'url(https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ihqeyvVK_wNnLFsi6ZeuvfcYtDGFgACNCoAAmsm2FeJMbyGDdEl0D0E.png)', backgroundSize: '100% 100%' }}>
+      <div style={{ position: 'absolute', top: 'calc(max(15px, env(safe-area-inset-top)) + 78px)', right: 15, zIndex: 10, background: 'url(https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ihqeyvVK_wNnLFsi6ZeuvfcYtDGFgACNCoAAmsm2FeJMbyGDdEl0D0E.png)', backgroundSize: '100% 100%' }}>
         <div style={{ background: '#F5E6C8', padding: '8px 15px', borderRadius: '4px', border: '2px solid #D7CCC8', display: 'flex', flexDirection: 'column', gap: '4px', boxShadow: '2px 2px 8px rgba(0,0,0,0.2)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '8px' }}>
             <span style={{ color: '#5D4037', fontSize: '0.8rem' }}>第{stage}关目标:</span>
@@ -50521,10 +50984,10 @@ const AgilityGamePage = ({ onBack }) => {
         </div>
       </div>
 
-      {/* Bottom Sheet Drawer for Role Management */}
-      {showCharModal && (
+      {/* Bottom Sheet Drawer for Role/Skin Management */}
+      {showSkinModal && (
         <div
-          onClick={() => setShowCharModal(false)}
+          onClick={() => setShowSkinModal(false)}
           style={{
             position: 'absolute',
             inset: 0,
@@ -50561,7 +51024,7 @@ const AgilityGamePage = ({ onBack }) => {
                 </div>
               </div>
               <div
-                onClick={() => setShowCharModal(false)}
+                onClick={() => setShowSkinModal(false)}
                 style={{
                   width: 30,
                   height: 30,
@@ -50694,6 +51157,245 @@ const AgilityGamePage = ({ onBack }) => {
         </div>
       )}
 
+      {/* 🎭 角色选择抽屉 (用于「看Ta操作」) */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5E8D2 100%)',
+              borderRadius: '24px 24px 0 0', padding: '20px 16px max(24px, env(safe-area-inset-bottom)) 16px',
+              borderTop: '3px solid #C49C58', maxHeight: '75%', overflowY: 'auto'
+            }}
+          >
+            <div style={{ width: 36, height: 4, background: '#D7CCC8', borderRadius: 2, margin: '0 auto 10px auto' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#4E342E' }}>
+                  🌾 选择农田代打密探
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#8D6E63', marginTop: 2 }}>
+                  读取自【传讯-角色配置库】，选择后由其敏捷挥锤守卫农田与局内小窗互动
+                </div>
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {availableChars.length === 0 ? (
+              <div style={{ padding: '30px 0', textAlign: 'center', color: '#8D6E63', fontSize: '0.85rem' }}>
+                暂未在【传讯】中配置密探角色，请先前往传讯添加。
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {availableChars.map(char => {
+                  const isCur = selectedChar && String(selectedChar.id) === String(char.id);
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => handleSelectAutoChar(char)}
+                      style={{
+                        background: isCur ? '#FFF3E0' : '#FFFDF9',
+                        borderRadius: 14, padding: '12px 6px',
+                        border: isCur ? '2px solid #D6724B' : '1px solid #E6D7C3',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.06)'
+                      }}
+                    >
+                      <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #D6724B' : '1px solid #DDD', marginBottom: 6 }}>
+                        <img src={char.avatar || DEFAULT_AVATAR} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#D6724B' : '#4E342E', textAlign: 'center' }}>
+                        {char.name}
+                      </div>
+                      {isCur && (
+                        <span style={{ fontSize: '0.65rem', color: '#D6724B', marginTop: 2, fontWeight: 'bold' }}>
+                          ✓ 代打中
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 💬 局内专属悬浮小窗聊天 (IndexedDB 独立存储，对接【设置-API设置】) */}
+      {showInGameChat && (
+        <div
+          onClick={() => setShowInGameChat(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(5px)',
+            zIndex: 550, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5EADB 100%)',
+              borderRadius: '24px 24px 0 0', padding: '16px 14px max(18px, env(safe-area-inset-bottom)) 14px',
+              borderTop: '3px solid #C49C58', height: '82%', maxHeight: 600,
+              display: 'flex', flexDirection: 'column', boxShadow: '0 -10px 30px rgba(0,0,0,0.4)'
+            }}
+          >
+            {/* 小窗头部 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #E6D7C3' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #C49C58' }}>
+                  <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>{selectedChar ? selectedChar.name : "密探"}</span>
+                    <span style={{ fontSize: '0.68rem', background: 'rgba(214,114,75,0.15)', color: '#D6724B', padding: '1px 6px', borderRadius: 8 }}>
+                      {playMode === 'auto' ? '代打中 · 局内复盘' : '观战中 · 局内复盘'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#8D6E63' }}>
+                    🌾 第 {stage} 关 | 得分 {score}/{targetScore} | 累计赏金 +{sessionCoins} 铢
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  onClick={handleClearInGameChat}
+                  style={{ fontSize: '0.72rem', color: '#A08070', background: 'rgba(0,0,0,0.05)', padding: '3px 8px', borderRadius: 10, cursor: 'pointer' }}
+                  title="清空局内对话"
+                >
+                  清空记录
+                </div>
+                <div
+                  onClick={() => setShowInGameChat(false)}
+                  style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  ✕
+                </div>
+              </div>
+            </div>
+
+            {/* 消息列表 */}
+            <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {inGameChatMsgs.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '24px 10px', color: '#9C8577', fontSize: '0.8rem', lineHeight: 1.6 }}>
+                  <span>🍵 暂无对话记录。</span><br />
+                  <span style={{ fontSize: '0.72rem' }}>
+                    {playMode === 'auto'
+                      ? '你可以向Ta询问方才守卫农田的战况，或者给Ta打气吐槽！'
+                      : '你可以与Ta复盘方才守卫农田的身手，探讨战术！'}
+                  </span>
+                </div>
+              )}
+
+              {inGameChatMsgs.map(msg => {
+                const isUser = msg.role === 'user';
+                return (
+                  <div key={msg.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', gap: 8, alignItems: 'flex-start' }}>
+                    {!isUser && (
+                      <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid #C49C58' }}>
+                        <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        maxWidth: '75%',
+                        padding: '9px 13px',
+                        borderRadius: isUser ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
+                        background: isUser ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : '#FFFDF9',
+                        color: isUser ? '#FFF' : '#3E2723',
+                        fontSize: '0.84rem',
+                        lineHeight: 1.45,
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                        border: isUser ? 'none' : '1px solid #E6D7C3',
+                        wordBreak: 'break-word'
+                      }}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {isAiReplying && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid #C49C58' }}>
+                    <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <div style={{ background: '#FFFDF9', border: '1px solid #E6D7C3', padding: '8px 12px', borderRadius: '4px 16px 16px 16px', fontSize: '0.8rem', color: '#8D6E63' }}>
+                    正在构思回复... ✍️
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 快捷话术气泡 */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '4px 0 8px 0', borderTop: '1px dashed #E6D7C3' }}>
+              {(playMode === 'auto' ? [
+                "刚才手速挺快嘛！",
+                "怎么漏了那只大盗贼？",
+                "辛苦啦，歇会儿再打！",
+                "下一关看你破纪录！"
+              ] : [
+                "刚才我敲得如何？",
+                "那只大怪实在太狡猾了！",
+                "差点就通关了，真可惜！",
+                "有什么破关技巧传授吗？"
+              ]).map((quickText, qIdx) => (
+                <div
+                  key={qIdx}
+                  onClick={() => handleSendInGameMessage(quickText)}
+                  style={{
+                    fontSize: '0.72rem', background: '#FFF', color: '#6E5D53', border: '1px solid #E0D4C5',
+                    borderRadius: 12, padding: '3px 8px', whiteSpace: 'nowrap', cursor: 'pointer',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                  }}
+                >
+                  {quickText}
+                </div>
+              ))}
+            </div>
+
+            {/* 底部输入栏 */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingTop: 4 }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSendInGameMessage()}
+                placeholder={`对${selectedChar ? selectedChar.name : "Ta"}说点什么...`}
+                style={{
+                  flex: 1, padding: '9px 12px', background: '#FFF', border: '1.5px solid #C49C58',
+                  borderRadius: 18, fontSize: '0.84rem', outline: 'none', color: '#4E342E'
+                }}
+              />
+              <button
+                onClick={() => handleSendInGameMessage()}
+                disabled={!chatInput.trim() || isAiReplying}
+                style={{
+                  padding: '9px 16px', borderRadius: 18, border: 'none',
+                  background: (!chatInput.trim() || isAiReplying) ? '#CCC' : 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)',
+                  color: '#FFF', fontSize: '0.84rem', fontWeight: 'bold', cursor: (!chatInput.trim() || isAiReplying) ? 'not-allowed' : 'pointer'
+                }}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Result Modal */}
       {gameState === 'result' && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
@@ -50707,24 +51409,51 @@ const AgilityGamePage = ({ onBack }) => {
             </div>
 
             {score >= targetScore && lives > 0 ? (
-              <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '20px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
+              <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '16px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span>💰 本关递增赏金：</span>
-                  <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${stage * 2} 五铢钱</span>
+                  <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+$${stage * 2} 五铢钱</span>
                 </div>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span>🏆 本局累计收益：</span>
-                  <span style={{ color: '#8C4A1E', fontWeight: 'bold' }}>+${sessionCoins + (hasAwardedThisStage ? 0 : stage * 2)} 铢</span>
+                  <span style={{ color: '#8C4A1E', fontWeight: 'bold' }}>+$${sessionCoins + (hasAwardedThisStage ? 0 : stage * 2)} 铢</span>
                 </div>
                 <div style={{ fontSize: '0.74rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '4px', marginTop: '4px' }}>
                   ✨ 递增赏金已实时存入【隐私与安全-我的金库】
                 </div>
               </div>
             ) : (
-              <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '20px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
+              <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '16px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
                 <span>💰 本局已得收益：</span>
-                <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${sessionCoins} 铢</span>（已入金库）
+                <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+$${sessionCoins} 铢</span>（已入金库）
               </div>
+            )}
+
+            {/* 关卡失败或通关后，提供与Ta拉小窗复盘按钮 */}
+            {selectedChar && (
+              <button
+                onClick={() => setShowInGameChat(true)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  marginBottom: '10px',
+                  background: 'linear-gradient(135deg, #FFFDF8 0%, #F5E8D2 100%)',
+                  border: '1.5px solid #D6724B',
+                  borderRadius: 16,
+                  color: '#B85630',
+                  fontSize: '0.88rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 6,
+                  boxShadow: '0 2px 8px rgba(214,114,75,0.15)'
+                }}
+              >
+                <span>💬</span>
+                <span>与【{selectedChar.name}】拉小窗复盘</span>
+              </button>
             )}
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
@@ -50764,6 +51493,85 @@ const AgilityGamePage = ({ onBack }) => {
   );
 };
 
+// 划船训练专属局内小窗独立聊天数据库 (IndexedDB: rowing_game_db / char_chats)
+const RowingGameChatDB = {
+  dbName: 'rowing_game_db',
+  dbVersion: 1,
+  storeName: 'char_chats',
+  _db: null,
+
+  async getDB() {
+    if (this._db) return this._db;
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.dbVersion);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(this.storeName)) {
+          db.createObjectStore(this.storeName, { keyPath: 'charId' });
+        }
+      };
+      request.onsuccess = (e) => {
+        this._db = e.target.result;
+        resolve(this._db);
+      };
+      request.onerror = (e) => reject(e);
+    });
+  },
+
+  async getMessages(charId) {
+    if (!charId) return [];
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction([this.storeName], 'readonly');
+        const store = tx.objectStore(this.storeName);
+        const req = store.get(String(charId));
+        req.onsuccess = () => {
+          resolve(req.result ? req.result.messages || [] : []);
+        };
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      console.error("RowingGameChatDB getMessages error:", e);
+      return [];
+    }
+  },
+
+  async saveMessage(charId, message) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      const currentMsgs = await this.getMessages(charId);
+      const updatedMsgs = [...currentMsgs, message];
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([this.storeName], 'readwrite');
+        const store = tx.objectStore(this.storeName);
+        const req = store.put({ charId: String(charId), messages: updatedMsgs, updatedAt: Date.now() });
+        req.onsuccess = () => resolve(updatedMsgs);
+        req.onerror = (e) => reject(e);
+      });
+    } catch (e) {
+      console.error("RowingGameChatDB saveMessage error:", e);
+    }
+  },
+
+  async clearMessages(charId) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([this.storeName], 'readwrite');
+        const store = tx.objectStore(this.storeName);
+        const req = store.delete(String(charId));
+        req.onsuccess = () => resolve(true);
+        req.onerror = (e) => reject(e);
+      });
+    } catch (e) {
+      console.error("RowingGameChatDB clearMessages error:", e);
+    }
+  }
+};
+
 // 划船训练 (双人踩点竞速 - 关卡递增赏金系统: 5, 10, 15, 20, 25... 铢)
 const RowingGamePage = ({ onBack }) => {
   const { useState, useEffect, useRef } = React;
@@ -50774,6 +51582,21 @@ const RowingGamePage = ({ onBack }) => {
   const [stage, setStage] = useState(1);
   const [collectedCount, setCollectedCount] = useState(0);
   const targetCount = stage * 5 + 5;
+
+  // 模式切换: 'manual' (自己玩) | 'auto' (看Ta操作)
+  const [playMode, setPlayMode] = useState('manual');
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedChar, setSelectedChar] = useState(null);
+  const [showCharModal, setShowCharModal] = useState(false);
+  const [showSkinModal, setShowSkinModal] = useState(false);
+
+  // 局内小窗聊天系统
+  const [showInGameChat, setShowInGameChat] = useState(false);
+  const [inGameChatMsgs, setInGameChatMsgs] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiReplying, setIsAiReplying] = useState(false);
+  const [lastBattleContext, setLastBattleContext] = useState(null);
+  const chatScrollRef = useRef(null);
 
   // 金钱累计系统 (每关递增: 第1关5铢，第2关10铢，第3关15铢，第N关 5*N 铢)
   const [sessionCoins, setSessionCoins] = useState(0);
@@ -50811,8 +51634,80 @@ const RowingGamePage = ({ onBack }) => {
     obstacles: [],
     particles: [],
     bubbles: [],
-    lastTime: 0
+    lastTime: 0,
+    aiHasPressedThisPhase: false,
+    lastAiSteerDir: 0
   });
+
+  // 读取传讯角色列表及持久化的代打角色 (支持 IndexedDB 异步加载与 localStorage 双重回退)
+  useEffect(() => {
+    const loadCharacters = async () => {
+      let chars = [];
+      try {
+        if (window.chatCharacterStore && typeof window.chatCharacterStore.getAll === 'function') {
+          chars = await window.chatCharacterStore.getAll();
+        }
+        if (!chars || chars.length === 0) {
+          const stored = localStorage.getItem('t8_chat_list');
+          if (stored) chars = JSON.parse(stored);
+        }
+        const validChars = (chars || []).filter(c => c && !c.isGroup && !String(c.id).startsWith('group') && !String(c.id).startsWith('style_') && c.type !== 'decor');
+        setAvailableChars(validChars);
+
+        const savedCharId = localStorage.getItem('rowing_game_auto_char_id');
+        if (savedCharId) {
+          const matched = validChars.find(c => String(c.id) === String(savedCharId));
+          if (matched) {
+            setSelectedChar(matched);
+            return;
+          }
+        }
+        if (validChars.length > 0) {
+          setSelectedChar(validChars[0]);
+        }
+      } catch (e) {
+        console.error("加载传讯角色失败:", e);
+      }
+    };
+    loadCharacters();
+  }, []);
+
+  // 选定代打角色时加载对应局内小窗对话
+  useEffect(() => {
+    if (selectedChar) {
+      RowingGameChatDB.getMessages(selectedChar.id).then(msgs => {
+        setInGameChatMsgs(msgs || []);
+      });
+      // 联动船上角色2立绘
+      if (selectedChar.avatar) {
+        setChar2Img(selectedChar.avatar);
+        const image = new Image();
+        image.src = selectedChar.avatar;
+        imgsRef.current['avatar_p2'] = image;
+      }
+    }
+  }, [selectedChar]);
+
+  useEffect(() => {
+    if (chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [inGameChatMsgs, showInGameChat]);
+
+  const handleSelectAutoChar = (char) => {
+    setSelectedChar(char);
+    localStorage.setItem('rowing_game_auto_char_id', String(char.id));
+    setShowCharModal(false);
+    RowingGameChatDB.getMessages(char.id).then(msgs => {
+      setInGameChatMsgs(msgs || []);
+    });
+    if (char.avatar) {
+      setChar2Img(char.avatar);
+      const image = new Image();
+      image.src = char.avatar;
+      imgsRef.current['avatar_p2'] = image;
+    }
+  };
 
   useEffect(() => {
     if (window.settingsStore) {
@@ -50825,7 +51720,7 @@ const RowingGamePage = ({ onBack }) => {
         }
       });
       window.settingsStore.getRowingGameChar2Image().then(img => {
-        if (img) {
+        if (img && !selectedChar) {
           setChar2Img(img);
           const image = new Image();
           image.src = img;
@@ -50889,18 +51784,64 @@ const RowingGamePage = ({ onBack }) => {
     input.click();
   };
 
-  useEffect(() => {
-    let reqId;
-    const ctx = canvasRef.current?.getContext('2d');
-    if (!ctx) return;
+  const addBubble = (text, isP1) => {
+    stateRef.current.bubbles.push({
+      text, isP1, life: 2.0
+    });
+  };
 
-    let timer = setInterval(() => {
-      if (gameState === 'playing') {
-        setTimeLeft(t => t + 1);
+  const handleHit = () => {
+    const state = stateRef.current;
+    state.speed = Math.max(50, state.speed - 150);
+    state.combo = 0;
+    state.isSprint = false;
+    state.sprintTimer = 0;
+    addBubble(playMode === 'auto' ? '哎呀，蹭到浮木了！' : '撞到了。没事吧。', Math.random() > 0.5);
+  };
+
+  const handleLeftPress = () => {
+    const state = stateRef.current;
+    if (state.rhythmPhase === 2) {
+      // Good / Perfect hit
+      state.combo++;
+      state.speed = Math.min(800, state.speed + 120);
+      addBubble(playMode === 'auto' ? (selectedChar ? selectedChar.name + ': 顺流而下！' : '好耶！') : '好耶！', true);
+      if (state.combo >= 3) {
+        state.isSprint = true;
+        state.sprintTimer = 3.0;
+        addBubble(playMode === 'auto' ? '水上极速冲刺！' : '冲刺！', true);
       }
-    }, 1000);
+    } else {
+      // Bad hit
+      state.combo = 0;
+      state.speed = Math.max(50, state.speed - 30);
+      addBubble('别急，抓稳！', false);
+    }
+    state.p2PaddleTimer = 0.3; // Animate left paddle
+    // Turn left
+    state.boatAngle = Math.max(-Math.PI / 6, state.boatAngle - 0.15);
+  };
 
-    stateRef.current.lastTime = performance.now();
+  const handleRightPress = () => {
+    const state = stateRef.current;
+    if (state.rhythmPhase === 2) {
+      state.combo++;
+      state.speed = Math.min(800, state.speed + 120);
+      addBubble(playMode === 'auto' ? (selectedChar ? selectedChar.name + ': 采这朵！' : '配合，很好。') : '配合，很好。', false);
+      if (state.combo >= 3) {
+        state.isSprint = true;
+        state.sprintTimer = 3.0;
+        addBubble(playMode === 'auto' ? '看我破浪疾行！' : '准备飞。', false);
+      }
+    } else {
+      state.combo = 0;
+      state.speed = Math.max(50, state.speed - 30);
+      addBubble('抓稳，没事。', true);
+    }
+    state.p1PaddleTimer = 0.3; // Animate right paddle
+    // Turn right
+    state.boatAngle = Math.min(Math.PI / 6, state.boatAngle + 0.15);
+  };
 
   // 划船通关递增赏金结算 (第1关5铢, 第2关10铢, 第3关15铢...)
   const awardRowingStageWin = (curStage) => {
@@ -50924,18 +51865,33 @@ const RowingGamePage = ({ onBack }) => {
     }
   };
 
-  const loop = (time) => {
-    reqId = requestAnimationFrame(loop);
-    if (gameState !== 'playing') {
-      if (gameState === 'result' && collectedCount >= targetCount) {
-        awardRowingStageWin(stage);
+  useEffect(() => {
+    let reqId;
+    const ctx = canvasRef.current?.getContext('2d');
+    if (!ctx) return;
+
+    let timer = setInterval(() => {
+      if (gameState === 'playing' && !showInGameChat && !showCharModal && !showSkinModal) {
+        setTimeLeft(t => t + 1);
       }
-      render(ctx);
-      return;
-    }
+    }, 1000);
+
+    stateRef.current.lastTime = performance.now();
+
+    const loop = (time) => {
+      reqId = requestAnimationFrame(loop);
+      if (gameState !== 'playing') {
+        if (gameState === 'result' && collectedCount >= targetCount) {
+          awardRowingStageWin(stage);
+        }
+        render(ctx);
+        return;
+      }
       const dt = Math.min((time - stateRef.current.lastTime) / 1000, 0.05);
       stateRef.current.lastTime = time;
-      update(dt);
+      if (!showInGameChat && !showCharModal && !showSkinModal) {
+        update(dt);
+      }
       render(ctx);
     };
     reqId = requestAnimationFrame(loop);
@@ -50944,71 +51900,32 @@ const RowingGamePage = ({ onBack }) => {
       cancelAnimationFrame(reqId);
       clearInterval(timer);
     };
-  }, [gameState]);
+  }, [gameState, playMode, collectedCount, targetCount, stage, hasAwardedThisStage, showInGameChat, showCharModal, showSkinModal]);
+
+  // 监听输赢并记录战况上下文
+  useEffect(() => {
+    if (gameState === 'result') {
+      const isWon = collectedCount >= targetCount;
+      const reason = isWon
+        ? `采莲达标（采集: ${collectedCount}/${targetCount}朵，耗时: ${timeLeft}秒）`
+        : `采集不足未达标（仅采集: ${collectedCount}/${targetCount}朵，耗时: ${timeLeft}秒）`;
+      setLastBattleContext({
+        stage,
+        collectedCount,
+        targetCount,
+        timeLeft,
+        distance,
+        sessionCoins,
+        isWon,
+        reason
+      });
+    }
+  }, [gameState, collectedCount, targetCount, timeLeft, distance, sessionCoins, stage]);
 
   const formatTime = (seconds) => {
     const m = Math.floor(seconds / 60).toString().padStart(2, '0');
     const s = (seconds % 60).toString().padStart(2, '0');
     return `${m}:${s}`;
-  };
-
-  const addBubble = (text, isP1) => {
-    stateRef.current.bubbles.push({
-      text, isP1, life: 2.0
-    });
-  };
-
-  const handleHit = () => {
-    const state = stateRef.current;
-    state.speed = Math.max(50, state.speed - 150);
-    state.combo = 0;
-    state.isSprint = false;
-    state.sprintTimer = 0;
-    addBubble('撞到了。没事吧。', Math.random() > 0.5);
-  };
-
-  const handleLeftPress = () => {
-    const state = stateRef.current;
-    if (state.rhythmPhase === 2) {
-      // Good / Perfect hit
-      state.combo++;
-      state.speed = Math.min(800, state.speed + 120);
-      addBubble('好耶！', true);
-      if (state.combo >= 3) {
-        state.isSprint = true;
-        state.sprintTimer = 3.0;
-        addBubble('冲刺！', true);
-      }
-    } else {
-      // Bad hit
-      state.combo = 0;
-      state.speed = Math.max(50, state.speed - 30);
-      addBubble('别急，有我。', false);
-    }
-    state.p2PaddleTimer = 0.3; // Animate left paddle
-    // Turn left
-    state.boatAngle = Math.max(-Math.PI / 6, state.boatAngle - 0.15);
-  };
-
-  const handleRightPress = () => {
-    const state = stateRef.current;
-    if (state.rhythmPhase === 2) {
-      state.combo++;
-      state.speed = Math.min(800, state.speed + 120);
-      addBubble('配合，很好。', false);
-      if (state.combo >= 3) {
-        state.isSprint = true;
-        state.sprintTimer = 3.0;
-        addBubble('准备飞。', false);
-      }
-    } else {
-      state.combo = 0;
-      state.speed = Math.max(50, state.speed - 30);
-      addBubble('抓稳，没事。', true);
-    }
-    state.p1PaddleTimer = 0.3; // Animate right paddle
-    // Turn right
-    state.boatAngle = Math.min(Math.PI / 6, state.boatAngle + 0.15);
   };
 
   const update = (dt) => {
@@ -51044,8 +51961,65 @@ const RowingGamePage = ({ onBack }) => {
     if (state.rhythmTimer > 0.8) {
       state.rhythmTimer = 0;
       state.rhythmPhase = (state.rhythmPhase + 1) % 3;
+      state.aiHasPressedThisPhase = false;
       if (state.rhythmPhase === 2) {
         state.p2PaddleTimer = 0.3;
+      }
+    }
+
+    // 🤖 「看Ta操作」拟真自动接管 (Auto-Pilot)
+    if (playMode === 'auto' && gameState === 'playing' && !showInGameChat && !showCharModal && !showSkinModal) {
+      if (state.rhythmPhase === 2 && !state.aiHasPressedThisPhase) {
+        state.aiHasPressedThisPhase = true;
+
+        // 拟真扫描前方水域 350px 范围内的荷花与浮木
+        const boatCenter = 180 + state.boatX;
+        let targetDir = 0; // -1 left, 1 right, 0 neutral
+        let closestDist = 999;
+        let chosenItem = null;
+
+        for (const obs of state.obstacles) {
+          if (obs.y < state.boatY && obs.y > state.boatY - 350) {
+            const dy = state.boatY - obs.y;
+            if (dy < closestDist) {
+              closestDist = dy;
+              chosenItem = obs;
+            }
+          }
+        }
+
+        if (chosenItem) {
+          const diffX = chosenItem.x - boatCenter;
+          if (chosenItem.type !== 'log') {
+            // 荷花/荷叶: 主动靠近采集
+            if (diffX < -15) targetDir = -1;
+            else if (diffX > 15) targetDir = 1;
+            else targetDir = (Math.random() > 0.5 ? 1 : -1);
+          } else {
+            // 浮木: 紧急避让
+            if (Math.abs(diffX) < 65) {
+              targetDir = diffX <= 0 ? 1 : -1;
+            } else {
+              targetDir = (Math.random() > 0.5 ? 1 : -1);
+            }
+          }
+        } else {
+          // 无紧急障碍: 朝水流中央平稳划行
+          if (state.boatX > 40) targetDir = -1;
+          else if (state.boatX < -40) targetDir = 1;
+          else targetDir = (Math.random() > 0.5 ? 1 : -1);
+        }
+
+        // 约 8% 的拟真微误判
+        if (Math.random() < 0.08) {
+          targetDir = -targetDir;
+        }
+
+        if (targetDir === -1) {
+          handleLeftPress();
+        } else {
+          handleRightPress();
+        }
       }
     }
 
@@ -51320,62 +52294,556 @@ const RowingGamePage = ({ onBack }) => {
     }
   };
 
+  // 局内小窗发送消息与 AI 回复 (对接【设置-API设置】)
+  const handleSendInGameMessage = async (customText) => {
+    const textToSend = typeof customText === 'string' ? customText : chatInput;
+    if (!textToSend || !textToSend.trim() || !selectedChar || isAiReplying) return;
+
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      role: 'user',
+      content: textToSend.trim(),
+      timestamp: Date.now()
+    };
+
+    const newMsgs = [...inGameChatMsgs, userMsg];
+    setInGameChatMsgs(newMsgs);
+    setChatInput('');
+    setIsAiReplying(true);
+
+    try {
+      await RowingGameChatDB.saveMessage(selectedChar.id, userMsg);
+
+      let userProfile = { name: "主控", personality: "沉稳", background: "隐秘阁主" };
+      try {
+        const storedPersonas = localStorage.getItem('user_personas');
+        const activeId = localStorage.getItem('active_persona_id');
+        if (storedPersonas) {
+          const personas = JSON.parse(storedPersonas);
+          const active = (activeId ? personas.find(p => p.id == activeId) : null) || personas.find(p => p.isActive) || personas[0];
+          if (active) userProfile = active;
+        }
+      } catch (e) {}
+
+      let worldContext = "";
+      if (window.getWorldBookContext) {
+        worldContext = window.getWorldBookContext(textToSend) || "";
+      }
+
+      const charProfile = selectedChar.profile || {};
+      const charName = selectedChar.name || "密探";
+      const isAuto = playMode === 'auto';
+
+      const gameBattleDetail = lastBattleContext
+        ? (isAuto
+            ? (lastBattleContext.isWon
+                ? `你刚才在舟上身手矫健破浪疾行，采莲达标（采集: ${lastBattleContext.collectedCount}/${lastBattleContext.targetCount}朵，耗时${lastBattleContext.timeLeft}秒），突破第${lastBattleContext.stage}关！`
+                : `你在第${lastBattleContext.stage}关未能达标（${lastBattleContext.reason}）`)
+            : (lastBattleContext.isWon
+                ? `主控与你配合默契顺流而下，采莲达标（采集: ${lastBattleContext.collectedCount}/${lastBattleContext.targetCount}朵，耗时${lastBattleContext.timeLeft}秒），突破第${lastBattleContext.stage}关！`
+                : `主控与你在第${lastBattleContext.stage}关未能达标（${lastBattleContext.reason}）`))
+        : (isAuto
+            ? `你正在舟上全神贯注掌舵巡视水面荷花`
+            : `主控与你正在舟上全神贯注划行`);
+
+      const systemPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${charName}】。
+${worldContext ? '【世界观与背景知识】\n' + worldContext : ''}
+【用户/主控身份】
+姓名: ${userProfile.name || '主控'}
+性格特征: ${userProfile.personality || '沉稳'}
+身份背景: ${userProfile.background || '隐秘阁主'}
+
+【代打角色设定】
+姓名: ${charName}
+性别: ${charProfile.gender || '未知'}
+性格特征: ${charProfile.personality || '机敏沉稳'}
+说话风格: ${charProfile.speakingStyle || charProfile.style || '古风自然'}
+人设背景: ${charProfile.background || '绣衣楼密探'}
+MBTI: ${charProfile.mbti || '未知'}
+
+【局内划船训练战况】
+模式: ${isAuto ? '看Ta操作（由你亲自在舟上掌舵挥桨，主控在场边看你操作）' : '自己玩（主控亲自在舟上划船与你合作）'}
+当前关卡: 第 ${stage} 关 (采集目标: ${targetCount} 朵 🌸)
+当前战绩: 耗时 ${timeLeft} 秒, 采集荷花 ${collectedCount}/${targetCount} 朵, 剩余距离 ${Math.floor(distance)} 米, 累计收益 +${sessionCoins} 铢
+最新战况: ${gameBattleDetail}
+
+【交互情境与视角（极其重要）】
+- ${isAuto ? '当前是【看Ta操作】模式！刚才【是你【' + charName + '】本人】亲自在轻舟上挥桨乘风驭水！主控是在岸边看你的操作！无论是破浪冲刺还是手忙脚乱漏采了荷花，都是【你自己的亲身经历】！' : '当前是【自己玩】模式，你与主控同乘一舟。'}
+- 面对主控在小窗里的打趣、询问或复盘，请以第一人称（“我”、“本公子”等）并严格贴合【${charName}】的性格与说话风格进行生动回复。
+- 字数控制在 25-70 字，言简意赅，生动鲜活，直接输出台词，不要包含旁白括号外的元解释。`;
+
+      const historyForLLM = newMsgs.slice(-8).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
+
+      const apiMessages = [
+        { role: "system", content: systemPrompt },
+        ...historyForLLM
+      ];
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          apiMessages,
+          null,
+          async (reply) => {
+            const cleanReply = reply.trim();
+            const aiMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: cleanReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, aiMsg]);
+            setIsAiReplying(false);
+            await RowingGameChatDB.saveMessage(selectedChar.id, aiMsg);
+          },
+          (err) => {
+            console.error("AI回复失败:", err);
+            const fallbackReply = isAuto
+              ? "（放下木桨顺了口气）方才水流湍急，只顾着往前冲刺，倒把几朵荷花给漏了……下一趟定采它个满船香！"
+              : "（递过帕子）刚才两岸风急，这轻舟划得飞快，下一回咱们放缓些节拍定能采齐！";
+            const fallbackMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: fallbackReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, fallbackMsg]);
+            setIsAiReplying(false);
+          }
+        );
+      } else {
+        setIsAiReplying(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsAiReplying(false);
+    }
+  };
+
+  const handleClearInGameChat = async () => {
+    if (!selectedChar) return;
+    if (confirm("确定要清空与该角色的划船局内对话记录吗？（不影响传讯页面正常聊天）")) {
+      await RowingGameChatDB.clearMessages(selectedChar.id);
+      setInGameChatMsgs([]);
+    }
+  };
+
+  const displayAvatar = selectedChar && selectedChar.avatar ? selectedChar.avatar : "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOYRqgEC1Mz_OffMtgithgxQBrCvDXwAC1R4AArHjCFTKnROMk9dJ3j0E.png";
+
   return (
     <div style={{ position: 'absolute', inset: 0, zIndex: 300, background: '#B2DFDB', opacity: visible ? 1 : 0, transition: 'opacity 0.4s', fontFamily: '"GuanKiapTsingKhai", serif', overflow: 'hidden' }}>
       <canvas ref={canvasRef} width={360} height={640} style={{ width: '100%', height: '100%', touchAction: 'none' }} />
 
-      {/* Top Bar */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: 15, display: 'flex', alignItems: 'center', gap: '8px', zIndex: 10 }}>
-        <div onClick={onBack} style={{ width: 38, height: 38, background: 'rgba(0,0,0,0.5)', borderRadius: '50%', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.1rem', cursor: 'pointer', border: '1px solid rgba(255,255,255,0.2)' }}>←</div>
-        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.9) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.78rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+      {/* 顶部第一行：返回 + 模式切换胶囊 + 金库收益 */}
+      <div style={{ position: 'absolute', top: 'max(12px, env(safe-area-inset-top))', left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 100 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div onClick={onBack} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '5px 12px', borderRadius: 20, cursor: 'pointer', fontSize: '0.85rem', border: '1px solid rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', gap: '3px' }}>
+            <span>←</span>
+            <span>退出</span>
+          </div>
+
+          {/* 模式切换胶囊 */}
+          <div style={{ background: 'rgba(255,255,255,0.88)', padding: '2px', borderRadius: 20, display: 'flex', border: '1px solid rgba(0,172,193,0.5)', boxShadow: '0 2px 6px rgba(0,0,0,0.1)' }}>
+            <div
+              onClick={(e) => { e.stopPropagation(); setPlayMode('manual'); }}
+              style={{
+                padding: '3px 9px', borderRadius: 16, fontSize: '0.74rem', fontWeight: 'bold', cursor: 'pointer',
+                background: playMode === 'manual' ? 'linear-gradient(135deg, #00838F 0%, #006064 100%)' : 'transparent',
+                color: playMode === 'manual' ? '#fff' : '#006064',
+                transition: 'all 0.2s'
+              }}
+            >
+              自己玩
+            </div>
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setPlayMode('auto');
+                if (!selectedChar && availableChars.length > 0) {
+                  setShowCharModal(true);
+                }
+              }}
+              style={{
+                padding: '3px 9px', borderRadius: 16, fontSize: '0.74rem', fontWeight: 'bold', cursor: 'pointer',
+                background: playMode === 'auto' ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : 'transparent',
+                color: playMode === 'auto' ? '#fff' : '#006064',
+                transition: 'all 0.2s'
+              }}
+            >
+              看Ta操作
+            </div>
+          </div>
+        </div>
+
+        {/* 右侧：金库收益 */}
+        <div style={{ background: 'linear-gradient(135deg, rgba(214, 114, 75, 0.92) 0%, rgba(184, 86, 48, 0.95) 100%)', color: '#FFF', padding: '5px 12px', borderRadius: 20, fontSize: '0.8rem', fontWeight: 'bold', border: '1px solid rgba(255,255,255,0.3)', boxShadow: '0 2px 8px rgba(214,114,75,0.4)', display: 'flex', alignItems: 'center', gap: '4px' }}>
           <span>💰 金库收益:</span>
-          <span style={{ color: '#FFEB3B', fontSize: '0.88rem' }}>+{sessionCoins} 铢</span>
+          <span style={{ color: '#FFEB3B', fontSize: '0.92rem' }}>+{sessionCoins} 铢</span>
         </div>
       </div>
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', left: '50%', transform: 'translateX(-50%)', zIndex: 10, background: 'rgba(255,255,255,0.8)', padding: '8px 16px', borderRadius: '10px', boxShadow: '0 4px 6px rgba(0,0,0,0.1)', border: '2px solid #D7CCC8', textAlign: 'center' }}>
-        <div style={{ fontSize: '1.3rem', color: '#5D4037', fontWeight: 'bold' }}>{formatTime(timeLeft)}</div>
-        <div style={{ fontSize: '0.75rem', color: '#795548', marginTop: 2 }}>距离终点还有 {Math.floor(distance)} 米</div>
-        <div style={{ width: '100%', height: 4, background: '#CCC', marginTop: 4, borderRadius: 2 }}>
-          <div style={{ width: `${100 - (distance / (stage * 1000)) * 100}%`, height: '100%', background: '#4CAF50', borderRadius: 2 }}></div>
+
+      {/* 顶部第二行：代打角色/更换角色 + 局内小窗入口 */}
+      <div style={{ position: 'absolute', top: 'calc(max(12px, env(safe-area-inset-top)) + 42px)', left: 12, right: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center', zIndex: 90 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          {playMode === 'auto' ? (
+            <div
+              onClick={() => setShowCharModal(true)}
+              style={{
+                background: 'rgba(255, 255, 255, 0.92)',
+                padding: '3px 10px 3px 4px',
+                borderRadius: 20,
+                border: '1.5px solid #00ACC1',
+                boxShadow: '0 2px 8px rgba(0,172,193,0.25)',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 6,
+                cursor: 'pointer'
+              }}
+            >
+              <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', border: '1.5px solid #00ACC1' }}>
+                <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              </div>
+              <span style={{ fontSize: '0.76rem', fontWeight: 'bold', color: '#00838F' }}>
+                {selectedChar ? selectedChar.name : "选择密探"} ▾
+              </span>
+            </div>
+          ) : (
+            <div style={{ display: 'flex', gap: 4 }}>
+              <button
+                onClick={handleUploadChar1}
+                style={{
+                  height: 30, padding: '0 8px', background: 'rgba(255, 255, 255, 0.88)',
+                  border: '1px solid #00ACC1', borderRadius: 15, color: '#006064', fontSize: '0.72rem',
+                  fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+              >
+                更换角色1
+              </button>
+              <button
+                onClick={handleUploadChar2}
+                style={{
+                  height: 30, padding: '0 8px', background: 'rgba(255, 255, 255, 0.88)',
+                  border: '1px solid #00ACC1', borderRadius: 15, color: '#006064', fontSize: '0.72rem',
+                  fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+                }}
+              >
+                更换角色2
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* 局内小窗悬浮入口 (始终常驻可用) */}
+        <div
+          onClick={() => {
+            if (!selectedChar && availableChars.length > 0) {
+              setSelectedChar(availableChars[0]);
+            }
+            setShowInGameChat(true);
+          }}
+          style={{
+            background: 'linear-gradient(135deg, rgba(255,255,255,0.95) 0%, rgba(224,247,250,0.95) 100%)',
+            border: '1.5px solid #00ACC1',
+            borderRadius: 20,
+            padding: '4px 10px 4px 6px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 5,
+            cursor: 'pointer',
+            boxShadow: '0 3px 10px rgba(0,0,0,0.15)',
+            position: 'relative'
+          }}
+        >
+          <div style={{ width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', border: '1.5px solid #00ACC1' }}>
+            <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+          </div>
+          <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#006064' }}>局内小窗</span>
+          {inGameChatMsgs.length > 0 && (
+            <span style={{ width: 7, height: 7, background: '#D84315', borderRadius: '50%' }} />
+          )}
+        </div>
+      </div>
+
+      {/* Top Center Progress & Target */}
+      <div style={{ position: 'absolute', top: 'calc(max(15px, env(safe-area-inset-top)) + 78px)', left: '50%', transform: 'translateX(-50%)', zIndex: 10, background: 'rgba(255,255,255,0.85)', padding: '8px 16px', borderRadius: '14px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', border: '2px solid #B2DFDB', textAlign: 'center', minWidth: 200 }}>
+        <div style={{ fontSize: '1.25rem', color: '#006064', fontWeight: 'bold' }}>{formatTime(timeLeft)}</div>
+        <div style={{ fontSize: '0.75rem', color: '#00838F', marginTop: 2 }}>距离终点还有 {Math.floor(distance)} 米</div>
+        <div style={{ width: '100%', height: 4, background: '#E0F2F1', marginTop: 4, borderRadius: 2 }}>
+          <div style={{ width: `${Math.max(0, Math.min(100, 100 - (distance / (stage * 1000)) * 100))}%`, height: '100%', background: '#00ACC1', borderRadius: 2 }}></div>
         </div>
         <div style={{ fontSize: '0.85rem', color: '#D84315', marginTop: 4, fontWeight: 'bold' }}>
           采集目标: {collectedCount} / {targetCount} 🌸
         </div>
       </div>
 
-      {/* Top Right Actions */}
-      <div style={{ position: 'absolute', top: 'max(15px, env(safe-area-inset-top))', right: 15, display: 'flex', flexDirection: 'column', gap: '6px', zIndex: 20 }}>
-        <div onClick={(e) => { e.stopPropagation(); handleUploadChar1(); }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '5px 10px', borderRadius: 16, cursor: 'pointer', fontSize: '0.75rem', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-          更换角色1
-        </div>
-        <div onClick={(e) => { e.stopPropagation(); handleUploadChar2(); }} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', padding: '5px 10px', borderRadius: 16, cursor: 'pointer', fontSize: '0.75rem', border: '1px solid rgba(255,255,255,0.2)', backdropFilter: 'blur(4px)', textAlign: 'center', whiteSpace: 'nowrap' }}>
-          更换角色2
-        </div>
-      </div>
-
       {/* Controls */}
-      <div style={{ position: 'absolute', bottom: 60, left: 0, right: 0, height: 300, display: 'flex', justifyContent: 'space-between', zIndex: 10, pointerEvents: 'none' }}>
-        <div
-          style={{ width: '40%', height: '100%', background: 'linear-gradient(to right, rgba(255,255,255,0.3), transparent)', borderRadius: '0 50% 50% 0', display: 'flex', alignItems: 'center', paddingLeft: 20, pointerEvents: 'auto', cursor: 'pointer' }}
-          onPointerDown={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, rgba(255,255,255,0.6), transparent)'; handleLeftPress(); }}
-          onPointerUp={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, rgba(255,255,255,0.3), transparent)'; }}
-          onPointerCancel={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, rgba(255,255,255,0.3), transparent)'; }}
-        >
-          <span style={{ fontSize: '2rem', color: '#FFF', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>左</span>
+      {playMode === 'manual' && (
+        <div style={{ position: 'absolute', bottom: 60, left: 0, right: 0, height: 300, display: 'flex', justifyContent: 'space-between', zIndex: 10, pointerEvents: 'none' }}>
+          <div
+            style={{ width: '40%', height: '100%', background: 'linear-gradient(to right, rgba(255,255,255,0.3), transparent)', borderRadius: '0 50% 50% 0', display: 'flex', alignItems: 'center', paddingLeft: 20, pointerEvents: 'auto', cursor: 'pointer' }}
+            onPointerDown={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, rgba(255,255,255,0.6), transparent)'; handleLeftPress(); }}
+            onPointerUp={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, rgba(255,255,255,0.3), transparent)'; }}
+            onPointerCancel={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, rgba(255,255,255,0.3), transparent)'; }}
+          >
+            <span style={{ fontSize: '2rem', color: '#FFF', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>左</span>
+          </div>
+          <div
+            style={{ width: '40%', height: '100%', background: 'linear-gradient(to left, rgba(255,255,255,0.3), transparent)', borderRadius: '50% 0 0 50%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 20, pointerEvents: 'auto', cursor: 'pointer' }}
+            onPointerDown={(e) => { e.currentTarget.style.background = 'linear-gradient(to left, rgba(255,255,255,0.6), transparent)'; handleRightPress(); }}
+            onPointerUp={(e) => { e.currentTarget.style.background = 'linear-gradient(to left, rgba(255,255,255,0.3), transparent)'; }}
+            onPointerCancel={(e) => { e.currentTarget.style.background = 'linear-gradient(to right, rgba(255,255,255,0.3), transparent)'; }}
+          >
+            <span style={{ fontSize: '2rem', color: '#FFF', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>右</span>
+          </div>
         </div>
-        <div
-          style={{ width: '40%', height: '100%', background: 'linear-gradient(to left, rgba(255,255,255,0.3), transparent)', borderRadius: '50% 0 0 50%', display: 'flex', alignItems: 'center', justifyContent: 'flex-end', paddingRight: 20, pointerEvents: 'auto', cursor: 'pointer' }}
-          onPointerDown={(e) => { e.currentTarget.style.background = 'linear-gradient(to left, rgba(255,255,255,0.6), transparent)'; handleRightPress(); }}
-          onPointerUp={(e) => { e.currentTarget.style.background = 'linear-gradient(to left, rgba(255,255,255,0.3), transparent)'; }}
-          onPointerCancel={(e) => { e.currentTarget.style.background = 'linear-gradient(to left, rgba(255,255,255,0.3), transparent)'; }}
-        >
-          <span style={{ fontSize: '2rem', color: '#FFF', fontWeight: 'bold', textShadow: '0 2px 4px rgba(0,0,0,0.3)' }}>右</span>
-        </div>
+      )}
+
+      <div style={{ position: 'absolute', bottom: 20, width: '100%', textAlign: 'center', color: '#004D40', fontSize: '0.86rem', zIndex: 10, textShadow: '0 1px 2px rgba(255,255,255,0.8)' }}>
+        {playMode === 'auto'
+          ? (selectedChar ? `【${selectedChar.name}】正在驭舟踩点采莲，主控观战中` : '看Ta操作中，系统自动接管')
+          : '注意密探的划桨方向与节奏，相互合作划船'}
       </div>
 
-      <div style={{ position: 'absolute', bottom: 20, width: '100%', textAlign: 'center', color: '#5D4037', fontSize: '0.9rem', zIndex: 10 }}>
-        注意密探的划桨方向与节奏，相互合作划船
-      </div>
+      {/* 🎭 角色选择抽屉 (用于「看Ta操作」) */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #E0F7FA 100%)',
+              borderRadius: '24px 24px 0 0', padding: '20px 16px max(24px, env(safe-area-inset-bottom)) 16px',
+              borderTop: '3px solid #00ACC1', maxHeight: '75%', overflowY: 'auto'
+            }}
+          >
+            <div style={{ width: 36, height: 4, background: '#B2DFDB', borderRadius: 2, margin: '0 auto 10px auto' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#006064' }}>
+                  🛶 选择划船代打密探
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#00838F', marginTop: 2 }}>
+                  读取自【传讯-角色配置库】，选择后由其在舟上掌舵挥桨与局内小窗互动
+                </div>
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(0, 96, 100, 0.1)', color: '#006064', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {availableChars.length === 0 ? (
+              <div style={{ padding: '30px 0', textAlign: 'center', color: '#00838F', fontSize: '0.85rem' }}>
+                暂未在【传讯】中配置密探角色，请先前往传讯添加。
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {availableChars.map(char => {
+                  const isCur = selectedChar && String(selectedChar.id) === String(char.id);
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => handleSelectAutoChar(char)}
+                      style={{
+                        background: isCur ? '#E0F2F1' : '#FFFDF9',
+                        borderRadius: 14, padding: '12px 6px',
+                        border: isCur ? '2px solid #00ACC1' : '1px solid #B2DFDB',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center',
+                        cursor: 'pointer', boxShadow: '0 2px 6px rgba(0,0,0,0.06)'
+                      }}
+                    >
+                      <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #00ACC1' : '1px solid #DDD', marginBottom: 6 }}>
+                        <img src={char.avatar || "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOYRqgEC1Mz_OffMtgithgxQBrCvDXwAC1R4AArHjCFTKnROMk9dJ3j0E.png"} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#006064' : '#004D40', textAlign: 'center' }}>
+                        {char.name}
+                      </div>
+                      {isCur && (
+                        <span style={{ fontSize: '0.65rem', color: '#00ACC1', marginTop: 2, fontWeight: 'bold' }}>
+                          ✓ 掌舵中
+                        </span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 💬 局内专属悬浮小窗聊天 (IndexedDB 独立存储，对接【设置-API设置】) */}
+      {showInGameChat && (
+        <div
+          onClick={() => setShowInGameChat(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.65)', backdropFilter: 'blur(5px)',
+            zIndex: 550, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #E0F7FA 100%)',
+              borderRadius: '24px 24px 0 0', padding: '16px 14px max(18px, env(safe-area-inset-bottom)) 14px',
+              borderTop: '3px solid #00ACC1', height: '82%', maxHeight: 600,
+              display: 'flex', flexDirection: 'column', boxShadow: '0 -10px 30px rgba(0,0,0,0.4)'
+            }}
+          >
+            {/* 小窗头部 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #B2DFDB' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #00ACC1' }}>
+                  <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#004D40', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>{selectedChar ? selectedChar.name : "密探"}</span>
+                    <span style={{ fontSize: '0.68rem', background: 'rgba(0,172,193,0.15)', color: '#00838F', padding: '1px 6px', borderRadius: 8 }}>
+                      {playMode === 'auto' ? '代打中 · 局内复盘' : '同舟中 · 局内复盘'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#006064' }}>
+                    🛶 第 {stage} 关 | 采莲 {collectedCount}/{targetCount} 🌸 | 累计收益 +{sessionCoins} 铢
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  onClick={handleClearInGameChat}
+                  style={{ fontSize: '0.72rem', color: '#006064', background: 'rgba(0,0,0,0.05)', padding: '3px 8px', borderRadius: 10, cursor: 'pointer' }}
+                  title="清空局内对话"
+                >
+                  清空记录
+                </div>
+                <div
+                  onClick={() => setShowInGameChat(false)}
+                  style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(0, 96, 100, 0.1)', color: '#006064', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  ✕
+                </div>
+              </div>
+            </div>
+
+            {/* 消息列表 */}
+            <div ref={chatScrollRef} style={{ flex: 1, overflowY: 'auto', padding: '12px 0', display: 'flex', flexDirection: 'column', gap: 10 }}>
+              {inGameChatMsgs.length === 0 && (
+                <div style={{ textAlign: 'center', padding: '24px 10px', color: '#006064', fontSize: '0.8rem', lineHeight: 1.6 }}>
+                  <span>🍵 暂无对话记录。</span><br />
+                  <span style={{ fontSize: '0.72rem' }}>
+                    {playMode === 'auto'
+                      ? '你可以向Ta询问方才水上荡舟掌舵的战况，或者给Ta打气吐槽！'
+                      : '你可以与Ta复盘方才划船采莲的默契，探讨战术！'}
+                  </span>
+                </div>
+              )}
+
+              {inGameChatMsgs.map(msg => {
+                const isUser = msg.role === 'user';
+                return (
+                  <div key={msg.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', gap: 8, alignItems: 'flex-start' }}>
+                    {!isUser && (
+                      <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid #00ACC1' }}>
+                        <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        maxWidth: '75%',
+                        padding: '9px 13px',
+                        borderRadius: isUser ? '16px 4px 16px 16px' : '4px 16px 16px 16px',
+                        background: isUser ? 'linear-gradient(135deg, #00838F 0%, #006064 100%)' : '#FFFDF9',
+                        color: isUser ? '#FFF' : '#004D40',
+                        fontSize: '0.84rem',
+                        lineHeight: 1.45,
+                        boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                        border: isUser ? 'none' : '1px solid #B2DFDB',
+                        wordBreak: 'break-word'
+                      }}
+                    >
+                      {msg.content}
+                    </div>
+                  </div>
+                );
+              })}
+
+              {isAiReplying && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid #00ACC1' }}>
+                    <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  </div>
+                  <div style={{ background: '#FFFDF9', border: '1px solid #B2DFDB', padding: '8px 12px', borderRadius: '4px 16px 16px 16px', fontSize: '0.8rem', color: '#00838F' }}>
+                    正在构思回复... ✍️
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 快捷话术气泡 */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', padding: '4px 0 8px 0', borderTop: '1px dashed #B2DFDB' }}>
+              {(playMode === 'auto' ? [
+                "方才那记水上冲刺真帅！",
+                "怎么漏了左边那朵大荷花？",
+                "辛苦啦，歇会儿再划！",
+                "下一关看你破纪录！"
+              ] : [
+                "刚才我们配合得如何？",
+                "那根浮木实在太隐蔽了！",
+                "就差两朵荷花，真可惜！",
+                "有什么采莲技巧传授吗？"
+              ]).map((quickText, qIdx) => (
+                <div
+                  key={qIdx}
+                  onClick={() => handleSendInGameMessage(quickText)}
+                  style={{
+                    fontSize: '0.72rem', background: '#FFF', color: '#006064', border: '1px solid #B2DFDB',
+                    borderRadius: 12, padding: '3px 8px', whiteSpace: 'nowrap', cursor: 'pointer',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)'
+                  }}
+                >
+                  {quickText}
+                </div>
+              ))}
+            </div>
+
+            {/* 底部输入栏 */}
+            <div style={{ display: 'flex', gap: 6, alignItems: 'center', paddingTop: 4 }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => e.key === 'Enter' && handleSendInGameMessage()}
+                placeholder={`对${selectedChar ? selectedChar.name : "Ta"}说点什么...`}
+                style={{
+                  flex: 1, padding: '9px 12px', background: '#FFF', border: '1.5px solid #00ACC1',
+                  borderRadius: 18, fontSize: '0.84rem', outline: 'none', color: '#004D40'
+                }}
+              />
+              <button
+                onClick={() => handleSendInGameMessage()}
+                disabled={!chatInput.trim() || isAiReplying}
+                style={{
+                  padding: '9px 16px', borderRadius: 18, border: 'none',
+                  background: (!chatInput.trim() || isAiReplying) ? '#CCC' : 'linear-gradient(135deg, #00838F 0%, #006064 100%)',
+                  color: '#FFF', fontSize: '0.84rem', fontWeight: 'bold', cursor: (!chatInput.trim() || isAiReplying) ? 'not-allowed' : 'pointer'
+                }}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Result Modal */}
       {gameState === 'result' && (
@@ -51389,7 +52857,7 @@ const RowingGamePage = ({ onBack }) => {
             </div>
 
             {collectedCount >= targetCount ? (
-              <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '20px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
+              <div style={{ background: 'rgba(214, 114, 75, 0.08)', padding: '12px', borderRadius: '16px', border: '1px solid rgba(214,114,75,0.2)', marginBottom: '16px', textAlign: 'left', fontSize: '0.82rem', color: '#5A4638' }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
                   <span>💰 本关递增赏金：</span>
                   <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${stage * 5} 五铢钱</span>
@@ -51403,11 +52871,41 @@ const RowingGamePage = ({ onBack }) => {
                 </div>
               </div>
             ) : (
-              <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '20px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
+              <div style={{ background: '#FFF', padding: '10px 14px', borderRadius: '16px', border: '1px solid #EAE3DA', marginBottom: '16px', textAlign: 'left', fontSize: '0.8rem', color: '#5A4638' }}>
                 <span>💰 本局已得收益：</span>
                 <span style={{ color: '#D6724B', fontWeight: 'bold' }}>+${sessionCoins} 铢</span>（已入金库）
               </div>
             )}
+
+            {/* 与角色拉小窗复盘按钮 */}
+            <button
+              onClick={() => {
+                if (!selectedChar && availableChars.length > 0) {
+                  setSelectedChar(availableChars[0]);
+                }
+                setShowInGameChat(true);
+              }}
+              style={{
+                width: '100%',
+                padding: '10px',
+                marginBottom: '10px',
+                background: 'linear-gradient(135deg, #00838F 0%, #006064 100%)',
+                color: '#FFF',
+                border: 'none',
+                borderRadius: 16,
+                fontSize: '0.88rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+                boxShadow: '0 2px 8px rgba(0,131,143,0.3)'
+              }}
+            >
+              <span>💬</span>
+              <span>与【{selectedChar ? selectedChar.name : "密探"}】拉小窗复盘</span>
+            </button>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
               {collectedCount >= targetCount ? (
@@ -51448,6 +52946,7 @@ const RowingGamePage = ({ onBack }) => {
     </div>
   );
 };
+
 
 // 音律训练 (七弦琴节奏乐谱小游戏)
 const MusicGamePage = ({ onBack }) => {
@@ -59281,6 +60780,27 @@ const TaibaiMysteryPage = ({ onBack }) => {
   const [showClues, setShowClues] = React.useState(false);
   const [selectedSuspect, setSelectedSuspect] = React.useState(null);
   const [votes, setVotes] = React.useState({});
+  
+  // 金钱系统与金库记账状态
+  const ENTRY_FEE = 10;
+  const WIN_REWARD = 20;
+  const [userCoins, setUserCoins] = React.useState(() => {
+    return parseInt(localStorage.getItem("farm_coins") || "500", 10);
+  });
+  const [sessionReward, setSessionReward] = React.useState(0);
+  const [rewardAwarded, setRewardAwarded] = React.useState(false);
+
+  const refreshCoins = () => {
+    setUserCoins(parseInt(localStorage.getItem("farm_coins") || "500", 10));
+  };
+
+  React.useEffect(() => {
+    refreshCoins();
+    window.addEventListener("walletTransactionsUpdated", refreshCoins);
+    return () => {
+      window.removeEventListener("walletTransactionsUpdated", refreshCoins);
+    };
+  }, []);
 
   const chatEndRef = React.useRef(null);
   const chatLogRef = React.useRef(chatLog);
@@ -59389,7 +60909,31 @@ const TaibaiMysteryPage = ({ onBack }) => {
       return;
     }
 
+    // 金库余额校验与扣除 10 铢
+    const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+    if (currentCoins < ENTRY_FEE) {
+      showToast(`金库余额不足！开局需 ${ENTRY_FEE} 铢五铢钱，请前往【隐私与安全-我的金库】充值。`);
+      return;
+    }
+
+    const newCoins = currentCoins - ENTRY_FEE;
+    try {
+      localStorage.setItem("farm_coins", newCoins.toString());
+      setUserCoins(newCoins);
+    } catch (e) {}
+
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord(
+        "expense",
+        ENTRY_FEE,
+        `太白杀阵 · 剧本杀组局入场费 (-${ENTRY_FEE}铢)`
+      );
+    }
+
+    setRewardAwarded(false);
+    setSessionReward(0);
     setStage("generating");
+    showToast(`已扣除入场费 ${ENTRY_FEE} 铢，正在构筑剧本...`);
 
     const selectedChars = characterPool.filter((c) => selectedCharIds.includes(c.id));
     const playerList = [
@@ -59712,16 +61256,41 @@ ${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说�
     });
 
     setVotes(simVotes);
+    
+    // 破案成功赏金结算 (+20 铢)
+    const isUserWin = selectedSuspect === mysteryData.solution.killer;
+    if (isUserWin && !rewardAwarded) {
+      setRewardAwarded(true);
+      setSessionReward(WIN_REWARD);
+      try {
+        const curCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+        const winCoins = curCoins + WIN_REWARD;
+        localStorage.setItem("farm_coins", winCoins.toString());
+        setUserCoins(winCoins);
+      } catch (e) {}
+
+      if (window.addTransactionRecord) {
+        window.addTransactionRecord(
+          "income",
+          WIN_REWARD,
+          `太白杀阵 · 慧眼如炬破案赏金 (+${WIN_REWARD}铢)`
+        );
+      }
+    }
+
     setStage("review");
   };
 
   // 重置并重新选人
   const handleRestart = () => {
+    refreshCoins();
     setStage("lobby");
     setMysteryData(null);
     setChatLog([]);
     setSelectedSuspect(null);
     setVotes({});
+    setRewardAwarded(false);
+    setSessionReward(0);
   };
 
   const mySheet = mysteryData?.characterSheets?.[userPersona.name] || {};
@@ -59785,49 +61354,69 @@ ${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说�
           </div>
         </div>
 
-        {/* 顶部快捷操作 */}
-        {mysteryData && stage !== "lobby" && stage !== "generating" && (
-          <div style={{ display: "flex", gap: "6px" }}>
-            <button
-              onClick={() => setShowMyScript(true)}
-              style={{
-                fontSize: "12px",
-                background: "#7D93A4",
-                color: "#FFF",
-                border: "none",
-                padding: "5px 10px",
-                borderRadius: "12px",
-                fontWeight: "600",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "3px",
-              }}
-            >
-              <i className="ph ph-scroll"></i>
-              <span>我的剧本</span>
-            </button>
-            <button
-              onClick={() => setShowClues(true)}
-              style={{
-                fontSize: "12px",
-                background: "#C88E7D",
-                color: "#FFF",
-                border: "none",
-                padding: "5px 10px",
-                borderRadius: "12px",
-                fontWeight: "600",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "3px",
-              }}
-            >
-              <i className="ph ph-magnifying-glass"></i>
-              <span>线索</span>
-            </button>
+        {/* 顶部金库与快捷操作 */}
+        <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              background: "#FAF7F2",
+              padding: "4px 9px",
+              borderRadius: "14px",
+              border: "1px solid #E2D9CE",
+              fontSize: "12px",
+              fontWeight: "700",
+              color: "#8C4A1E",
+            }}
+          >
+            <i className="ph ph-coins" style={{ fontSize: "14px", color: "#D6724B" }}></i>
+            <span>{userCoins} 铢</span>
           </div>
-        )}
+
+          {mysteryData && stage !== "lobby" && stage !== "generating" && (
+            <div style={{ display: "flex", gap: "6px" }}>
+              <button
+                onClick={() => setShowMyScript(true)}
+                style={{
+                  fontSize: "12px",
+                  background: "#7D93A4",
+                  color: "#FFF",
+                  border: "none",
+                  padding: "5px 10px",
+                  borderRadius: "12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3px",
+                }}
+              >
+                <i className="ph ph-scroll"></i>
+                <span>我的剧本</span>
+              </button>
+              <button
+                onClick={() => setShowClues(true)}
+                style={{
+                  fontSize: "12px",
+                  background: "#C88E7D",
+                  color: "#FFF",
+                  border: "none",
+                  padding: "5px 10px",
+                  borderRadius: "12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3px",
+                }}
+              >
+                <i className="ph ph-magnifying-glass"></i>
+                <span>线索</span>
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* ================= 阶段 1: 组局准备厅 (选人) ================= */}
@@ -60003,8 +61592,23 @@ ${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说�
               }}
             >
               <i className="ph ph-sparkle" style={{ fontSize: "18px" }}></i>
-              <span>生成剧本杀演武 ({selectedCharIds.length + 1}人局)</span>
+              <span>开启剧本杀演武 · 10 铢 ({selectedCharIds.length + 1}人局)</span>
             </button>
+            <div
+              style={{
+                textAlign: "center",
+                fontSize: "11px",
+                color: "#8C7E72",
+                marginTop: "6px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+              }}
+            >
+              <i className="ph ph-coins" style={{ color: "#D6724B" }}></i>
+              <span>入场费 10 铢/局 | 破案成功立得 20 铢赏金 | 记入【我的金库】</span>
+            </div>
           </div>
         </div>
       )}
@@ -60539,6 +62143,59 @@ ${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说�
             );
           })()}
 
+          {/* 金库收支结算卡片 */}
+          <div
+            style={{
+              background: "#FFFFFF",
+              borderRadius: "18px",
+              padding: "14px",
+              border: "1.5px solid #E5DDD2",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "13.5px", fontWeight: "700", color: "#3B4235" }}>
+                💰 金库收支明细
+              </span>
+              <span style={{ fontSize: "11px", color: "#8E99A2" }}>
+                ✨ 账目已实时记入【隐私与安全-我的金库】
+              </span>
+            </div>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-around",
+                background: "#FAF7F2",
+                padding: "10px",
+                borderRadius: "12px",
+                textAlign: "center",
+              }}
+            >
+              <div>
+                <div style={{ fontSize: "11px", color: "#7B838A" }}>入场门票</div>
+                <div style={{ fontSize: "14px", fontWeight: "700", color: "#C62828" }}>-10 铢</div>
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", color: "#7B838A" }}>破案赏金</div>
+                <div
+                  style={{
+                    fontSize: "14px",
+                    fontWeight: "700",
+                    color: selectedSuspect === mysteryData.solution.killer ? "#2E7D32" : "#9E9E9E",
+                  }}
+                >
+                  {selectedSuspect === mysteryData.solution.killer ? "+20 铢" : "0 铢"}
+                </div>
+              </div>
+              <div>
+                <div style={{ fontSize: "11px", color: "#7B838A" }}>当前金库余额</div>
+                <div style={{ fontSize: "14px", fontWeight: "800", color: "#8C4A1E" }}>{userCoins} 铢</div>
+              </div>
+            </div>
+          </div>
+
           {/* 全员投票详情 */}
           <div
             style={{
@@ -60816,7 +62473,6 @@ ${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说�
     </div>
   );
 };
-
 
 // ==================== 谁在说谎 · 东汉规则怪谈大逃杀组件 ====================
 const LyingRulesGhostPage = ({ onBack }) => {
