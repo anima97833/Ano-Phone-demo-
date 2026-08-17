@@ -10000,9 +10000,106 @@ const PostDetailPage = ({
     return null;
   };
 
-  // 读取用户配置
+  // 智能解析 LLM 返回的讨论行
+  const parseRepliesFromText = (rawText) => {
+    if (!rawText || typeof rawText !== "string") return [];
+    const lines = rawText.split("\n").map((l) => l.trim()).filter((l) => l.length > 0);
+    const parsed = [];
+    const fallbackNpcNames = [
+      "广陵探微官",
+      "隐鸢阁奉侍",
+      "绣衣掌簿吏",
+      "江左闲步客",
+      "青囊采药吏",
+      "观星台少吏",
+      "百草堂掌柜",
+      "演武堂教头",
+    ];
+
+    lines.forEach((line, idx) => {
+      // 1. 去除常见的前缀编号或符号：如 "1. ", "1、", "- ", "* ", "• "
+      let cleanLine = line.replace(/^(\d+[\.、\s\-]+|[\-\*\•\—\~]+\s*)/, "").trim();
+      if (!cleanLine) return;
+
+      // 2. 匹配 [身份]: 内容 或 【身份】：内容 或 身份：内容
+      let match = cleanLine.match(/^[\[【\(\<](.*?)[\]】\)\>][:：\s]\s*(.*)$/);
+      if (!match) {
+        match = cleanLine.match(/^([^:：]{2,12})[:：]\s*(.*)$/);
+      }
+
+      if (match && match[1] && match[2] && match[2].trim()) {
+        parsed.push({
+          id: Date.now() + Math.random() + idx,
+          npc: match[1].trim().replace(/^[\[【\(]|[\]】\)]$/g, ""),
+          content: match[2].trim(),
+          likes: Math.floor(Math.random() * 25) + 1,
+          liked: false,
+        });
+      } else if (cleanLine.length > 5 && !cleanLine.startsWith("严格输出格式") && !cleanLine.startsWith("【")) {
+        // 如果没有特定身份前缀但有一整句回复内容
+        parsed.push({
+          id: Date.now() + Math.random() + idx,
+          npc: fallbackNpcNames[idx % fallbackNpcNames.length],
+          content: cleanLine,
+          likes: Math.floor(Math.random() * 20) + 1,
+          liked: false,
+        });
+      }
+    });
+
+    return parsed;
+  };
+
+  const getFallbackNpcReplies = (postTitle) => {
+    return [
+      {
+        id: Date.now() + 1,
+        npc: "广陵探微官",
+        content: `此言极是！关于「${postTitle || "此事"}」，日前密探亦有汇报，细节颇值得推敲。`,
+        likes: 18,
+        liked: false,
+      },
+      {
+        id: Date.now() + 2,
+        npc: "隐鸢阁奉侍",
+        content: "楼主所言甚妙，待我回阁中查阅典籍与秘卷，再来与诸君细细讨论。",
+        likes: 14,
+        liked: false,
+      },
+      {
+        id: Date.now() + 3,
+        npc: "绣衣掌簿吏",
+        content: "已将诸位之议记录在案，甚合当下的局势与风向。",
+        likes: 22,
+        liked: false,
+      },
+      {
+        id: Date.now() + 4,
+        npc: "江左闲步客",
+        content: "路过留墨。听闻西域与中原造物各有千秋，此番见解令人耳目一新！",
+        likes: 9,
+        liked: false,
+      },
+      {
+        id: Date.now() + 5,
+        npc: "青囊采药吏",
+        content: "诸位探讨热烈，切莫忘了劳逸结合，饮一杯清茶定心。",
+        likes: 11,
+        liked: false,
+      },
+    ];
+  };
+
+  // 读取用户配置与检查/生成回复
   React.useEffect(() => {
-    const loadUserConfigs = async () => {
+    let isMounted = true;
+
+    const initData = async () => {
+      setLoading(true);
+
+      // 1. 读取身份与角色配置
+      let loadedRoles = [];
+      let loadedAreas = [];
       try {
         const personasData = localStorage.getItem("user_personas");
         if (personasData) {
@@ -10011,94 +10108,169 @@ const PostDetailPage = ({
             const activeId = localStorage.getItem("active_persona_id");
             if (activeId) {
               const active = personas.find((p) => String(p.id) === String(activeId));
-              setActivePersona(active);
+              if (isMounted) setActivePersona(active);
             }
           } catch (e) {}
         }
-      } catch (e) {}
-    };
-    loadUserConfigs();
-  }, []);
 
-  // 检查缓存与加载回复
-  React.useEffect(() => {
-    const initData = async () => {
-      setLoading(true);
+        if (window.chatCharacterStore) {
+          const allRoles = await window.chatCharacterStore.getAll();
+          loadedRoles = (allRoles || []).filter(
+            (c) => c && c.name && c.type !== "group" && c.type !== "decor" && c.type !== "moments"
+          );
+          if (isMounted) setUserRoles(loadedRoles);
+        }
+        if (window.areaStore) {
+          loadedAreas = (await window.areaStore.getAreas()) || [];
+          if (isMounted) setSavedAreas(loadedAreas);
+        }
+      } catch (e) {
+        console.error("加载角色/区域数据失败:", e);
+      }
+
+      // 2. 检查有效缓存（若缓存为空数组则强制重新生成）
       const cached = loadPostStateFromCache();
-      if (cached) {
-        setPostLiked(cached.postLiked || false);
-        setPostLikes(cached.postLikes || post.likes || 0);
-        setPostComments(cached.postComments || post.comments || 0);
-        setNpcReplies(cached.npcReplies || []);
-        setRoleReplies(cached.roleReplies || []);
-        setUserReplies(cached.userReplies || []);
-        setPage(cached.page || 1);
-        setLoading(false);
+      if (
+        cached &&
+        ((cached.npcReplies && cached.npcReplies.length > 0) ||
+          (cached.roleReplies && cached.roleReplies.length > 0) ||
+          (cached.userReplies && cached.userReplies.length > 0))
+      ) {
+        if (isMounted) {
+          setPostLiked(cached.postLiked || false);
+          setPostLikes(cached.postLikes || post.likes || 0);
+          setPostComments(cached.postComments || post.comments || 0);
+          setNpcReplies(cached.npcReplies || []);
+          setRoleReplies(cached.roleReplies || []);
+          setUserReplies(cached.userReplies || []);
+          setPage(cached.page || 1);
+          setLoading(false);
+        }
         return;
       }
 
-      // 未命中缓存时，通过 LLM 生成 NPC 与 角色回复
+      // 3. 生成 NPC 回复
       let generatedNpc = [];
       let generatedRoles = [];
-      const sections = areaContent?.sections || ["综合"];
-      const npcPrompt = `你是一个论坛回复生成助手。请为以下帖子生成5-8个不同身份NPC的真实生动回复。
+      const sections = areaContent?.sections || ["综合", "热议", "闲聊"];
+      const currentSection =
+        post.section || sections[(post.id || 0) % sections.length] || "综合";
+
+      const npcPrompt = `你是一个论坛回复生成助手。请为以下帖子生成5-8个不同身份NPC的真实生动回复，语言风格生动、符合世界观。
 【帖子标题】：${post.title}
 【帖子内容】：${post.content || "无"}
-【所属板块】：${sections[(post.id || 0) % sections.length]}
-【严格输出格式】：
-[NPC身份]: [回复内容]`;
+【所属板块】：${currentSection}
 
-      await new Promise((resolve) => {
+【严格输出格式】（每行一个）：
+[NPC身份]: [回复内容]
+例如：
+[广陵探微官]: 楼主分析得极有道理！
+[百草堂掌柜]: 西域那边的机关术确实很有特色。`;
+
+      try {
         if (window.sendToLLM) {
-          window.sendToLLM(
-            [{ role: "user", content: npcPrompt }],
-            null,
-            (res) => {
-              res.split("\n").forEach((line) => {
-                const match = line.match(/^\\[?(.*?)\\]?[:：]\\s*(.*)$/);
-                if (match) {
-                  generatedNpc.push({
-                    id: Date.now() + Math.random(),
-                    npc: match[1].trim(),
-                    content: match[2].trim(),
-                    likes: Math.floor(Math.random() * 30),
-                    liked: false,
-                  });
+          await new Promise((resolve) => {
+            window.sendToLLM(
+              [{ role: "user", content: npcPrompt }],
+              null,
+              (res) => {
+                const parsed = parseRepliesFromText(res);
+                if (parsed.length > 0) {
+                  generatedNpc = parsed;
+                } else {
+                  generatedNpc = getFallbackNpcReplies(post.title);
                 }
-              });
-              setNpcReplies(generatedNpc);
-              resolve();
-            },
-            () => resolve()
-          );
+                resolve();
+              },
+              (err) => {
+                console.error("生成NPC回复出错:", err);
+                generatedNpc = getFallbackNpcReplies(post.title);
+                resolve();
+              }
+            );
+          });
         } else {
-          // 本地兜底模拟回复
-          generatedNpc = [
-            { id: 1, npc: "广陵探微官", content: "此言极是，江左近日亦有此类传闻。", likes: 12, liked: false },
-            { id: 2, npc: "隐鸢阁奉侍", content: "楼主所言颇有深意，且容我细细品读一番。", likes: 8, liked: false },
-            { id: 3, npc: "绣衣掌簿吏", content: "已记录在案，甚合心意。", likes: 15, liked: false },
-          ];
-          setNpcReplies(generatedNpc);
-          resolve();
+          generatedNpc = getFallbackNpcReplies(post.title);
         }
-      });
+      } catch (e) {
+        generatedNpc = getFallbackNpcReplies(post.title);
+      }
 
-      localStorage.setItem(
-        getPostCacheKey(),
-        JSON.stringify({
-          postLiked: false,
-          postLikes: post.likes || 0,
-          postComments: post.comments || 0,
-          npcReplies: generatedNpc,
-          roleReplies: generatedRoles,
-          userReplies: [],
-          page: 1,
-        })
-      );
-      setLoading(false);
+      // 4. 生成配置角色的专属回复
+      const currentAreaConfig =
+        loadedAreas.find((a) => a.id === selectedArea?.id) ||
+        loadedAreas[0] ||
+        selectedArea;
+      const roleIdsToGenerate = currentAreaConfig?.formData?.roles || [];
+
+      if (roleIdsToGenerate.length > 0 && window.sendToLLM) {
+        for (const roleId of roleIdsToGenerate) {
+          const role = loadedRoles.find((r) => String(r.id) === String(roleId));
+          if (!role) continue;
+          try {
+            const rolePrompt = `请以【${role.name}】的身份回复论坛帖子《${post.title}》。
+角色性格：${role.profile?.personality || role.personality || "未知"}
+角色身份：${role.profile?.identity || role.identity || "密探"}
+对楼主的态度：自然亲近，15-40字。
+严格格式：[${role.name}]: [回复内容]`;
+
+            await new Promise((resolve) => {
+              window.sendToLLM(
+                [{ role: "user", content: rolePrompt }],
+                null,
+                (replyRes) => {
+                  const roleParsed = parseRepliesFromText(replyRes);
+                  if (roleParsed.length > 0) {
+                    generatedRoles.push({
+                      id: Date.now() + Math.random(),
+                      role: role.name,
+                      roleId: role.id,
+                      content: roleParsed[0].content,
+                      likes: Math.floor(Math.random() * 30) + 5,
+                      liked: false,
+                    });
+                  }
+                  resolve();
+                },
+                () => resolve()
+              );
+            });
+          } catch (e) {}
+        }
+      }
+
+      if (isMounted) {
+        setNpcReplies(generatedNpc);
+        setRoleReplies(generatedRoles);
+        const totalInitComments = generatedNpc.length + generatedRoles.length;
+        setPostComments(
+          post.comments ? Math.max(post.comments, totalInitComments) : totalInitComments
+        );
+        setLoading(false);
+
+        // 写入缓存
+        localStorage.setItem(
+          getPostCacheKey(),
+          JSON.stringify({
+            postLiked: false,
+            postLikes: post.likes || 0,
+            postComments: post.comments
+              ? Math.max(post.comments, totalInitComments)
+              : totalInitComments,
+            npcReplies: generatedNpc,
+            roleReplies: generatedRoles,
+            userReplies: [],
+            page: 1,
+          })
+        );
+      }
     };
 
     initData();
+
+    return () => {
+      isMounted = false;
+    };
   }, [post]);
 
   const handlePostLike = () => {
@@ -10165,13 +10337,13 @@ const PostDetailPage = ({
         ],
         null,
         (res) => {
-          const match = res.match(/^\\[?(.*?)\\]?[:：]\\s*(.*)$/);
-          if (match) {
+          const match = res.match(/^[\[【\(\<]?(.*?)[\]】\)\>[:：]?\s*(.*)$/);
+          if (match && match[2]) {
             setNpcReplies((prev) => [
               ...prev,
               {
                 id: Date.now() + 1,
-                npc: match[1].trim(),
+                npc: match[1]?.trim() || targetName,
                 content: match[2].trim(),
                 likes: 0,
                 liked: false,
@@ -10190,9 +10362,56 @@ const PostDetailPage = ({
     setNpcReplies([]);
     setRoleReplies([]);
     setUserReplies([]);
-    setTimeout(() => {
+
+    // 重新触发生成
+    const sections = areaContent?.sections || ["综合", "热议", "闲聊"];
+    const currentSection =
+      post.section || sections[(post.id || 0) % sections.length] || "综合";
+
+    const npcPrompt = `你是一个论坛回复生成助手。请为以下帖子生成5-8个不同身份NPC的真实生动回复，语言风格生动、符合世界观。
+【帖子标题】：${post.title}
+【帖子内容】：${post.content || "无"}
+【所属板块】：${currentSection}
+
+【严格输出格式】（每行一个）：
+[NPC身份]: [回复内容]`;
+
+    if (window.sendToLLM) {
+      window.sendToLLM(
+        [{ role: "user", content: npcPrompt }],
+        null,
+        (res) => {
+          const parsed = parseRepliesFromText(res);
+          const finalReplies = parsed.length > 0 ? parsed : getFallbackNpcReplies(post.title);
+          setNpcReplies(finalReplies);
+          setPostComments(finalReplies.length);
+          setLoading(false);
+          localStorage.setItem(
+            getPostCacheKey(),
+            JSON.stringify({
+              postLiked,
+              postLikes,
+              postComments: finalReplies.length,
+              npcReplies: finalReplies,
+              roleReplies: [],
+              userReplies: [],
+              page: 1,
+            })
+          );
+        },
+        () => {
+          const fallback = getFallbackNpcReplies(post.title);
+          setNpcReplies(fallback);
+          setPostComments(fallback.length);
+          setLoading(false);
+        }
+      );
+    } else {
+      const fallback = getFallbackNpcReplies(post.title);
+      setNpcReplies(fallback);
+      setPostComments(fallback.length);
       setLoading(false);
-    }, 400);
+    }
   };
 
   const author = {
@@ -10237,6 +10456,10 @@ const PostDetailPage = ({
             <div className="ad-skeleton-line" style={{ width: "95%" }}></div>
             <div className="ad-skeleton-line" style={{ width: "60%" }}></div>
           </div>
+          <div className="flex items-center justify-center gap-2 text-xs text-gray-400 py-6">
+            <div className="w-4 h-4 border-2 border-gray-200 border-t-[#D6724B] rounded-full animate-spin"></div>
+            <span>正在调取密探讨论与客官回复...</span>
+          </div>
         </div>
       </div>
     );
@@ -10244,6 +10467,7 @@ const PostDetailPage = ({
 
   // 区分针对主帖的直接回复与针对评论的回复
   const directPostReplies = userReplies.filter((r) => r.repliedTo === "post" || !r.repliedTo);
+  const totalCommentsCount = roleReplies.length + npcReplies.length + userReplies.length;
 
   return (
     <div className="post-detail-container" style={{ animation: "fadeIn 0.3s ease-out" }}>
@@ -10316,7 +10540,7 @@ const PostDetailPage = ({
             {/* 评论数 */}
             <div className="flex items-center gap-1.5 text-xs font-semibold text-gray-500">
               <i className="ph ph-chat-circle-text text-base"></i>
-              <span>{postComments} 回复</span>
+              <span>{totalCommentsCount || postComments} 回复</span>
             </div>
 
             {/* 收藏 */}
@@ -10337,7 +10561,7 @@ const PostDetailPage = ({
           <div className="pd-reply-section-header">
             <div className="pd-reply-title">
               <i className="ph-bold ph-chat-centered-text text-[#D6724B]"></i>
-              <span>回复讨论 ({roleReplies.length + npcReplies.length + userReplies.length})</span>
+              <span>回复讨论 ({totalCommentsCount})</span>
             </div>
             <button
               onClick={handleRefreshReplies}
@@ -10569,7 +10793,6 @@ const PostDetailPage = ({
     </div>
   );
 };
-
 // ErrorBoundary for JoinUsPage
 class JoinUsErrorBoundary extends React.Component {
   constructor(props) {
