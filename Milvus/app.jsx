@@ -16787,7 +16787,7 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
   };
 
   // 处理发布个人闲置
-  const handlePublishAuction = () => {
+  const handlePublishAuction = async () => {
     if (!selectedBackpackItem) {
       alert("请先选择一件背包中的物品！");
       return;
@@ -16795,6 +16795,15 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
     if (!publishForm.price.trim()) {
       alert("请填写起拍价格！");
       return;
+    }
+
+    // 立即从背包中扣除上架拍卖的物品
+    if (window.backpackStore && selectedBackpackItem.id) {
+      try {
+        await window.backpackStore.removeItem(selectedBackpackItem.id);
+      } catch (err) {
+        console.error("扣除背包物品失败:", err);
+      }
     }
 
     // 读取当前主控名字与头像
@@ -16961,13 +16970,28 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
   };
 
   // 下架拍卖
-  const handleCancelAuction = (auction) => {
+  const handleCancelAuction = async (auction) => {
     if (window.confirm(`确定要下架物品【${auction.item}】吗？`)) {
       const updated = userAuctions.filter(a => a.id !== auction.id);
       setUserAuctions(updated);
       localStorage.setItem("tjc_user_auctions", JSON.stringify(updated));
+
+      // 下架后返还背包
+      if (window.backpackStore) {
+        try {
+          await window.backpackStore.addItems([{
+            name: auction.item,
+            price: auction.price,
+            merchant: "二手拍卖下架退回",
+            type: auction.category || "other"
+          }]);
+        } catch (err) {
+          console.error("退回背包失败:", err);
+        }
+      }
+
       setShowMyAuctionDetail(null);
-      alert("已成功下架该物品！");
+      alert("已成功下架该物品并退回您的背包！");
     }
   };
 
@@ -38562,14 +38586,53 @@ const T9Page = () => {
       const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
       let userContext = mePersona ? `【用户身份】姓名:${mePersona.name}, 性格:${mePersona.personality || "未知"}` : "";
       const charContext = `【记账角色设定】\n姓名:${taCharacter.name}\n性格:${taCharacter.profile?.personality || "无"}`;
-      const sysPrompt = "你是一个沉浸式角色扮演AI兼记账生成助手。";
+
+      // 🔍 读取传讯单聊中用户给该角色发送的真实红包与礼物记录
+      let redPacketContext = "";
+      let recentRedPackets = [];
+      let recentGifts = [];
+
+      if (window.chatHistoryStore && taCharacter.id) {
+        try {
+          const history = await window.chatHistoryStore.getMessages(taCharacter.id);
+          if (Array.isArray(history)) {
+            recentRedPackets = history.filter((m) => m.type === "red_packet" && m.content);
+            recentGifts = history.filter((m) => m.type === "gift_card" && m.content);
+          }
+        } catch (err) {
+          console.error("读取角色红包记录失败:", err);
+        }
+      }
+
+      if (recentRedPackets.length > 0 || recentGifts.length > 0) {
+        const rpTexts = recentRedPackets.slice(-3).map((rp) => 
+          `【收到${mePersona?.name || '广陵王'}专属红包】：金额 ${rp.content.amount} 铢，寄语：“${rp.content.blessing || '一点心意' }”`
+        ).join("；");
+
+        const giftTexts = recentGifts.slice(-3).map((g) =>
+          `【收到${mePersona?.name || '广陵王'}心意佳礼】：【${g.content.itemName}】（来源:${g.content.merchant}），赠言：“${g.content.blessing || '见字如晤' }”`
+        ).join("；");
+
+        redPacketContext = `
+\n【与${mePersona?.name || '用户'}的真实经济与心意往来】：
+${rpTexts ? rpTexts + '\n' : ''}${giftTexts ? giftTexts + '\n' : ''}
+【记账绝对铁律】：
+1. 你深深记着对方给你发的红包和心意礼物！
+2. 在生成的 5 条账目中，【必须包含至少一条关于收到对方红包的收入项（type: "income", category 详细写明收到对方发的红包及寄语，金额与收到的红包一致）】！
+3. 也可以包含你使用对方给的红包钱为对方买点心/回礼的消费支出项！
+`;
+      }
+
+      const sysPrompt = "你是一个沉浸式角色扮演AI兼记账生成助手，严格保持角色人设，并牢记与主控之间的真实往来。";
       const userPrompt = `
               ${worldContext}
               ${userContext}
               ${charContext}
-              【任务】请以【${taCharacter.name}】身份生成 5 条符合该角色和东汉特色的账目（有收有支）。
+              ${redPacketContext}
+              【任务】请以【${taCharacter.name}】身份生成 5 条符合该角色、东汉特色以及上述与主控真实往来的账目（有收有支）。
               严格返回纯 JSON 数组，格式示例：
               [
+                {"type": "income", "category": "收到${mePersona?.name || '广陵王'}的心意红包", "amount": 100, "date": "2026-08-17"},
                 {"type": "expense", "category": "购买上等佳酿", "amount": 500, "date": "2026-08-16"},
                 {"type": "income", "category": "朝廷俸禄", "amount": 2000, "date": "2026-08-15"}
               ]
@@ -38581,16 +38644,35 @@ const T9Page = () => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
+              const cleanJson = reply.replace(/\`\`\`json|\`\`\`/g, "").trim();
               const data = JSON.parse(cleanJson);
               if (Array.isArray(data)) {
-                const formatted = data.map((item, idx) => ({
+                let formatted = data.map((item, idx) => ({
                   id: Date.now() + idx,
                   type: item.type === "income" ? "income" : "expense",
                   category: item.category,
                   amount: parseFloat(item.amount) || 0,
                   date: item.date || new Date().toISOString().split("T")[0],
                 }));
+
+                // 兜底保障：若有红包记录且AI未生成红包相关账目，自动置顶插入最新红包账目
+                if (recentRedPackets.length > 0) {
+                  const hasRpBill = formatted.some(b => 
+                    b.category && (b.category.includes("红包") || b.category.includes("心意") || b.category.includes("红封"))
+                  );
+                  if (!hasRpBill) {
+                    const latestRp = recentRedPackets[recentRedPackets.length - 1];
+                    const rpBill = {
+                      id: Date.now() + 999,
+                      type: "income",
+                      category: `收到${mePersona?.name || '广陵王'}的心意红包（"${latestRp.content?.blessing || '一点心意'}"）`,
+                      amount: parseFloat(latestRp.content?.amount) || 100,
+                      date: new Date().toISOString().split("T")[0],
+                    };
+                    formatted = [rpBill, ...formatted.slice(0, 4)];
+                  }
+                }
+
                 setTaBills(formatted);
               }
             } catch (e) {
@@ -38601,6 +38683,8 @@ const T9Page = () => {
           },
           () => setIsGeneratingTaBills(false),
         );
+      } else {
+        setIsGeneratingTaBills(false);
       }
     } catch (e) {
       console.error(e);
@@ -72588,6 +72672,138 @@ const T8ChatDetail = ({
   const [inputText, setInputText] = React.useState("");
   const [isTyping, setIsTyping] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
+
+  // ===== [新增] 送礼与红包状态 =====
+  const [showGiftModal, setShowGiftModal] = React.useState(false);
+  const [giftTab, setGiftTab] = React.useState("red_packet"); // "red_packet" | "gift"
+  const [redPacketAmount, setRedPacketAmount] = React.useState("100");
+  const [redPacketBlessing, setRedPacketBlessing] = React.useState("一点心意，愿君欢喜");
+  const [backpackGifts, setBackpackGifts] = React.useState([]);
+  const [selectedGiftItem, setSelectedGiftItem] = React.useState(null);
+  const [giftBlessing, setGiftBlessing] = React.useState("见字如晤，特赠此物");
+  const [myFarmCoins, setMyFarmCoins] = React.useState(500);
+
+  // 打开送礼/红包弹窗并拉取金库与背包
+  const handleOpenGiftModal = async () => {
+    const coins = parseInt(localStorage.getItem("farm_coins") || "500");
+    setMyFarmCoins(coins);
+    if (window.backpackStore) {
+      try {
+        const items = await window.backpackStore.getAll();
+        setBackpackGifts(items || []);
+        if (items && items.length > 0) {
+          setSelectedGiftItem(items[0]);
+        } else {
+          setSelectedGiftItem(null);
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+    setShowGiftModal(true);
+  };
+
+  // 随机吉言库
+  const randomRedPacketBlessings = [
+    "一点心意，愿君欢喜！",
+    "买点好茶美酒，莫要太过操劳~",
+    "岁岁常欢愉，万事皆胜意！",
+    "见信如面，聊表寸心。",
+    "愿君平安顺遂，福泽绵长！",
+    "今日偶得横财，特与君同乐！"
+  ];
+
+  const randomGiftBlessings = [
+    "见字如晤，特赠此物以表寸心。",
+    "偶然得之，私心觉得与君甚配！",
+    "愿此心意小礼，能博君莞尔一笑。",
+    "山水迢迢，唯赠此珍物寄相思。",
+    "前日巡游偶遇，特意为君带回。",
+    "宝剑赠英雄，美玉配雅士，望君珍之。"
+  ];
+
+  // 发送五铢钱红包
+  const handleSendRedPacket = () => {
+    const amountNum = parseInt(redPacketAmount.replace(/[^0-9]/g, '')) || 0;
+    if (amountNum <= 0) {
+      alert("请输入有效的红包金额！");
+      return;
+    }
+    const currentCoins = parseInt(localStorage.getItem("farm_coins") || "500");
+    if (currentCoins < amountNum) {
+      alert(`金库余额不足！当前金库仅有 ${currentCoins} 铢，不足以支付 ${amountNum} 铢。可先前往太疾驰签到或拍卖赚取五铢钱~`);
+      return;
+    }
+
+    // 1. 扣除金库
+    const remaining = currentCoins - amountNum;
+    localStorage.setItem("farm_coins", remaining.toString());
+    setMyFarmCoins(remaining);
+
+    // 2. 写入全局收支明细
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord("expense", amountNum, `传讯红包：赠予【${chatData.name}】`);
+    }
+
+    // 3. 生成红包消息卡片
+    const blessingText = redPacketBlessing.trim() || "一点心意，愿君欢喜";
+    const rpMsg = {
+      id: Date.now(),
+      type: "red_packet",
+      text: `【五铢钱红包】赠送 ${amountNum} 铢`,
+      isMe: true,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      content: {
+        amount: amountNum,
+        amountStr: `${amountNum} 铢`,
+        blessing: blessingText,
+        recipient: chatData.name
+      }
+    };
+
+    setMessages(prev => [...prev, rpMsg]);
+    if (onMessageUpdate) onMessageUpdate(rpMsg.text);
+    setShowGiftModal(false);
+  };
+
+  // 发送背包礼物
+  const handleSendGift = async () => {
+    if (!selectedGiftItem) {
+      alert("请先选择一件要赠送的背包物品！");
+      return;
+    }
+
+    // 1. 从背包扣除物品
+    if (window.backpackStore && selectedGiftItem.id) {
+      try {
+        await window.backpackStore.removeItem(selectedGiftItem.id);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // 2. 生成礼物卡片消息
+    const blessingText = giftBlessing.trim() || "见字如晤，特赠此物";
+    const giftMsg = {
+      id: Date.now(),
+      type: "gift_card",
+      text: `【心意佳礼】赠送了【${selectedGiftItem.name}】`,
+      isMe: true,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      content: {
+        itemId: selectedGiftItem.id,
+        itemName: selectedGiftItem.name,
+        merchant: selectedGiftItem.merchant || selectedGiftItem.shop || "太疾驰坊市",
+        price: selectedGiftItem.price || "珍贵之物",
+        blessing: blessingText,
+        recipient: chatData.name
+      }
+    };
+
+    setMessages(prev => [...prev, giftMsg]);
+    if (onMessageUpdate) onMessageUpdate(giftMsg.text);
+    setShowGiftModal(false);
+  };
   const scrollRef = React.useRef(null);
 
   // ======= 【修改处2：新增】提取判断当前是否为群聊 =======
@@ -74723,6 +74939,18 @@ const T8ChatDetail = ({
       { role: "system", content: systemInstruction },
       // [修改] 强引导支持多模态图片识别
       ...historyForPrompt.map((m) => {
+        if (m.type === "red_packet") {
+          return {
+            role: m.isMe ? "user" : "assistant",
+            content: `【系统事件】我向你发送了一份五铢钱红包，金额为【${m.content?.amountStr || `${m.content?.amount} 铢`}】，附言为：“${m.content?.blessing || '一点心意'}”。金额已入账你的荷包。请根据你的角色性格、与我的关系做出真实生动、贴合人设的回应与感谢。`,
+          };
+        }
+        if (m.type === "gift_card") {
+          return {
+            role: m.isMe ? "user" : "assistant",
+            content: `【系统事件】我向你赠送了一份心意礼物：【${m.content?.itemName}】（来源：${m.content?.merchant || '私藏'}），附言为：“${m.content?.blessing || '特赠此物'}”。实物已送至你的府邸。请根据你的喜好、性格与跟我的关系用你的角色语气做出真实生动的回复与评价。`,
+          };
+        }
         // 判断如果消息类型是图片，且拥有合法的URL或Base64数据，使用符合 OpenAI/Gemini Vision 标准的数组格式
         if (m.type === "image") {
           console.log("发现图片消息:", {
@@ -76200,6 +76428,228 @@ const T8ChatDetail = ({
         </div>
       )}
       
+      {/* ==== [新增] 心意送礼与红包弹窗 ==== */}
+      {showGiftModal && (
+        <div
+          className="fixed inset-0 bg-black/60 z-[200] flex items-end justify-center animate-fadeIn"
+          onClick={() => setShowGiftModal(false)}
+        >
+          <div
+            className="w-full max-w-md bg-white rounded-t-3xl shadow-2xl flex flex-col max-h-[82vh] animate-slide-up overflow-hidden font-sans"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 顶部标题栏 */}
+            <div className="p-4 px-5 flex justify-between items-center bg-[#FDFCF8] border-b border-[#F2EFDE]">
+              <div className="flex items-center gap-2">
+                <span className="text-xl">🎁</span>
+                <h3 className="text-base font-bold text-[#5A5F4D]">
+                  心意相赠 · 赠予【{chatData.name}】
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowGiftModal(false)}
+                className="w-8 h-8 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#8C8C8C] active:scale-90 transition-transform"
+              >
+                <i className="ph-bold ph-x"></i>
+              </button>
+            </div>
+
+            {/* Tab 切换 */}
+            <div className="flex p-2 bg-[#F7F5F0] gap-2 border-b border-[#EAE6DE]">
+              <button
+                onClick={() => setGiftTab("red_packet")}
+                className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                  giftTab === "red_packet"
+                    ? "bg-gradient-to-r from-[#FF5722] to-[#E64A19] text-white shadow-md"
+                    : "bg-white text-[#777] border border-[#EAEAEA]"
+                }`}
+              >
+                <span>🧧</span>
+                <span>发五铢钱红包</span>
+              </button>
+              <button
+                onClick={() => setGiftTab("gift")}
+                className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${
+                  giftTab === "gift"
+                    ? "bg-gradient-to-r from-[#D6724B] to-[#C05D36] text-white shadow-md"
+                    : "bg-white text-[#777] border border-[#EAEAEA]"
+                }`}
+              >
+                <span>🎁</span>
+                <span>赠送背包礼物</span>
+              </button>
+            </div>
+
+            {/* 内容区 */}
+            <div className="flex-1 overflow-y-auto p-5 space-y-4 no-scrollbar bg-[#FAF9F5]">
+              {giftTab === "red_packet" ? (
+                <>
+                  {/* 金库余额信息 */}
+                  <div className="p-3.5 bg-gradient-to-r from-[#FFF8E1] to-[#FFF3E0] rounded-2xl border border-[#FFE082] flex justify-between items-center shadow-xs">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl">💰</span>
+                      <div>
+                        <div className="text-[11px] text-[#8C8279] font-medium">我的金库余额</div>
+                        <div className="text-base font-black text-[#F57F17] font-mono">
+                          {myFarmCoins} <span className="text-xs font-normal">五铢钱</span>
+                        </div>
+                      </div>
+                    </div>
+                    <span className="text-[10px] text-[#D6724B] font-bold bg-white/80 px-2 py-1 rounded-full">
+                      实时联动
+                    </span>
+                  </div>
+
+                  {/* 自定义金额输入 */}
+                  <div>
+                    <label className="text-xs font-bold text-[#8C8279] mb-1.5 block">
+                      红包金额（铢）：
+                    </label>
+                    <input
+                      type="number"
+                      value={redPacketAmount}
+                      onChange={(e) => setRedPacketAmount(e.target.value)}
+                      placeholder="输入五铢钱金额"
+                      className="w-full p-3.5 bg-white rounded-xl border border-[#EAEAEA] text-lg font-black text-[#D6724B] outline-none font-mono"
+                    />
+                  </div>
+
+                  {/* 快捷金额药丸 */}
+                  <div className="flex gap-2 flex-wrap">
+                    {["50", "100", "200", "520", "1314"].map((amt) => (
+                      <button
+                        key={amt}
+                        type="button"
+                        onClick={() => setRedPacketAmount(amt)}
+                        className={`px-3 py-1.5 rounded-full text-xs font-bold transition-all ${
+                          redPacketAmount === amt
+                            ? "bg-[#FFE0B2] text-[#D6724B] border border-[#FFB74D]"
+                            : "bg-white text-[#666] border border-[#EEE]"
+                        }`}
+                      >
+                        {amt} 铢
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* 吉祥附言 */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="text-xs font-bold text-[#8C8279]">
+                        红包寄语：
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const random = randomRedPacketBlessings[Math.floor(Math.random() * randomRedPacketBlessings.length)];
+                          setRedPacketBlessing(random);
+                        }}
+                        className="text-[11px] text-[#D6724B] font-bold flex items-center gap-1 active:scale-90 transition-transform"
+                      >
+                        <i className="ph-bold ph-dice-five"></i>
+                        <span>🎲 换一句吉言</span>
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={redPacketBlessing}
+                      onChange={(e) => setRedPacketBlessing(e.target.value)}
+                      placeholder="写下您的祝福寄语..."
+                      className="w-full p-3 bg-white rounded-xl border border-[#EAEAEA] text-xs text-[#555] outline-none"
+                    />
+                  </div>
+
+                  {/* 确认发红包按钮 */}
+                  <button
+                    onClick={handleSendRedPacket}
+                    className="w-full py-4 bg-gradient-to-r from-[#FF5722] to-[#E64A19] text-white font-bold rounded-2xl shadow-lg active:scale-95 transition-transform text-sm mt-2 flex items-center justify-center gap-2"
+                  >
+                    <span>🧧</span>
+                    <span>立即封入并送达红包 ({redPacketAmount || 0} 铢)</span>
+                  </button>
+                </>
+              ) : (
+                <>
+                  {/* 背包物品选择 */}
+                  <div>
+                    <label className="text-xs font-bold text-[#8C8279] mb-2 block">
+                      选择您背包中的心意礼物：
+                    </label>
+                    {backpackGifts.length > 0 ? (
+                      <div className="grid grid-cols-2 gap-2.5 max-h-52 overflow-y-auto p-1 bg-white rounded-2xl border border-[#EAEAEA] no-scrollbar">
+                        {backpackGifts.map((item, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => setSelectedGiftItem(item)}
+                            className={`p-2.5 rounded-xl border text-xs cursor-pointer active:scale-95 transition-all flex items-center gap-2 ${
+                              selectedGiftItem?.id === item.id
+                                ? "bg-[#FFF4ED] border-[#D6724B] shadow-xs text-[#D6724B] font-bold"
+                                : "bg-[#FDFCF8] border-[#EEE] text-[#555]"
+                            }`}
+                          >
+                            <span className="text-xl shrink-0">🎁</span>
+                            <div className="truncate flex-1">
+                              <div className="truncate font-medium">{item.name}</div>
+                              <div className="text-[10px] text-[#999] truncate">{item.merchant || item.shop || "背包珍藏"}</div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="p-6 bg-white rounded-2xl border border-dashed border-[#DDD] text-center text-xs text-[#999] space-y-1">
+                        <div>🎒 您的背包空空如也</div>
+                        <div className="text-[11px] text-[#BBB]">可前往太疾驰商城逛逛选购心仪之物再来赠送哦~</div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* 礼物赠言 */}
+                  <div>
+                    <div className="flex justify-between items-center mb-1.5">
+                      <label className="text-xs font-bold text-[#8C8279]">
+                        赠言寄语：
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const random = randomGiftBlessings[Math.floor(Math.random() * randomGiftBlessings.length)];
+                          setGiftBlessing(random);
+                        }}
+                        className="text-[11px] text-[#D6724B] font-bold flex items-center gap-1 active:scale-90 transition-transform"
+                      >
+                        <i className="ph-bold ph-dice-five"></i>
+                        <span>🎲 换一句赠言</span>
+                      </button>
+                    </div>
+                    <input
+                      type="text"
+                      value={giftBlessing}
+                      onChange={(e) => setGiftBlessing(e.target.value)}
+                      placeholder="写下赠送这件物品的心意..."
+                      className="w-full p-3 bg-white rounded-xl border border-[#EAEAEA] text-xs text-[#555] outline-none"
+                    />
+                  </div>
+
+                  {/* 确认送礼按钮 */}
+                  <button
+                    onClick={handleSendGift}
+                    disabled={!selectedGiftItem}
+                    className={`w-full py-4 font-bold rounded-2xl shadow-lg transition-transform text-sm mt-2 flex items-center justify-center gap-2 ${
+                      selectedGiftItem
+                        ? "bg-gradient-to-r from-[#D6724B] to-[#C05D36] text-white active:scale-95"
+                        : "bg-[#EAEAEA] text-[#999] cursor-not-allowed"
+                    }`}
+                  >
+                    <span>🎁</span>
+                    <span>赠送【{selectedGiftItem ? selectedGiftItem.name : "请选择物品"}】并送达府邸</span>
+                  </button>
+                </>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 活动选择页面 */}
       {showActivitySelect && (
         <ActivitySelectionPage
@@ -76757,7 +77207,112 @@ const T8ChatDetail = ({
                         style={{ position: "relative", maxWidth: "100%" }}
                       >
                         {/* 原本包裹的卡片、图片内容均维持不变 */}
-                        {msg.type === "shopping_session_card" ? (
+                        {msg.type === "red_packet" ? (
+                          <div
+                            style={{
+                              background: "linear-gradient(135deg, #E64A19 0%, #D84315 100%)",
+                              borderRadius: "16px",
+                              padding: "14px 16px",
+                              minWidth: "210px",
+                              maxWidth: "280px",
+                              color: "#FFF",
+                              boxShadow: "0 6px 18px rgba(230, 74, 25, 0.3)",
+                              border: "1.5px solid #FF8A65",
+                              cursor: "default"
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                              <div style={{
+                                width: "38px",
+                                height: "38px",
+                                borderRadius: "50%",
+                                background: "linear-gradient(135deg, #FFE082 0%, #FFB300 100%)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "20px",
+                                boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+                                shrink: 0
+                              }}>
+                                🧧
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: "14px", fontWeight: "bold", color: "#FFE082" }}>
+                                  五铢钱心意红包
+                                </div>
+                                <div style={{ fontSize: "11px", color: "rgba(255,255,255,0.9)", marginTop: "2px" }} className="truncate">
+                                  {msg.content?.blessing || "一点心意，愿君欢喜"}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{
+                              background: "rgba(0, 0, 0, 0.15)",
+                              borderRadius: "10px",
+                              padding: "8px 12px",
+                              display: "flex",
+                              justifyContent: "space-between",
+                              alignItems: "center"
+                            }}>
+                              <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.8)" }}>已送达荷包</span>
+                              <span style={{ fontSize: "16px", fontWeight: "900", color: "#FFE082", fontFamily: "monospace" }}>
+                                {msg.content?.amountStr || `${msg.content?.amount} 铢`}
+                              </span>
+                            </div>
+                          </div>
+                        ) : msg.type === "gift_card" ? (
+                          <div
+                            style={{
+                              background: "linear-gradient(135deg, #FFFDF8 0%, #FFF5ED 100%)",
+                              borderRadius: "16px",
+                              padding: "14px 16px",
+                              minWidth: "220px",
+                              maxWidth: "290px",
+                              border: "1.5px solid #FFCCBC",
+                              boxShadow: "0 6px 18px rgba(214, 114, 75, 0.12)",
+                              cursor: "default"
+                            }}
+                          >
+                            <div style={{ display: "flex", alignItems: "center", gap: "10px", marginBottom: "10px" }}>
+                              <div style={{
+                                width: "40px",
+                                height: "40px",
+                                borderRadius: "12px",
+                                background: "linear-gradient(135deg, #FFAB91 0%, #FF7043 100%)",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontSize: "22px",
+                                boxShadow: "0 3px 8px rgba(255, 112, 67, 0.3)",
+                                shrink: 0
+                              }}>
+                                🎁
+                              </div>
+                              <div style={{ flex: 1, minWidth: 0 }}>
+                                <div style={{ fontSize: "14px", fontWeight: "bold", color: "#5D4037" }} className="truncate">
+                                  {msg.content?.itemName}
+                                </div>
+                                <div style={{ fontSize: "11px", color: "#D6724B", fontWeight: "500" }}>
+                                  {msg.content?.merchant || "私藏好物"} · {msg.content?.price || "心意无价"}
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{
+                              fontSize: "12px",
+                              color: "#6D4C41",
+                              background: "#FFF",
+                              padding: "8px 10px",
+                              borderRadius: "10px",
+                              border: "1px solid #FFE0B2",
+                              fontStyle: "italic",
+                              marginBottom: "6px"
+                            }}>
+                              "{msg.content?.blessing || "见字如晤，特赠此物"}"
+                            </div>
+                            <div style={{ fontSize: "10px", color: "#A1887F", textAlign: "right" }}>
+                              ✨ 实物已妥投至对方府邸
+                            </div>
+                          </div>
+                        ) : msg.type === "shopping_session_card" ? (
                           <CollapsibleShoppingCard msg={msg} />
                         ) : msg.type === "order_card" ? (
                           <div
@@ -77524,6 +78079,39 @@ const T8ChatDetail = ({
                   >
                     <i
                       className="ph-bold ph-book-bookmark"
+                      style={{
+                        fontSize: "24px",
+                        color: "#666",
+                        transition: "all 0.2s ease",
+                      }}
+                    ></i>
+                  </div>
+                )}
+
+                {/* 送礼与红包按钮 */}
+                {!isGroupChat && (
+                  <div
+                    title="送礼与红包"
+                    style={{
+                      cursor: "pointer",
+                      padding: "4px",
+                      borderRadius: "8px",
+                      position: "relative",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }}
+                    onMouseEnter={(e) =>
+                      (e.currentTarget.style.backgroundColor =
+                        "rgba(255, 255, 255, 0.9)")
+                    }
+                    onMouseLeave={(e) =>
+                      (e.currentTarget.style.backgroundColor = "transparent")
+                    }
+                    onClick={handleOpenGiftModal}
+                  >
+                    <i
+                      className="ph-bold ph-gift"
                       style={{
                         fontSize: "24px",
                         color: "#666",
