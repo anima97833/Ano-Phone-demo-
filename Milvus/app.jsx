@@ -82242,7 +82242,9 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
   const [decorImages, setDecorImages] = React.useState({
     left: null,
     right: null,
+    cover: null,
   });
+  const [userAvatar, setUserAvatar] = useState("");
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [newMomentText, setNewMomentText] = useState("");
   const [newMomentColor, setNewMomentColor] = useState("#EAD6D6");
@@ -82252,6 +82254,62 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
   const [userCommentText, setUserCommentText] = useState("");
   // 按钮状态管理
   const [buttonStates, setButtonStates] = useState({});
+
+  // 空间自定义资料 (空间标语、称号徽章、个人姓名、个性签名)
+  const [spaceProfile, setSpaceProfile] = useState(() => {
+    try {
+      const saved = localStorage.getItem("t8_space_profile");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      title: "广陵密探 · 浮生录",
+      subtitle: "隐鸢阁密探秘闻与日常分享",
+      userName: "广陵王",
+      badge: "绣衣楼掌舵",
+      bio: "山河远阔，人间烟火，听雨品茗",
+    };
+  });
+  const [showEditProfileModal, setShowEditProfileModal] = useState(false);
+  const [editProfileForm, setEditProfileForm] = useState({
+    title: "广陵密探 · 浮生录",
+    subtitle: "隐鸢阁密探秘闻与日常分享",
+    userName: "广陵王",
+    badge: "绣衣楼掌舵",
+    bio: "山河远阔，人间烟火，听雨品茗",
+  });
+
+  const handleOpenEditProfile = () => {
+    setEditProfileForm({ ...spaceProfile });
+    setShowEditProfileModal(true);
+  };
+
+  const handleSaveProfile = () => {
+    const updated = {
+      title: editProfileForm.title?.trim() || "广陵密探 · 浮生录",
+      subtitle: editProfileForm.subtitle?.trim() || "隐鸢阁密探秘闻与日常分享",
+      userName: editProfileForm.userName?.trim() || "广陵王",
+      badge: editProfileForm.badge?.trim() || "绣衣楼掌舵",
+      bio: editProfileForm.bio?.trim() || "山河远阔，人间烟火，听雨品茗",
+    };
+    setSpaceProfile(updated);
+    try {
+      localStorage.setItem("t8_space_profile", JSON.stringify(updated));
+    } catch (e) {}
+    setShowEditProfileModal(false);
+  };
+
+  // 加载用户头像
+  React.useEffect(() => {
+    const fetchUserAvatar = async () => {
+      if (window.settingsStore) {
+        try {
+          const av = await window.settingsStore.getUserAvatar();
+          if (av) setUserAvatar(av);
+        } catch (e) {}
+      }
+    };
+    fetchUserAvatar();
+  }, []);
 
   // [新增] 从Pixabay搜索图片方法
   const searchPixabayImage = async (query, apiKey) => {
@@ -82286,6 +82344,9 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
               null,
             right:
               decorItems.find((item) => item.position === "right")?.imageData ||
+              null,
+            cover:
+              decorItems.find((item) => item.position === "cover")?.imageData ||
               null,
           };
           setDecorImages(loadedImages);
@@ -82626,6 +82687,14 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
           }
         }
       }
+
+      // 如果未配置身份，使用空间个人姓名和头像
+      if (userInfo.name === "我" && spaceProfile?.userName) {
+        userInfo.name = spaceProfile.userName;
+      }
+      if (!userInfo.avatar && userAvatar) {
+        userInfo.avatar = userAvatar;
+      }
     } catch (e) {
       console.error("获取用户角色信息失败:", e);
     }
@@ -82697,7 +82766,7 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
     // 创建新评论
     const newComment = {
       id: Date.now() + Math.random(),
-      author: "用户",
+      author: spaceProfile?.userName || "广陵王",
       authorId: "user",
       text: replyingTo
         ? `@${replyingTo.author} ${userCommentText}`
@@ -83024,212 +83093,531 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
         background: "#FDFCFB",
       }}
     >
-      {/* 顶部：双方框一圆 */}
+      {/* ================= 简约大方 · 空间风格头部 (QQ空间/朋友圈空间主页模式) ================= */}
       <div
         style={{
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: "30px",
-          marginBottom: "24px",
-        }}
-      >
-        {/* 左侧方块 */}
-        <div
-          style={{
-            width: "70px",
-            height: "70px",
-            border: "5px solid #1A1A1A",
-            borderRadius: "4px",
-            cursor: "pointer",
-            position: "relative",
-            overflow: "hidden",
-          }}
-          onClick={() => document.getElementById("left-image-upload").click()}
-        >
-          {decorImages.left ? (
-            <img
-              src={decorImages.left}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-              alt="左侧装饰"
-            />
-          ) : null}
-          <input
-            id="left-image-upload"
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={(e) => handleImageUpload("left", e)}
-          />
-        </div>
-        <div
-          style={{
-            width: "25px",
-            height: "25px",
-            border: "2px solid #333",
-            borderRadius: "50%",
-          }}
-        ></div>
-        {/* 右侧方块 */}
-        <div
-          style={{
-            width: "70px",
-            height: "70px",
-            border: "5px solid #1A1A1A",
-            borderRadius: "4px",
-            cursor: "pointer",
-            position: "relative",
-            overflow: "hidden",
-          }}
-          onClick={() => document.getElementById("right-image-upload").click()}
-        >
-          {decorImages.right ? (
-            <img
-              src={decorImages.right}
-              style={{
-                width: "100%",
-                height: "100%",
-                objectFit: "cover",
-              }}
-              alt="右侧装饰"
-            />
-          ) : null}
-          <input
-            id="right-image-upload"
-            type="file"
-            accept="image/*"
-            style={{ display: "none" }}
-            onChange={(e) => handleImageUpload("right", e)}
-          />
-        </div>
-      </div>
-
-      {/* 中间：灰色圆角矩形 + 四个淡粉方块 */}
-      <div
-        style={{
-          background: "#CCCCCC",
+          position: "relative",
+          marginBottom: "18px",
           borderRadius: "20px",
-          padding: "15px",
-          marginBottom: "24px",
-          display: "flex",
-          gap: "10px",
-          justifyContent: "space-between",
+          overflow: "hidden",
+          background: "#FFF",
+          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.04)",
+          border: "1px solid rgba(0, 0, 0, 0.05)",
         }}
       >
-        {[1, 2, 3, 4].map((i) => (
-          <div
-            key={i}
-            style={{
-              flex: 1,
-              aspectRatio: "1/1",
-              background: "#EAE2E2",
-              borderRadius: "4px",
-            }}
-          ></div>
-        ))}
-      </div>
-
-      {/* 故事头像行 */}
-      <div
-        style={{
-          display: "flex",
-          gap: "15px",
-          marginBottom: "30px",
-          overflowX: "auto",
-          alignItems: "center",
-        }}
-        className="no-scrollbar"
-      >
+        {/* 1. 空间主封面大图 (Cover Wall) */}
         <div
-          className="active-press"
-          onClick={() => setShowCreateModal(true)}
           style={{
-            width: "56px",
-            height: "56px",
-            borderRadius: "50%",
-            border: "2px dashed #85C9D9",
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            flexShrink: 0,
-            cursor: "pointer",
+            position: "relative",
+            width: "100%",
+            height: "140px",
+            background: decorImages.cover
+              ? `url(${decorImages.cover}) center/cover no-repeat`
+              : "linear-gradient(135deg, #4A5568 0%, #718096 50%, #A0AEC0 100%)",
+            transition: "all 0.3s ease",
           }}
         >
-          <i
-            className="ph-bold ph-plus"
-            style={{ color: "#85C9D9", fontSize: "24px" }}
-          ></i>
-        </div>
-        {/* 显示发送了朋友圈动态的角色头像 */}
-        {(() => {
-          // 获取不重复的角色，最多4个
-          const uniqueChars = [];
-          const charIds = new Set();
+          {/* 封面渐变遮罩 (增强层次感与白字可读性) */}
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              background:
+                "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.5) 100%)",
+            }}
+          />
 
-          for (const item of moments) {
-            if (!charIds.has(item.char.id) && uniqueChars.length < 4) {
-              charIds.add(item.char.id);
-              uniqueChars.push(item.char);
-            }
-          }
+          {/* 右上角：更换封面按钮 */}
+          <div
+            onClick={() => document.getElementById("cover-image-upload").click()}
+            style={{
+              position: "absolute",
+              top: "12px",
+              right: "12px",
+              background: "rgba(255, 255, 255, 0.25)",
+              backdropFilter: "blur(8px)",
+              border: "1px solid rgba(255, 255, 255, 0.4)",
+              color: "#FFF",
+              padding: "5px 10px",
+              borderRadius: "14px",
+              fontSize: "11px",
+              fontWeight: "600",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.15)",
+              zIndex: 2,
+            }}
+            className="active-press"
+          >
+            <i className="ph-bold ph-image text-sm"></i>
+            <span>更换背景墙</span>
+          </div>
+          <input
+            id="cover-image-upload"
+            type="file"
+            accept="image/*"
+            style={{ display: "none" }}
+            onChange={(e) => handleImageUpload("cover", e)}
+          />
 
-          // 如果角色不足4个，用灰色占位符填充
-          while (uniqueChars.length < 4) {
-            uniqueChars.push(null);
-          }
-
-          return uniqueChars.map((char, index) => (
+          {/* 封面左下：空间主题文字 (支持点击自定义) */}
+          <div
+            onClick={handleOpenEditProfile}
+            style={{
+              position: "absolute",
+              bottom: "12px",
+              left: "16px",
+              color: "#FFF",
+              textShadow: "0 2px 6px rgba(0,0,0,0.4)",
+              zIndex: 2,
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              gap: "2px",
+            }}
+            className="active-press"
+            title="点击自定义空间标语"
+          >
             <div
-              key={index}
               style={{
-                width: "56px",
-                height: "56px",
-                borderRadius: "50%",
-                background: char?.avatarBg || char?.avatarColor || "#C9C9C1",
-                flexShrink: 0,
+                fontSize: "16px",
+                fontWeight: "700",
+                letterSpacing: "0.5px",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <span>{spaceProfile.title}</span>
+              <i
+                className="ph-bold ph-pencil-simple"
+                style={{ fontSize: "13px", opacity: 0.8 }}
+              ></i>
+            </div>
+            <div
+              style={{
+                fontSize: "11px",
+                opacity: 0.9,
+              }}
+            >
+              {spaceProfile.subtitle}
+            </div>
+          </div>
+        </div>
+
+        {/* 2. 个人信息名片与互动统计 (Profile & Stats) */}
+        <div
+          style={{
+            padding: "10px 16px 14px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "10px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginTop: "-32px",
+              position: "relative",
+              zIndex: 3,
+            }}
+          >
+            {/* 头像 + 昵称/身份 (支持点击自定义) */}
+            <div
+              onClick={handleOpenEditProfile}
+              style={{
+                display: "flex",
+                alignItems: "flex-end",
+                gap: "10px",
+                cursor: "pointer",
+              }}
+              className="active-press"
+              title="点击编辑个人称号与资料"
+            >
+              <div
+                style={{
+                  width: "56px",
+                  height: "56px",
+                  borderRadius: "16px",
+                  border: "3px solid #FFF",
+                  background: userAvatar
+                    ? `url(${userAvatar}) center/cover no-repeat`
+                    : "#D6724B",
+                  boxShadow: "0 4px 12px rgba(0, 0, 0, 0.12)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  color: "#FFF",
+                  fontSize: "20px",
+                  fontWeight: "bold",
+                  overflow: "hidden",
+                  flexShrink: 0,
+                }}
+              >
+                {!userAvatar && (spaceProfile.userName?.[0] || "广")}
+              </div>
+              <div style={{ paddingBottom: "2px" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: "15px",
+                      fontWeight: "700",
+                      color: "#2D3748",
+                    }}
+                  >
+                    {spaceProfile.userName}
+                  </span>
+                  <span
+                    style={{
+                      fontSize: "10px",
+                      background: "#FFF4ED",
+                      color: "#D6724B",
+                      border: "1px solid #FFD8C7",
+                      padding: "1px 6px",
+                      borderRadius: "6px",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {spaceProfile.badge}
+                  </span>
+                  <i
+                    className="ph-bold ph-pencil-simple"
+                    style={{ fontSize: "11px", color: "#A0AEC0" }}
+                  ></i>
+                </div>
+                <div
+                  style={{
+                    fontSize: "11px",
+                    color: "#718096",
+                    marginTop: "2px",
+                    maxWidth: "160px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                  title={spaceProfile.bio}
+                >
+                  {spaceProfile.bio}
+                </div>
+              </div>
+            </div>
+
+            {/* 动态数统计胶囊 */}
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                padding: "5px 10px",
+                background: "#F8F9FA",
+                borderRadius: "10px",
+                border: "1px solid #EDF2F7",
+                alignItems: "center",
+              }}
+            >
+              <div style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: "700",
+                    color: "#2D3748",
+                    lineHeight: "1.2",
+                  }}
+                >
+                  {moments.length}
+                </div>
+                <div style={{ fontSize: "10px", color: "#A0AEC0" }}>说说</div>
+              </div>
+              <div
+                style={{
+                  width: "1px",
+                  height: "16px",
+                  background: "#E2E8F0",
+                }}
+              />
+              <div style={{ textAlign: "center" }}>
+                <div
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: "700",
+                    color: "#D6724B",
+                    lineHeight: "1.2",
+                  }}
+                >
+                  {new Set(moments.map((m) => m.char?.name).filter(Boolean)).size}
+                </div>
+                <div style={{ fontSize: "10px", color: "#A0AEC0" }}>密探</div>
+              </div>
+            </div>
+          </div>
+
+          {/* 3. 空间快捷操作栏 (发说说、刷新动态、自定义资料) */}
+          <div
+            style={{
+              display: "flex",
+              gap: "8px",
+              paddingTop: "6px",
+              borderTop: "1px dashed #EDF2F7",
+            }}
+          >
+            {/* 发动态按钮 */}
+            <button
+              onClick={() => setShowCreateModal(true)}
+              style={{
+                flex: 1.2,
+                padding: "8px 10px",
+                borderRadius: "10px",
+                background: "linear-gradient(135deg, #FFF4ED 0%, #FFE9DC 100%)",
+                border: "1px solid #FFD8C7",
+                color: "#D6724B",
+                fontSize: "12px",
+                fontWeight: "700",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#FFF",
-                fontSize: "18px",
+                gap: "5px",
+                cursor: "pointer",
+                boxShadow: "0 2px 6px rgba(214, 114, 75, 0.08)",
+                transition: "all 0.2s ease",
+              }}
+              className="active-press"
+            >
+              <i className="ph-bold ph-pencil-simple-line text-sm"></i>
+              <span>写说说</span>
+            </button>
+
+            {/* 编辑/装扮资料按钮 */}
+            <button
+              onClick={handleOpenEditProfile}
+              style={{
+                flex: 1,
+                padding: "8px 10px",
+                borderRadius: "10px",
+                background: "#FFF9F5",
+                border: "1px solid #FFE0D3",
+                color: "#B45309",
+                fontSize: "12px",
+                fontWeight: "600",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+                cursor: "pointer",
+                transition: "all 0.2s ease",
+              }}
+              className="active-press"
+            >
+              <i className="ph-bold ph-user-gear text-sm"></i>
+              <span>装扮资料</span>
+            </button>
+
+            {/* 刷新动态按钮 */}
+            <button
+              onClick={generateMoments}
+              disabled={isLoading}
+              style={{
+                padding: "8px 12px",
+                borderRadius: "10px",
+                background: "#F8F9FA",
+                border: "1px solid #E2E8F0",
+                color: "#4A5568",
+                fontSize: "12px",
+                fontWeight: "600",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+                cursor: isLoading ? "not-allowed" : "pointer",
+                opacity: isLoading ? 0.6 : 1,
+                transition: "all 0.2s ease",
+              }}
+              className="active-press"
+            >
+              <i
+                className={`ph-bold ph-arrows-clockwise text-sm`}
+                style={{
+                  display: "inline-block",
+                  animation: isLoading ? "spin 1s linear infinite" : "none",
+                }}
+              ></i>
+              <span>{isLoading ? "传信中" : "刷新"}</span>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 4. 密探好友故事圈 (好友速览与快捷筛选) */}
+      <div
+        style={{
+          background: "#FFF",
+          borderRadius: "16px",
+          padding: "12px 14px",
+          marginBottom: "18px",
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.03)",
+          border: "1px solid #F5F5F5",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "10px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <i className="ph-fill ph-users-three text-[#D6724B] text-sm"></i>
+            <span
+              style={{
+                fontSize: "12px",
+                fontWeight: "700",
+                color: "#2D3748",
               }}
             >
-              {char ? (
-                char.avatar ? (
-                  <T8AvatarLoader
-                    avatarId={char.avatar}
-                    fallbackColor={char.avatarBg || char.avatarColor}
-                  />
-                ) : char.name && char.name.length > 0 ? (
-                  char.name[0]
-                ) : (
-                  "?"
-                )
-              ) : null}
-            </div>
-          ));
-        })()}
-        {/* 黄色小三角 - 绑定刷新事件与旋转动画 */}
+              密探好友圈
+            </span>
+          </div>
+          <span style={{ fontSize: "11px", color: "#A0AEC0" }}>
+            共 {new Set(moments.map((m) => m.char?.name).filter(Boolean)).size} 位密探活跃
+          </span>
+        </div>
+
         <div
-          onClick={generateMoments}
           style={{
-            alignSelf: "flex-end",
-            marginLeft: "auto",
-            width: 0,
-            height: 0,
-            borderLeft: "10px solid transparent",
-            borderRight: "10px solid transparent",
-            borderBottom: "16px solid #F2D06B",
-            opacity: isLoading ? 0.3 : 0.8,
-            cursor: "pointer",
-            transition: "transform 0.3s ease",
-            transform: isLoading ? "rotate(180deg)" : "rotate(0deg)",
+            display: "flex",
+            gap: "12px",
+            overflowX: "auto",
+            alignItems: "center",
+            paddingBottom: "2px",
           }}
-        ></div>
+          className="no-scrollbar"
+        >
+          {/* 发布快捷加号 */}
+          <div
+            className="active-press"
+            onClick={() => setShowCreateModal(true)}
+            style={{
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "4px",
+              cursor: "pointer",
+              flexShrink: 0,
+            }}
+          >
+            <div
+              style={{
+                width: "46px",
+                height: "46px",
+                borderRadius: "50%",
+                border: "2px dashed #D6724B",
+                background: "#FFF9F5",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#D6724B",
+              }}
+            >
+              <i className="ph-bold ph-plus text-base"></i>
+            </div>
+            <span
+              style={{
+                fontSize: "10px",
+                color: "#718096",
+                fontWeight: "500",
+              }}
+            >
+              发动态
+            </span>
+          </div>
+
+          {/* 好友动态头像列表 */}
+          {(() => {
+            const uniqueChars = [];
+            const charNames = new Set();
+            for (const item of moments) {
+              if (item.char && item.char.name && !charNames.has(item.char.name)) {
+                charNames.add(item.char.name);
+                uniqueChars.push(item.char);
+              }
+            }
+
+            return uniqueChars.slice(0, 8).map((char, index) => (
+              <div
+                key={index}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  gap: "4px",
+                  flexShrink: 0,
+                }}
+              >
+                <div
+                  style={{
+                    width: "46px",
+                    height: "46px",
+                    borderRadius: "50%",
+                    padding: "2px",
+                    background:
+                      "linear-gradient(135deg, #FFD8C7 0%, #D6724B 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: "50%",
+                      background:
+                        char.avatarBg || char.avatarColor || "#C9C9C1",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      color: "#FFF",
+                      fontSize: "14px",
+                      fontWeight: "bold",
+                      overflow: "hidden",
+                      border: "2px solid #FFF",
+                    }}
+                  >
+                    {char.avatar ? (
+                      <T8AvatarLoader
+                        avatarId={char.avatar}
+                        fallbackColor={char.avatarBg || char.avatarColor}
+                      />
+                    ) : (
+                      char.name?.[0] || "?"
+                    )}
+                  </div>
+                </div>
+                <span
+                  style={{
+                    fontSize: "10px",
+                    color: "#4A5568",
+                    maxWidth: "48px",
+                    whiteSpace: "nowrap",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                  }}
+                >
+                  {char.name}
+                </span>
+              </div>
+            ));
+          })()}
+        </div>
       </div>
 
       {/* 动态信息流 */}
@@ -83729,6 +84117,354 @@ const T8MomentsPage = ({ pixabayApiKey }) => {
                 }}
               >
                 发布
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 自定义空间资料与称号徽章弹窗 */}
+      {showEditProfileModal && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0, 0, 0, 0.55)",
+            backdropFilter: "blur(4px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 1000,
+          }}
+          onClick={(e) => {
+            if (e.target === e.currentTarget) setShowEditProfileModal(false);
+          }}
+        >
+          <div
+            style={{
+              width: "90%",
+              maxWidth: "420px",
+              background: "#FFF",
+              borderRadius: "20px",
+              padding: "22px 20px",
+              boxShadow: "0 12px 36px rgba(0, 0, 0, 0.2)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+              maxHeight: "90vh",
+              overflowY: "auto",
+            }}
+            className="no-scrollbar"
+          >
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                borderBottom: "1px solid #F0F0F0",
+                paddingBottom: "12px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div
+                  style={{
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "8px",
+                    background: "#FFF4ED",
+                    color: "#D6724B",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                >
+                  <i className="ph-bold ph-user-gear text-lg"></i>
+                </div>
+                <h3
+                  style={{
+                    margin: 0,
+                    fontSize: "16px",
+                    fontWeight: "bold",
+                    color: "#2D3748",
+                  }}
+                >
+                  自定义空间资料
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowEditProfileModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  fontSize: "18px",
+                  color: "#A0AEC0",
+                  cursor: "pointer",
+                  padding: "4px",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 个人姓名 */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "#4A5568",
+                  marginBottom: "6px",
+                }}
+              >
+                个人姓名 / 昵称
+              </label>
+              <input
+                type="text"
+                value={editProfileForm.userName}
+                onChange={(e) =>
+                  setEditProfileForm({
+                    ...editProfileForm,
+                    userName: e.target.value,
+                  })
+                }
+                placeholder="例如：广陵王"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid #E2E8F0",
+                  fontSize: "13px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 称号徽章 */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "#4A5568",
+                  marginBottom: "6px",
+                }}
+              >
+                称号徽章
+              </label>
+              <input
+                type="text"
+                value={editProfileForm.badge}
+                onChange={(e) =>
+                  setEditProfileForm({
+                    ...editProfileForm,
+                    badge: e.target.value,
+                  })
+                }
+                placeholder="例如：绣衣楼掌舵 / 隐鸢阁主"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid #E2E8F0",
+                  fontSize: "13px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+              {/* 快捷推荐标签 */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "6px",
+                  marginTop: "6px",
+                  flexWrap: "wrap",
+                }}
+              >
+                {[
+                  "绣衣楼掌舵",
+                  "隐鸢阁主",
+                  "汉室宗亲",
+                  "天下第一密探",
+                  "摸鱼闲官",
+                ].map((tag) => (
+                  <span
+                    key={tag}
+                    onClick={() =>
+                      setEditProfileForm({ ...editProfileForm, badge: tag })
+                    }
+                    style={{
+                      fontSize: "10px",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      background:
+                        editProfileForm.badge === tag ? "#FFF0E6" : "#F7FAFC",
+                      color:
+                        editProfileForm.badge === tag ? "#D6724B" : "#718096",
+                      border:
+                        editProfileForm.badge === tag
+                          ? "1px solid #FFD8C7"
+                          : "1px solid #E2E8F0",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* 空间标语 / 主题 */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "#4A5568",
+                  marginBottom: "6px",
+                }}
+              >
+                空间主标语
+              </label>
+              <input
+                type="text"
+                value={editProfileForm.title}
+                onChange={(e) =>
+                  setEditProfileForm({
+                    ...editProfileForm,
+                    title: e.target.value,
+                  })
+                }
+                placeholder="例如：广陵密探 · 浮生录"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid #E2E8F0",
+                  fontSize: "13px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 空间副标语 / 简介 */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "#4A5568",
+                  marginBottom: "6px",
+                }}
+              >
+                空间副标语 / 简介
+              </label>
+              <input
+                type="text"
+                value={editProfileForm.subtitle}
+                onChange={(e) =>
+                  setEditProfileForm({
+                    ...editProfileForm,
+                    subtitle: e.target.value,
+                  })
+                }
+                placeholder="例如：隐鸢阁密探秘闻与日常分享"
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid #E2E8F0",
+                  fontSize: "13px",
+                  outline: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 个性签名 */}
+            <div>
+              <label
+                style={{
+                  display: "block",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  color: "#4A5568",
+                  marginBottom: "6px",
+                }}
+              >
+                个性签名
+              </label>
+              <textarea
+                value={editProfileForm.bio}
+                onChange={(e) =>
+                  setEditProfileForm({
+                    ...editProfileForm,
+                    bio: e.target.value,
+                  })
+                }
+                rows={2}
+                placeholder="例如：山河远阔，人间烟火，听雨品茗"
+                style={{
+                  width: "100%",
+                  padding: "8px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid #E2E8F0",
+                  fontSize: "13px",
+                  outline: "none",
+                  resize: "none",
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+
+            {/* 操作按钮 */}
+            <div
+              style={{
+                display: "flex",
+                gap: "10px",
+                marginTop: "6px",
+              }}
+            >
+              <button
+                onClick={() => setShowEditProfileModal(false)}
+                style={{
+                  flex: 1,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "1px solid #E2E8F0",
+                  background: "#F7FAFC",
+                  color: "#4A5568",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: "600",
+                }}
+              >
+                取消
+              </button>
+              <button
+                onClick={handleSaveProfile}
+                style={{
+                  flex: 1.2,
+                  padding: "10px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "linear-gradient(135deg, #D6724B 0%, #B85832 100%)",
+                  color: "#FFF",
+                  cursor: "pointer",
+                  fontSize: "13px",
+                  fontWeight: "700",
+                  boxShadow: "0 2px 8px rgba(214, 114, 75, 0.3)",
+                }}
+              >
+                保存资料
               </button>
             </div>
           </div>
