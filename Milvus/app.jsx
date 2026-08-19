@@ -2,6 +2,133 @@
 /** @jsxFrag React.Fragment */
 const { useState, useEffect, useRef } = React;
 
+// ==================== 全局通用头像渲染加载器 ====================
+const UniversalAvatarLoader = ({ avatar, avatarId, fallbackColor = "#ddd", name = "?", style = {}, className = "" }) => {
+  const [avatarData, setAvatarData] = React.useState(null);
+  const [loadFailed, setLoadFailed] = React.useState(false);
+
+  const targetAvatar = avatar !== undefined ? avatar : avatarId;
+
+  React.useEffect(() => {
+    let isMounted = true;
+    setLoadFailed(false);
+
+    if (!targetAvatar) {
+      setAvatarData(null);
+      return;
+    }
+
+    // 1. 如果是直链 URL / Base64 数据
+    if (typeof targetAvatar === "string" && (
+      targetAvatar.startsWith("data:image") ||
+      targetAvatar.startsWith("http://") ||
+      targetAvatar.startsWith("https://") ||
+      targetAvatar.startsWith("blob:") ||
+      targetAvatar.startsWith("/") ||
+      targetAvatar.startsWith("./")
+    )) {
+      setAvatarData(targetAvatar);
+      return;
+    }
+
+    // 2. 如果是 IndexedDB 中的 avatarId 键值
+    const fetchFromStore = async () => {
+      try {
+        const store = window.avatarStore || (typeof avatarStore !== "undefined" ? avatarStore : null);
+        if (store && typeof store.get === "function") {
+          const item = await store.get(targetAvatar);
+          if (isMounted && item && item.avatarData) {
+            setAvatarData(item.avatarData);
+            return;
+          }
+        }
+      } catch (err) {
+        console.warn("UniversalAvatarLoader 加载头像失败:", err);
+      }
+      if (isMounted) setAvatarData(null);
+    };
+
+    fetchFromStore();
+
+    return () => { isMounted = false; };
+  }, [targetAvatar]);
+
+  const defaultImgStyle = {
+    width: "100%",
+    height: "100%",
+    objectFit: "cover",
+    borderRadius: "inherit",
+    display: "block",
+    ...style
+  };
+
+  if (avatarData && !loadFailed) {
+    return (
+      <img
+        src={avatarData}
+        alt={name}
+        className={className}
+        style={defaultImgStyle}
+        onError={() => setLoadFailed(true)}
+      />
+    );
+  }
+
+  // 优雅降级展示首字
+  const firstLetter = (name && typeof name === "string" && name.trim()) ? name.trim()[0] : "?";
+  return (
+    <div
+      className={`flex-center ${className}`}
+      style={{
+        width: "100%",
+        height: "100%",
+        background: fallbackColor || "#ddd",
+        color: "#fff",
+        fontSize: "10px",
+        fontWeight: "bold",
+        borderRadius: "inherit",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        userSelect: "none",
+        ...style
+      }}
+    >
+      {firstLetter}
+    </div>
+  );
+};
+
+window.UniversalAvatarLoader = UniversalAvatarLoader;
+window.T8AvatarLoader = UniversalAvatarLoader;
+var T8AvatarLoader = UniversalAvatarLoader;
+
+window.resolveAvatarUrl = async (avatarOrId, fallback = "") => {
+  if (!avatarOrId) return fallback;
+  if (typeof avatarOrId === "string" && (
+    avatarOrId.startsWith("data:image") ||
+    avatarOrId.startsWith("http://") ||
+    avatarOrId.startsWith("https://") ||
+    avatarOrId.startsWith("blob:") ||
+    avatarOrId.startsWith("/") ||
+    avatarOrId.startsWith("./")
+  )) {
+    return avatarOrId;
+  }
+  try {
+    const store = window.avatarStore || (typeof avatarStore !== "undefined" ? avatarStore : null);
+    if (store && typeof store.get === "function") {
+      const item = await store.get(avatarOrId);
+      if (item && item.avatarData) {
+        return item.avatarData;
+      }
+    }
+  } catch (e) {
+    console.warn("resolveAvatarUrl error:", e);
+  }
+  return fallback;
+};
+
 // ==================== 钱包与交易全局记录系统 ====================
 window.addTransactionRecord = (type, amount, source) => {
   try {
@@ -21537,11 +21664,7 @@ ${JSON.stringify(questions, null, 2)}
                     fontSize: "10px",
                   }}
                 >
-                  {char.avatar ? (
-                    <img src={char.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    char.name[0]
-                  )}
+                  <UniversalAvatarLoader avatar={char.avatar} fallbackColor={char.avatarColor} name={char.name} />
                 </div>
                 <span>{char.name}</span>
               </div>
@@ -22495,11 +22618,7 @@ ${JSON.stringify(questions, null, 2)}
                     fontSize: "10px",
                   }}
                 >
-                  {char.avatar ? (
-                    <img src={char.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    char.name[0]
-                  )}
+                  <UniversalAvatarLoader avatar={char.avatar} fallbackColor={char.avatarColor} name={char.name} />
                 </div>
                 <span>{char.name}</span>
               </div>
@@ -22830,8 +22949,16 @@ const HistoryRecordsModal = ({ title = "📋 历史满意度问卷", historyList
                       boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
                     }}
                   >
-                    <div style={{ fontSize: "14px", fontWeight: "bold", color: "#5a5f4d", marginBottom: "4px" }}>
-                      答卷人：{selectedRecord.answeredBy}
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "4px" }}>
+                      <div style={{ width: "24px", height: "24px", borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+                        <UniversalAvatarLoader
+                          avatar={selectedRecord.respondentAvatar}
+                          name={selectedRecord.answeredBy}
+                        />
+                      </div>
+                      <div style={{ fontSize: "14px", fontWeight: "bold", color: "#5a5f4d" }}>
+                        答卷人：{selectedRecord.answeredBy}
+                      </div>
                     </div>
                     <div style={{ fontSize: "12px", color: "#999" }}>
                       提交时间：{selectedRecord.createdAt}
@@ -23630,11 +23757,7 @@ ${JSON.stringify(questions, null, 2)}
                     fontSize: "10px",
                   }}
                 >
-                  {char.avatar ? (
-                    <img src={char.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    char.name[0]
-                  )}
+                  <UniversalAvatarLoader avatar={char.avatar} fallbackColor={char.avatarColor} name={char.name} />
                 </div>
                 <span>{char.name}</span>
               </div>
@@ -24587,11 +24710,7 @@ ${JSON.stringify(questions, null, 2)}
                     fontSize: "10px",
                   }}
                 >
-                  {char.avatar ? (
-                    <img src={char.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    char.name[0]
-                  )}
+                  <UniversalAvatarLoader avatar={char.avatar} fallbackColor={char.avatarColor} name={char.name} />
                 </div>
                 <span>{char.name}</span>
               </div>
@@ -25544,11 +25663,7 @@ ${JSON.stringify(questions, null, 2)}
                     fontSize: "10px",
                   }}
                 >
-                  {char.avatar ? (
-                    <img src={char.avatar} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
-                  ) : (
-                    char.name[0]
-                  )}
+                  <UniversalAvatarLoader avatar={char.avatar} fallbackColor={char.avatarColor} name={char.name} />
                 </div>
                 <span>{char.name}</span>
               </div>
@@ -46286,11 +46401,12 @@ const JumpGamePage = ({ onBack }) => {
   };
 
   // 选择代打角色
-  const handleSelectAutoChar = (char) => {
+  const handleSelectAutoChar = async (char) => {
     setSelectedChar(char);
     localStorage.setItem("jump_game_auto_char_id", char.id);
     if (char.avatar) {
-      setCharImg(char.avatar);
+      const realUrl = await window.resolveAvatarUrl(char.avatar, char.avatar);
+      setCharImg(realUrl);
     }
     setShowCharModal(false);
   };
@@ -46965,7 +47081,7 @@ ${isAuto ? `
                       }}
                     >
                       <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #D6724B' : '1px solid #DDD', marginBottom: 6 }}>
-                        <img src={char.avatar || "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEY-ClqevymgmdqN8oAAbGwXpbrH5vAQ2cAArMnAAJrJthXTWQDSRPv8eA9BA.png"} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <UniversalAvatarLoader avatar={char.avatar} fallbackColor={char.avatarColor} name={char.name} />
                       </div>
                       <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#D6724B' : '#4E342E', textAlign: 'center' }}>
                         {char.name}
@@ -47006,7 +47122,7 @@ ${isAuto ? `
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #E6D7C3' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #C49C58' }}>
-                  <img src={selectedChar?.avatar || charImg} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <UniversalAvatarLoader avatar={selectedChar?.avatar || charImg} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                 </div>
                 <div>
                   <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -47065,7 +47181,7 @@ ${isAuto ? `
                     >
                       {!isUser && (
                         <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginTop: 2 }}>
-                          <img src={selectedChar?.avatar || charImg} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <UniversalAvatarLoader avatar={selectedChar?.avatar || charImg} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                         </div>
                       )}
                       <div
@@ -47092,7 +47208,7 @@ ${isAuto ? `
               {isAiReplying && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
-                    <img src={selectedChar?.avatar || charImg} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <UniversalAvatarLoader avatar={selectedChar?.avatar || charImg} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                   </div>
                   <div style={{ background: '#FFF', padding: '8px 14px', borderRadius: '16px 16px 16px 2px', fontSize: '0.8rem', color: '#8D6E63', border: '1px solid #EAE0D5' }}>
                     {selectedChar?.name} 正在思考回复中... ✍️
@@ -48092,7 +48208,7 @@ ${isAuto ? `
       {gameState === 'result' && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: 'linear-gradient(135deg, #FFFDF8 0%, #F5EFEB 100%)', padding: '36px 24px 28px 24px', borderRadius: 24, textAlign: 'center', position: 'relative', width: '100%', maxWidth: 330, boxShadow: '0 12px 36px rgba(0,0,0,0.5)', border: '2px solid #E2D8CC' }}>
-            <img src={displayAvatar} style={{ width: 72, height: 72, borderRadius: '50%', position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', border: '4px solid #fff', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }} />
+            <div style={{ width: 72, height: 72, borderRadius: '50%', position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', border: '4px solid #fff', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}><UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} /></div>
 
             {isWin() ? (
               <>
@@ -48217,7 +48333,7 @@ ${isAuto ? `
               {/* 卡片 1: 角色立绘/头像 */}
               <div style={{ background: '#FFFDF9', borderRadius: 16, padding: '14px', border: '1.5px solid #E6D7C3', display: 'flex', alignItems: 'center', gap: 12, boxShadow: '0 2px 6px rgba(0,0,0,0.06)' }}>
                 <div style={{ width: 60, height: 60, borderRadius: '50%', overflow: 'hidden', border: '2px solid #ECE0D1', flexShrink: 0 }}>
-                  <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                 </div>
                 <div style={{ flex: 1 }}>
                   <div style={{ fontSize: '0.88rem', fontWeight: 'bold', color: '#4E342E', marginBottom: 2 }}>
@@ -48336,7 +48452,7 @@ ${isAuto ? `
                       }}
                     >
                       <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #D6724B' : '1px solid #DDD', marginBottom: 6 }}>
-                        <img src={char.avatar || DEFAULT_AVATAR_IMG} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <UniversalAvatarLoader avatar={char.avatar} fallbackColor={char.avatarColor} name={char.name} />
                       </div>
                       <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#D6724B' : '#4E342E', textAlign: 'center' }}>
                         {char.name}
@@ -48377,7 +48493,7 @@ ${isAuto ? `
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #E6D7C3' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #C49C58' }}>
-                  <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                 </div>
                 <div>
                   <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -48436,7 +48552,7 @@ ${isAuto ? `
                     >
                       {!isUser && (
                         <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginTop: 2 }}>
-                          <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                         </div>
                       )}
                       <div
@@ -48463,7 +48579,7 @@ ${isAuto ? `
               {isAiReplying && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
-                    <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                   </div>
                   <div style={{ background: '#FFF', padding: '8px 14px', borderRadius: '16px 16px 16px 2px', fontSize: '0.8rem', color: '#8D6E63', border: '1px solid #EAE0D5' }}>
                     {selectedChar?.name} 正在思考回复中... ✍️
@@ -49372,11 +49488,12 @@ const ArcheryGamePage = ({ onBack }) => {
     }
   };
 
-  const handleSelectAutoChar = (char) => {
+  const handleSelectAutoChar = async (char) => {
     setSelectedChar(char);
     localStorage.setItem("archery_game_auto_char_id", char.id);
     if (char.avatar) {
-      setArcherAvatar(char.avatar);
+      const realUrl = await window.resolveAvatarUrl(char.avatar, char.avatar);
+      setArcherAvatar(realUrl);
     }
     setShowCharModal(false);
   };
@@ -49671,7 +49788,7 @@ ${isAuto ? `
       {gameState === 'result' && (
         <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.75)', backdropFilter: 'blur(6px)', zIndex: 400, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
           <div style={{ background: 'linear-gradient(135deg, #FFFDF8 0%, #F5E8D2 100%)', padding: '36px 24px 28px 24px', borderRadius: 24, textAlign: 'center', position: 'relative', width: '100%', maxWidth: 330, boxShadow: '0 12px 36px rgba(0,0,0,0.5)', border: '2px solid #C49C58' }}>
-            <img src={displayAvatar} style={{ width: 72, height: 72, borderRadius: '50%', position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', border: '4px solid #fff', objectFit: 'cover', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }} />
+            <div style={{ width: 72, height: 72, borderRadius: '50%', position: 'absolute', top: -36, left: '50%', transform: 'translateX(-50%)', border: '4px solid #fff', overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.2)' }}><UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} /></div>
 
             <h2 style={{ color: score >= targetScore && lives > 0 ? '#D84315' : '#3E2723', fontSize: '1.4rem', fontWeight: '800', margin: '20px 0 6px 0' }}>
               {lives <= 0 ? '😔 生命耗尽 · 试炼止步' : (score >= targetScore ? `🎉 百步穿杨 · 突破第 ${stage} 关！` : '😔 未达标 · 挑战失败')}
@@ -49917,7 +50034,7 @@ ${isAuto ? `
                       }}
                     >
                       <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #D6724B' : '1px solid #DDD', marginBottom: 6 }}>
-                        <img src={char.avatar || DEFAULT_AVATAR} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <UniversalAvatarLoader avatar={char.avatar} fallbackColor={char.avatarColor} name={char.name} />
                       </div>
                       <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#D6724B' : '#4E342E', textAlign: 'center' }}>
                         {char.name}
@@ -49958,7 +50075,7 @@ ${isAuto ? `
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #E6D7C3' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #C49C58' }}>
-                  <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                 </div>
                 <div>
                   <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -50017,7 +50134,7 @@ ${isAuto ? `
                     >
                       {!isUser && (
                         <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginTop: 2 }}>
-                          <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                          <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                         </div>
                       )}
                       <div
@@ -50044,7 +50161,7 @@ ${isAuto ? `
               {isAiReplying && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
-                    <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                   </div>
                   <div style={{ background: '#FFF', padding: '8px 14px', borderRadius: '16px 16px 16px 2px', fontSize: '0.8rem', color: '#8D6E63', border: '1px solid #EAE0D5' }}>
                     {selectedChar?.name} 正在思考回复中... ✍️
@@ -50338,7 +50455,7 @@ const AgilityGamePage = ({ onBack }) => {
   }, [inGameChatMsgs, showInGameChat, isAiReplying]);
 
   // 选择代打角色
-  const handleSelectAutoChar = (char) => {
+  const handleSelectAutoChar = async (char) => {
     setSelectedChar(char);
     localStorage.setItem("agility_game_auto_char_id", char.id);
     setShowCharModal(false);
@@ -51017,7 +51134,7 @@ ${isAuto ? `
               }}
             >
               <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', border: '1.5px solid #D6724B' }}>
-                <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
               </div>
               <span style={{ fontSize: '0.76rem', fontWeight: 'bold', color: '#B85630' }}>
                 {selectedChar ? selectedChar.name : "选择密探"} ▾
@@ -51085,7 +51202,7 @@ ${isAuto ? `
             }}
           >
             <div style={{ width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', border: '1px solid #C49C58' }}>
-              <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
             </div>
             <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#5D4037' }}>局内小窗</span>
             {inGameChatMsgs.length > 0 && (
@@ -51350,7 +51467,7 @@ ${isAuto ? `
                       }}
                     >
                       <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #D6724B' : '1px solid #DDD', marginBottom: 6 }}>
-                        <img src={char.avatar || DEFAULT_AVATAR} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <UniversalAvatarLoader avatar={char.avatar} fallbackColor={char.avatarColor} name={char.name} />
                       </div>
                       <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#D6724B' : '#4E342E', textAlign: 'center' }}>
                         {char.name}
@@ -51391,7 +51508,7 @@ ${isAuto ? `
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #E6D7C3' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #C49C58' }}>
-                  <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                 </div>
                 <div>
                   <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -51442,7 +51559,7 @@ ${isAuto ? `
                   <div key={msg.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', gap: 8, alignItems: 'flex-start' }}>
                     {!isUser && (
                       <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid #C49C58' }}>
-                        <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                       </div>
                     )}
                     <div
@@ -51468,7 +51585,7 @@ ${isAuto ? `
               {isAiReplying && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid #C49C58' }}>
-                    <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                   </div>
                   <div style={{ background: '#FFFDF9', border: '1px solid #E6D7C3', padding: '8px 12px', borderRadius: '4px 16px 16px 16px', fontSize: '0.8rem', color: '#8D6E63' }}>
                     正在构思回复... ✍️
@@ -52642,7 +52759,7 @@ MBTI: ${charProfile.mbti || '未知'}
               }}
             >
               <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', border: '1.5px solid #00ACC1' }}>
-                <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
               </div>
               <span style={{ fontSize: '0.76rem', fontWeight: 'bold', color: '#00838F' }}>
                 {selectedChar ? selectedChar.name : "选择密探"} ▾
@@ -52696,7 +52813,7 @@ MBTI: ${charProfile.mbti || '未知'}
           }}
         >
           <div style={{ width: 24, height: 24, borderRadius: '50%', overflow: 'hidden', border: '1.5px solid #00ACC1' }}>
-            <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
           </div>
           <span style={{ fontSize: '0.75rem', fontWeight: 'bold', color: '#006064' }}>局内小窗</span>
           {inGameChatMsgs.length > 0 && (
@@ -52801,7 +52918,7 @@ MBTI: ${charProfile.mbti || '未知'}
                       }}
                     >
                       <div style={{ width: 52, height: 52, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #00ACC1' : '1px solid #DDD', marginBottom: 6 }}>
-                        <img src={char.avatar || "https://img.remit.ee/api/file/BQACAgUAAyEGAASHRsPbAAEZOYRqgEC1Mz_OffMtgithgxQBrCvDXwAC1R4AArHjCFTKnROMk9dJ3j0E.png"} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <UniversalAvatarLoader avatar={char.avatar} fallbackColor={char.avatarColor} name={char.name} />
                       </div>
                       <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#006064' : '#004D40', textAlign: 'center' }}>
                         {char.name}
@@ -52842,7 +52959,7 @@ MBTI: ${charProfile.mbti || '未知'}
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #B2DFDB' }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                 <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #00ACC1' }}>
-                  <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                 </div>
                 <div>
                   <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#004D40', display: 'flex', alignItems: 'center', gap: 4 }}>
@@ -52893,7 +53010,7 @@ MBTI: ${charProfile.mbti || '未知'}
                   <div key={msg.id} style={{ display: 'flex', justifyContent: isUser ? 'flex-end' : 'flex-start', gap: 8, alignItems: 'flex-start' }}>
                     {!isUser && (
                       <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid #00ACC1' }}>
-                        <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                       </div>
                     )}
                     <div
@@ -52919,7 +53036,7 @@ MBTI: ${charProfile.mbti || '未知'}
               {isAiReplying && (
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, border: '1px solid #00ACC1' }}>
-                    <img src={displayAvatar} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <UniversalAvatarLoader avatar={displayAvatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
                   </div>
                   <div style={{ background: '#FFFDF9', border: '1px solid #B2DFDB', padding: '8px 12px', borderRadius: '4px 16px 16px 16px', fontSize: '0.8rem', color: '#00838F' }}>
                     正在构思回复... ✍️
@@ -65893,11 +66010,14 @@ const OddFarmPage = ({ onBack }) => {
               gap: "8px",
             }}
           >
-            <iconify-icon
-              icon="ph:eye-fill"
-              style={{ color: "#A8C8BA" }}
-            ></iconify-icon>
-            正在暗中观察【{viewingCharacter?.name}】的农场
+            <div style={{ width: "22px", height: "22px", borderRadius: "50%", overflow: "hidden", flexShrink: 0 }}>
+              <UniversalAvatarLoader
+                avatar={viewingCharacter?.avatar}
+                fallbackColor={viewingCharacter?.avatarColor}
+                name={viewingCharacter?.name}
+              />
+            </div>
+            <span>正在暗中观察【{viewingCharacter?.name}】的农场</span>
           </div>
         )}
 
@@ -66624,8 +66744,17 @@ const OddFarmPage = ({ onBack }) => {
                   >
                     <div className="flex justify-between items-start mb-2">
                       <div className="flex items-center gap-2">
-                        <div className="w-9 h-9 rounded-full bg-[#A8C8BA] flex items-center justify-center text-white font-bold text-sm shadow-inner">
-                          {order.buyer.charAt(0)}
+                        <div className="w-9 h-9 rounded-full bg-[#A8C8BA] flex items-center justify-center text-white font-bold text-sm shadow-inner overflow-hidden flex-shrink-0">
+                          {(() => {
+                            const matchedChar = (availableFarmChars || []).find((c) => c.name === order.buyer);
+                            return (
+                              <UniversalAvatarLoader
+                                avatar={order.buyerAvatar || matchedChar?.avatar}
+                                fallbackColor={matchedChar?.avatarColor || "#A8C8BA"}
+                                name={order.buyer}
+                              />
+                            );
+                          })()}
                         </div>
                         <div>
                           <div className="font-bold text-[#5A5F4D] text-sm">
@@ -66882,12 +67011,16 @@ const OddFarmPage = ({ onBack }) => {
                 className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex items-center gap-4 cursor-pointer active:scale-95 transition-transform"
               >
                 <div
-                  className="w-12 h-12 rounded-full text-white flex items-center justify-center font-bold text-lg"
+                  className="w-12 h-12 rounded-full text-white flex items-center justify-center font-bold text-lg overflow-hidden flex-shrink-0"
                   style={{
                     backgroundColor: char.avatarColor || "#D99E82",
                   }}
                 >
-                  {(char.name || "")[0] || "?"}
+                  <UniversalAvatarLoader
+                    avatar={char.avatar}
+                    fallbackColor={char.avatarColor || "#D99E82"}
+                    name={char.name}
+                  />
                 </div>
                 <div className="flex flex-col">
                   <span className="font-bold text-[#5A5F4D]">{char.name}</span>
@@ -66927,8 +67060,12 @@ const OddFarmPage = ({ onBack }) => {
           >
             <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-200">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-full bg-[#A8C8BA] text-white flex items-center justify-center text-xs font-bold">
-                  {(viewingCharacter?.name || "")[0] || "?"}
+                <div className="w-8 h-8 rounded-full bg-[#A8C8BA] text-white flex items-center justify-center text-xs font-bold overflow-hidden flex-shrink-0">
+                  <UniversalAvatarLoader
+                    avatar={viewingCharacter?.avatar}
+                    fallbackColor={viewingCharacter?.avatarColor || "#A8C8BA"}
+                    name={viewingCharacter?.name}
+                  />
                 </div>
                 <span className="font-bold text-[#5A5F4D]">
                   {viewingCharacter?.name} 的作物
@@ -67152,90 +67289,8 @@ const T8Icons = {
   ),
 };
 
-// T8 头像加载组件
-const T8AvatarLoader = ({ avatarId, fallbackColor }) => {
-  const { useState, useEffect, useRef } = React;
-  const [avatarData, setAvatarData] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const lastLoadTime = useRef(0);
+// T8 头像加载组件（已在顶层全局统一声明为 UniversalAvatarLoader）
 
-  useEffect(() => {
-    const loadAvatar = async () => {
-      try {
-        const avatarItem = await avatarStore.get(avatarId);
-        if (avatarItem && avatarItem.avatarData) {
-          setAvatarData(avatarItem.avatarData);
-        }
-      } catch (error) {
-        console.error("加载头像失败:", error);
-      } finally {
-        setLoading(false);
-        lastLoadTime.current = Date.now();
-      }
-    };
-
-    loadAvatar();
-  }, [avatarId]);
-
-  // 添加定期检查机制，确保头像数据实时更新
-  useEffect(() => {
-    if (!avatarId) return;
-
-    const interval = setInterval(async () => {
-      // 每500毫秒检查一次头像数据是否更新
-      try {
-        const avatarItem = await avatarStore.get(avatarId);
-        if (avatarItem && avatarItem.avatarData) {
-          // 只有当头像数据确实改变时才更新状态
-          if (avatarItem.avatarData !== avatarData) {
-            setAvatarData(avatarItem.avatarData);
-          }
-        }
-      } catch (error) {
-        console.error("检查头像更新失败:", error);
-      }
-    }, 500);
-
-    return () => clearInterval(interval);
-  }, [avatarId, avatarData]);
-
-  if (loading) {
-    return (
-      <div
-        style={{
-          width: "100%",
-          height: "100%",
-          background: fallbackColor,
-          borderRadius: "50%",
-        }}
-      />
-    );
-  }
-
-  if (avatarData) {
-    return (
-      <img
-        src={avatarData}
-        style={{
-          width: "100%",
-          height: "100%",
-          objectFit: "cover",
-        }}
-      />
-    );
-  }
-
-  return (
-    <div
-      style={{
-        width: "100%",
-        height: "100%",
-        background: fallbackColor,
-        borderRadius: "50%",
-      }}
-    />
-  );
-};
 
 // T8 可拖拽红点组件
 const T8DraggableBadge = ({ count, onDismiss }) => {
