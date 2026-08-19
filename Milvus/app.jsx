@@ -69951,19 +69951,11 @@ const ChatSettingsModal = ({
             type="range"
             min="0"
             max="1"
-            step="0.1"
-            value={settings.backgroundOpacity || 1}
+            step="0.05"
+            value={typeof settings.backgroundOpacity === "number" ? settings.backgroundOpacity : 1}
             onChange={(e) => {
               const opacity = parseFloat(e.target.value);
               onChange({ ...settings, backgroundOpacity: opacity });
-
-              // 更新背景透明度
-              const overlay = document.querySelector(".chat-detail-overlay");
-              if (overlay) {
-                overlay.style.backgroundColor = `rgba(255, 255, 255, ${1 - opacity})`;
-              }
-
-              // 保存透明度设置
               localStorage.setItem("background_opacity", opacity);
             }}
             style={{
@@ -69972,7 +69964,7 @@ const ChatSettingsModal = ({
             }}
           />
           <span style={{ color: "#5d4e37", fontSize: "14px" }}>
-            {Math.round((settings.backgroundOpacity || 1) * 100)}%
+            {Math.round((typeof settings.backgroundOpacity === "number" ? settings.backgroundOpacity : 1) * 100)}%
           </span>
         </div>
 
@@ -71687,6 +71679,7 @@ const T8ChatDetail = ({
   const [inputText, setInputText] = React.useState("");
   const [isTyping, setIsTyping] = React.useState(false);
   const [showSettings, setShowSettings] = React.useState(false);
+  const [chatBackground, setChatBackground] = React.useState(null);
 
   // ===== [新增] 送礼与红包状态 =====
   const [showGiftModal, setShowGiftModal] = React.useState(false);
@@ -72457,30 +72450,7 @@ const T8ChatDetail = ({
       window.removeEventListener("appendShoppingSummary", handleAppendSummary);
   }, [chatData?.id]);
 
-  // ========== [新增] 背景更新和初始化 ==========
-  React.useEffect(() => {
-    // 初始化背景透明度
-    const overlay = document.querySelector(".chat-detail-overlay");
-    if (overlay) {
-      const opacity = settings.backgroundOpacity || 1;
-      // 创建背景覆盖层，只影响背景图片的透明度
-      let bgOverlay = overlay.querySelector(".bg-opacity-overlay");
-      if (!bgOverlay) {
-        bgOverlay = document.createElement("div");
-        bgOverlay.className = "bg-opacity-overlay";
-        bgOverlay.style.position = "absolute";
-        bgOverlay.style.top = "0";
-        bgOverlay.style.left = "0";
-        bgOverlay.style.width = "100%";
-        bgOverlay.style.height = "100%";
-        bgOverlay.style.pointerEvents = "none";
-        bgOverlay.style.zIndex = "-1";
-        overlay.insertBefore(bgOverlay, overlay.firstChild);
-      }
-      // 设置覆盖层颜色和透明度，实现背景图片变暗的效果
-      bgOverlay.style.backgroundColor = `rgba(255, 255, 255, ${1 - opacity})`;
-    }
-  }, [settings.backgroundOpacity]);
+
 
   // ========== [新增] 加载和保存设置到IndexedDB ==========
   // 加载保存的设置
@@ -72551,41 +72521,16 @@ const T8ChatDetail = ({
   // 监听背景更新事件
   React.useEffect(() => {
     const handleBackgroundUpdated = (e) => {
-      const { background, chatId } = e.detail;
-      // 只有当事件中的chatId与当前聊天页面的chatId匹配时才更新背景
-      if (background && chatId === chatData.id) {
-        // 更新页面背景
-        const overlay = document.querySelector(".chat-detail-overlay");
-        if (overlay) {
-          overlay.style.backgroundImage = `url(${background})`;
-          overlay.style.backgroundSize = "cover";
-          overlay.style.backgroundPosition = "center";
-          overlay.style.backgroundRepeat = "no-repeat";
-
-          // 应用透明度，只影响背景图片
-          const opacity = settings.backgroundOpacity || 1;
-          let bgOverlay = overlay.querySelector(".bg-opacity-overlay");
-          if (!bgOverlay) {
-            bgOverlay = document.createElement("div");
-            bgOverlay.className = "bg-opacity-overlay";
-            bgOverlay.style.position = "absolute";
-            bgOverlay.style.top = "0";
-            bgOverlay.style.left = "0";
-            bgOverlay.style.width = "100%";
-            bgOverlay.style.height = "100%";
-            bgOverlay.style.pointerEvents = "none";
-            bgOverlay.style.zIndex = "-1";
-            overlay.insertBefore(bgOverlay, overlay.firstChild);
-          }
-          bgOverlay.style.backgroundColor = `rgba(255, 255, 255, ${1 - opacity})`;
-        }
+      const { background, chatId } = e.detail || {};
+      if (chatId === chatData?.id) {
+        setChatBackground(background || null);
       }
     };
 
     window.addEventListener("backgroundUpdated", handleBackgroundUpdated);
     return () =>
       window.removeEventListener("backgroundUpdated", handleBackgroundUpdated);
-  }, [settings.backgroundOpacity, chatData?.id]);
+  }, [chatData?.id]);
 
   // 加载头像的通用函数
   const loadAvatars = async () => {
@@ -73129,32 +73074,7 @@ const T8ChatDetail = ({
 
         request.onsuccess = () => {
           const background = request.result?.value;
-          if (background) {
-            const overlay = document.querySelector(".chat-detail-overlay");
-            if (overlay) {
-              overlay.style.backgroundImage = `url(${background})`;
-              overlay.style.backgroundSize = "cover";
-              overlay.style.backgroundPosition = "center";
-              overlay.style.backgroundRepeat = "no-repeat";
-
-              // 应用透明度，只影响背景图片
-              const opacity = settings.backgroundOpacity || 1;
-              let bgOverlay = overlay.querySelector(".bg-opacity-overlay");
-              if (!bgOverlay) {
-                bgOverlay = document.createElement("div");
-                bgOverlay.className = "bg-opacity-overlay";
-                bgOverlay.style.position = "absolute";
-                bgOverlay.style.top = "0";
-                bgOverlay.style.left = "0";
-                bgOverlay.style.width = "100%";
-                bgOverlay.style.height = "100%";
-                bgOverlay.style.pointerEvents = "none";
-                bgOverlay.style.zIndex = "-1";
-                overlay.insertBefore(bgOverlay, overlay.firstChild);
-              }
-              bgOverlay.style.backgroundColor = `rgba(255, 255, 255, ${1 - opacity})`;
-            }
-          }
+          setChatBackground(background || null);
         };
       } catch (error) {
         console.error("加载背景失败:", error);
@@ -73162,7 +73082,7 @@ const T8ChatDetail = ({
     };
 
     loadBackground();
-  }, [isOpen, settings.backgroundOpacity, chatData?.id]);
+  }, [isOpen, chatData?.id]);
 
   // ========== [新增] 每3分钟自动分析对话，更新角色状态 ==========
   React.useEffect(() => {
@@ -74840,8 +74760,25 @@ const T8ChatDetail = ({
     <div
       className={`chat-detail-overlay chat-${chatData.id} ${isOpen ? "open" : ""}`}
       onClick={handleAreaClick}
+      style={{ position: "relative", overflow: "hidden" }}
     >
-      <div className="chat-bg-pattern"></div>
+      {/* 动态角色专属背景图层 (完美支持透明度与实时响应) */}
+      <div
+        className="chat-custom-bg-layer"
+        style={{
+          position: "absolute",
+          inset: 0,
+          backgroundImage: chatBackground ? `url(${chatBackground})` : "none",
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          opacity: typeof settings.backgroundOpacity === "number" ? settings.backgroundOpacity : 1,
+          pointerEvents: "none",
+          zIndex: 0,
+          transition: "opacity 0.15s ease",
+        }}
+      />
+      <div className="chat-bg-pattern" style={{ zIndex: 1, pointerEvents: "none" }}></div>
 
       {/* [新增] 竹简日记页面 */}
       {showDiaryPage && (
