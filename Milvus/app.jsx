@@ -3,55 +3,214 @@
 const { useState, useEffect, useRef } = React;
 
 // ==================== 全局通用头像渲染加载器 ====================
+const extractAvatarData = (item) => {
+  if (!item) return null;
+  if (typeof item === "string") {
+    if (
+      item.startsWith("data:image") ||
+      item.startsWith("http://") ||
+      item.startsWith("https://") ||
+      item.startsWith("blob:") ||
+      item.startsWith("/") ||
+      item.startsWith("./")
+    ) {
+      return item;
+    }
+  }
+  if (typeof item === "object") {
+    if (item instanceof Blob) {
+      try {
+        return URL.createObjectURL(item);
+      } catch (e) {}
+    }
+    if (item.avatarData) {
+      return extractAvatarData(item.avatarData);
+    }
+    if (item.avatar && typeof item.avatar === "string" && (
+      item.avatar.startsWith("data:image") ||
+      item.avatar.startsWith("http://") ||
+      item.avatar.startsWith("https://") ||
+      item.avatar.startsWith("blob:") ||
+      item.avatar.startsWith("/")
+    )) {
+      return item.avatar;
+    }
+  }
+  return null;
+};
+
 const UniversalAvatarLoader = ({ avatar, avatarId, fallbackColor = "#ddd", name = "?", style = {}, className = "" }) => {
   const [avatarData, setAvatarData] = React.useState(null);
   const [loadFailed, setLoadFailed] = React.useState(false);
+  const blobUrlRef = React.useRef(null);
 
-  const targetAvatar = avatar !== undefined ? avatar : avatarId;
+  const targetAvatar = avatar !== undefined && avatar !== null ? avatar : avatarId;
 
   React.useEffect(() => {
     let isMounted = true;
     setLoadFailed(false);
 
-    if (!targetAvatar) {
+    if (blobUrlRef.current) {
+      try {
+        URL.revokeObjectURL(blobUrlRef.current);
+      } catch (e) {}
+      blobUrlRef.current = null;
+    }
+
+    if (!targetAvatar && !name) {
       setAvatarData(null);
       return;
     }
 
     // 1. 如果是直链 URL / Base64 数据
-    if (typeof targetAvatar === "string" && (
-      targetAvatar.startsWith("data:image") ||
-      targetAvatar.startsWith("http://") ||
-      targetAvatar.startsWith("https://") ||
-      targetAvatar.startsWith("blob:") ||
-      targetAvatar.startsWith("/") ||
-      targetAvatar.startsWith("./")
-    )) {
-      setAvatarData(targetAvatar);
+    const directUrl = extractAvatarData(targetAvatar);
+    if (directUrl) {
+      if (directUrl.startsWith("blob:")) {
+        blobUrlRef.current = directUrl;
+      }
+      setAvatarData(directUrl);
       return;
     }
 
-    // 2. 如果是 IndexedDB 中的 avatarId 键值
+    // 2. 深度检索 IndexedDB、角色表、用户表与本地字典
     const fetchFromStore = async () => {
       try {
         const store = window.avatarStore || (typeof avatarStore !== "undefined" ? avatarStore : null);
-        if (store && typeof store.get === "function") {
-          const item = await store.get(targetAvatar);
-          if (isMounted && item && item.avatarData) {
-            setAvatarData(item.avatarData);
-            return;
+
+        // A. 尝试通过 targetAvatar 查询 avatarStore (容错 number / string 类型)
+        if (store && typeof store.get === "function" && targetAvatar) {
+          const keysToTry = [targetAvatar];
+          if (!isNaN(targetAvatar) && typeof targetAvatar === "string" && targetAvatar.trim() !== "") {
+            keysToTry.push(Number(targetAvatar));
+          }
+          if (typeof targetAvatar === "number") {
+            keysToTry.push(String(targetAvatar));
+          }
+
+          for (const key of keysToTry) {
+            try {
+              const item = await store.get(key);
+              const extracted = extractAvatarData(item);
+              if (extracted && isMounted) {
+                if (extracted.startsWith("blob:")) blobUrlRef.current = extracted;
+                setAvatarData(extracted);
+                return;
+              }
+            } catch (e) {}
           }
         }
+
+        // B. 尝试从 localStorage "绣衣楼头像" 中查找
+        if (name || targetAvatar) {
+          try {
+            const avatarMap = JSON.parse(localStorage.getItem("绣衣楼头像") || "{}");
+            const mapped = (name && avatarMap[name]) || (typeof targetAvatar === "string" && avatarMap[targetAvatar]);
+            const extracted = extractAvatarData(mapped);
+            if (extracted && isMounted) {
+              setAvatarData(extracted);
+              return;
+            }
+          } catch (e) {}
+        }
+
+        // C. 尝试从 chatCharacterStore 中根据 name 检索角色并提取头像
+        if (name && typeof name === "string" && name.trim()) {
+          let foundChar = null;
+          try {
+            if (window.chatCharacterStore && typeof window.chatCharacterStore.getAll === "function") {
+              const all = await window.chatCharacterStore.getAll();
+              foundChar = (all || []).find((c) => c && c.name === name.trim());
+            }
+          } catch (e) {}
+
+          if (!foundChar) {
+            try {
+              const t8List = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+              foundChar = t8List.find((c) => c && c.name === name.trim());
+            } catch (e) {}
+          }
+
+          if (foundChar) {
+            // 如果 foundChar 自带直链/base64 avatar
+            const extractedDirect = extractAvatarData(foundChar.avatar);
+            if (extractedDirect && isMounted) {
+              setAvatarData(extractedDirect);
+              return;
+            }
+
+            // 否则在 avatarStore 中查找该角色的关联 key
+            if (store && typeof store.get === "function") {
+              const charKeys = [foundChar.avatar, foundChar.id, foundChar.avatarId, foundChar.avatarKey].filter(Boolean);
+              for (const ck of charKeys) {
+                const subKeys = [ck];
+                if (!isNaN(ck) && typeof ck === "string" && ck.trim() !== "") subKeys.push(Number(ck));
+                if (typeof ck === "number") subKeys.push(String(ck));
+                for (const sk of subKeys) {
+                  try {
+                    const item = await store.get(sk);
+                    const extracted = extractAvatarData(item);
+                    if (extracted && isMounted) {
+                      if (extracted.startsWith("blob:")) blobUrlRef.current = extracted;
+                      setAvatarData(extracted);
+                      return;
+                    }
+                  } catch (e) {}
+                }
+              }
+            }
+          }
+        }
+
+        // D. 尝试用户/广陵王专属头像
+        try {
+          const userName = localStorage.getItem("user_name") || "广陵王";
+          if (name === "广陵王" || name === "我" || name === userName || name === "发起人(你)") {
+            if (window.settingsStore && typeof window.settingsStore.getUserAvatar === "function") {
+              const userAv = await window.settingsStore.getUserAvatar();
+              const extracted = extractAvatarData(userAv);
+              if (extracted && isMounted) {
+                setAvatarData(extracted);
+                return;
+              }
+            }
+            const localUserAv = localStorage.getItem("user_avatar") || localStorage.getItem("me_avatar");
+            const extractedLocal = extractAvatarData(localUserAv);
+            if (extractedLocal && isMounted) {
+              setAvatarData(extractedLocal);
+              return;
+            }
+            const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+            const activeId = localStorage.getItem("active_persona_id");
+            if (savedPersonas.length > 0) {
+              const p = activeId ? savedPersonas.find((x) => String(x.id) === String(activeId)) : savedPersonas[0];
+              const extractedPersona = extractAvatarData(p?.avatar);
+              if (extractedPersona && isMounted) {
+                setAvatarData(extractedPersona);
+                return;
+              }
+            }
+          }
+        } catch (e) {}
+
       } catch (err) {
         console.warn("UniversalAvatarLoader 加载头像失败:", err);
       }
+
       if (isMounted) setAvatarData(null);
     };
 
     fetchFromStore();
 
-    return () => { isMounted = false; };
-  }, [targetAvatar]);
+    return () => {
+      isMounted = false;
+      if (blobUrlRef.current) {
+        try {
+          URL.revokeObjectURL(blobUrlRef.current);
+        } catch (e) {}
+        blobUrlRef.current = null;
+      }
+    };
+  }, [targetAvatar, name]);
 
   const defaultImgStyle = {
     width: "100%",
@@ -84,7 +243,7 @@ const UniversalAvatarLoader = ({ avatar, avatarId, fallbackColor = "#ddd", name 
         height: "100%",
         background: fallbackColor || "#ddd",
         color: "#fff",
-        fontSize: "10px",
+        fontSize: "12px",
         fontWeight: "bold",
         borderRadius: "inherit",
         display: "flex",
@@ -105,22 +264,24 @@ var T8AvatarLoader = UniversalAvatarLoader;
 
 window.resolveAvatarUrl = async (avatarOrId, fallback = "") => {
   if (!avatarOrId) return fallback;
-  if (typeof avatarOrId === "string" && (
-    avatarOrId.startsWith("data:image") ||
-    avatarOrId.startsWith("http://") ||
-    avatarOrId.startsWith("https://") ||
-    avatarOrId.startsWith("blob:") ||
-    avatarOrId.startsWith("/") ||
-    avatarOrId.startsWith("./")
-  )) {
-    return avatarOrId;
-  }
+  const direct = extractAvatarData(avatarOrId);
+  if (direct) return direct;
   try {
     const store = window.avatarStore || (typeof avatarStore !== "undefined" ? avatarStore : null);
     if (store && typeof store.get === "function") {
-      const item = await store.get(avatarOrId);
-      if (item && item.avatarData) {
-        return item.avatarData;
+      const keysToTry = [avatarOrId];
+      if (!isNaN(avatarOrId) && typeof avatarOrId === "string" && avatarOrId.trim() !== "") {
+        keysToTry.push(Number(avatarOrId));
+      }
+      if (typeof avatarOrId === "number") {
+        keysToTry.push(String(avatarOrId));
+      }
+      for (const k of keysToTry) {
+        try {
+          const item = await store.get(k);
+          const extracted = extractAvatarData(item);
+          if (extracted) return extracted;
+        } catch (e) {}
       }
     }
   } catch (e) {
@@ -59077,23 +59238,7 @@ const safeParseLLMJson = (raw) => {
 };
 
 // ==================== 水镜头像安全渲染组件 ====================
-const WaterMirrorAvatar = ({ avatar, name, size = 38 }) => {
-  const [imgError, setImgError] = React.useState(false);
-
-  React.useEffect(() => {
-    setImgError(false);
-  }, [avatar]);
-
-  const isValidUrl =
-    typeof avatar === "string" &&
-    avatar.trim().length > 0 &&
-    (avatar.startsWith("data:image") ||
-      avatar.startsWith("http://") ||
-      avatar.startsWith("https://") ||
-      avatar.startsWith("blob:") ||
-      avatar.startsWith("/") ||
-      avatar.startsWith("./"));
-
+const WaterMirrorAvatar = ({ avatar, name, size = 38, fallbackColor, style = {} }) => {
   return (
     <div
       style={{
@@ -59101,31 +59246,23 @@ const WaterMirrorAvatar = ({ avatar, name, size = 38 }) => {
         height: `${size}px`,
         borderRadius: "50%",
         overflow: "hidden",
-        background: "linear-gradient(135deg, #E8C3A8 0%, #D4AB90 100%)",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
-        color: "#FFFFFF",
-        fontWeight: "bold",
-        fontSize: `${Math.max(12, Math.round(size * 0.42))}px`,
         flexShrink: 0,
         position: "relative",
         border: "1.5px solid rgba(255, 255, 255, 0.4)",
         boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+        fontSize: `${Math.max(12, Math.round(size * 0.42))}px`,
+        ...style,
       }}
     >
-      {isValidUrl && !imgError ? (
-        <img
-          src={avatar}
-          alt={name || ""}
-          onError={() => setImgError(true)}
-          style={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-        />
-      ) : (
-        <span style={{ userSelect: "none", textShadow: "0 1px 3px rgba(0,0,0,0.3)" }}>
-          {(name || "").trim().charAt(0) || "密"}
-        </span>
-      )}
+      <UniversalAvatarLoader
+        avatar={avatar}
+        name={name}
+        fallbackColor={fallbackColor || "linear-gradient(135deg, #E8C3A8 0%, #D4AB90 100%)"}
+        style={{ width: "100%", height: "100%", borderRadius: "50%" }}
+      />
     </div>
   );
 };
@@ -61076,30 +61213,49 @@ const TaibaiMysteryPage = ({ onBack }) => {
       try {
         const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
         const activeId = localStorage.getItem("active_persona_id");
+        let activePersona = null;
         if (savedPersonas.length > 0) {
-          const found = activeId ? savedPersonas.find((p) => String(p.id) === String(activeId)) : savedPersonas[0];
-          if (found) {
-            setUserPersona({
-              name: found.name || "广陵王",
-              role: found.role || found.name || "广陵王",
-              personality: found.personality || "机敏睿智",
-              background: found.background || found.description || "绣衣楼之主",
-              avatar: found.avatar || ""
-            });
-          }
+          activePersona = activeId ? savedPersonas.find((p) => String(p.id) === String(activeId)) : savedPersonas[0];
         }
+        const userAv = activePersona?.avatar || localStorage.getItem("user_avatar") || localStorage.getItem("me_avatar") || "";
+        setUserPersona({
+          name: activePersona?.name || localStorage.getItem("user_name") || "广陵王",
+          role: activePersona?.role || activePersona?.name || "广陵王",
+          personality: activePersona?.personality || "机敏睿智",
+          background: activePersona?.background || activePersona?.description || "绣衣楼之主",
+          avatar: userAv,
+        });
       } catch (e) { }
 
       // 2. 传讯密探列表
       try {
         let allChars = [];
-        if (window.chatCharacterStore) {
-          allChars = await window.chatCharacterStore.getAll();
-        } else {
-          allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        if (window.chatCharacterStore && typeof window.chatCharacterStore.getAll === "function") {
+          try {
+            allChars = await window.chatCharacterStore.getAll();
+          } catch (e) {}
+        }
+        if (!allChars || allChars.length === 0) {
+          try {
+            allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+          } catch (e) {}
         }
 
-        const validChars = allChars.filter(
+        // 合并 customCharacters 补充
+        try {
+          const customChars = JSON.parse(localStorage.getItem("customCharacters") || "[]");
+          if (Array.isArray(customChars) && customChars.length > 0) {
+            const existingIds = new Set(allChars.map((c) => String(c.id)));
+            const existingNames = new Set(allChars.map((c) => c.name));
+            customChars.forEach((cc) => {
+              if (!existingIds.has(String(cc.id)) && !existingNames.has(cc.name)) {
+                allChars.push(cc);
+              }
+            });
+          }
+        } catch (e) {}
+
+        const validChars = (allChars || []).filter(
           (c) => !String(c.id).startsWith("group") && c.type !== "decor" && c.name
         );
 
@@ -61117,12 +61273,14 @@ const TaibaiMysteryPage = ({ onBack }) => {
 
         const mapped = validChars.map((c) => {
           const charName = c.name;
-          const charAvatar = c.avatar || avatarMap[charName] || "";
+          const charAvatar = c.avatar || c.avatarKey || c.avatarId || c.id || avatarMap[charName] || "";
+          const charAvatarColor = c.avatarColor || c.color || "#A8C8BA";
           const charProfile = c.profile || c.personality || biosMap[charName] || c.description || "";
           return {
             id: c.id,
             name: charName,
             avatar: charAvatar,
+            avatarColor: charAvatarColor,
             profile: typeof charProfile === "string" ? charProfile : JSON.stringify(charProfile),
             raw: c,
           };
@@ -61776,7 +61934,7 @@ ${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说�
                       transition: "all 0.18s ease",
                     }}
                   >
-                    <WaterMirrorAvatar avatar={char.avatar} name={char.name} size={44} />
+                    <WaterMirrorAvatar avatar={char.avatar} name={char.name} fallbackColor={char.avatarColor} size={44} />
 
                     <div style={{ flex: 1, minWidth: 0 }}>
                       <div style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235" }}>
@@ -62282,7 +62440,7 @@ ${lastMsg ? `【上一位发言者是【${lastMsg.sender}】，对方刚刚说�
                       boxShadow: isSelected ? "0 4px 14px rgba(200,142,125,0.2)" : "none",
                     }}
                   >
-                    <WaterMirrorAvatar avatar={char.avatar} name={char.name} size={46} />
+                    <WaterMirrorAvatar avatar={char.avatar} name={char.name} fallbackColor={char.avatarColor} size={46} />
                     <div style={{ flex: 1 }}>
                       <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4235" }}>
                         {char.name}
@@ -64594,14 +64752,32 @@ const RelativeDeductionPage = ({ onBack }) => {
     const loadActors = async () => {
       let chars = [];
       try {
-        if (window.chatCharacterStore) {
-          chars = await window.chatCharacterStore.getAll();
-        } else {
-          chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        if (window.chatCharacterStore && typeof window.chatCharacterStore.getAll === "function") {
+          try {
+            chars = await window.chatCharacterStore.getAll();
+          } catch (e) {}
         }
+        if (!chars || chars.length === 0) {
+          try {
+            chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+          } catch (e) {}
+        }
+        try {
+          const customChars = JSON.parse(localStorage.getItem("customCharacters") || "[]");
+          if (Array.isArray(customChars) && customChars.length > 0) {
+            const existingIds = new Set((chars || []).map((c) => String(c.id)));
+            const existingNames = new Set((chars || []).map((c) => c.name));
+            customChars.forEach((cc) => {
+              if (!existingIds.has(String(cc.id)) && !existingNames.has(cc.name)) {
+                chars.push(cc);
+              }
+            });
+          }
+        } catch (e) {}
+
         // 过滤掉群组和装饰
-        const validChars = chars.filter(
-          (c) => !String(c.id).startsWith("group") && c.type !== "decor",
+        const validChars = (chars || []).filter(
+          (c) => c && !String(c.id).startsWith("group") && c.type !== "decor" && c.name,
         );
         setAllActors(validChars);
       } catch (e) {
@@ -65095,7 +65271,7 @@ const RelativeDeductionPage = ({ onBack }) => {
                           </div>
                         );
                       } else {
-                        // 匹配演员头像颜色
+                        // 匹配演员头像颜色与数据
                         const actor = selectedActors.find(
                           (a) => a.name === line.speaker,
                         );
@@ -65105,10 +65281,14 @@ const RelativeDeductionPage = ({ onBack }) => {
                           <div key={idx} className="mb-4 flex flex-col">
                             <div className="flex items-center gap-2 mb-1">
                               <div
-                                className="w-5 h-5 rounded-full text-white flex items-center justify-center text-[10px] font-bold shadow-inner"
+                                className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center shadow-inner"
                                 style={{ backgroundColor: avatarColor }}
                               >
-                                {line.speaker[0]}
+                                <UniversalAvatarLoader
+                                  avatar={actor?.avatar || actor?.avatarKey || actor?.avatarId || actor?.id}
+                                  fallbackColor={avatarColor}
+                                  name={line.speaker}
+                                />
                               </div>
                               <span className="text-xs font-bold text-[#89A89A]">
                                 {line.speaker}
@@ -65167,15 +65347,19 @@ const RelativeDeductionPage = ({ onBack }) => {
                         selectedActors.map((a) => (
                           <span
                             key={a.id}
-                            className="bg-[#F2F7F4] text-[#5A8F6D] px-3 py-1.5 rounded-full text-xs font-bold shadow-sm border border-[#E4EFE9] flex items-center gap-1"
+                            className="bg-[#F2F7F4] text-[#5A8F6D] px-3 py-1.5 rounded-full text-xs font-bold shadow-sm border border-[#E4EFE9] flex items-center gap-1.5"
                           >
                             <div
-                              className="w-4 h-4 rounded-full bg-black text-white flex items-center justify-center text-[8px]"
+                              className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-[8px]"
                               style={{
-                                backgroundColor: a.avatarColor || "#ccc",
+                                backgroundColor: a.avatarColor || "#89A89A",
                               }}
                             >
-                              {a.name[0]}
+                              <UniversalAvatarLoader
+                                avatar={a.avatar || a.avatarKey || a.avatarId || a.id}
+                                fallbackColor={a.avatarColor || "#89A89A"}
+                                name={a.name}
+                              />
                             </div>
                             {a.name}
                           </span>
@@ -65310,12 +65494,16 @@ const RelativeDeductionPage = ({ onBack }) => {
                         }}
                       />
                       <div
-                        className="w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-inner"
+                        className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center shadow-inner"
                         style={{
-                          backgroundColor: actor.avatarColor || "#ccc",
+                          backgroundColor: actor.avatarColor || "#89A89A",
                         }}
                       >
-                        {(actor.name && actor.name[0]) || "?"}
+                        <UniversalAvatarLoader
+                          avatar={actor.avatar || actor.avatarKey || actor.avatarId || actor.id}
+                          fallbackColor={actor.avatarColor || "#89A89A"}
+                          name={actor.name}
+                        />
                       </div>
                       <div className="flex flex-col">
                         <span className="text-[#5A5F4D] font-bold">
