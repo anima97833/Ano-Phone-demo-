@@ -68866,6 +68866,8 @@ const ChatSettingsModal = ({
   setChatHeaderCss,
   chatInputCss,
   setChatInputCss,
+  chatToolbarCss,
+  setChatToolbarCss,
   chatButtonsCss,
   setChatButtonsCss,
 }) => {
@@ -71113,7 +71115,90 @@ const ChatSettingsModal = ({
               </div>
             </div>
 
-            {/* C. 发送与操作按钮 */}
+            
+            {/* C. 输入栏上方工具栏 */}
+            <div style={{ marginBottom: "16px", backgroundColor: "#fbf9f4", padding: "10px 12px", borderRadius: "10px", border: "1px solid #ebd9c8" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "12px", fontWeight: "bold", color: "#5d4e37" }}>🛠️ 输入栏上方工具栏 CSS</span>
+                <span style={{ fontSize: "10px", color: "#a89b88" }}>目标: .chat-toolbar, .chat-toolbar::before</span>
+              </div>
+
+              {/* 快捷模板 */}
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "8px" }}>
+                {[
+                  { label: "微透毛玻璃", css: ".chat-toolbar { background: rgba(255, 255, 255, 0.75) !important; backdrop-filter: blur(10px) !important; border-bottom: 1px solid rgba(214, 114, 75, 0.2) !important; }" },
+                  { label: "浮雕画卷底板", css: ".chat-toolbar { background: #fdfbf7 !important; border-top: 1px solid #ebd9c8 !important; box-shadow: inset 0 2px 6px rgba(0,0,0,0.03) !important; }" },
+                  { label: "顶边飘带饰条", css: ".chat-toolbar { position: relative !important; }\\n.chat-toolbar::before { content: '' !important; position: absolute !important; top: -2px !important; left: 10% !important; width: 80% !important; height: 3px !important; background: linear-gradient(90deg, transparent, #d6724b, transparent) !important; border-radius: 2px !important; }" }
+                ].map((tpl, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "12px", background: "#fff", border: "1px solid #d6724b", color: "#d6724b", cursor: "pointer" }}
+                    onClick={async () => {
+                      setChatToolbarCss(tpl.css);
+                      window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "toolbar", css: tpl.css, chatId: chatData.id } }));
+                      try {
+                        const db = await openDB();
+                        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                        await tx.objectStore(STORES.USER_SETTINGS).put({ key: `chat_toolbar_css_${chatData.id}`, value: tpl.css });
+                      } catch(e) { console.error(e); }
+                    }}
+                  >
+                    +{tpl.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ position: "relative", width: "100%" }}>
+                <textarea
+                  rows={2}
+                  placeholder="支持 .chat-toolbar, .chat-toolbar::before, .chat-action-btn 等"
+                  style={{
+                    width: "100%",
+                    padding: "8px 30px 8px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid #d6724b",
+                    fontSize: "11px",
+                    color: "#5d4e37",
+                    backgroundColor: "#fff",
+                    fontFamily: "monospace",
+                    resize: "vertical"
+                  }}
+                  value={chatToolbarCss || ""}
+                  onChange={(e) => setChatToolbarCss(e.target.value)}
+                  onBlur={async (e) => {
+                    const css = e.target.value;
+                    try {
+                      const db = await openDB();
+                      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                      await tx.objectStore(STORES.USER_SETTINGS).put({ key: `chat_toolbar_css_${chatData.id}`, value: css });
+                      window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "toolbar", css, chatId: chatData.id } }));
+                    } catch(err) { console.error("保存工具栏样式失败:", err); }
+                  }}
+                  onInput={(e) => {
+                    const css = e.target.value;
+                    window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "toolbar", css, chatId: chatData.id } }));
+                  }}
+                />
+                <button
+                  style={{ position: "absolute", right: "6px", top: "8px", background: "transparent", border: "none", cursor: "pointer", color: "#d6724b", fontSize: "14px" }}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    setChatToolbarCss("");
+                    window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "toolbar", css: "", chatId: chatData.id } }));
+                    try {
+                      const db = await openDB();
+                      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                      await tx.objectStore(STORES.USER_SETTINGS).delete(`chat_toolbar_css_${chatData.id}`);
+                    } catch(err) { console.error(err); }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* D. 发送与操作按钮 */}
             <div style={{ marginBottom: "10px", backgroundColor: "#fbf9f4", padding: "10px 12px", borderRadius: "10px", border: "1px solid #ebd9c8" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                 <span style={{ fontSize: "12px", fontWeight: "bold", color: "#5d4e37" }}>🚀 发送与功能按钮 CSS</span>
@@ -72007,6 +72092,7 @@ const T8ChatDetail = ({
   // [新增] 聊天页面顶部导航、输入框、按钮自定义CSS状态
   const [chatHeaderCss, setChatHeaderCss] = React.useState("");
   const [chatInputCss, setChatInputCss] = React.useState("");
+  const [chatToolbarCss, setChatToolbarCss] = React.useState("");
   const [chatButtonsCss, setChatButtonsCss] = React.useState("");
 
   // 活动选择状态
@@ -72808,6 +72894,15 @@ const T8ChatDetail = ({
         }
       };
 
+      const toolbarCssReq = store.get(`chat_toolbar_css_${chatData.id}`);
+      toolbarCssReq.onsuccess = () => {
+        const val = toolbarCssReq.result?.value;
+        if (val) {
+          setChatToolbarCss(val);
+          applyCustomChatStyle("toolbar", val, chatData.id);
+        }
+      };
+
       const buttonsCssReq = store.get(`chat_buttons_css_${chatData.id}`);
       buttonsCssReq.onsuccess = () => {
         const val = buttonsCssReq.result?.value;
@@ -72857,6 +72952,8 @@ const T8ChatDetail = ({
         defaultSelectors = [".chat-header"];
       } else if (type === "input") {
         defaultSelectors = [".chat-input-field", ".chat-input-bar", ".chat-input-container"];
+      } else if (type === "toolbar") {
+        defaultSelectors = [".chat-toolbar", ".chat-action-bar"];
       } else if (type === "buttons") {
         defaultSelectors = [".chat-send-btn", ".ai-trigger-btn", ".chat-action-btn"];
       }
@@ -75169,6 +75266,8 @@ const T8ChatDetail = ({
             setChatHeaderCss={setChatHeaderCss}
             chatInputCss={chatInputCss}
             setChatInputCss={setChatInputCss}
+            chatToolbarCss={chatToolbarCss}
+            setChatToolbarCss={setChatToolbarCss}
             chatButtonsCss={chatButtonsCss}
             setChatButtonsCss={setChatButtonsCss}
           />
@@ -77592,6 +77691,7 @@ const T8ChatDetail = ({
             <div style={{ display: "flex", flexDirection: "column" }}>
               {/* [新增] 工具条：紧贴输入框上方 */}
               <div
+                className="chat-toolbar chat-action-bar"
                 style={{
                   padding: "8px 16px",
                   display: "flex",

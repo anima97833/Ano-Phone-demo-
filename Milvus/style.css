@@ -5847,6 +5847,9 @@
         position: relative;
         cursor: pointer;
       }
+      .chat-toolbar {
+        position: relative;
+      }
 
       @keyframes msgFadeIn {
         from {
