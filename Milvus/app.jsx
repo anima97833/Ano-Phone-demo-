@@ -92858,6 +92858,7 @@ class IndexedDBManager {
 
 // 创建全局实例
 const dbManager = new IndexedDBManager();
+window.dbManager = dbManager;
 
 // ==================== [修改] 主题设置页面组件 (支持图标图片上传) ====================
 
@@ -99626,6 +99627,14 @@ const MasterApp = () => {
 
         // 加载主页背景
         const savedBg = await dbManager.get("home_bg_image");
+        const savedLockBg = await dbManager.get("lockscreen_bg_image");
+        if (savedLockBg) {
+          setLockScreenConfig((prev) => ({
+            ...prev,
+            bgImage: savedLockBg,
+            bgType: "image"
+          }));
+        }
         if (savedBg) {
           setHomeBg(savedBg);
         }
