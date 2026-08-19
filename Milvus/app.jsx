@@ -74760,7 +74760,6 @@ const T8ChatDetail = ({
     <div
       className={`chat-detail-overlay chat-${chatData.id} ${isOpen ? "open" : ""}`}
       onClick={handleAreaClick}
-      style={{ position: "relative", overflow: "hidden" }}
     >
       {/* 动态角色专属背景图层 (完美支持透明度与实时响应) */}
       <div
