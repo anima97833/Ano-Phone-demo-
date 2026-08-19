@@ -20,6 +20,12 @@ const STORES = {
   LOCKSCREEN: "lockscreen", // ✅ 新增：锁屏图片存储
 };
 
+// 挂载到 window 方便全局使用
+if (typeof window !== "undefined") {
+  window.STORES = STORES;
+  window.openDB = openDB;
+}
+
 // 打开数据库连接
 function openDB() {
   return new Promise((resolve, reject) => {

@@ -32902,13 +32902,13 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
   return (
     <div
       style={{
-        position: "fixed",
+        position: "absolute",
         top: 0,
         left: 0,
         width: "100%",
         height: "100%",
         background: "#EBE5DF",
-        zIndex: 250,
+        zIndex: 350,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -33222,16 +33222,17 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         <div ref={messagesEndRef} />
       </div>
 
-      {/* 3. Telegram 风格底部输入栏 (位于底部独立层，避开 tab 栏) */}
+      {/* 3. Telegram 风格底部输入栏 */}
       <div
         style={{
           background: "#FFFFFF",
-          padding: "8px 10px 12px 10px",
+          padding: "10px 12px calc(10px + var(--safe-bottom, 0px)) 12px",
           borderTop: "1px solid #E5E0D8",
           display: "flex",
           alignItems: "center",
           gap: "8px",
           flexShrink: 0,
+          boxShadow: "0 -2px 10px rgba(0, 0, 0, 0.04)",
         }}
       >
         {/* 附件夹按钮 */}
@@ -33481,7 +33482,7 @@ const T11MessageListPage = ({ onBack, directChatChar, onClearDirectChatChar }) =
         width: "100%",
         height: "100%",
         background: "#F9F7F5",
-        zIndex: 20,
+        zIndex: activeChatChar ? 300 : 20,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
@@ -33506,7 +33507,7 @@ const T11MessageListPage = ({ onBack, directChatChar, onClearDirectChatChar }) =
         style={{
           flex: 1,
           overflowY: "auto",
-          padding: "16px 18px 80px 18px",
+          padding: "16px 18px 100px 18px",
           boxSizing: "border-box",
         }}
       >
@@ -33753,7 +33754,6 @@ const T11InsideContactsPage = ({ onBack }) => {
 
   // 状态管理
   const [avatars, setAvatars] = React.useState({}); // 头像
-  const [showItems, setShowItems] = React.useState([]); // 列表动画条目
   const [selectedChar, setSelectedChar] = React.useState(null); // 当前选中查看的角色
   const [characterBios, setCharacterBios] = React.useState({}); // 所有角色的自定义人物介绍字典 (来自 IndexedDB)
   const [currentBioText, setCurrentBioText] = React.useState(""); // 当前编辑中的人物介绍
@@ -33782,19 +33782,6 @@ const T11InsideContactsPage = ({ onBack }) => {
       }
     };
     loadBios();
-
-    // 列表条目动画
-    let index = 0;
-    const interval = setInterval(() => {
-      if (index < CHARACTERS.length) {
-        setShowItems((prev) => [...prev, index]);
-        index++;
-      } else {
-        clearInterval(interval);
-      }
-    }, 50);
-
-    return () => clearInterval(interval);
   }, []);
 
   // 处理点击角色卡片打开底部抽屉
@@ -33872,12 +33859,12 @@ const T11InsideContactsPage = ({ onBack }) => {
         className="t11-subpage-container no-scrollbar"
         style={{
           overflowY: "auto",
-          height: "calc(100% - 60px)",
-          padding: "16px 20px 40px 20px",
+          height: "calc(100% - 56px)",
+          padding: "16px 20px 110px 20px",
           boxSizing: "border-box",
         }}
       >
-        {CHARACTERS.map((character, index) => (
+        {CHARACTERS.map((character) => (
           <div
             key={character}
             onClick={() => handleOpenCharCard(character)}
@@ -33887,13 +33874,6 @@ const T11InsideContactsPage = ({ onBack }) => {
               padding: "14px 16px",
               marginBottom: "12px",
               boxShadow: "0 4px 14px rgba(140, 145, 123, 0.08)",
-              animation: showItems.includes(index)
-                ? "fadeIn 0.4s ease-out"
-                : "none",
-              opacity: showItems.includes(index) ? 1 : 0,
-              transform: showItems.includes(index)
-                ? "translateY(0)"
-                : "translateY(10px)",
               display: "flex",
               alignItems: "center",
               gap: "16px",
@@ -34356,7 +34336,12 @@ const T11ContactsPage = ({ onBack }) => {
       {/* 列表内容 */}
       <div
         className="t11-subpage-container no-scrollbar"
-        style={{ overflowY: "auto", height: "100%", padding: "20px" }}
+        style={{
+          overflowY: "auto",
+          height: "calc(100% - 56px)",
+          padding: "20px 20px 100px 20px",
+          boxSizing: "border-box",
+        }}
       >
         {contactItems.map((item, index) => (
           <div
@@ -69307,517 +69292,239 @@ const ChatSettingsModal = ({
   };
 
   return (
-    <div className="cs-mask" onClick={onClose}>
+    <div className="cs-mask" onClick={onClose} style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
       <div
         className="cs-panel"
         onClick={handlePanelClick}
         style={{
-          maxHeight: "80vh",
-          overflowY: "auto",
-          paddingRight: "10px",
+          position: 'absolute',
+          top: '0',
+          left: '0',
+          right: '0',
+          bottom: '0',
+          margin: 'auto',
+          width: '90%',
+          maxHeight: '80vh',
+          display: 'flex',
+          flexDirection: 'column',
+          backgroundColor: '#fff',
+          borderRadius: '16px',
+          overflow: 'hidden'
         }}
       >
         <div
           className="cs-title"
           style={{
+            flexShrink: 0,
+            padding: '20px',
             fontSize: "18px",
             fontWeight: "bold",
             color: "#5a5f4d",
             textAlign: "center",
-            marginBottom: "20px",
           }}
         >
           对话偏好设置
         </div>
 
-        {/* 1. 剧情模式设置 */}
-        <div className="cs-row">
-          <div>
-            <div className="cs-label">线上剧情模式</div>
-            <div className="cs-desc">模拟网络聊天，发表情包，用语网感化</div>
-          </div>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              className="toggle-input"
-              checked={settings.plotMode === "online"}
-              onChange={() => handleModeToggle("online")}
-            />
-            <span className="toggle-slider"></span>
-          </label>
-        </div>
-
-        <div className="cs-row">
-          <div>
-            <div className="cs-label">线下剧情模式</div>
-            <div className="cs-desc">模拟面对面互动，描写动作、神态、环境</div>
-          </div>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              className="toggle-input"
-              checked={settings.plotMode === "offline"}
-              onChange={() => handleModeToggle("offline")}
-            />
-            <span className="toggle-slider"></span>
-          </label>
-        </div>
-
-        {/* 2. 时间感知 */}
-        <div className="cs-row">
-          <div>
-            <div className="cs-label">时间感知</div>
-            <div className="cs-desc">AI会根据当前时间调整回复内容和行为</div>
-          </div>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              className="toggle-input"
-              checked={settings.timeAware || false}
-              onChange={() =>
-                onChange({
-                  ...settings,
-                  timeAware: !settings.timeAware,
-                })
-              }
-            />
-            <span className="toggle-slider"></span>
-          </label>
-        </div>
-
-        {/* [新增] 核心记忆挂载 */}
-        <div className="cs-row">
-          <div>
-            <div className="cs-label">核心记忆挂载</div>
-            <div className="cs-desc">
-              选择要挂载的核心记忆，角色回复时会参考这些事件设定
+        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px' }}>
+          {/* 1. 剧情模式设置 */}
+          <div className="cs-row">
+            <div>
+              <div className="cs-label">线上剧情模式</div>
+              <div className="cs-desc">模拟网络聊天，发表情包，用语网感化</div>
             </div>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                className="toggle-input"
+                checked={settings.plotMode === "online"}
+                onChange={() => handleModeToggle("online")}
+              />
+              <span className="toggle-slider"></span>
+            </label>
           </div>
-          {memoriesList.length > 0 ? (
-            <div
-              className="memory-dropdown-container"
-              style={{ position: "relative" }}
-            >
-              <button
-                onClick={() => setShowMemoryDropdown(!showMemoryDropdown)}
-                style={{
-                  padding: "8px 16px",
-                  borderRadius: "8px",
-                  border: "1px solid #d6724b",
-                  background: "#f9f6f0",
-                  color: "#5a5f4d",
-                  fontSize: "14px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "8px",
-                }}
+
+          <div className="cs-row">
+            <div>
+              <div className="cs-label">线下剧情模式</div>
+              <div className="cs-desc">模拟面对面互动，描写动作、神态、环境</div>
+            </div>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                className="toggle-input"
+                checked={settings.plotMode === "offline"}
+                onChange={() => handleModeToggle("offline")}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+          </div>
+
+          {/* 2. 时间感知 */}
+          <div className="cs-row">
+            <div>
+              <div className="cs-label">时间感知</div>
+              <div className="cs-desc">AI会根据当前时间调整回复内容和行为</div>
+            </div>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                className="toggle-input"
+                checked={settings.timeAware || false}
+                onChange={() =>
+                  onChange({
+                    ...settings,
+                    timeAware: !settings.timeAware,
+                  })
+                }
+              />
+              <span className="toggle-slider"></span>
+            </label>
+          </div>
+
+          {/* [新增] 核心记忆挂载 */}
+          <div className="cs-row">
+            <div>
+              <div className="cs-label">核心记忆挂载</div>
+              <div className="cs-desc">
+                选择要挂载的核心记忆，角色回复时会参考这些事件设定
+              </div>
+            </div>
+            {memoriesList.length > 0 ? (
+              <div
+                className="memory-dropdown-container"
+                style={{ position: "relative" }}
               >
-                <span>
-                  {(settings.mountedMemories || []).length > 0
-                    ? `已选${(settings.mountedMemories || []).length}个`
-                    : "选择记忆"}
-                </span>
-                <i
-                  className={`ph-bold ${showMemoryDropdown ? "ph-caret-up" : "ph-caret-down"
-                    }`}
-                  style={{ fontSize: "14px" }}
-                ></i>
-              </button>
-              {showMemoryDropdown && (
-                <div
+                <button
+                  onClick={() => setShowMemoryDropdown(!showMemoryDropdown)}
                   style={{
-                    position: "absolute",
-                    top: "100%",
-                    right: 0,
-                    marginTop: "8px",
-                    width: "200px",
-                    maxHeight: "200px",
-                    overflowY: "auto",
-                    background: "#fff",
-                    border: "1px solid #d6724b",
+                    padding: "8px 16px",
                     borderRadius: "8px",
-                    boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
-                    zIndex: 100,
+                    border: "1px solid #d6724b",
+                    background: "#f9f6f0",
+                    color: "#5a5f4d",
+                    fontSize: "14px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "8px",
                   }}
                 >
-                  {memoriesList.map((mem) => (
-                    <label
-                      key={mem.id}
-                      style={{
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "8px",
-                        padding: "10px 12px",
-                        cursor: "pointer",
-                        borderBottom: "1px solid #f0f0f0",
-                      }}
-                    >
-                      <input
-                        type="checkbox"
-                        checked={(settings.mountedMemories || []).includes(
-                          mem.id,
-                        )}
-                        onChange={() => toggleMemoryMount(mem.id)}
+                  <span>
+                    {(settings.mountedMemories || []).length > 0
+                      ? `已选${(settings.mountedMemories || []).length}个`
+                      : "选择记忆"}
+                  </span>
+                  <i
+                    className={`ph-bold ${showMemoryDropdown ? "ph-caret-up" : "ph-caret-down"
+                      }`}
+                    style={{ fontSize: "14px" }}
+                  ></i>
+                </button>
+                {showMemoryDropdown && (
+                  <div
+                    style={{
+                      position: "absolute",
+                      top: "100%",
+                      right: 0,
+                      marginTop: "8px",
+                      width: "200px",
+                      maxHeight: "200px",
+                      overflowY: "auto",
+                      background: "#fff",
+                      border: "1px solid #d6724b",
+                      borderRadius: "8px",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.1)",
+                      zIndex: 100,
+                    }}
+                  >
+                    {memoriesList.map((mem) => (
+                      <label
+                        key={mem.id}
                         style={{
-                          accentColor: "#d6724b",
-                          transform: "scale(1.1)",
-                        }}
-                      />
-                      <span
-                        style={{
-                          fontSize: "13px",
-                          color: "#5a5f4d",
-                          fontWeight: "normal",
-                          whiteSpace: "nowrap",
-                          overflow: "hidden",
-                          textOverflow: "ellipsis",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          padding: "10px 12px",
+                          cursor: "pointer",
+                          borderBottom: "1px solid #f0f0f0",
                         }}
                       >
-                        {mem.title}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              )}
+                        <input
+                          type="checkbox"
+                          checked={(settings.mountedMemories || []).includes(
+                            mem.id,
+                          )}
+                          onChange={() => toggleMemoryMount(mem.id)}
+                          style={{
+                            accentColor: "#d6724b",
+                            transform: "scale(1.1)",
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontSize: "13px",
+                            color: "#5a5f4d",
+                            fontWeight: "normal",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                          }}
+                        >
+                          {mem.title}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#999",
+                  padding: "6px 12px",
+                  background: "#f5f5f5",
+                  borderRadius: "8px",
+                }}
+              >
+                暂无记忆
+              </div>
+            )}
+          </div>
+
+          {/* ======= 【新增：备份与恢复】 ======= */}
+          <div
+            className="cs-row"
+            style={{
+              borderBottom: showBackupRestore ? "none" : "1px dashed #eee",
+              paddingBottom: showBackupRestore ? "0" : "16px",
+              marginTop: "16px",
+            }}
+          >
+            <div>
+              <div className="cs-label" style={{ color: "#4a90e2" }}>
+                备份与恢复
+              </div>
+              <div className="cs-desc">导出聊天数据或通过文件还原历史记录</div>
             </div>
-          ) : (
-            <div
+            <button
               style={{
-                fontSize: "12px",
-                color: "#999",
-                padding: "6px 12px",
-                background: "#f5f5f5",
+                padding: "8px 16px",
+                backgroundColor: showBackupRestore ? "#f0f0f0" : "#4a90e2",
+                color: showBackupRestore ? "#666" : "white",
+                border: "none",
                 borderRadius: "8px",
-              }}
-            >
-              暂无记忆
-            </div>
-          )}
-        </div>
-
-        {/* 3. 主动回复 */}
-        <div className="cs-row">
-          <div>
-            <div className="cs-label">主动回复</div>
-            <div className="cs-desc">
-              AI会在后台自动发起对话，不需要用户先提问
-            </div>
-          </div>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              className="toggle-input"
-              checked={settings.proactiveReply || false}
-              onChange={() =>
-                onChange({
-                  ...settings,
-                  proactiveReply: !settings.proactiveReply,
-                })
-              }
-            />
-            <span className="toggle-slider"></span>
-          </label>
-        </div>
-
-        {/* 4. 动态测试 */}
-        <div className="cs-row">
-          <div>
-            <div className="cs-label">动态测试</div>
-            <div className="cs-desc">
-              开启后，该角色将基于自身设定和对话上下文在朋友圈发一条真实动态
-            </div>
-          </div>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              className="toggle-input"
-              checked={settings.dynamicTest || false}
-              onChange={(e) => {
-                const newValue = e.target.checked;
-                onChange({
-                  ...settings,
-                  dynamicTest: newValue,
-                });
-                if (newValue) {
-                  // 触发动态测试，发送一条动态
-                  sendDynamicTest();
-                }
-              }}
-            />
-            <span className="toggle-slider"></span>
-          </label>
-        </div>
-
-        {/* 4. 记忆设置 */}
-        <div className="cs-row">
-          <div>
-            <div className="cs-label">上下文记忆条目</div>
-            <div className="cs-desc">AI 读取的历史消息数量</div>
-          </div>
-          <input
-            type="number"
-            className="cs-num-input"
-            value={settings.contextLimit}
-            onChange={(e) =>
-              onChange({
-                ...settings,
-                contextLimit: Number(e.target.value),
-              })
-            }
-          />
-        </div>
-
-        {/* 3. 状态显示 */}
-        <div className="cs-row">
-          <div>
-            <div className="cs-label">显示角色状态</div>
-            <div className="cs-desc">在顶部显示心率与当前心情</div>
-          </div>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              className="toggle-input"
-              checked={settings.showStatus}
-              onChange={() =>
-                onChange({
-                  ...settings,
-                  showStatus: !settings.showStatus,
-                })
-              }
-            />
-            <span className="toggle-slider"></span>
-          </label>
-        </div>
-
-        {/* 4. 加入群聊 */}
-        <div className="cs-row">
-          <div>
-            <div className="cs-label">加入群聊</div>
-            <div className="cs-desc">将该角色添加到已存在的群聊中</div>
-          </div>
-          <div>
-            <select
-              style={{
-                padding: "8px 12px",
-                borderRadius: "8px",
-                border: "1px solid #d6724b",
-                backgroundColor: "#f9f6f0",
-                color: "#5d4e37",
+                cursor: "pointer",
                 fontSize: "14px",
+                fontWeight: "500",
               }}
-              onChange={async (e) => {
-                const groupChatId = e.target.value;
-                if (groupChatId) {
-                  try {
-                    // 获取所有聊天角色
-                    let allChars = [];
-                    if (window.chatCharacterStore) {
-                      allChars = await window.chatCharacterStore.getAll();
-                    } else {
-                      const saved = localStorage.getItem("t8_chat_list");
-                      if (saved) {
-                        allChars = JSON.parse(saved);
-                      }
-                    }
-
-                    // 获取当前角色信息
-                    const currentChar = allChars.find(
-                      (c) => c.id === chatData.id,
-                    );
-                    if (!currentChar) return;
-
-                    // 获取所有群聊
-                    const chats = allChars.filter((c) =>
-                      String(c.id).startsWith("group_chat"),
-                    );
-                    const selectedGroup = chats.find(
-                      (c) => c.id === groupChatId,
-                    );
-                    if (!selectedGroup) return;
-
-                    // 检查角色是否已经在群聊中
-                    if (
-                      selectedGroup.profile?.members?.some(
-                        (m) => m.id === currentChar.id,
-                      )
-                    ) {
-                      alert("该角色已经在该群聊中");
-                      return;
-                    }
-
-                    // 更新群聊成员
-                    const updatedMembers = selectedGroup.profile?.members
-                      ? [...selectedGroup.profile.members, currentChar]
-                      : [currentChar];
-                    const updatedGroup = {
-                      ...selectedGroup,
-                      profile: {
-                        ...selectedGroup.profile,
-                        members: updatedMembers,
-                      },
-                    };
-
-                    // 保存更新后的群聊
-                    if (window.chatCharacterStore) {
-                      await window.chatCharacterStore.save(updatedGroup);
-                    } else {
-                      const updatedChats = allChars.map((c) =>
-                        c.id === groupChatId ? updatedGroup : c,
-                      );
-                      localStorage.setItem(
-                        "t8_chat_list",
-                        JSON.stringify(updatedChats),
-                      );
-                    }
-
-                    // 构建角色加入消息
-                    const joinMsg = {
-                      id: Date.now(),
-                      text: `${currentChar.name} 已加入群聊`,
-                      type: "narration",
-                      isMe: false,
-                      tap: true,
-                      time: new Date().toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      }),
-                    };
-
-                    // 保存消息到群聊历史
-                    if (window.chatHistoryStore) {
-                      try {
-                        const { messages: existingMsgs } =
-                          await window.chatHistoryStore.getMessages(
-                            groupChatId,
-                          );
-                        const combinedMsgs =
-                          existingMsgs && existingMsgs.length > 0
-                            ? [...existingMsgs, joinMsg]
-                            : [joinMsg];
-                        await window.chatHistoryStore.saveMessages(
-                          groupChatId,
-                          combinedMsgs,
-                        );
-                      } catch (e) {
-                        await window.chatHistoryStore.saveMessages(
-                          groupChatId,
-                          [joinMsg],
-                        );
-                      }
-                    }
-
-                    // 触发全局刷新事件，通知外层 T8Page 重新获取最新的群聊成员数据
-                    window.dispatchEvent(new CustomEvent("reloadChats"));
-
-                    alert(`${currentChar.name} 已成功加入群聊`);
-                  } catch (error) {
-                    console.error("加入群聊失败:", error);
-                    alert("加入群聊失败，请重试");
-                  }
-                }
-              }}
+              onClick={() => setShowBackupRestore(!showBackupRestore)}
             >
-              <option value="">选择群聊</option>
-              {availableGroups.map((group) => (
-                <option key={group.id} value={group.id}>
-                  {group.name}
-                </option>
-              ))}
-            </select>
+              {showBackupRestore ? "收起" : "展开"}
+            </button>
           </div>
-        </div>
-
-        {/* 5. 心声查阅 */}
-        <div className="cs-row">
-          <div>
-            <div className="cs-label">心声查阅 (读心术)</div>
-            <div className="cs-desc">查看角色回复时的真实内心想法</div>
-          </div>
-          <label className="toggle-switch">
-            <input
-              type="checkbox"
-              className="toggle-input"
-              checked={settings.showThoughts}
-              onChange={() =>
-                onChange({
-                  ...settings,
-                  showThoughts: !settings.showThoughts,
-                })
-              }
-            />
-            <span className="toggle-slider"></span>
-          </label>
-        </div>
-
-        {/* 5. 重新开始 */}
-        <div className="cs-row">
-          <div>
-            <div className="cs-label" style={{ color: "#d6724b" }}>
-              重新开始
-            </div>
-            <div className="cs-desc">
-              清空与该角色的所有对话记录，恢复初始状态
-            </div>
-          </div>
-          <button
-            style={{
-              padding: "8px 16px",
-              backgroundColor: "#d6724b",
-              color: "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: "500",
-            }}
-            onClick={() => {
-              if (
-                window.confirm(
-                  "确定要清空与该角色的所有对话记录吗？此操作不可恢复。",
-                )
-              ) {
-                window.dispatchEvent(new CustomEvent("restartChat"));
-                onClose();
-              }
-            }}
-          >
-            确认
-          </button>
-        </div>
-
-        {/* ======= 【新增：备份与恢复】 ======= */}
-        <div
-          className="cs-row"
-          style={{
-            borderBottom: showBackupRestore ? "none" : "1px dashed #eee",
-            paddingBottom: showBackupRestore ? "0" : "16px",
-            marginTop: "16px",
-          }}
-        >
-          <div>
-            <div className="cs-label" style={{ color: "#4a90e2" }}>
-              备份与恢复
-            </div>
-            <div className="cs-desc">导出聊天数据或通过文件还原历史记录</div>
-          </div>
-          <button
-            style={{
-              padding: "8px 16px",
-              backgroundColor: showBackupRestore ? "#f0f0f0" : "#4a90e2",
-              color: showBackupRestore ? "#666" : "white",
-              border: "none",
-              borderRadius: "8px",
-              cursor: "pointer",
-              fontSize: "14px",
-              fontWeight: "500",
-            }}
-            onClick={() => setShowBackupRestore(!showBackupRestore)}
-          >
-            {showBackupRestore ? "收起" : "展开"}
-          </button>
-        </div>
 
         {/* 备份与恢复展开面板 */}
         {showBackupRestore && (
@@ -71252,97 +70959,128 @@ const ChatSettingsModal = ({
   );
 };
 
-// ==================== VoiceCallPage 组件 ====================
+// ==================== VoiceCallPage 组件 (延用聊天背景与角色头像) ====================
 const VoiceCallPage = ({
   characterName,
+  chatData,
   onBack,
   onAccept,
   onReject,
   callType = "role",
 }) => {
   const [avatarUrl, setAvatarUrl] = React.useState(null);
+  const [bgUrl, setBgUrl] = React.useState(null);
 
   React.useEffect(() => {
-    // 从IndexedDB加载保存的头像
+    // 1. 加载角色配置页配置的头像
     const loadSavedAvatar = async () => {
       try {
-        const db = await openDB();
-        const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
-        const store = transaction.objectStore(STORES.USER_SETTINGS);
-        const request = store.get(`voice_call_avatar_${characterName}`);
-
-        request.onsuccess = () => {
-          const savedAvatar = request.result?.value;
-          if (savedAvatar) {
-            setAvatarUrl(savedAvatar);
-          }
-        };
+        const xiuyiAvatars = JSON.parse(
+          localStorage.getItem("绣衣楼头像") || "{}",
+        );
+        if (characterName && xiuyiAvatars[characterName]) {
+          setAvatarUrl(xiuyiAvatars[characterName]);
+          return;
+        }
+        if (chatData?.avatar) {
+          setAvatarUrl(chatData.avatar);
+          return;
+        }
+        if (
+          chatData?.id &&
+          typeof window !== "undefined" &&
+          window.openDB &&
+          window.STORES?.USER_SETTINGS
+        ) {
+          const db = await window.openDB();
+          const transaction = db.transaction(
+            window.STORES.USER_SETTINGS,
+            "readonly",
+          );
+          const store = transaction.objectStore(window.STORES.USER_SETTINGS);
+          const request = store.get(`role_avatar_${chatData.id}`);
+          request.onsuccess = () => {
+            if (request.result?.value) {
+              setAvatarUrl(request.result.value);
+            }
+          };
+        }
       } catch (error) {
         console.error("加载语音通话头像失败:", error);
       }
     };
 
-    loadSavedAvatar();
-  }, [characterName]);
-
-  const handleAvatarUpload = (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = async (event) => {
-      const imageUrl = event.target.result;
-      setAvatarUrl(imageUrl);
-
+    // 2. 加载当前角色的聊天背景
+    const loadSavedBackground = async () => {
       try {
-        const db = await openDB();
-        const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
-        const store = transaction.objectStore(STORES.USER_SETTINGS);
-        await store.put({
-          key: `voice_call_avatar_${characterName}`,
-          value: imageUrl,
-        });
-        console.log("语音通话头像保存成功");
+        const targetId = chatData?.id || characterName;
+        if (
+          targetId &&
+          typeof window !== "undefined" &&
+          window.openDB &&
+          window.STORES?.USER_SETTINGS
+        ) {
+          const db = await window.openDB();
+          const transaction = db.transaction(
+            window.STORES.USER_SETTINGS,
+            "readonly",
+          );
+          const store = transaction.objectStore(window.STORES.USER_SETTINGS);
+          const request = store.get(`page_background_${targetId}`);
+          request.onsuccess = () => {
+            if (request.result?.value) {
+              setBgUrl(request.result.value);
+            }
+          };
+        }
       } catch (error) {
-        console.error("保存头像到IndexedDB失败:", error);
+        console.error("加载聊天背景失败:", error);
       }
     };
-    reader.readAsDataURL(file);
-  };
 
-  const fileInputRef = React.useRef(null);
+    loadSavedAvatar();
+    loadSavedBackground();
+  }, [characterName, chatData?.id]);
 
   return (
     <div
-      className="voice-call-overlay open"
+      className="wechat-voice-call-screen wechat-voice-call-overlay open"
       style={{
         position: "absolute",
         inset: 0,
         width: "100%",
         height: "100%",
-        backgroundColor: "#0d0d0f",
-        backgroundImage: "radial-gradient(circle at 50% 30%, #1e1b18 0%, #0d0d0f 75%)",
-        zIndex: 1300,
+        background: bgUrl
+          ? `url(${bgUrl}) center/cover no-repeat`
+          : "radial-gradient(circle at 50% 20%, #f6f7f3 0%, #ebeee8 55%, #e1e6de 100%)",
+        padding:
+          "calc(48px + var(--safe-top, 0px)) 24px calc(48px + var(--safe-bottom, 0px)) 24px",
+        boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
         alignItems: "center",
         justifyContent: "space-between",
-        padding: "calc(30px + var(--safe-top, 0px)) 24px calc(40px + var(--safe-bottom, 0px)) 24px",
-        boxSizing: "border-box",
+        zIndex: 1300,
         overflow: "hidden",
-        fontFamily: '"PingFang SC", "Noto Sans SC", sans-serif',
       }}
       onClick={(e) => e.stopPropagation()}
     >
-      <input
-        type="file"
-        ref={fileInputRef}
-        accept="image/*,video/mp4,video/webm"
-        style={{ display: "none" }}
-        onChange={handleAvatarUpload}
-      />
+      {/* 若有背景图，增加一层柔和的高斯模糊与遮罩，确保文字与头像清晰 */}
+      {bgUrl && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(245, 245, 240, 0.35)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            zIndex: 1,
+            pointerEvents: "none",
+          }}
+        />
+      )}
 
-      {/* 顶部提示与装饰 */}
+      {/* 顶部/中部信息区域：对方头像 + 昵称 + 状态文字 */}
       <div
         style={{
           display: "flex",
@@ -71350,255 +71088,181 @@ const VoiceCallPage = ({
           alignItems: "center",
           width: "100%",
           zIndex: 10,
+          marginTop: "40px",
         }}
       >
+        {/* 头像展示 (带呼吸脉冲光晕) */}
         <div
           style={{
-            color: "rgba(255, 255, 255, 0.7)",
-            fontSize: "15px",
-            letterSpacing: "2px",
-            marginBottom: "8px",
-            fontFamily: '"STKaiti", "KaiTi", serif',
+            position: "relative",
+            width: "96px",
+            height: "96px",
+            borderRadius: "50%",
+            background: avatarUrl
+              ? `url(${avatarUrl}) center/cover no-repeat`
+              : "linear-gradient(135deg, #d8e2dc 0%, #b8c5bd 100%)",
+            boxShadow: "0 10px 28px rgba(0, 0, 0, 0.1)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            border: "3px solid rgba(255, 255, 255, 0.95)",
+            animation: "morandiPulse 2.8s infinite ease-in-out",
+            overflow: "hidden",
+          }}
+        >
+          {!avatarUrl && (
+            <span
+              style={{
+                fontSize: "36px",
+                color: "#ffffff",
+                fontWeight: "bold",
+              }}
+            >
+              {characterName ? characterName.slice(0, 1) : "传"}
+            </span>
+          )}
+        </div>
+
+        {/* 昵称 */}
+        <div
+          style={{
+            color: "#2c3437",
+            fontSize: "22px",
+            fontWeight: "600",
+            letterSpacing: "0.5px",
+            marginTop: "18px",
+            textAlign: "center",
+            textShadow: bgUrl ? "0 1px 4px rgba(255,255,255,0.8)" : "none",
+          }}
+        >
+          {characterName || "对方"}
+        </div>
+
+        {/* 状态提示文案 */}
+        <div
+          style={{
+            color: "#5a666b",
+            fontSize: "14px",
+            fontWeight: "400",
+            marginTop: "8px",
+            letterSpacing: "0.3px",
+            textShadow: bgUrl ? "0 1px 4px rgba(255,255,255,0.8)" : "none",
           }}
         >
           {callType === "user"
-            ? `你向 ${characterName || "对方"} 发起心纸来电...`
-            : `${characterName || "对方"} 发起心纸来电...`}
+            ? "正在等待对方接受邀请..."
+            : "邀请你进行语音通话..."}
         </div>
-
-        {/* 顶部古风装饰弧线 */}
-        <svg
-          viewBox="0 0 300 60"
-          style={{ width: "240px", height: "48px", opacity: 0.7 }}
-        >
-          <path
-            d="M20,50 Q150,10 280,50"
-            fill="none"
-            stroke="#a89278"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-          />
-          <path
-            d="M40,46 Q150,16 260,46"
-            fill="none"
-            stroke="#a89278"
-            strokeWidth="1"
-            strokeDasharray="2,4"
-            opacity="0.6"
-          />
-        </svg>
       </div>
 
-      {/* 中央人像卡片区域 */}
-      <div
-        onClick={() => fileInputRef.current && fileInputRef.current.click()}
-        style={{
-          width: "220px",
-          height: "360px",
-          borderRadius: "12px",
-          border: avatarUrl ? "1.5px solid rgba(168, 146, 120, 0.5)" : "2px dashed rgba(255, 255, 255, 0.35)",
-          display: "flex",
-          flexDirection: "column",
-          alignItems: "center",
-          justifyContent: "center",
-          cursor: "pointer",
-          backgroundImage: avatarUrl ? `url(${avatarUrl})` : "none",
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundColor: avatarUrl ? "transparent" : "rgba(255, 255, 255, 0.03)",
-          boxShadow: avatarUrl ? "0 10px 30px rgba(0,0,0,0.5)" : "none",
-          transition: "all 0.3s ease",
-          position: "relative",
-          margin: "auto 0",
-        }}
-      >
-        {!avatarUrl && (
-          <div
-            style={{
-              color: "rgba(255, 255, 255, 0.35)",
-              fontSize: "13px",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "center",
-              gap: "8px",
-              userSelect: "none",
-            }}
-          >
-            <i className="ph ph-image-square" style={{ fontSize: "32px" }}></i>
-            <span>点击设置通话立绘</span>
-          </div>
-        )}
-      </div>
-
-      {/* 底部动作按钮栏 */}
+      {/* 底部微信标准操作按钮栏 */}
       <div
         style={{
           width: "100%",
-          maxWidth: "320px",
+          maxWidth: "280px",
           display: "flex",
-          justifyContent: callType === "user" ? "center" : "space-between",
+          justifyContent: callType === "user" ? "center" : "space-around",
           alignItems: "center",
           zIndex: 10,
+          marginBottom: "20px",
         }}
       >
-        {/* 拒绝 / 挂断 / 取消 */}
+        {/* 拒绝 / 取消 按钮 */}
         <div
           style={{
             display: "flex",
             flexDirection: "column",
             alignItems: "center",
-            gap: "10px",
-            position: "relative",
+            gap: "8px",
           }}
         >
-          <div
-            className="vc-circle-btn"
-            style={{
-              width: "74px",
-              height: "74px",
-              borderRadius: "50%",
-              background: "linear-gradient(135deg, #f2a2a2 0%, #e88c8c 100%)",
-              border: "2.5px solid #fffdfa",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              cursor: "pointer",
-              boxShadow: "0 4px 20px rgba(232, 140, 140, 0.35)",
-              transition: "transform 0.2s",
-            }}
+          <button
+            className="wechat-call-btn wechat-btn-hangup"
+            style={{ width: "56px", height: "56px" }}
             onClick={() => {
               onBack();
               if (onReject) onReject();
             }}
+            title={callType === "user" ? "取消呼叫" : "拒绝通话"}
           >
+            {/* 电话挂断 SVG */}
             <svg
-              width="36"
-              height="36"
+              width="26"
+              height="26"
               viewBox="0 0 24 24"
               fill="none"
-              stroke="white"
-              strokeWidth="2"
+              stroke="currentColor"
+              strokeWidth="2.4"
+              strokeLinecap="round"
+              strokeLinejoin="round"
             >
-              <path d="M18 8L10 16" strokeLinecap="round" />
-              <path
-                d="M6 10 C6 10 7 6 12 6 C17 6 18 10 18 10 L16 16 L8 16 Z"
-                fill="rgba(255,255,255,0.25)"
-              />
+              <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91" />
+              <line x1="23" y1="1" x2="1" y2="23" />
             </svg>
-          </div>
+          </button>
           <span
             style={{
-              color: "#fff",
-              fontSize: "15px",
-              fontWeight: 500,
-              letterSpacing: "2px",
+              color: "#4f5c62",
+              fontSize: "13px",
+              fontWeight: "500",
+              letterSpacing: "0.5px",
+              textShadow: bgUrl ? "0 1px 3px rgba(255,255,255,0.8)" : "none",
             }}
           >
             {callType === "user" ? "取消" : "拒绝"}
           </span>
-
-          {/* 挂载小风铃 */}
-          <div
-            className="vc-hanging-bell"
-            style={{
-              position: "absolute",
-              width: "40px",
-              height: "40px",
-              top: "65px",
-              left: "-12px",
-              animation: "bellSwing 3s infinite ease-in-out",
-              pointerEvents: "none",
-            }}
-          >
-            <svg viewBox="0 0 100 100">
-              <path d="M40,20 L60,80" stroke="#b0967a" strokeWidth="4" />
-              <circle cx="60" cy="80" r="10" fill="#b0967a" />
-            </svg>
-          </div>
         </div>
 
-        {/* 接通 (仅在角色呼入时显示) */}
+        {/* 接听 按钮 (仅对方来电时显示) */}
         {callType !== "user" && (
           <div
             style={{
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
-              gap: "10px",
-              position: "relative",
+              gap: "8px",
             }}
           >
-            <div
-              className="vc-circle-btn"
-              style={{
-                width: "74px",
-                height: "74px",
-                borderRadius: "50%",
-                background: "linear-gradient(135deg, #c9e8d5 0%, #a8d8b8 100%)",
-                border: "2.5px solid #fffdfa",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                boxShadow: "0 4px 20px rgba(168, 216, 184, 0.35)",
-                transition: "transform 0.2s",
-              }}
+            <button
+              className="wechat-call-btn wechat-btn-accept"
+              style={{ width: "56px", height: "56px" }}
               onClick={() => {
                 if (onAccept) onAccept();
               }}
+              title="接听通话"
             >
+              {/* 电话接听 SVG */}
               <svg
-                width="36"
-                height="36"
+                width="26"
+                height="26"
                 viewBox="0 0 24 24"
                 fill="none"
-                stroke="#3e5241"
-                strokeWidth="2"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <path
-                  d="M6 10 C6 10 7 6 12 6 C17 6 18 10 18 10 L16 16 L8 16 Z"
-                  fill="rgba(255,255,255,0.4)"
-                />
-                <circle cx="12" cy="11" r="1.5" fill="#3e5241" />
-                <circle cx="12" cy="13.5" r="1.5" fill="#3e5241" />
-                <circle cx="12" cy="16" r="1.5" fill="#3e5241" />
+                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
               </svg>
-            </div>
+            </button>
             <span
               style={{
-                color: "#fff",
-                fontSize: "15px",
-                fontWeight: 500,
-                letterSpacing: "2px",
+                color: "#4f5c62",
+                fontSize: "13px",
+                fontWeight: "500",
+                letterSpacing: "0.5px",
+                textShadow: bgUrl ? "0 1px 3px rgba(255,255,255,0.8)" : "none",
               }}
             >
-              接通
+              接听
             </span>
-
-            {/* 挂载小风铃 */}
-            <div
-              className="vc-hanging-bell"
-              style={{
-                position: "absolute",
-                width: "40px",
-                height: "40px",
-                top: "65px",
-                right: "-12px",
-                animation: "bellSwing 3s infinite ease-in-out",
-                pointerEvents: "none",
-              }}
-            >
-              <svg viewBox="0 0 100 100">
-                <path d="M60,20 L40,80" stroke="#b0967a" strokeWidth="4" />
-                <circle cx="40" cy="80" r="10" fill="#b0967a" />
-              </svg>
-            </div>
           </div>
         )}
       </div>
     </div>
   );
 };
+
 // ==================== [修改开始] T8ChatDetail 组件 ====================
 // T8 聊天详情页组件 (包含高级设置、心声功能、及新增的表情包功能)
 // ==================== [新增] 可折叠同行记录卡片 ====================
@@ -72227,6 +71891,39 @@ const T8ChatDetail = ({
   const [showInCallUI, setShowInCallUI] = React.useState(false);
   // 通话中消息状态
   const [inCallMessages, setInCallMessages] = React.useState([]);
+  // [新增] 通话中计时器与交互状态
+  const [inCallDuration, setInCallDuration] = React.useState(0);
+  const [isInCallMuted, setIsInCallMuted] = React.useState(false);
+  const [isInCallSpeaker, setIsInCallSpeaker] = React.useState(true);
+  const [showInCallInput, setShowInCallInput] = React.useState(false);
+  const [inCallAvatarUrl, setInCallAvatarUrl] = React.useState(null);
+  // 查看通话历史详情弹窗状态
+  const [viewingCallRecord, setViewingCallRecord] = React.useState(null);
+
+  // [新增] 通话计时器 Effect
+  React.useEffect(() => {
+    let timer = null;
+    if (showInCallUI) {
+      setInCallDuration(0);
+      timer = setInterval(() => {
+        setInCallDuration((prev) => prev + 1);
+      }, 1000);
+    } else {
+      setInCallDuration(0);
+      setShowInCallInput(false);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [showInCallUI]);
+
+  // 格式化通话时间为 mm:ss
+  const formatCallDuration = (seconds) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+  };
+
   // [新增] 日记页面状态
   const [showDiaryPage, setShowDiaryPage] = React.useState(false);
   // [新增] 日记内容状态
@@ -72236,41 +71933,55 @@ const T8ChatDetail = ({
   // [新增] 轨迹数据状态
   const [trajectoryData, setTrajectoryData] = React.useState(null);
 
-  // [新增] 通话中页面自动滚动到底部
+  // 通话中页面自动滚动到底部
   React.useEffect(() => {
     const incallArea = document.getElementById("incall-scroll-area");
     if (incallArea) {
-      incallArea.scrollTop = incallArea.scrollHeight;
+      setTimeout(() => {
+        incallArea.scrollTo({
+          top: incallArea.scrollHeight,
+          behavior: "smooth",
+        });
+      }, 50);
     }
   }, [inCallMessages]);
 
-  // 加载通话中页面的自定义图像
+  // 加载通话中页面的自定义立绘/头像 (优先延用用户配置的联系人头像)
   React.useEffect(() => {
-    if (showInCallUI && chatData?.name) {
-      // 加载保存的头像
+    if (showInCallUI && chatData) {
       const loadSavedAvatar = async () => {
         try {
-          const db = await openDB();
-          const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
-          const store = transaction.objectStore(STORES.USER_SETTINGS);
-          const request = store.get(`voice_call_avatar_${chatData.name}`);
+          const xiuyiAvatars = JSON.parse(
+            localStorage.getItem("绣衣楼头像") || "{}",
+          );
+          if (chatData.name && xiuyiAvatars[chatData.name]) {
+            setInCallAvatarUrl(xiuyiAvatars[chatData.name]);
+            return;
+          }
+          if (chatData.avatar) {
+            setInCallAvatarUrl(chatData.avatar);
+            return;
+          }
+          if (typeof window !== "undefined" && window.openDB && window.STORES?.USER_SETTINGS) {
+            const db = await openDB();
+            const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+            const store = transaction.objectStore(STORES.USER_SETTINGS);
+            const request = store.get(`voice_call_avatar_${chatData.name}`);
 
-          request.onsuccess = () => {
-            const savedAvatar = request.result?.value;
-            if (savedAvatar) {
-              const avatarElement = document.getElementById(
-                `incall-avatar-${chatData.id}`,
-              );
-              if (avatarElement) {
-                avatarElement.style.backgroundImage = `url(${savedAvatar})`;
-                avatarElement.style.backgroundSize = "contain";
-                avatarElement.style.backgroundPosition = "center";
-                avatarElement.style.backgroundRepeat = "no-repeat";
-                avatarElement.style.border =
-                  "3px dashed rgba(200, 200, 200, 0.5)";
+            request.onsuccess = () => {
+              const savedAvatar = request.result?.value;
+              if (savedAvatar) {
+                setInCallAvatarUrl(savedAvatar);
+              } else if (chatData.id) {
+                const roleReq = store.get(`role_avatar_${chatData.id}`);
+                roleReq.onsuccess = () => {
+                  if (roleReq.result?.value) {
+                    setInCallAvatarUrl(roleReq.result.value);
+                  }
+                };
               }
-            }
-          };
+            };
+          }
         } catch (error) {
           console.error("加载语音通话头像失败:", error);
         }
@@ -73832,6 +73543,138 @@ const T8ChatDetail = ({
     );
   };
 
+  // 实时语音通话中的专属 AI 回复处理
+  const handleInCallAITrigger = async (userCallMsg) => {
+    if (isTyping) return;
+    setIsTyping(true);
+
+    let memorySettings = {
+      globalMemoryDays: 30,
+      summary: "",
+    };
+    try {
+      const savedMem = JSON.parse(
+        localStorage.getItem("t8_memory_config") || "{}",
+      );
+      if (savedMem.globalMemoryDays)
+        memorySettings.globalMemoryDays = savedMem.globalMemoryDays;
+
+      if (savedMem.memories && savedMem.memories.length > 0) {
+        const mountedIds = settings.mountedMemories || [];
+        const mountedMemories = savedMem.memories.filter((m) =>
+          mountedIds.includes(m.id),
+        );
+        if (mountedMemories.length > 0) {
+          memorySettings.summary = mountedMemories
+            .map((m) => `【${m.title}】：${m.content}`)
+            .join("\n");
+        }
+      }
+    } catch (e) { }
+
+    const worldContext = window.getWorldBookContext
+      ? window.getWorldBookContext()
+      : "";
+    let userContext = "";
+    try {
+      const savedPersonas = JSON.parse(
+        localStorage.getItem("user_personas") || "[]",
+      );
+      const activePersonaId = localStorage.getItem("active_user_persona_id");
+      const activePersona = savedPersonas.find(
+        (p) => String(p.id) === String(activePersonaId),
+      );
+      if (activePersona) {
+        userContext = `【当前对话的你的用户/聊天对象人设】：\n- 称呼/姓名：${activePersona.name || "我"}\n- 身份/设定：${activePersona.persona || "暂无特别设定"}\n`;
+      }
+    } catch (e) { }
+
+    const charPersona =
+      chatData.customPersona ||
+      chatData.persona ||
+      chatData.profile?.persona ||
+      "";
+    const systemInstruction = `你正在扮演【${chatData.name}】。\n${charPersona ? `【角色人设】：\n${charPersona}\n` : ""}${userContext}${worldContext ? `【世界观背景】：\n${worldContext}\n` : ""}${memorySettings.summary ? `【长期记忆背景】：\n${memorySettings.summary}\n` : ""}\n【核心要求：实时语音通话】\n你们当前正在进行电话实时语音通话中。请以【${chatData.name}】的角色口吻进行语音通话回复。\n1. 语言必须高度口语化、自然流畅、简短生动（像在真实打电话一样），请将回复控制在1~3句话以内。\n2. 严禁输出描写性动作或括号（如（微笑着说）或*叹气*），直接输出电话里说出来的真实口语台词。\n3. 严禁输出任何系统控制标签（如 [发起通话]、[接受通话]、[拒绝通话] 等）。`;
+
+    const apiMessages = [
+      { role: "system", content: systemInstruction },
+    ];
+
+    // 取最近的历史消息作为前置背景
+    const recentHistory = messages.slice(-12);
+    recentHistory.forEach((m) => {
+      if (m.type === "voice_call_record") {
+        if (m.status === "completed" && m.dialogue && m.dialogue.length > 0) {
+          const dl = m.dialogue
+            .map((d) => `  - ${d.isMe ? "用户" : (chatData.name || "你")}：“${d.text}”`)
+            .join("\n");
+          apiMessages.push({
+            role: "system",
+            content: `【历史语音通话记录（时长 ${m.durationText || ""}）】：\n${dl}`,
+          });
+        }
+      } else if (m.type !== "narration" || m.text) {
+        apiMessages.push({
+          role: m.isMe ? "user" : "assistant",
+          content: m.text || "",
+        });
+      }
+    });
+
+    apiMessages.push({
+      role: "system",
+      content: `【系统提示：当前语音通话已接通，以下为本次通话中的实时对话内容】`,
+    });
+
+    // 载入本次通话中已经说过的话
+    inCallMessages.forEach((m) => {
+      apiMessages.push({
+        role: m.isMe ? "user" : "assistant",
+        content: m.text,
+      });
+    });
+
+    // 载入用户最新发送的这一句
+    if (userCallMsg) {
+      apiMessages.push({
+        role: "user",
+        content: userCallMsg.text,
+      });
+    }
+
+    window.sendToLLM(
+      apiMessages,
+      null,
+      async (reply) => {
+        setIsTyping(false);
+        let cleanReply = reply || "";
+        cleanReply = cleanReply
+          .replace(/\[发起通话\]/g, "")
+          .replace(/\[接受通话\]/g, "")
+          .replace(/\[拒绝通话\]/g, "")
+          .replace(/\[.*?\]/g, "")
+          .trim();
+
+        if (cleanReply) {
+          const aiCallMsg = {
+            text: cleanReply,
+            isMe: false,
+            time: new Date().toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+          };
+          setInCallMessages((prev) => [...prev, aiCallMsg]);
+          handlePlayTTS(cleanReply);
+        }
+      },
+      (err) => {
+        console.error("通话中AI请求出错:", err);
+        setIsTyping(false);
+      }
+    );
+  };
+
   // 触发 AI 回复
   // [修改] 触发 AI 回复 (增加线下模式的描写解析逻辑和Pixabay图片搜索功能)
   const handleAITrigger = async (customHistory = null, lastUserMsg = null) => {
@@ -74038,8 +73881,34 @@ const T8ChatDetail = ({
 
     const apiMessages = [
       { role: "system", content: systemInstruction },
-      // [修改] 强引导支持多模态图片识别
+      // [修改] 强引导支持多模态图片识别与通话记录结构化
       ...historyForPrompt.map((m) => {
+        if (m.type === "voice_call_record") {
+          const dlg = m.dialogue || m.content?.messages || m.content?.dialogue || [];
+          if (dlg.length > 0) {
+            const dialogueContent = dlg
+              .map((d) => `  - ${d.isMe ? "用户" : (chatData?.name || "你")}：“${d.text}”`)
+              .join("\n");
+            return {
+              role: "user",
+              content: `【系统事件与通话记忆同步：你与用户于 ${m.time || "刚才"} 进行了一次实时语音通话，通话时长 ${m.durationText || m.durationStr || m.content?.durationStr || "00:00"}。以下为当时的完整通话对话记录】：\n${dialogueContent}\n【语音通话已结束。你必须完全记住上述通话中双方所聊的所有内容、承诺与对话细节，在后续传讯回复时保持自然的记忆连贯】`,
+            };
+          } else if (m.status === "rejected" || m.status === "rejected_by_user") {
+            return {
+              role: "user",
+              content: `【系统事件：${m.time || ""} 曾发起语音通话，未接通（已拒绝）】`,
+            };
+          } else if (m.status === "canceled") {
+            return {
+              role: "user",
+              content: `【系统事件：${m.time || ""} 曾发起语音通话，未接通（已取消）】`,
+            };
+          }
+          return {
+            role: "user",
+            content: `【系统事件：${m.time || ""} 曾发起语音通话，通话时长 ${m.durationText || m.durationStr || m.content?.durationStr || "00:00"}（通话已结束）`,
+          };
+        }
         if (m.type === "red_packet") {
           return {
             role: m.isMe ? "user" : "assistant",
@@ -74474,24 +74343,97 @@ const T8ChatDetail = ({
         // 处理所有段落
         await processImageSearchRequests();
 
-        // [新增] 如果角色拒绝通话，插入系统提示消息
-        if (roleRejectCall) {
-          msgIdCounter++;
-          newAiMsgs.push({
-            id: msgIdCounter,
-            text: "（对方拒绝了你的心纸君传讯）",
-            type: "narration",
-            isMe: false,
+        // 检查是否处于通话呼叫/等待/接听上下文
+        const isCallingContext =
+          showVoiceCallPage.show ||
+          showInCallUI ||
+          (customHistory &&
+            customHistory.some(
+              (msg) => msg.text === "（发起了语音通话请求）" && msg.isMe,
+            )) ||
+          messages.some(
+            (msg) => msg.text === "（发起了语音通话请求）" && msg.isMe,
+          );
+
+        // 触发通话界面的副作用
+        if (roleRejectCall && isCallingContext) {
+          // 角色拒绝接听：关闭等待UI，在聊天记录中生成一条精致的拒接通话记录
+          setShowVoiceCallPage({ show: false, callType: "role" });
+          const rejectRecord = {
+            id: Date.now(),
+            type: "voice_call_record",
+            status: "rejected",
+            duration: 0,
+            durationText: "00:00",
+            text: "语音通话 对方已拒绝",
+            dialogue: [],
+            isMe: true,
             time: new Date().toLocaleTimeString([], {
               hour: "2-digit",
               minute: "2-digit",
             }),
-            thought: null,
-          });
+          };
+          const updatedMessages = [...messages, rejectRecord];
+          setMessages(updatedMessages);
+          if (chatData?.id && window.chatHistoryStore) {
+            window.chatHistoryStore
+              .saveMessages(chatData.id, updatedMessages)
+              .then(() => console.log("✅ 拒接记录已同步至DB"))
+              .catch((error) => console.error("❌ 保存失败:", error));
+          }
+          setIsTyping(false);
+          return;
+        } else if (roleAcceptCall || (isCallingContext && !roleInitiateCall)) {
+          // 无论是明确返回了[接受通话]，还是在呼叫等待中角色回复了台词（未拒绝），均判定为接通并进入通话界面
+          setShowVoiceCallPage({ show: false, callType: "role" });
+          setTimeout(() => setShowInCallUI(true), 300);
+
+          const textMsgs = newAiMsgs
+            .filter((m) => m.type === "text" || m.type === "narration")
+            .map((m) => ({
+              text: m.text,
+              isMe: false,
+              time: new Date().toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              }),
+            }));
+
+          const openingMsgs =
+            textMsgs.length > 0
+              ? textMsgs
+              : [
+                  {
+                    text: "喂？",
+                    isMe: false,
+                    time: new Date().toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    }),
+                  },
+                ];
+
+          setTimeout(() => {
+            setInCallMessages((prev) => {
+              return prev.length > 0 ? [...prev, ...openingMsgs] : openingMsgs;
+            });
+            const fullText = openingMsgs.map((m) => m.text).join(" ");
+            if (fullText) {
+              handlePlayTTS(fullText);
+            }
+          }, 100);
+
+          setIsTyping(false);
+          return;
+        } else if (roleInitiateCall) {
+          // 角色主动发起通话，弹出被呼叫界面
+          setTimeout(
+            () => setShowVoiceCallPage({ show: true, callType: "role" }),
+            800,
+          );
         }
 
-        // ================= 核心修复开始 =================
-        // 边界校验：检查 newAiMsgs 是否为空
+        // ================= 普通消息更新 =================
         if (newAiMsgs.length === 0) {
           console.warn("❌ newAiMsgs 为空，跳过消息更新");
           setIsTyping(false);
@@ -74512,51 +74454,9 @@ const T8ChatDetail = ({
             .catch((error) => console.error("❌ 保存失败:", error));
         }
 
-        // 触发通话界面的副作用
-        if (roleAcceptCall) {
-          // 关闭等待拨号UI，进入通话界面
-          setShowVoiceCallPage({ show: false, callType: "role" });
-          setTimeout(() => setShowInCallUI(true), 300);
-
-          // 【整改核心】：提取 AI 解析并拆分好的 newAiMsgs，渲染为多个气泡
-          const textMsgs = newAiMsgs
-            .filter((m) => m.type === "text" || m.type === "narration")
-            .map((m) => ({ text: m.text, isMe: false }));
-
-          if (textMsgs.length > 0) {
-            setTimeout(() => setInCallMessages(textMsgs), 100);
-          } else {
-            setTimeout(
-              () => setInCallMessages([{ text: "喂？", isMe: false }]),
-              100,
-            );
-          }
-        } else if (roleRejectCall) {
-          // AI拒绝接听，关闭等待UI
-          setShowVoiceCallPage({ show: false, callType: "role" });
-        } else if (roleInitiateCall) {
-          // 角色主动发起通话，弹出被呼叫界面
-          setTimeout(
-            () => setShowVoiceCallPage({ show: true, callType: "role" }),
-            800,
-          );
-        } else if (showInCallUI && newAiMsgs.length > 0) {
-          // 【整改核心】：通话中状态下，继续将拆分好的消息追加进去，而不是一段话挤在一个气泡
-          const textMsgs = newAiMsgs
-            .filter((m) => m.type === "text" || m.type === "narration")
-            .map((m) => ({ text: m.text, isMe: false }));
-
-          if (textMsgs.length > 0) {
-            setTimeout(() => {
-              setInCallMessages((prev) => [...prev, ...textMsgs]);
-            }, 100);
-          }
-        }
-
         // 更新左侧列表的预览文本
         if (onMessageUpdate && newAiMsgs.length > 0) {
           const lastText = newAiMsgs[newAiMsgs.length - 1].text;
-          // 使用 setTimeout 避免在渲染周期内触发父组件更新警告
           setTimeout(() => onMessageUpdate(lastText), 0);
         }
 
@@ -74986,43 +74886,40 @@ const T8ChatDetail = ({
       {showVoiceCallPage.show && (
         <VoiceCallPage
           characterName={chatData.name}
+          chatData={chatData}
           callType={showVoiceCallPage.callType}
           onBack={() => {
             setShowVoiceCallPage({ show: false, callType: "role" });
           }}
           onAccept={() => {
             setShowVoiceCallPage({ show: false, callType: "role" });
-            // AI接通电话
-            const msg = {
-              id: Date.now(),
-              text: "（接通了语音通话）",
-              type: "narration",
-              isMe: false,
-              time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-            };
-            setMessages((prev) => {
-              const newMsgs = [...prev, msg];
-              // 立即触发AI对话，不延迟
-              handleAITrigger(newMsgs);
-              return newMsgs;
-            });
-            // 立即添加初始问候消息到通话中页面
+            // 用户接通角色来电
             setTimeout(() => {
-              setInCallMessages([{ text: "你好，有什么事吗？", isMe: false }]);
+              setInCallMessages([
+                {
+                  text: "喂，找我有什么事吗？",
+                  isMe: false,
+                  time: new Date().toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                },
+              ]);
             }, 100);
-            // 跳转到通话中页面
             setTimeout(() => setShowInCallUI(true), 300);
           }}
           onReject={() => {
             setShowVoiceCallPage({ show: false, callType: "role" });
+            const isUserCancel = showVoiceCallPage.callType === "user";
             const msg = {
               id: Date.now(),
-              text: `（你拒绝了${chatData.name}的心纸君传讯）`,
-              type: "narration",
-              isMe: true, // 是用户挂断的
+              type: "voice_call_record",
+              status: isUserCancel ? "canceled" : "rejected_by_user",
+              duration: 0,
+              durationText: "00:00",
+              text: isUserCancel ? "语音通话 已取消" : "语音通话 已拒绝",
+              dialogue: [],
+              isMe: true,
               time: new Date().toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit",
@@ -75030,11 +74927,205 @@ const T8ChatDetail = ({
             };
             setMessages((prev) => {
               const newMsgs = [...prev, msg];
-              setTimeout(() => handleAITrigger(newMsgs), 500); // 触发AI对拒接的反应
+              if (chatData?.id && window.chatHistoryStore) {
+                window.chatHistoryStore.saveMessages(chatData.id, newMsgs);
+              }
               return newMsgs;
             });
           }}
         />
+      )}
+
+      {/* 语音通话详情记录弹窗 */}
+      {viewingCallRecord && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0, 0, 0, 0.55)",
+            zIndex: 3500,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            backdropFilter: "blur(4px)",
+            padding: "16px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setViewingCallRecord(null)}
+        >
+          <div
+            style={{
+              background: "#FBF9F5",
+              borderRadius: "24px",
+              width: "100%",
+              maxWidth: "380px",
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 16px 40px rgba(0,0,0,0.2)",
+              border: "1px solid rgba(255,255,255,0.8)",
+              overflow: "hidden",
+              animation: "popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* 弹窗头部 */}
+            <div
+              style={{
+                padding: "16px 20px",
+                borderBottom: "1px solid #ECE7DE",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                background: "linear-gradient(180deg, #FFFFFF 0%, #FAF7F2 100%)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <div
+                  style={{
+                    width: "36px",
+                    height: "36px",
+                    borderRadius: "50%",
+                    background: "linear-gradient(135deg, #a5d6a7 0%, #81c784 100%)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#ffffff",
+                  }}
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                  </svg>
+                </div>
+                <div>
+                  <div style={{ fontSize: "15px", fontWeight: "bold", color: "#374151" }}>
+                    语音通话详情
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#6b7280", marginTop: "2px" }}>
+                    通话时长：{viewingCallRecord.durationText || "00:00"} · {viewingCallRecord.time || ""}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setViewingCallRecord(null)}
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "50%",
+                  border: "none",
+                  background: "#EDE8DF",
+                  color: "#6b7280",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "14px",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 对话内容滚动区 */}
+            <div
+              style={{
+                flex: 1,
+                padding: "16px",
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                background: "#F7F5F0",
+              }}
+            >
+              {viewingCallRecord.dialogue && viewingCallRecord.dialogue.length > 0 ? (
+                viewingCallRecord.dialogue.map((item, idx) => (
+                  <div
+                    key={idx}
+                    style={{
+                      display: "flex",
+                      flexDirection: item.isMe ? "row-reverse" : "row",
+                      alignItems: "flex-start",
+                      gap: "8px",
+                    }}
+                  >
+                    <div
+                      style={{
+                        fontSize: "10px",
+                        fontWeight: "600",
+                        color: "#9ca3af",
+                        alignSelf: "flex-end",
+                        marginBottom: "2px",
+                      }}
+                    >
+                      {item.time || ""}
+                    </div>
+                    <div
+                      style={{
+                        maxWidth: "75%",
+                        padding: "8px 12px",
+                        borderRadius: item.isMe ? "14px 14px 2px 14px" : "14px 14px 14px 2px",
+                        background: item.isMe
+                          ? "linear-gradient(135deg, #8dc38e 0%, #70a772 100%)"
+                          : "#FFFFFF",
+                        color: item.isMe ? "#FFFFFF" : "#374151",
+                        fontSize: "13px",
+                        lineHeight: "1.45",
+                        boxShadow: "0 2px 5px rgba(0,0,0,0.04)",
+                        border: item.isMe ? "none" : "1px solid #EAE5DB",
+                      }}
+                    >
+                      {item.text}
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div style={{ textAlign: "center", color: "#9ca3af", fontSize: "13px", padding: "20px 0" }}>
+                  本次通话无对话文字记录
+                </div>
+              )}
+            </div>
+
+            {/* 弹窗底部操作 */}
+            <div
+              style={{
+                padding: "12px 16px",
+                borderTop: "1px solid #ECE7DE",
+                display: "flex",
+                justifyContent: "flex-end",
+                background: "#FFFFFF",
+              }}
+            >
+              <button
+                onClick={() => setViewingCallRecord(null)}
+                style={{
+                  padding: "6px 16px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: "#4b5563",
+                  color: "#FFFFFF",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                关闭
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       {/* 购物意图拦截弹窗 */}
@@ -75141,390 +75232,562 @@ const T8ChatDetail = ({
         </div>
       )}
 
-      {/* 通话中页面 */}
+      {/* ==================== 通话中页面 (微信风格 · 莫兰迪浅色磨砂) ==================== */}
       {showInCallUI && (
         <div
-          className="incall-container"
+          className="wechat-voice-call-overlay"
           style={{
-            position: "absolute",
-            inset: 0,
-            width: "100%",
-            height: "100%",
-            backgroundColor: "#0d0d0f",
-            backgroundImage: "radial-gradient(circle at 50% 25%, #1c1917 0%, #0a0a0c 80%)",
-            zIndex: 1300,
+            padding: "calc(12px + var(--safe-top, 0px)) 14px calc(18px + var(--safe-bottom, 0px)) 14px",
+            boxSizing: "border-box",
             display: "flex",
             flexDirection: "column",
-            alignItems: "center",
             justifyContent: "space-between",
-            padding: "calc(16px + var(--safe-top, 0px)) 16px calc(20px + var(--safe-bottom, 0px)) 16px",
-            boxSizing: "border-box",
-            overflow: "hidden",
-            fontFamily: '"PingFang SC", "Noto Sans SC", "SimSun", serif',
           }}
           onClick={(e) => e.stopPropagation()}
         >
-          {/* 顶部状态与关闭按钮 */}
+          {/* 顶部导航与状态栏：最小化 + 小圆头像与昵称时长 + 背景设置 */}
           <div
             style={{
               position: "relative",
               width: "100%",
+              maxWidth: "420px",
               display: "flex",
               alignItems: "center",
-              justifyContent: "center",
-              padding: "10px 0",
+              justifyContent: "space-between",
+              padding: "4px 6px",
               zIndex: 20,
+              flexShrink: 0,
             }}
           >
+            {/* 左上角最小化收起按钮 */}
             <div
-              className="incall-top-status"
               style={{
-                color: "#d4b275",
-                fontSize: "18px",
-                letterSpacing: "3px",
-                fontWeight: "bold",
-                fontFamily: '"STKaiti", "KaiTi", serif',
-              }}
-            >
-              通话中
-            </div>
-
-            {/* 右上角关闭挂断按钮 */}
-            <div
-              className="incall-top-icon"
-              style={{
-                position: "absolute",
-                right: "4px",
-                top: "8px",
-                width: "32px",
-                height: "32px",
-                border: "1px solid rgba(212, 178, 117, 0.4)",
+                width: "36px",
+                height: "36px",
                 borderRadius: "50%",
+                background: "rgba(255, 255, 255, 0.7)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                border: "1px solid rgba(255, 255, 255, 0.8)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                color: "#d4b275",
-                backgroundColor: "rgba(255, 255, 255, 0.05)",
+                color: "#4a555b",
                 cursor: "pointer",
-                transition: "all 0.2s ease",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
+                flexShrink: 0,
               }}
               onClick={() => {
                 setShowInCallUI(false);
-                const hangupMsg = {
+                const durationSec = inCallDuration;
+                const durationFormatted = formatCallDuration(durationSec);
+                const callRecordMsg = {
                   id: Date.now(),
-                  text: "（挂断了语音通话）",
-                  type: "narration",
-                  isMe: false,
+                  type: "voice_call_record",
+                  status: "completed",
+                  duration: durationSec,
+                  durationText: durationFormatted,
+                  text: `语音通话 时长 ${durationFormatted}`,
+                  dialogue: inCallMessages.map((m) => ({
+                    sender: m.isMe ? "用户" : (chatData?.name || "角色"),
+                    text: m.text,
+                    isMe: m.isMe,
+                    time: m.time || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  })),
+                  isMe: true,
                   time: new Date().toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
                   }),
                 };
-                setMessages((prev) => [...prev, hangupMsg]);
+                setMessages((prev) => {
+                  const newMsgs = [...prev, callRecordMsg];
+                  if (chatData?.id && window.chatHistoryStore) {
+                    window.chatHistoryStore
+                      .saveMessages(chatData.id, newMsgs)
+                      .catch((err) => console.error("❌ 保存失败:", err));
+                  }
+                  return newMsgs;
+                });
                 setInCallMessages([]);
+                setInCallDuration(0);
               }}
+              title="收起通话"
             >
               <svg
-                width="16"
-                height="16"
+                width="18"
+                height="18"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.5"
+                strokeWidth="2.4"
                 strokeLinecap="round"
+                strokeLinejoin="round"
               >
-                <line x1="18" y1="6" x2="6" y2="18"></line>
-                <line x1="6" y1="6" x2="18" y2="18"></line>
+                <polyline points="4 14 10 14 10 20"></polyline>
+                <polyline points="20 10 14 10 14 4"></polyline>
+                <line x1="14" y1="10" x2="21" y2="3"></line>
+                <line x1="3" y1="21" x2="10" y2="14"></line>
               </svg>
             </div>
-          </div>
 
-          {/* 中央虚线框 / 头像展示区 */}
-          <div
-            className="incall-dashed-box"
-            id={`incall-avatar-${chatData.id}`}
-            style={{
-              width: "150px",
-              height: "190px",
-              border: "2px dashed rgba(212, 178, 117, 0.45)",
-              borderRadius: "8px",
-              margin: "6px 0 10px 0",
-              cursor: "pointer",
-              backgroundColor: "rgba(255, 255, 255, 0.02)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundSize: "cover",
-              backgroundPosition: "center",
-              flexShrink: 0,
-            }}
-            onClick={() => {
-              const fileInput = document.createElement("input");
-              fileInput.type = "file";
-              fileInput.accept = "image/*,video/mp4,video/webm";
-              fileInput.style.display = "none";
+            {/* 中间：小圆头像(延用配置, 48px) + 姓名 + 动态计时 + 声波 */}
+            <div
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+              }}
+            >
+              {/* 小圆头像 (延用用户配置好的头像) */}
+              <div
+                style={{
+                  width: "48px",
+                  height: "48px",
+                  borderRadius: "50%",
+                  background: inCallAvatarUrl
+                    ? `url(${inCallAvatarUrl}) center/cover no-repeat`
+                    : "linear-gradient(135deg, #d8e2dc 0%, #b8c5bd 100%)",
+                  border: "2px solid rgba(255, 255, 255, 0.9)",
+                  boxShadow: "0 3px 10px rgba(0, 0, 0, 0.08)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  flexShrink: 0,
+                  overflow: "hidden",
+                }}
+              >
+                {!inCallAvatarUrl && (
+                  <span style={{ fontSize: "20px", color: "#ffffff", fontWeight: "bold" }}>
+                    {chatData.name ? chatData.name.slice(0, 1) : "传"}
+                  </span>
+                )}
+              </div>
 
-              fileInput.onchange = async (e) => {
-                const file = e.target.files[0];
-                if (file) {
-                  try {
+              {/* 姓名与通话状态时长 */}
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div
+                  style={{
+                    color: "#2c3437",
+                    fontSize: "15px",
+                    fontWeight: "600",
+                    letterSpacing: "0.5px",
+                    lineHeight: 1.2,
+                  }}
+                >
+                  {chatData.name}
+                </div>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                    color: "#7a868b",
+                    fontSize: "12px",
+                    marginTop: "3px",
+                    fontWeight: "500",
+                  }}
+                >
+                  <span
+                    style={{
+                      width: "6px",
+                      height: "6px",
+                      borderRadius: "50%",
+                      backgroundColor: "#70a772",
+                      boxShadow: "0 0 6px rgba(112, 167, 114, 0.6)",
+                    }}
+                  ></span>
+                  <span>{formatCallDuration(inCallDuration)}</span>
+                  {/* 动态跳动迷你声波 */}
+                  <div
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "2.5px",
+                      height: "12px",
+                      marginLeft: "4px",
+                    }}
+                  >
+                    {[0.4, 0.7, 1.0, 0.6, 0.3].map((delay, idx) => (
+                      <span
+                        key={idx}
+                        style={{
+                          width: "2.5px",
+                          backgroundColor: "#70a772",
+                          borderRadius: "2px",
+                          animation: `soundWaveBar 1.2s infinite ease-in-out ${delay * 0.3}s`,
+                        }}
+                      />
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 右上角立绘更换 / 图标 */}
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "50%",
+                background: "rgba(255, 255, 255, 0.7)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                border: "1px solid rgba(255, 255, 255, 0.8)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#4a555b",
+                cursor: "pointer",
+                boxShadow: "0 2px 8px rgba(0, 0, 0, 0.04)",
+                flexShrink: 0,
+              }}
+              onClick={() => {
+                const fileInput = document.createElement("input");
+                fileInput.type = "file";
+                fileInput.accept = "image/*,video/mp4,video/webm";
+                fileInput.style.display = "none";
+                fileInput.onchange = async (e) => {
+                  const file = e.target.files[0];
+                  if (file) {
                     const reader = new FileReader();
                     reader.onload = async (event) => {
                       const imageUrl = event.target.result;
+                      setInCallAvatarUrl(imageUrl);
                       try {
                         const db = await openDB();
-                        const transaction = db.transaction(
-                          STORES.USER_SETTINGS,
-                          "readwrite",
-                        );
-                        const store = transaction.objectStore(
-                          STORES.USER_SETTINGS,
-                        );
+                        const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                        const store = transaction.objectStore(STORES.USER_SETTINGS);
                         await store.put({
                           key: `voice_call_avatar_${chatData.name}`,
                           value: imageUrl,
                         });
-                        console.log("语音通话头像保存成功");
-
-                        const avatarElement = document.getElementById(
-                          `incall-avatar-${chatData.id}`,
-                        );
-                        if (avatarElement) {
-                          avatarElement.style.backgroundImage = `url(${imageUrl})`;
-                          avatarElement.style.backgroundSize = "cover";
-                          avatarElement.style.backgroundPosition = "center";
-                          avatarElement.style.border = "1.5px solid rgba(212, 178, 117, 0.6)";
-                        }
-                      } catch (error) {
-                        console.error("保存头像到IndexedDB失败:", error);
+                      } catch (err) {
+                        console.error("保存头像失败:", err);
                       }
                     };
                     reader.readAsDataURL(file);
-                  } catch (error) {
-                    console.error("处理文件失败:", error);
                   }
-                }
-              };
+                };
+                document.body.appendChild(fileInput);
+                fileInput.click();
+                document.body.removeChild(fileInput);
+              }}
+              title="设置立绘/头像"
+            >
+              <i className="ph ph-image" style={{ fontSize: "17px" }}></i>
+            </div>
+          </div>
 
-              document.body.appendChild(fileInput);
-              fileInput.click();
-              document.body.removeChild(fileInput);
-            }}
-          ></div>
-
-          {/* 通话对话气泡区域 */}
+          {/* 通话对话字幕/气泡滚动区域 (中间全部留给聊天文本，滚动制，无遮挡限制) */}
           <div
             id="incall-scroll-area"
-            className="incall-dialogue-area"
             style={{
               flex: 1,
               width: "100%",
-              maxWidth: "400px",
-              padding: "10px 4px",
+              maxWidth: "420px",
+              padding: "12px 6px 16px 6px",
               display: "flex",
               flexDirection: "column",
-              gap: "16px",
+              gap: "12px",
               overflowY: "auto",
               boxSizing: "border-box",
+              minHeight: 0,
+              scrollBehavior: "smooth",
             }}
           >
-            {inCallMessages.map((msg, index) => (
+            {inCallMessages.length === 0 ? (
               <div
-                key={index}
-                className="incall-bubble-wrapper"
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: msg.isMe ? "flex-end" : "flex-start",
-                  width: "100%",
-                  padding: "0 8px",
-                  boxSizing: "border-box",
+                  margin: "auto",
+                  color: "#8e9ba0",
+                  fontSize: "13px",
+                  textAlign: "center",
+                  letterSpacing: "0.5px",
+                  background: "rgba(255, 255, 255, 0.45)",
+                  padding: "8px 16px",
+                  borderRadius: "20px",
                 }}
               >
-                {/* 名字标签 */}
-                <div
-                  className="incall-name-tag"
-                  style={{
-                    color: "#d4b275",
-                    fontSize: "12px",
-                    marginBottom: "4px",
-                    letterSpacing: "1px",
-                    fontFamily: '"STKaiti", "KaiTi", serif',
-                  }}
-                >
-                  {msg.isMe ? "我" : chatData.name}
-                </div>
-
-                {/* 气泡主体 */}
-                <div
-                  className="incall-bubble-body"
-                  style={{
-                    display: "inline-block",
-                    padding: "10px 16px",
-                    color: msg.isMe ? "#2c2c2c" : "#1a1a1a",
-                    fontSize: "14px",
-                    lineHeight: "1.6",
-                    background: msg.isMe
-                      ? "linear-gradient(135deg, #f0ebd8 0%, #e2dac2 100%)"
-                      : "#ffffff",
-                    borderRadius: msg.isMe ? "14px 2px 14px 14px" : "2px 14px 14px 14px",
-                    maxWidth: "85%",
-                    wordBreak: "break-word",
-                    boxShadow: "0 3px 12px rgba(0, 0, 0, 0.35)",
-                    border: "1px solid rgba(255, 255, 255, 0.6)",
-                  }}
-                >
-                  {msg.text}
-                </div>
+                通话已接通，输入文字即可与对方传讯
               </div>
-            ))}
+            ) : (
+              inCallMessages.map((msg, index) => (
+                <div
+                  key={index}
+                  style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: msg.isMe ? "flex-end" : "flex-start",
+                    width: "100%",
+                    boxSizing: "border-box",
+                    animation: "slideUpSmooth 0.2s ease-out",
+                  }}
+                >
+                  <div
+                    style={{
+                      color: "#8a979d",
+                      fontSize: "11px",
+                      marginBottom: "3px",
+                      paddingLeft: msg.isMe ? "0" : "6px",
+                      paddingRight: msg.isMe ? "6px" : "0",
+                    }}
+                  >
+                    {msg.isMe ? "我" : chatData.name}
+                  </div>
+                  <div
+                    className={`wechat-incall-bubble ${
+                      msg.isMe
+                        ? "wechat-incall-bubble-me"
+                        : "wechat-incall-bubble-other"
+                    }`}
+                    style={{
+                      boxShadow: "0 3px 12px rgba(0,0,0,0.06)",
+                      padding: "10px 14px",
+                      fontSize: "14px",
+                      lineHeight: "1.5",
+                      maxWidth: "85%",
+                      wordBreak: "break-word",
+                    }}
+                  >
+                    {msg.text}
+                  </div>
+                </div>
+              ))
+            )}
+            {/* 底部垫片 */}
+            <div style={{ height: "4px", flexShrink: 0 }}></div>
           </div>
 
-          {/* 底部输入区域 */}
+          {/* 底部操作与输入栏：按钮两侧分布 (左侧静音/免提，右侧挂断)，中间留出充裕输入区域 */}
           <div
-            className="incall-bottom-bar"
             style={{
               width: "100%",
-              maxWidth: "400px",
+              maxWidth: "420px",
               display: "flex",
               alignItems: "center",
-              gap: "10px",
-              padding: "10px 4px 4px 4px",
+              gap: "8px",
+              padding: "8px 10px",
+              background: "rgba(255, 255, 255, 0.8)",
+              backdropFilter: "blur(20px)",
+              WebkitBackdropFilter: "blur(20px)",
+              borderRadius: "26px",
+              border: "1px solid rgba(255, 255, 255, 0.9)",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.06)",
               boxSizing: "border-box",
+              flexShrink: 0,
+              zIndex: 30,
             }}
           >
-            {/* 麦克风图标 */}
-            <div
-              className="incall-mic-icon"
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-                backgroundColor: "rgba(212, 178, 117, 0.15)",
-                border: "1px solid rgba(212, 178, 117, 0.3)",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                color: "#d4b275",
-                flexShrink: 0,
-              }}
-            >
-              <svg
-                width="20"
-                height="20"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
+            {/* 左侧功能按钮组：静音 + 免提 */}
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {/* 静音按钮 */}
+              <button
+                type="button"
+                className={`wechat-tool-btn ${isInCallMuted ? "active" : ""}`}
+                style={{ width: "36px", height: "36px", flexShrink: 0 }}
+                onClick={() => setIsInCallMuted(!isInCallMuted)}
+                title={isInCallMuted ? "已静音（点击开启）" : "静音"}
               >
-                <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z" />
-                <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z" />
-              </svg>
+                <i
+                  className={
+                    isInCallMuted
+                      ? "ph ph-microphone-slash"
+                      : "ph ph-microphone"
+                  }
+                  style={{ fontSize: "18px" }}
+                ></i>
+              </button>
+
+              {/* 免提按钮 */}
+              <button
+                type="button"
+                className={`wechat-tool-btn ${isInCallSpeaker ? "active" : ""}`}
+                style={{ width: "36px", height: "36px", flexShrink: 0 }}
+                onClick={() => setIsInCallSpeaker(!isInCallSpeaker)}
+                title={isInCallSpeaker ? "免提开（点击切换听筒）" : "听筒"}
+              >
+                <i
+                  className={
+                    isInCallSpeaker
+                      ? "ph ph-speaker-high"
+                      : "ph ph-speaker-none"
+                  }
+                  style={{ fontSize: "18px" }}
+                ></i>
+              </button>
             </div>
 
-            {/* 输入框 */}
-            <input
-              type="text"
-              id="incall-input-element"
-              className="incall-input-pill"
+            {/* 中间输入框区域 (留出足够多的输入地方) */}
+            <div
               style={{
                 flex: 1,
-                height: "40px",
-                padding: "0 16px",
-                fontSize: "14px",
-                borderRadius: "20px",
-                border: "1px solid rgba(212, 178, 117, 0.3)",
-                backgroundColor: "rgba(255, 255, 255, 0.9)",
-                outline: "none",
-                color: "#333",
-                boxSizing: "border-box",
-              }}
-              placeholder="输入消息..."
-              onKeyPress={(e) => {
-                if (e.key === "Enter") {
-                  const inputElement = e.target;
-                  const message = inputElement.value.trim();
-                  if (message) {
-                    setInCallMessages((prev) => [
-                      ...prev,
-                      { text: message, isMe: true },
-                    ]);
-                    inputElement.value = "";
-                    setTimeout(() => {
-                      const userMsg = {
-                        id: Date.now(),
-                        text: message,
-                        type: "text",
-                        isMe: true,
-                        time: new Date().toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }),
-                      };
-                      handleAITrigger(null, userMsg);
-                    }, 100);
-                  }
-                }
-              }}
-            />
-
-            {/* 发送按钮 */}
-            <div
-              className="incall-arrow-icon"
-              style={{
-                width: "40px",
-                height: "40px",
-                borderRadius: "50%",
-                backgroundColor: "#d4b275",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                color: "#1a1a1a",
-                cursor: "pointer",
-                flexShrink: 0,
-                boxShadow: "0 2px 8px rgba(212, 178, 117, 0.4)",
+                background: "rgba(255, 255, 255, 0.9)",
+                borderRadius: "20px",
+                border: "1px solid rgba(215, 222, 226, 0.8)",
+                padding: "0 8px 0 12px",
+                height: "36px",
+                boxSizing: "border-box",
               }}
-              onClick={() => {
-                const inputElement = document.getElementById("incall-input-element");
-                if (inputElement) {
-                  const message = inputElement.value.trim();
-                  if (message) {
-                    setInCallMessages((prev) => [
-                      ...prev,
-                      { text: message, isMe: true },
-                    ]);
-                    inputElement.value = "";
-                    setTimeout(() => {
-                      const userMsg = {
-                        id: Date.now(),
+            >
+              <input
+                type="text"
+                id="incall-input-element"
+                style={{
+                  flex: 1,
+                  height: "100%",
+                  border: "none",
+                  backgroundColor: "transparent",
+                  outline: "none",
+                  color: "#2c3437",
+                  fontSize: "14px",
+                  padding: "0",
+                }}
+                placeholder="说点什么..."
+                onKeyPress={(e) => {
+                  if (e.key === "Enter") {
+                    const inputElement = e.target;
+                    const message = inputElement.value.trim();
+                    if (message) {
+                      const userCallMsg = {
                         text: message,
-                        type: "text",
                         isMe: true,
                         time: new Date().toLocaleTimeString([], {
                           hour: "2-digit",
                           minute: "2-digit",
                         }),
                       };
-                      handleAITrigger(null, userMsg);
-                    }, 100);
+                      setInCallMessages((prev) => [
+                        ...prev,
+                        userCallMsg,
+                      ]);
+                      inputElement.value = "";
+                      setTimeout(() => {
+                        handleInCallAITrigger(userCallMsg);
+                      }, 100);
+                    }
                   }
-                }
+                }}
+              />
+              {/* 发送按钮 */}
+              <button
+                type="button"
+                style={{
+                  height: "28px",
+                  padding: "0 10px",
+                  borderRadius: "14px",
+                  background: "linear-gradient(135deg, #8dc38e 0%, #70a772 100%)",
+                  color: "#ffffff",
+                  border: "none",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  boxShadow: "0 2px 6px rgba(112, 167, 114, 0.3)",
+                  marginLeft: "4px",
+                  flexShrink: 0,
+                }}
+                onClick={() => {
+                  const inputElement = document.getElementById("incall-input-element");
+                  if (inputElement) {
+                    const message = inputElement.value.trim();
+                    if (message) {
+                      const userCallMsg = {
+                        text: message,
+                        isMe: true,
+                        time: new Date().toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        }),
+                      };
+                      setInCallMessages((prev) => [
+                        ...prev,
+                        userCallMsg,
+                      ]);
+                      inputElement.value = "";
+                      setTimeout(() => {
+                        handleInCallAITrigger(userCallMsg);
+                      }, 100);
+                    }
+                  }
+                }}
+              >
+                发送
+              </button>
+            </div>
+
+            {/* 右侧功能按钮：挂断通话 */}
+            <button
+              type="button"
+              className="wechat-call-btn wechat-btn-hangup"
+              style={{
+                width: "36px",
+                height: "36px",
+                flexShrink: 0,
+                boxShadow: "0 3px 10px rgba(217, 99, 99, 0.3)",
               }}
+              onClick={() => {
+                setShowInCallUI(false);
+                const durationSec = inCallDuration;
+                const durationFormatted = formatCallDuration(durationSec);
+                const callRecordMsg = {
+                  id: Date.now(),
+                  type: "voice_call_record",
+                  status: "completed",
+                  duration: durationSec,
+                  durationText: durationFormatted,
+                  text: `语音通话 时长 ${durationFormatted}`,
+                  dialogue: inCallMessages.map((m) => ({
+                    sender: m.isMe ? "用户" : (chatData?.name || "角色"),
+                    text: m.text,
+                    isMe: m.isMe,
+                    time: m.time || new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                  })),
+                  isMe: true,
+                  time: new Date().toLocaleTimeString([], {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  }),
+                };
+                setMessages((prev) => {
+                  const newMsgs = [...prev, callRecordMsg];
+                  if (chatData?.id && window.chatHistoryStore) {
+                    window.chatHistoryStore
+                      .saveMessages(chatData.id, newMsgs)
+                      .then(() => console.log("✅ 通话记录已同步至DB"))
+                      .catch((err) => console.error("❌ 保存失败:", err));
+                  }
+                  return newMsgs;
+                });
+                setInCallMessages([]);
+                setInCallDuration(0);
+              }}
+              title="挂断通话"
             >
               <svg
-                width="20"
-                height="20"
+                width="18"
+                height="18"
                 viewBox="0 0 24 24"
                 fill="none"
                 stroke="currentColor"
-                strokeWidth="2.5"
+                strokeWidth="2.4"
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <line x1="22" y1="2" x2="11" y2="13" />
-                <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                <path d="M10.68 13.31a16 16 0 0 0 3.41 2.6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7 2 2 0 0 1 1.72 2v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.42 19.42 0 0 1-3.33-2.67m-2.67-3.34a19.79 19.79 0 0 1-3.07-8.63A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91" />
+                <line x1="23" y1="1" x2="1" y2="23" />
               </svg>
-            </div>
+            </button>
           </div>
         </div>
       )}
@@ -76303,7 +76566,100 @@ const T8ChatDetail = ({
                         style={{ position: "relative", maxWidth: "100%" }}
                       >
                         {/* 原本包裹的卡片、图片内容均维持不变 */}
-                        {msg.type === "red_packet" ? (
+                        {msg.type === "voice_call_record" ? (
+                          <div
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (msg.dialogue && msg.dialogue.length > 0) {
+                                setViewingCallRecord(msg);
+                              }
+                            }}
+                            style={{
+                              display: "flex",
+                              alignItems: "center",
+                              gap: "10px",
+                              padding: "10px 14px",
+                              background: msg.isMe
+                                ? "linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%)"
+                                : "linear-gradient(135deg, #f5f5f5 0%, #e0e0e0 100%)",
+                              borderRadius: "14px",
+                              border: "1px solid rgba(0,0,0,0.06)",
+                              boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+                              cursor: msg.dialogue && msg.dialogue.length > 0 ? "pointer" : "default",
+                              minWidth: "150px",
+                              maxWidth: "240px",
+                              transition: "transform 0.15s ease",
+                            }}
+                            title={msg.dialogue && msg.dialogue.length > 0 ? "点击查看通话对话详情" : ""}
+                          >
+                            <div
+                              style={{
+                                width: "32px",
+                                height: "32px",
+                                borderRadius: "50%",
+                                background: msg.status === "completed"
+                                  ? "#66bb6a"
+                                  : msg.status === "rejected" || msg.status === "rejected_by_user"
+                                  ? "#ef5350"
+                                  : "#9e9e9e",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                color: "#ffffff",
+                                flexShrink: 0,
+                              }}
+                            >
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2.2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z" />
+                              </svg>
+                            </div>
+                            <div style={{ flex: 1, minWidth: 0 }}>
+                              <div
+                                style={{
+                                  fontSize: "13px",
+                                  fontWeight: "600",
+                                  color: "#2c3437",
+                                  display: "flex",
+                                  alignItems: "center",
+                                  justifyContent: "space-between",
+                                }}
+                              >
+                                <span>语音通话</span>
+                                {msg.dialogue && msg.dialogue.length > 0 && (
+                                  <span style={{ fontSize: "10px", color: "#2e7d32", background: "rgba(46,125,50,0.1)", padding: "1px 4px", borderRadius: "4px" }}>
+                                    详情
+                                  </span>
+                                )}
+                              </div>
+                              <div
+                                style={{
+                                  fontSize: "11px",
+                                  color: "#546e7a",
+                                  marginTop: "2px",
+                                }}
+                              >
+                                {msg.status === "completed"
+                                  ? `通话时长 ${msg.durationText || "00:00"}`
+                                  : msg.status === "rejected"
+                                  ? "对方已拒绝"
+                                  : msg.status === "rejected_by_user"
+                                  ? "已拒绝"
+                                  : msg.status === "canceled"
+                                  ? "已取消"
+                                  : msg.text}
+                              </div>
+                            </div>
+                          </div>
+                        ) : msg.type === "red_packet" ? (
                           <div
                             style={{
                               background: "linear-gradient(135deg, #E64A19 0%, #D84315 100%)",
@@ -77114,13 +77470,13 @@ const T8ChatDetail = ({
                       (e.currentTarget.style.backgroundColor = "transparent")
                     }
                     onClick={() => {
-                      // 1. 立即弹出呼叫等待 UI（不再干等 AI 返回）
+                      // 1. 立即弹出呼叫等待 UI
                       setShowVoiceCallPage({
                         show: true,
                         callType: "user",
                       });
 
-                      const msg = {
+                      const callContextMsg = {
                         id: Date.now(),
                         text: "（发起了语音通话请求）",
                         type: "narration",
@@ -77130,12 +77486,9 @@ const T8ChatDetail = ({
                           minute: "2-digit",
                         }),
                       };
-                      setMessages((prev) => {
-                        const newMsgs = [...prev, msg];
-                        // 2. 带着拨号请求去触发 AI 判断
-                        setTimeout(() => handleAITrigger(newMsgs), 50);
-                        return newMsgs;
-                      });
+                      // 带着拨号请求去触发 AI 判断，但不直接追加到页面聊天流中
+                      const callHistory = [...messages, callContextMsg];
+                      setTimeout(() => handleAITrigger(callHistory), 50);
                     }}
                   >
                     <i
@@ -98149,29 +98502,6 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
           marginBottom: "16px",
         }}
       >
-        {/* 数据接口 */}
-        <div
-          onClick={() => onOpenMinimax && onOpenMinimax()}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            padding: "12px 0",
-            borderBottom: "1px solid #f5f5f5",
-            cursor: "pointer",
-          }}
-        >
-          <div>
-            <div style={{ fontSize: "14px", fontWeight: "500", color: "#333" }}>
-              数据接口
-            </div>
-            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
-              配置 API 与相关服务
-            </div>
-          </div>
-          <i data-lucide="chevron-right" style={{ color: "#aaa" }}></i>
-        </div>
-
         {/* 我的金库 */}
         <div
           onClick={() => setActiveSubPage("wallet")}

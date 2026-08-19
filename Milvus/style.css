@@ -6078,125 +6078,175 @@
         object-fit: cover;
       }
       
-      .voice-call-overlay {
+      /* ==================== 微信风格 · 莫兰迪浅色磨砂语音通话样式 ==================== */
+      @keyframes morandiPulse {
+        0% {
+          transform: scale(0.96);
+          box-shadow: 0 0 0 0 rgba(125, 168, 123, 0.45);
+        }
+        70% {
+          transform: scale(1.04);
+          box-shadow: 0 0 0 22px rgba(125, 168, 123, 0);
+        }
+        100% {
+          transform: scale(0.96);
+          box-shadow: 0 0 0 0 rgba(125, 168, 123, 0);
+        }
+      }
+
+      @keyframes soundWaveBar {
+        0%, 100% {
+          height: 6px;
+          opacity: 0.45;
+        }
+        50% {
+          height: 24px;
+          opacity: 1;
+        }
+      }
+
+      @keyframes fadeInSmooth {
+        from {
+          opacity: 0;
+          transform: scale(0.98);
+        }
+        to {
+          opacity: 1;
+          transform: scale(1);
+        }
+      }
+
+      @keyframes slideUpSmooth {
+        from {
+          opacity: 0;
+          transform: translateY(20px);
+        }
+        to {
+          opacity: 1;
+          transform: translateY(0);
+        }
+      }
+
+      .wechat-voice-call-overlay,
+      .wechat-voice-call-screen {
         position: absolute;
         inset: 0;
         width: 100%;
         height: 100%;
-        background: #000; 
-        z-index: 1200;
+        background: radial-gradient(circle at 50% 20%, #f6f7f3 0%, #ebeee8 55%, #e1e6de 100%);
+        backdrop-filter: blur(28px);
+        -webkit-backdrop-filter: blur(28px);
+        z-index: 1300;
         display: flex;
         flex-direction: column;
         align-items: center;
-        justify-content: center;
-        font-family: "PingFang SC", "Noto Sans SC", sans-serif;
-        animation: fadeIn 0.4s ease-out;
-      }
-
-      .vc-container {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        max-width: 430px;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        justify-content: center;
-      }
-
-      
-      .vc-user-placeholder {
-        width: 200px;
-        height: 350px;
-        border: 2px dashed rgba(255, 255, 255, 0.8);
-        border-radius: 4px;
-        position: absolute;
-        top: 48%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-      }
-
-      
-      .vc-top-arc {
-        position: absolute;
-        top: 25%;
-        width: 300px;
-        height: 100px;
-      }
-
-      
-      .vc-actions {
-        position: absolute;
-        top: 35%;
-        width: 320px;
-        display: flex;
         justify-content: space-between;
-        align-items: center;
+        font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Noto Sans SC", sans-serif;
+        animation: fadeInSmooth 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+        overflow: hidden;
+        user-select: none;
       }
 
-      .vc-btn-group {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 12px;
+      /* 磨砂半透明玻璃卡片 */
+      .wechat-glass-card {
+        background: rgba(255, 255, 255, 0.62);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(255, 255, 255, 0.75);
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.05);
       }
 
-      
-      .vc-circle-btn {
-        width: 76px;
-        height: 76px;
+      /* 通话按钮交互微动效 (精简尺寸) */
+      .wechat-call-btn {
+        width: 52px;
+        height: 52px;
         border-radius: 50%;
         display: flex;
         align-items: center;
         justify-content: center;
-        position: relative;
         cursor: pointer;
-        box-shadow: 0 0 15px rgba(255, 255, 255, 0.1);
-        transition: transform 0.2s;
+        transition: transform 0.2s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.2s ease, opacity 0.2s ease;
+        border: none;
+        outline: none;
       }
 
-      .vc-circle-btn:active {
-        transform: scale(0.9);
+      .wechat-call-btn:active {
+        transform: scale(0.88);
       }
 
-      
-      .vc-btn-reject {
-        background: linear-gradient(135deg, #f2a2a2 0%, #e88c8c 100%);
-        border: 2.5px solid #fffdfa;
+      /* 莫兰迪挂断 / 拒绝（豆沙绯红） */
+      .wechat-btn-hangup {
+        background: linear-gradient(135deg, #e87a7a 0%, #d96363 100%);
+        color: #ffffff;
+        box-shadow: 0 4px 16px rgba(217, 99, 99, 0.28);
       }
 
-      
-      .vc-btn-accept {
-        background: linear-gradient(135deg, #c9e8d5 0%, #a8d8b8 100%);
-        border: 2.5px solid #fffdfa;
+      /* 莫兰迪接听（鼠尾草青绿） */
+      .wechat-btn-accept {
+        background: linear-gradient(135deg, #8dc38e 0%, #70a772 100%);
+        color: #ffffff;
+        box-shadow: 0 4px 16px rgba(112, 167, 114, 0.3);
+        animation: morandiPulse 2.4s infinite ease-in-out;
       }
 
-      
-      .vc-btn-label {
-        color: #fff;
-        font-size: 16px;
-        font-weight: 500;
-        letter-spacing: 2px;
+      /* 辅助功能圆形按钮（静音/免提/打字） */
+      .wechat-tool-btn {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        background: rgba(255, 255, 255, 0.75);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
+        border: 1px solid rgba(255, 255, 255, 0.85);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        color: #4a555b;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        box-shadow: 0 3px 12px rgba(0, 0, 0, 0.04);
       }
 
-      
-      .vc-hanging-bell {
-        position: absolute;
-        width: 50px;
-        height: 50px;
-        top: 75px;
-        animation: bellSwing 3s infinite ease-in-out;
+      .wechat-tool-btn.active {
+        background: #536268;
+        color: #ffffff;
+        border-color: transparent;
+        box-shadow: 0 4px 14px rgba(83, 98, 104, 0.3);
       }
 
-      @keyframes bellSwing {
-        0%,
-        100% {
-          transform: rotate(-5deg);
-        }
-        50% {
-          transform: rotate(5deg);
-        }
+      .wechat-tool-btn:active {
+        transform: scale(0.92);
       }
+
+      /* 莫兰迪半透明气泡 (精致紧凑) */
+      .wechat-incall-bubble {
+        padding: 8px 13px;
+        border-radius: 14px;
+        font-size: 13px;
+        line-height: 1.5;
+        max-width: 82%;
+        word-break: break-word;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.03);
+        animation: slideUpSmooth 0.2s ease-out;
+      }
+
+      .wechat-incall-bubble-me {
+        background: linear-gradient(135deg, rgba(141, 195, 142, 0.92) 0%, rgba(112, 167, 114, 0.92) 100%);
+        color: #ffffff;
+        border-bottom-right-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.35);
+      }
+
+      .wechat-incall-bubble-other {
+        background: rgba(255, 255, 255, 0.86);
+        color: #2c3437;
+        border-bottom-left-radius: 3px;
+        border: 1px solid rgba(255, 255, 255, 0.9);
+      }
+
       
       .reader-detail-overlay {
         position: absolute;
@@ -10912,7 +10962,7 @@
 }
 
 /* Backup global rule - strictly for app pages, excluding all internal dialogs and modals */
-[class*="-overlay"]:not(.open):not([class*="modal"]):not(.calendar-modal-overlay):not(.join-us-overlay):not(.area-modal-overlay):not(.saved-areas-overlay) {
+[class*="-overlay"]:not(.open):not([class*="modal"]):not(.calendar-modal-overlay):not(.join-us-overlay):not(.area-modal-overlay):not(.saved-areas-overlay):not(.wechat-voice-call-overlay):not(.wechat-voice-call-screen) {
   display: none !important;
   pointer-events: none !important;
   visibility: hidden !important;
