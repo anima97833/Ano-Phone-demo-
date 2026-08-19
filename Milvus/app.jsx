@@ -67618,9 +67618,1072 @@ const T8ChatItem = ({
 
 // T8 人物创建模态框组件 (新增)
 // T8 人物创建模态框 (修改：支持保存数据)
+
+// ==================== 智能多格式/深度嵌套 JSON 人设解析器 ====================
+const T8_PERSONA_KEY_LABELS = {
+  occupation: "职业",
+  living_situation: "生活与家庭状况",
+  income_level: "经济水平",
+  overall_impression: "整体印象",
+  hair: "发型与发饰",
+  facial_features: "面部细节",
+  eyes: "眼神/眸色",
+  arms: "手臂特征",
+  right_face: "面纹特征",
+  skin_tone: "肤色",
+  hands: "手部细节",
+  height_weight: "身高/体格",
+  body_type: "体型",
+  distinctive_features: "显著特征",
+  clothing_style: "穿着风格",
+  scent: "气味",
+  voice_traits: "声音特质",
+  core_personality: "核心性格",
+  surface_persona: "外在表现",
+  inner_self: "内在自我",
+  core_desire: "核心渴望",
+  core_fear: "核心恐惧",
+  moral_compass: "道德准则",
+  key_conflict: "核心矛盾",
+  special_skills: "特长技能",
+  likes: "喜好",
+  dislikes: "厌恶",
+  daily_routine: "日常作息",
+  leisure_activities: "闲暇活动",
+  offline: "线下交流口吻",
+  online: "传讯口吻",
+  childhood: "童年时期",
+  adolescence: "少年时期",
+  young_adulthood: "青年时期",
+  turning_point: "人生转折",
+  current_status: "当前境况",
+  family: "家庭成员",
+  friends: "人际往来",
+  worldview_brief: "世界观大纲",
+  city_environment: "所在地域",
+  initial_relationship: "初始关系",
+  view_on_love: "情感观",
+  affinity_progression: "关系发展轨迹",
+  sexual_experience: "情感经历",
+  first_time: "初次",
+  sexual_orientation: "性取向",
+  physical_characteristics: "身型细节",
+  preferences: "偏好",
+  hard_limits: "雷点/底线",
+};
+
+// 深度递归序列化/格式化任意类型数据为清晰的文本说明
+function formatValueToString(val) {
+  if (val === null || val === undefined) return "";
+  if (typeof val === "string") return val.trim();
+  if (typeof val === "number" || typeof val === "boolean") return String(val);
+  if (Array.isArray(val)) {
+    return val
+      .map((item) => formatValueToString(item))
+      .filter(Boolean)
+      .join("\n");
+  }
+  if (typeof val === "object") {
+    const lines = [];
+    for (const [k, v] of Object.entries(val)) {
+      const label = T8_PERSONA_KEY_LABELS[k] || k;
+      if (typeof v === "object" && v !== null && !Array.isArray(v)) {
+        const sub = formatValueToString(v);
+        if (sub) {
+          lines.push(`【${label}】\n${sub}`);
+        }
+      } else {
+        const str = formatValueToString(v);
+        if (str) {
+          lines.push(`${label}：${str}`);
+        }
+      }
+    }
+    return lines.join("\n");
+  }
+  return "";
+}
+
+function parsePersonaJson(rawInput) {
+  let data = rawInput;
+  if (typeof data === "string") {
+    let clean = data.trim();
+    // 剔除 markdown 代码块包裹 (如 ```json ... ```)
+    if (clean.startsWith("```")) {
+      clean = clean.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+    }
+    try {
+      data = JSON.parse(clean);
+    } catch (err) {
+      // 容错处理：尝试修复末尾多余的逗号
+      try {
+        const fixed = clean.replace(/,\s*([\]}])/g, "$1");
+        data = JSON.parse(fixed);
+      } catch (e2) {
+        throw new Error("JSON 语法解析失败: " + err.message);
+      }
+    }
+  }
+
+  if (!data || typeof data !== "object") throw new Error("输入内容为空或非有效 JSON 对象");
+
+  let items = [];
+  if (Array.isArray(data)) {
+    items = data;
+  } else if (data.data && Array.isArray(data.data) && !data.spec) {
+    items = data.data;
+  } else if (data.characters && Array.isArray(data.characters)) {
+    items = data.characters;
+  } else if (data.roles && Array.isArray(data.roles)) {
+    items = data.roles;
+  } else {
+    items = [data];
+  }
+
+  const defaultColors = [
+    "#EAD6D6",
+    "#E6E2EA",
+    "#DEEBE1",
+    "#D6E4EA",
+    "#EAD6E6",
+    "#DCEADD",
+    "#EAE6D6",
+  ];
+
+  const normalized = items.map((item, idx) => {
+    // 兼容多种嵌套层级: item.basic_info, item.base_info, item.data (SillyTavern), item
+    const base =
+      item.basic_info ||
+      item.base_info ||
+      item.data?.basic_info ||
+      item.data ||
+      item;
+
+    // 1. 姓名 (多路径智能扫描)
+    const name =
+      base.name ||
+      base.char_name ||
+      base["姓名"] ||
+      base["名字"] ||
+      base["角色名"] ||
+      base["昵称"] ||
+      item.name ||
+      item["姓名"] ||
+      item.char_name ||
+      `新角色 ${idx + 1}`;
+
+    // 2. 基础属性
+    const gender =
+      base.gender ||
+      base["性别"] ||
+      base.sex ||
+      item.gender ||
+      item["性别"] ||
+      "";
+    const age =
+      base.age ||
+      base["年龄"] ||
+      item.age ||
+      item["年龄"] ||
+      "";
+    const mbti =
+      base.mbti ||
+      base.MBTI ||
+      base["mbti"] ||
+      base["MBTI"] ||
+      base["人格"] ||
+      item.mbti ||
+      item["mbti"] ||
+      "";
+    const constellation =
+      base.constellation ||
+      base["星座"] ||
+      item.constellation ||
+      item["星座"] ||
+      "";
+    const enneagram =
+      base.enneagram ||
+      base["九型人格"] ||
+      item.enneagram ||
+      "";
+
+    // 3. 性格与人设 (智能展平对象与数组)
+    const rawPersonality =
+      item.personality ||
+      base.personality ||
+      item.description ||
+      item["性格"] ||
+      item["人设"] ||
+      item["性格特点"] ||
+      item["设定"];
+    const personality = formatValueToString(rawPersonality);
+
+    // 4. 语言风格 / 口吻 (支持嵌套 speech_style, mannerisms 等)
+    const rawStyle =
+      item.mannerisms?.speech_style ||
+      item.mannerisms ||
+      item.speech_style ||
+      item.style ||
+      base.style ||
+      item.mes_example ||
+      item["语言风格"] ||
+      item["说话风格"] ||
+      item["口吻"] ||
+      item["说话习惯"];
+    const style = formatValueToString(rawStyle);
+
+    // 5. 身份背景 / 世界观 / 经历 (聚合多层嵌套模块)
+    const backgroundParts = [];
+    if (base.life_status) {
+      backgroundParts.push(`【身份状态】\n${formatValueToString(base.life_status)}`);
+    }
+    if (item.appearance) {
+      backgroundParts.push(`【外貌特征】\n${formatValueToString(item.appearance)}`);
+    }
+    if (item.history) {
+      backgroundParts.push(`【经历生平】\n${formatValueToString(item.history)}`);
+    }
+    if (item.relationships) {
+      backgroundParts.push(`【人际关系】\n${formatValueToString(item.relationships)}`);
+    }
+    if (item.preferences_abilities) {
+      backgroundParts.push(`【喜好与能力】\n${formatValueToString(item.preferences_abilities)}`);
+    }
+    if (item["user/Char_relationship"] || item.user_relationship) {
+      backgroundParts.push(`【与用户关系】\n${formatValueToString(item["user/Char_relationship"] || item.user_relationship)}`);
+    }
+    if (item.world) {
+      backgroundParts.push(`【世界观】\n${formatValueToString(item.world)}`);
+    }
+    if (item.nsfw_specs) {
+      backgroundParts.push(`【其他设定】\n${formatValueToString(item.nsfw_specs)}`);
+    }
+    if (item.background || item.scenario || item.world_info || item.system_prompt || item["背景"] || item["世界背景"] || item["身份背景"] || item["生平"]) {
+      backgroundParts.push(formatValueToString(item.background || item.scenario || item.world_info || item.system_prompt || item["背景"] || item["世界背景"] || item["身份背景"] || item["生平"]));
+    }
+    const background = backgroundParts.length > 0
+      ? backgroundParts.join("\n\n")
+      : formatValueToString(item.background || "");
+
+    // 6. 首条开场白 (优先取 firstMessage / first_mes / greeting，其次取 catchphrases 第一句)
+    let firstMessage =
+      item.firstMessage ||
+      item.first_mes ||
+      item.greeting ||
+      item.first_message ||
+      item["开场白"] ||
+      item["第一条消息"] ||
+      item["打招呼"] ||
+      base.firstMessage ||
+      "";
+
+    if (!firstMessage && item.mannerisms?.catchphrases) {
+      const phrases = item.mannerisms.catchphrases;
+      if (Array.isArray(phrases) && phrases.length > 0) {
+        firstMessage = String(phrases[0]).replace(/^[“"']|[”"']$/g, "");
+      }
+    }
+    firstMessage = formatValueToString(firstMessage);
+
+    // 7. 头像图片 (Base64 或 URL)
+    const avatar =
+      base.avatar ||
+      item.avatar ||
+      item.avatar_url ||
+      item.char_persona ||
+      item["头像"] ||
+      item["角色头像"] ||
+      null;
+
+    const avatarColor =
+      item.avatarColor ||
+      base.avatarColor ||
+      defaultColors[idx % defaultColors.length];
+
+    return {
+      name: String(name).trim(),
+      gender: String(gender || "").trim(),
+      age: String(age || "").trim(),
+      mbti: String(mbti || "").trim().toUpperCase(),
+      mbtiEnabled: !!mbti,
+      constellation: String(constellation || "").trim(),
+      constellationEnabled: !!constellation,
+      enneagram: String(enneagram || "").trim(),
+      personality: String(personality || "").trim(),
+      style: String(style || "").trim(),
+      background: String(background || "").trim(),
+      avatar:
+        avatar && String(avatar).trim().length > 5 ? String(avatar).trim() : null,
+      avatarColor,
+      firstMessage: String(firstMessage || "").trim(),
+      raw: item,
+    };
+  });
+
+  return normalized;
+}
+
+// ==================== T8 导入人设弹窗组件 (T8ImportPersonaModal) ====================
+const T8ImportPersonaModal = ({ isOpen, onClose, onImport }) => {
+  const [tab, setTab] = React.useState("file"); // 'file' | 'text'
+  const [jsonText, setJsonText] = React.useState("");
+  const [parsedList, setParsedList] = React.useState([]);
+  const [selectedIndices, setSelectedIndices] = React.useState([]);
+  const [parseError, setParseError] = React.useState(null);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [isProcessing, setIsProcessing] = React.useState(false);
+  const fileInputRef = React.useRef(null);
+
+  // 每次打开重置状态
+  React.useEffect(() => {
+    if (isOpen) {
+      setTab("file");
+      setJsonText("");
+      setParsedList([]);
+      setSelectedIndices([]);
+      setParseError(null);
+      setIsDragging(false);
+      setIsProcessing(false);
+    }
+  }, [isOpen]);
+
+  if (!isOpen) return null;
+
+  // 执行解析
+  const executeParse = (content) => {
+    try {
+      setParseError(null);
+      const results = parsePersonaJson(content);
+      if (!results || results.length === 0) {
+        throw new Error("未能从输入中提取到有效的角色信息");
+      }
+      setParsedList(results);
+      // 默认全选
+      setSelectedIndices(results.map((_, i) => i));
+    } catch (err) {
+      console.error("人设解析失败:", err);
+      setParseError(err.message || "解析失败，请检查 JSON 格式");
+      setParsedList([]);
+      setSelectedIndices([]);
+    }
+  };
+
+  // 处理文件读取
+  const handleFileChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    readJsonFile(file);
+  };
+
+  const readJsonFile = (file) => {
+    if (!file.name.endsWith(".json") && file.type && !file.type.includes("json")) {
+      setParseError("请选择 .json 后缀的文件");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const content = event.target.result;
+      setJsonText(content);
+      executeParse(content);
+    };
+    reader.onerror = () => {
+      setParseError("读取文件失败，请重试");
+    };
+    reader.readAsText(file);
+  };
+
+  // 拖拽处理
+  const handleDragOver = (e) => {
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragLeave = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+  };
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setIsDragging(false);
+    const file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if (file) {
+      readJsonFile(file);
+    }
+  };
+
+  // 从剪贴板粘贴
+  const handlePasteClipboard = async () => {
+    try {
+      if (navigator.clipboard && navigator.clipboard.readText) {
+        const text = await navigator.clipboard.readText();
+        if (text) {
+          setJsonText(text);
+          executeParse(text);
+          return;
+        }
+      }
+      alert("请直接在文本框中按 Ctrl+V / Command+V 粘贴");
+    } catch (e) {
+      alert("读取剪贴板受浏览器权限限制，请直接手动粘贴到文本框");
+    }
+  };
+
+  // 填入示例模板
+  const handleLoadSample = () => {
+    const sample = {
+      name: "周瑜",
+      gender: "男",
+      age: "24",
+      mbti: "ENFJ",
+      constellation: "双子座",
+      personality: "雄烈胆略，雅量高致，精通音律",
+      style: "从容自信，谈吐清雅，言辞间自有气度",
+      background: "东吴大都督，文武双全，与孙策为总角之交...",
+      firstMessage: "主公，赤壁江风渐起，我军战船已齐备，静待发兵之令。",
+    };
+    const str = JSON.stringify(sample, null, 2);
+    setJsonText(str);
+    executeParse(str);
+  };
+
+  // 切换选择
+  const toggleSelect = (idx) => {
+    if (selectedIndices.includes(idx)) {
+      setSelectedIndices(selectedIndices.filter((i) => i !== idx));
+    } else {
+      setSelectedIndices([...selectedIndices, idx]);
+    }
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIndices.length === parsedList.length) {
+      setSelectedIndices([]);
+    } else {
+      setSelectedIndices(parsedList.map((_, i) => i));
+    }
+  };
+
+  // 提交导入
+  const handleConfirmImport = async () => {
+    const charsToImport = parsedList.filter((_, i) => selectedIndices.includes(i));
+    if (charsToImport.length === 0) {
+      alert("请至少勾选一个需要导入的角色");
+      return;
+    }
+    setIsProcessing(true);
+    try {
+      await onImport(charsToImport);
+    } catch (err) {
+      console.error("导入执行出错:", err);
+      setIsProcessing(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 1100,
+        background: "rgba(18, 15, 22, 0.68)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        boxSizing: "border-box",
+        animation: "t8FadeIn 0.25s ease-out",
+      }}
+      onClick={onClose}
+    >
+      <style>{`
+        @keyframes t8FadeIn { from { opacity: 0; } to { opacity: 1; } }
+        @keyframes t8ModalPop { from { opacity: 0; transform: scale(0.94) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+      `}</style>
+
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "460px",
+          maxHeight: "88vh",
+          background: "var(--c-bg-card, #FFFFFF)",
+          borderRadius: "24px",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 24px 60px rgba(0, 0, 0, 0.3)",
+          overflow: "hidden",
+          border: "1px solid rgba(255, 255, 255, 0.4)",
+          animation: "t8ModalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 头部标题区 */}
+        <div
+          style={{
+            padding: "18px 20px 14px 20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottom: "1px solid rgba(0,0,0,0.06)",
+            background: "linear-gradient(180deg, rgba(245, 240, 235, 0.5) 0%, transparent 100%)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                borderRadius: "10px",
+                background: "linear-gradient(135deg, #E8AFAF 0%, #B85832 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#FFFFFF",
+                fontSize: "18px",
+                boxShadow: "0 4px 10px rgba(184, 88, 50, 0.25)",
+              }}
+            >
+              📥
+            </div>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "var(--c-text-main, #2D3748)" }}>
+                导入角色人设
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--c-text-sub, #718096)", marginTop: "2px" }}>
+                支持深度嵌套设、酒馆卡及批量 JSON
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: "32px",
+              height: "32px",
+              borderRadius: "50%",
+              border: "none",
+              background: "rgba(0, 0, 0, 0.05)",
+              color: "#718096",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "16px",
+              transition: "all 0.2s",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* Tab 切换栏 */}
+        <div
+          style={{
+            display: "flex",
+            padding: "10px 20px 0 20px",
+            gap: "10px",
+          }}
+        >
+          <button
+            onClick={() => setTab("file")}
+            style={{
+              flex: 1,
+              padding: "8px 12px",
+              borderRadius: "12px",
+              border: "none",
+              background: tab === "file" ? "var(--c-accent, #B85832)" : "rgba(0,0,0,0.04)",
+              color: tab === "file" ? "#FFFFFF" : "var(--c-text-sub, #4A5568)",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            📁 文件上传
+          </button>
+          <button
+            onClick={() => setTab("text")}
+            style={{
+              flex: 1,
+              padding: "8px 12px",
+              borderRadius: "12px",
+              border: "none",
+              background: tab === "text" ? "var(--c-accent, #B85832)" : "rgba(0,0,0,0.04)",
+              color: tab === "text" ? "#FFFFFF" : "var(--c-text-sub, #4A5568)",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            📝 文本粘贴
+          </button>
+        </div>
+
+        {/* 内容滚动区域 */}
+        <div
+          className="no-scrollbar"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "14px 20px 16px 20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+          }}
+        >
+          {/* 文件上传区域 */}
+          {tab === "file" && (
+            <div>
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current && fileInputRef.current.click()}
+                style={{
+                  border: isDragging ? "2px dashed #B85832" : "2px dashed rgba(0,0,0,0.15)",
+                  background: isDragging ? "rgba(184, 88, 50, 0.05)" : "rgba(0,0,0,0.02)",
+                  borderRadius: "16px",
+                  padding: "24px 16px",
+                  textAlign: "center",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                }}
+              >
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  accept=".json,application/json"
+                  onChange={handleFileChange}
+                  style={{ display: "none" }}
+                />
+                <div style={{ fontSize: "32px", marginBottom: "8px" }}>📄</div>
+                <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--c-text-main, #2D3748)" }}>
+                  点击选择 或 拖拽 .json 文件到这里
+                </div>
+                <div style={{ fontSize: "11px", color: "#A0AEC0", marginTop: "4px" }}>
+                  自动解析角色卡姓名、性格、背景、开场白及头像
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* 文本粘贴区域 */}
+          {tab === "text" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "12px", color: "#718096", fontWeight: "500" }}>粘贴 JSON 文本：</span>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    onClick={handleLoadSample}
+                    style={{
+                      border: "none",
+                      background: "none",
+                      color: "var(--c-accent, #B85832)",
+                      fontSize: "11px",
+                      cursor: "pointer",
+                      textDecoration: "underline",
+                      padding: 0,
+                    }}
+                  >
+                    示例模板
+                  </button>
+                  <button
+                    onClick={handlePasteClipboard}
+                    style={{
+                      border: "none",
+                      background: "rgba(0,0,0,0.06)",
+                      padding: "2px 8px",
+                      borderRadius: "6px",
+                      fontSize: "11px",
+                      color: "#4A5568",
+                      cursor: "pointer",
+                    }}
+                  >
+                    📋 粘贴剪贴板
+                  </button>
+                  {jsonText && (
+                    <button
+                      onClick={() => {
+                        setJsonText("");
+                        setParsedList([]);
+                        setParseError(null);
+                      }}
+                      style={{
+                        border: "none",
+                        background: "none",
+                        fontSize: "11px",
+                        color: "#E53E3E",
+                        cursor: "pointer",
+                        padding: 0,
+                      }}
+                    >
+                      清空
+                    </button>
+                  )}
+                </div>
+              </div>
+              <textarea
+                value={jsonText}
+                onChange={(e) => {
+                  setJsonText(e.target.value);
+                  if (e.target.value.trim()) {
+                    executeParse(e.target.value);
+                  } else {
+                    setParsedList([]);
+                    setParseError(null);
+                  }
+                }}
+                placeholder='{\n  "basic_info": { "name": "张辽", "gender": "男" },\n  "personality": { "core_personality": "强悍果断" }\n}'
+                rows={5}
+                style={{
+                  width: "100%",
+                  padding: "10px 12px",
+                  borderRadius: "12px",
+                  border: "1px solid rgba(0,0,0,0.1)",
+                  fontSize: "12px",
+                  fontFamily: "monospace",
+                  lineHeight: "1.4",
+                  resize: "vertical",
+                  boxSizing: "border-box",
+                  outline: "none",
+                }}
+              />
+            </div>
+          )}
+
+          {/* 错误提示 */}
+          {parseError && (
+            <div
+              style={{
+                padding: "10px 12px",
+                borderRadius: "10px",
+                background: "#FFF5F5",
+                border: "1px solid #FEB2B2",
+                color: "#C53030",
+                fontSize: "12px",
+                lineHeight: "1.4",
+              }}
+            >
+              ⚠️ {parseError}
+            </div>
+          )}
+
+          {/* 解析成功的卡片预览 */}
+          {parsedList.length > 0 && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "10px", marginTop: "4px" }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  padding: "0 2px",
+                }}
+              >
+                <div style={{ fontSize: "13px", fontWeight: "700", color: "var(--c-text-main, #2D3748)" }}>
+                  ✨ 识别到 {parsedList.length} 位角色 ({selectedIndices.length} 已选)
+                </div>
+                {parsedList.length > 1 && (
+                  <button
+                    onClick={toggleSelectAll}
+                    style={{
+                      border: "none",
+                      background: "none",
+                      fontSize: "12px",
+                      color: "var(--c-accent, #B85832)",
+                      cursor: "pointer",
+                      fontWeight: "600",
+                    }}
+                  >
+                    {selectedIndices.length === parsedList.length ? "取消全选" : "全选"}
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {parsedList.map((char, idx) => {
+                  const isSelected = selectedIndices.includes(idx);
+                  return (
+                    <div
+                      key={idx}
+                      onClick={() => toggleSelect(idx)}
+                      style={{
+                        padding: "12px 14px",
+                        borderRadius: "14px",
+                        border: isSelected
+                          ? "1.5px solid var(--c-accent, #B85832)"
+                          : "1px solid rgba(0,0,0,0.08)",
+                        background: isSelected ? "rgba(184, 88, 50, 0.03)" : "#FFFFFF",
+                        boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+                        cursor: "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                        transition: "all 0.15s ease",
+                      }}
+                    >
+                      <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                        {/* 勾选框 */}
+                        <input
+                          type="checkbox"
+                          checked={isSelected}
+                          onChange={() => {}} // 由外层 div 代理
+                          style={{
+                            width: "16px",
+                            height: "16px",
+                            cursor: "pointer",
+                            accentColor: "#B85832",
+                          }}
+                        />
+
+                        {/* 头像 */}
+                        <div
+                          style={{
+                            width: "44px",
+                            height: "44px",
+                            borderRadius: "50%",
+                            background: char.avatarColor || "#EAD6D6",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            fontSize: "16px",
+                            fontWeight: "700",
+                            color: "#5D4E37",
+                            overflow: "hidden",
+                            flexShrink: 0,
+                            border: "1px solid rgba(0,0,0,0.08)",
+                          }}
+                        >
+                          {char.avatar ? (
+                            <img
+                              src={char.avatar}
+                              alt={char.name}
+                              style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                            />
+                          ) : (
+                            char.name.slice(0, 1)
+                          )}
+                        </div>
+
+                        {/* 姓名与标签 */}
+                        <div style={{ flex: 1, minWidth: 0 }}>
+                          <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                            <span style={{ fontSize: "15px", fontWeight: "700", color: "#1A202C" }}>
+                              {char.name}
+                            </span>
+                            {char.gender && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "1px 6px",
+                                  borderRadius: "6px",
+                                  background: "#EDF2F7",
+                                  color: "#4A5568",
+                                }}
+                              >
+                                {char.gender}
+                              </span>
+                            )}
+                            {char.age && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "1px 6px",
+                                  borderRadius: "6px",
+                                  background: "#EDF2F7",
+                                  color: "#4A5568",
+                                }}
+                              >
+                                {char.age}岁
+                              </span>
+                            )}
+                            {char.mbti && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "1px 6px",
+                                  borderRadius: "6px",
+                                  background: "#EBF8FF",
+                                  color: "#2B6CB0",
+                                  fontWeight: "600",
+                                }}
+                              >
+                                {char.mbti}
+                              </span>
+                            )}
+                            {char.constellation && (
+                              <span
+                                style={{
+                                  fontSize: "10px",
+                                  padding: "1px 6px",
+                                  borderRadius: "6px",
+                                  background: "#FAF5FF",
+                                  color: "#6B46C1",
+                                }}
+                              >
+                                {char.constellation}
+                              </span>
+                            )}
+                          </div>
+
+                          {char.personality && (
+                            <div
+                              style={{
+                                fontSize: "11px",
+                                color: "#4A5568",
+                                marginTop: "3px",
+                                overflow: "hidden",
+                                textOverflow: "ellipsis",
+                                whiteSpace: "nowrap",
+                              }}
+                            >
+                              🎭 {char.personality.slice(0, 50)}...
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* 背景摘要 */}
+                      {char.background && (
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "#718096",
+                            background: "rgba(0,0,0,0.02)",
+                            padding: "6px 8px",
+                            borderRadius: "8px",
+                            lineHeight: "1.35",
+                            maxHeight: "54px",
+                            overflow: "hidden",
+                            display: "-webkit-box",
+                            WebkitLineClamp: 3,
+                            WebkitBoxOrient: "vertical",
+                          }}
+                        >
+                          📜 <strong style={{ color: "#4A5568" }}>背景生平：</strong>
+                          {char.background}
+                        </div>
+                      )}
+
+                      {/* 语言风格摘要 */}
+                      {char.style && (
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "#718096",
+                            lineHeight: "1.3",
+                            maxHeight: "36px",
+                            overflow: "hidden",
+                            display: "-webkit-box",
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: "vertical",
+                          }}
+                        >
+                          💬 <strong style={{ color: "#4A5568" }}>口吻习惯：</strong>
+                          {char.style}
+                        </div>
+                      )}
+
+                      {/* 开场白气泡 */}
+                      {char.firstMessage && (
+                        <div
+                          style={{
+                            fontSize: "11px",
+                            color: "#2C5282",
+                            background: "#EBF8FF",
+                            border: "1px solid #BEE3F8",
+                            padding: "6px 10px",
+                            borderRadius: "8px",
+                            lineHeight: "1.35",
+                          }}
+                        >
+                          💭 <strong style={{ color: "#2B6CB0" }}>开场白：</strong>
+                          "{char.firstMessage}"
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 底部按钮栏 */}
+        <div
+          style={{
+            padding: "12px 20px 16px 20px",
+            borderTop: "1px solid rgba(0,0,0,0.06)",
+            background: "#FAFAFA",
+            display: "flex",
+            gap: "10px",
+          }}
+        >
+          <button
+            onClick={onClose}
+            disabled={isProcessing}
+            style={{
+              flex: 1,
+              padding: "11px",
+              borderRadius: "12px",
+              border: "1px solid #E2E8F0",
+              background: "#FFFFFF",
+              color: "#4A5568",
+              cursor: isProcessing ? "not-allowed" : "pointer",
+              fontSize: "13px",
+              fontWeight: "600",
+            }}
+          >
+            取消
+          </button>
+          <button
+            onClick={handleConfirmImport}
+            disabled={parsedList.length === 0 || selectedIndices.length === 0 || isProcessing}
+            style={{
+              flex: 1.5,
+              padding: "11px",
+              borderRadius: "12px",
+              border: "none",
+              background:
+                parsedList.length === 0 || selectedIndices.length === 0 || isProcessing
+                  ? "#CBD5E0"
+                  : "linear-gradient(135deg, #D6724B 0%, #B85832 100%)",
+              color: "#FFFFFF",
+              cursor:
+                parsedList.length === 0 || selectedIndices.length === 0 || isProcessing
+                  ? "not-allowed"
+                  : "pointer",
+              fontSize: "13px",
+              fontWeight: "700",
+              boxShadow:
+                parsedList.length > 0 && selectedIndices.length > 0 && !isProcessing
+                  ? "0 4px 12px rgba(184, 88, 50, 0.3)"
+                  : "none",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "6px",
+            }}
+          >
+            {isProcessing ? "正在导入中..." : `确认导入 (${selectedIndices.length} 位角色)`}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // [修改] T8 人物创建/编辑模态框 (支持自定义头像和回显)
 const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
   const fileInputRef = React.useRef(null);
+  const docQuickInputRef = React.useRef(null);
+  const [showJsonImportModal, setShowJsonImportModal] = React.useState(false);
+  const [showDocsModal, setShowDocsModal] = React.useState(false);
+  const [docImportLoading, setDocImportLoading] = React.useState(false);
 
   // [新增] 识别当前传入的数据是否为群聊
   const isGroup =
@@ -67710,6 +68773,55 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  // 从 Doc / TXT 文档快速导入并自动填充人物设定
+  const handleDocQuickImport = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    setDocImportLoading(true);
+    try {
+      const docItem = await parseCharacterDocFile(file);
+      // 提取文件名去掉后缀作为名字备选
+      const baseName = file.name.replace(/\.[^/.]+$/, "").trim();
+      setFormData((prev) => ({
+        ...prev,
+        name: prev.name && prev.name.trim() ? prev.name : baseName,
+        background: prev.background && prev.background.trim()
+          ? prev.background + "\n\n【导入文档《" + file.name + "》】\n" + docItem.content
+          : docItem.content,
+      }));
+      alert(`🎉 成功从文档《${file.name}》读取 ${docItem.wordCount.toLocaleString()} 字设定，已自动填入人设背景中！`);
+    } catch (err) {
+      console.error("读取文档失败:", err);
+      alert("读取文档失败: " + err.message);
+    } finally {
+      setDocImportLoading(false);
+      e.target.value = "";
+    }
+  };
+
+  // 从 JSON 导入并自动填入当前表单
+  const handleJsonImportToForm = (importedChars) => {
+    if (!importedChars || importedChars.length === 0) return;
+    const char = importedChars[0];
+    setFormData((prev) => ({
+      ...prev,
+      name: char.name || prev.name,
+      gender: char.gender || prev.gender,
+      age: char.age || prev.age,
+      mbti: char.mbti || prev.mbti,
+      mbtiEnabled: !!char.mbti || prev.mbtiEnabled,
+      constellation: char.constellation || prev.constellation,
+      constellationEnabled: !!char.constellation || prev.constellationEnabled,
+      personality: char.personality || prev.personality,
+      style: char.style || prev.style,
+      background: char.background || prev.background,
+      avatar: char.avatar || prev.avatar,
+      avatarColor: char.avatarColor || prev.avatarColor,
+    }));
+    setShowJsonImportModal(false);
+    alert(`✨ 已成功将【${char.name}】的人设填充至创建表单！`);
   };
 
   const handleSave = () => {
@@ -68138,6 +69250,125 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
               />
             </div>
 
+            {/* ================= 快速导入工具栏 (JSON 角色卡 & Doc 长篇设定) ================= */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, rgba(232, 175, 175, 0.15) 0%, rgba(184, 88, 50, 0.08) 100%)",
+                border: "1px solid rgba(184, 88, 50, 0.22)",
+                borderRadius: "16px",
+                padding: "12px 14px",
+                marginBottom: "16px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                flexWrap: "wrap",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "20px" }}>⚡</span>
+                <div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#2D3748" }}>
+                    {initialData ? "快速补充或更新设定" : "从文件快速导入人设"}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#718096" }}>
+                    支持 JSON 角色卡 或 Word/TXT 生平文档
+                  </div>
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button
+                  type="button"
+                  onClick={() => setShowJsonImportModal(true)}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "10px",
+                    border: "none",
+                    background: "linear-gradient(135deg, #E8AFAF 0%, #B85832 100%)",
+                    color: "#FFFFFF",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(184, 88, 50, 0.25)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <span>📥</span>
+                  <span>导入 JSON</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => docQuickInputRef.current && docQuickInputRef.current.click()}
+                  disabled={docImportLoading}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid rgba(107, 142, 35, 0.3)",
+                    background: "linear-gradient(135deg, #6B8E23 0%, #3B5323 100%)",
+                    color: "#FFFFFF",
+                    fontSize: "12px",
+                    fontWeight: "700",
+                    cursor: docImportLoading ? "not-allowed" : "pointer",
+                    boxShadow: "0 2px 6px rgba(59, 83, 35, 0.25)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }}
+                >
+                  <span>📁</span>
+                  <span>{docImportLoading ? "读取中..." : "导入 Doc/TXT"}</span>
+                </button>
+                <input
+                  type="file"
+                  ref={docQuickInputRef}
+                  accept=".docx,.doc,.txt,.md,.markdown"
+                  onChange={handleDocQuickImport}
+                  style={{ display: "none" }}
+                />
+              </div>
+            </div>
+
+            {/* 编辑已有角色时：专属长篇文档档案库入口 */}
+            {initialData && initialData.id && (
+              <div
+                style={{
+                  background: "linear-gradient(135deg, rgba(107, 142, 35, 0.08) 0%, rgba(59, 83, 35, 0.03) 100%)",
+                  border: "1px solid rgba(107, 142, 35, 0.2)",
+                  borderRadius: "14px",
+                  padding: "10px 14px",
+                  marginBottom: "16px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "18px" }}>📚</span>
+                  <div style={{ fontSize: "12px", fontWeight: "600", color: "#2D3748" }}>
+                    管理该角色专属长篇文档库 (Word / TXT)
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDocsModal(true)}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid #6B8E23",
+                    background: "#FFFFFF",
+                    color: "#3B5323",
+                    fontSize: "11px",
+                    fontWeight: "700",
+                    cursor: "pointer",
+                  }}
+                >
+                  打开档案库
+                </button>
+              </div>
+            )}
+
             <label style={labelStyle}>姓名</label>
             <input
               type="text"
@@ -68301,6 +69532,22 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
           </>
         )}
       </div>
+
+      {/* 嵌套在创建弹窗中的 JSON 导入弹窗 */}
+      <T8ImportPersonaModal
+        isOpen={showJsonImportModal}
+        onClose={() => setShowJsonImportModal(false)}
+        onImport={handleJsonImportToForm}
+      />
+
+      {/* 嵌套在创建弹窗中的文档管理弹窗 */}
+      {initialData && (
+        <T8CharacterDocsModal
+          isOpen={showDocsModal}
+          onClose={() => setShowDocsModal(false)}
+          character={initialData}
+        />
+      )}
     </div>
   );
 };
@@ -68840,6 +70087,938 @@ const GroupChatSettingsModal = ({
   );
 };
 
+
+// ==================== 角色长篇专属文档解析器与管理组件 ====================
+
+// 文档文件智能解析器 (支持 .docx, .doc, .txt, .md, .rtf, .json 等全格式与各类编码)
+async function parseCharacterDocFile(file) {
+  const ext = file.name.split(".").pop().toLowerCase();
+  const formatSize = (bytes) => {
+    if (bytes < 1024) return bytes + " B";
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
+  };
+
+  const arrayBuffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(arrayBuffer);
+
+  if (!bytes || bytes.length === 0) {
+    throw new Error("所选文档内容为空");
+  }
+
+  // 1. 智能文本多编码解码器 (UTF-8, GBK/GB18030, UTF-16LE, UTF-16BE)
+  const smartDecodeText = (buf) => {
+    const b = new Uint8Array(buf);
+    if (!b || b.length === 0) return "";
+    // BOM 检测
+    if (b.length >= 3 && b[0] === 0xef && b[1] === 0xbb && b[2] === 0xbf) {
+      return new TextDecoder("utf-8").decode(b.subarray(3));
+    }
+    if (b.length >= 2 && b[0] === 0xff && b[1] === 0xfe) {
+      return new TextDecoder("utf-16le").decode(b.subarray(2));
+    }
+    if (b.length >= 2 && b[0] === 0xfe && b[1] === 0xff) {
+      return new TextDecoder("utf-16be").decode(b.subarray(2));
+    }
+    // 优先尝试 UTF-8
+    try {
+      return new TextDecoder("utf-8", { fatal: true }).decode(b);
+    } catch (e) {
+      // 失败后回退至中文 Windows GB18030 / GBK 编码
+      try {
+        return new TextDecoder("gb18030").decode(b);
+      } catch (e2) {
+        return new TextDecoder("utf-8").decode(b);
+      }
+    }
+  };
+
+  // 2. 内置 DOCX (ZIP XML) 纯前端快速解包提取器
+  const extractDocxXmlFromBuffer = async (buf) => {
+    try {
+      const view = new DataView(buf);
+      const b = new Uint8Array(buf);
+      let eocdOffset = -1;
+      for (let i = b.length - 22; i >= 0; i--) {
+        if (view.getUint32(i, true) === 0x06054b50) {
+          eocdOffset = i;
+          break;
+        }
+      }
+      if (eocdOffset === -1) return "";
+      const cdOffset = view.getUint32(eocdOffset + 16, true);
+      const cdEntries = view.getUint16(eocdOffset + 10, true);
+      let currentOffset = cdOffset;
+      let docXmlData = null;
+
+      for (let i = 0; i < cdEntries; i++) {
+        if (view.getUint32(currentOffset, true) !== 0x02014b50) break;
+        const compression = view.getUint16(currentOffset + 10, true);
+        const compressedSize = view.getUint32(currentOffset + 20, true);
+        const nameLen = view.getUint16(currentOffset + 28, true);
+        const extraLen = view.getUint16(currentOffset + 30, true);
+        const commentLen = view.getUint16(currentOffset + 32, true);
+        const localHeaderOffset = view.getUint32(currentOffset + 42, true);
+
+        const fileNameBytes = b.subarray(currentOffset + 46, currentOffset + 46 + nameLen);
+        const fileName = new TextDecoder("utf-8").decode(fileNameBytes);
+
+        if (fileName === "word/document.xml") {
+          const localNameLen = view.getUint16(localHeaderOffset + 26, true);
+          const localExtraLen = view.getUint16(localHeaderOffset + 28, true);
+          const dataOffset = localHeaderOffset + 30 + localNameLen + localExtraLen;
+          const compressedData = b.subarray(dataOffset, dataOffset + compressedSize);
+
+          if (compression === 0) {
+            docXmlData = compressedData;
+          } else if (compression === 8) {
+            if (typeof DecompressionStream !== "undefined") {
+              const ds = new DecompressionStream("deflate-raw");
+              const writer = ds.writable.getWriter();
+              writer.write(compressedData);
+              writer.close();
+              const response = new Response(ds.readable);
+              const decompressedBuf = await response.arrayBuffer();
+              docXmlData = new Uint8Array(decompressedBuf);
+            }
+          }
+          break;
+        }
+        currentOffset += 46 + nameLen + extraLen + commentLen;
+      }
+
+      if (!docXmlData) return "";
+      const xml = new TextDecoder("utf-8").decode(docXmlData);
+      const text = xml
+        .replace(/<w:tab[^>]*\/>/g, "\t")
+        .replace(/<w:br[^>]*\/>/g, "\n")
+        .replace(/<w:cr[^>]*\/>/g, "\n")
+        .replace(/<\/w:p>/g, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&amp;/g, "&")
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'");
+
+      return text
+        .split("\n")
+        .map((l) => l.trimEnd())
+        .join("\n")
+        .replace(/\n{3,}/g, "\n\n")
+        .trim();
+    } catch (err) {
+      console.warn("内置 DOCX 解包失败:", err);
+      return "";
+    }
+  };
+
+  // 3. 二进制 Word 97-2003 (.doc / CFBF) 深度文本提取器
+  const extractTextFromBinaryDoc = (buf) => {
+    const b = new Uint8Array(buf);
+    if (!b || b.length === 0) return "";
+
+    const isDocMeta = (s) => {
+      const trimmed = s.trim();
+      if (!trimmed || trimmed.length < 2) return true;
+      const metadataWords = [
+        "Root Entry",
+        "SummaryInformation",
+        "DocumentSummaryInformation",
+        "WordDocument",
+        "Table",
+        "Data",
+        "ObjectPool",
+        "CompObj",
+        "Microsoft Word",
+        "Normal.dotm",
+        "Normal.dot",
+        "Heading",
+        "Default Paragraph Font",
+        "Times New Roman",
+        "SimSun",
+        "SimHei",
+        "Microsoft YaHei",
+        "Calibri",
+        "Segoe UI",
+        "Font",
+        "Style",
+        "Title",
+        "Subject",
+        "Author",
+        "Keywords",
+        "Comments",
+        "Template",
+        "Last Author",
+        "Rev Number",
+        "App Version",
+      ];
+      if (
+        metadataWords.some(
+          (w) =>
+            trimmed === w ||
+            (trimmed.startsWith(w) && trimmed.length < w.length + 8)
+        )
+      )
+        return true;
+      const nonPrintableCount = (
+        trimmed.match(/[\x00-\x1F\x7F-\x9F]/g) || []
+      ).length;
+      if (nonPrintableCount > trimmed.length * 0.3) return true;
+      return false;
+    };
+
+    // 第一遍：扫描 UTF-16LE 宽字符文本段 (Word 97-2003 中文与正文主要存储方式)
+    const utf16Chunks = [];
+    let currentRun = [];
+    for (let i = 0; i < b.length - 1; i += 2) {
+      const code = b[i] | (b[i + 1] << 8);
+      const isValidChar =
+        (code >= 0x0020 && code <= 0x007e) ||
+        (code >= 0x4e00 && code <= 0x9fff) ||
+        (code >= 0x3400 && code <= 0x4dbf) ||
+        (code >= 0x3000 && code <= 0x303f) ||
+        (code >= 0xff00 && code <= 0xffef) ||
+        (code >= 0x2000 && code <= 0x206f) ||
+        (code >= 0x00a0 && code <= 0x00ff) ||
+        code === 0x000a ||
+        code === 0x000d ||
+        code === 0x0009;
+
+      if (isValidChar) {
+        currentRun.push(String.fromCharCode(code));
+      } else {
+        if (currentRun.length >= 2) {
+          const text = currentRun.join("");
+          if (!isDocMeta(text)) {
+            utf16Chunks.push(text);
+          }
+        }
+        currentRun = [];
+      }
+    }
+    if (currentRun.length >= 2) {
+      const text = currentRun.join("");
+      if (!isDocMeta(text)) utf16Chunks.push(text);
+    }
+
+    const utf16Joined = utf16Chunks
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (utf16Joined.length > 20) {
+      return utf16Joined;
+    }
+
+    // 第二遍：回退扫描 8-bit (GB18030 / ASCII)
+    const asciiChunks = [];
+    let byteRun = [];
+    for (let i = 0; i < b.length; i++) {
+      const byteVal = b[i];
+      if (
+        (byteVal >= 0x20 && byteVal <= 0x7e) ||
+        byteVal >= 0x80 ||
+        byteVal === 0x0a ||
+        byteVal === 0x0d ||
+        byteVal === 0x09
+      ) {
+        byteRun.push(byteVal);
+      } else {
+        if (byteRun.length >= 4) {
+          try {
+            const dec = new TextDecoder("gb18030").decode(
+              new Uint8Array(byteRun)
+            );
+            if (!isDocMeta(dec)) asciiChunks.push(dec);
+          } catch (e) {}
+        }
+        byteRun = [];
+      }
+    }
+    if (byteRun.length >= 4) {
+      try {
+        const dec = new TextDecoder("gb18030").decode(
+          new Uint8Array(byteRun)
+        );
+        if (!isDocMeta(dec)) asciiChunks.push(dec);
+      } catch (e) {}
+    }
+
+    const asciiJoined = asciiChunks
+      .join("\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    return asciiJoined || utf16Joined;
+  };
+
+  // 4. RTF 文本清洗
+  const cleanRtf = (rtf) => {
+    return rtf
+      .replace(/\\par[d]?/g, "\n")
+      .replace(/\\tab/g, "\t")
+      .replace(/\\'([0-9a-fA-F]{2})/g, (match, hex) => {
+        try {
+          return String.fromCharCode(parseInt(hex, 16));
+        } catch (e) {
+          return "";
+        }
+      })
+      .replace(/\\u([0-9]{3,5})\??/g, (match, code) => {
+        try {
+          return String.fromCharCode(parseInt(code, 10));
+        } catch (e) {
+          return "";
+        }
+      })
+      .replace(/\\[a-zA-Z]+(-?[0-9]+)?[ ]?/g, "")
+      .replace(/[{}]/g, "")
+      .trim();
+  };
+
+  let content = "";
+
+  // 判定文件类型
+  const isZip =
+    bytes.length >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4b &&
+    (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07);
+
+  const isOle2 =
+    bytes.length >= 8 &&
+    bytes[0] === 0xd0 &&
+    bytes[1] === 0xcf &&
+    bytes[2] === 0x11 &&
+    bytes[3] === 0xe0 &&
+    bytes[4] === 0xa1 &&
+    bytes[5] === 0xb1 &&
+    bytes[6] === 0x1a &&
+    bytes[7] === 0xe1;
+
+  const isRtf =
+    bytes.length >= 5 &&
+    bytes[0] === 0x7b &&
+    bytes[1] === 0x5c &&
+    bytes[2] === 0x72 &&
+    bytes[3] === 0x74 &&
+    bytes[4] === 0x66;
+
+  // A. 如果是 DOCX (ZIP 格式)
+  if (isZip || ext === "docx") {
+    // 优先 Mammoth
+    if (typeof window !== "undefined" && window.mammoth) {
+      try {
+        const res = await window.mammoth.extractRawText({ arrayBuffer });
+        if (res && res.value && res.value.trim()) {
+          content = res.value.trim();
+        }
+      } catch (mErr) {
+        console.warn("Mammoth 解析异常，启用内置 DOCX XML 提取器:", mErr);
+      }
+    }
+    // 内置 ZIP XML 提取
+    if (!content) {
+      content = await extractDocxXmlFromBuffer(arrayBuffer);
+    }
+  }
+
+  // B. 如果是老版二进制 Word 97-2003 (.doc / CFBF)
+  if (!content && (isOle2 || ext === "doc")) {
+    content = extractTextFromBinaryDoc(arrayBuffer);
+  }
+
+  // C. 如果是 RTF 格式
+  if (!content && (isRtf || ext === "rtf")) {
+    const rawRtf = smartDecodeText(arrayBuffer);
+    content = cleanRtf(rawRtf);
+  }
+
+  // D. 纯文本 / Markdown / JSON / 其他常规文本 (自动识别 UTF-8 / GBK)
+  if (!content) {
+    const text = smartDecodeText(arrayBuffer);
+    content = text.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, "").trim();
+  }
+
+  content = content ? content.trim() : "";
+  if (!content) {
+    throw new Error("未能从文档中提取到有效文本内容，请确认文件是否为空或损坏");
+  }
+
+  const wordCount = content.length;
+
+  return {
+    id: Date.now() + "_" + Math.random().toString(36).substr(2, 6),
+    name: file.name,
+    size: file.size,
+    sizeStr: formatSize(file.size),
+    uploadTime:
+      new Date().toLocaleDateString() +
+      " " +
+      new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    content: content,
+    wordCount: wordCount,
+    enabled: true,
+  };
+}
+
+// 文档全文阅读预览模态框 (T8DocReaderModal)
+const T8DocReaderModal = ({ isOpen, onClose, doc }) => {
+  if (!isOpen || !doc) return null;
+
+  const handleCopy = () => {
+    if (navigator.clipboard) {
+      navigator.clipboard.writeText(doc.content);
+      alert("✅ 已复制文档全文到剪贴板");
+    } else {
+      alert("浏览器不支持自动复制");
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 1300,
+        background: "rgba(18, 15, 22, 0.75)",
+        backdropFilter: "blur(10px)",
+        WebkitBackdropFilter: "blur(10px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        boxSizing: "border-box",
+        animation: "t8FadeIn 0.2s ease-out",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "540px",
+          maxHeight: "88vh",
+          background: "#FAF8F5",
+          borderRadius: "24px",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 24px 60px rgba(0, 0, 0, 0.35)",
+          overflow: "hidden",
+          border: "1px solid rgba(255, 255, 255, 0.4)",
+          animation: "t8ModalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 标题栏 */}
+        <div
+          style={{
+            padding: "16px 20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottom: "1px solid rgba(0,0,0,0.06)",
+            background: "#FFFFFF",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: 1 }}>
+            <span style={{ fontSize: "20px" }}>📄</span>
+            <div style={{ minWidth: 0, flex: 1 }}>
+              <div
+                style={{
+                  fontSize: "15px",
+                  fontWeight: "700",
+                  color: "#2D3748",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                }}
+              >
+                {doc.name}
+              </div>
+              <div style={{ fontSize: "11px", color: "#718096", marginTop: "2px" }}>
+                共 {doc.wordCount?.toLocaleString() || doc.content?.length?.toLocaleString()} 字 · 上传于 {doc.uploadTime}
+              </div>
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              onClick={handleCopy}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "10px",
+                border: "1px solid #E2E8F0",
+                background: "#FFFFFF",
+                color: "#4A5568",
+                fontSize: "12px",
+                cursor: "pointer",
+                fontWeight: "600",
+              }}
+            >
+              📋 复制全文
+            </button>
+            <button
+              onClick={onClose}
+              style={{
+                width: "32px",
+                height: "32px",
+                borderRadius: "50%",
+                border: "none",
+                background: "rgba(0, 0, 0, 0.05)",
+                color: "#718096",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "16px",
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        </div>
+
+        {/* 正文区域 */}
+        <div
+          className="no-scrollbar"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "20px",
+            fontSize: "14px",
+            lineHeight: "1.75",
+            color: "#2D3748",
+            whiteSpace: "pre-wrap",
+            fontFamily: "inherit",
+            background: "#FFFFFF",
+            margin: "12px",
+            borderRadius: "16px",
+            border: "1px solid rgba(0,0,0,0.04)",
+            boxShadow: "inset 0 1px 4px rgba(0,0,0,0.02)",
+          }}
+        >
+          {doc.content}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// 角色专属设定档案管理模态框 (T8CharacterDocsModal)
+const T8CharacterDocsModal = ({ isOpen, onClose, character, onDocsUpdated }) => {
+  const [docs, setDocs] = React.useState([]);
+  const [isUploading, setIsUploading] = React.useState(false);
+  const [isDragging, setIsDragging] = React.useState(false);
+  const [previewDoc, setPreviewDoc] = React.useState(null);
+  const fileInputRef = React.useRef(null);
+
+  // 加载该角色的所有文档
+  const loadDocs = async () => {
+    if (!character?.id || !window.characterDocStore) return;
+    try {
+      const list = await window.characterDocStore.getByCharacterId(character.id);
+      setDocs(list || []);
+    } catch (e) {
+      console.error("加载角色文档失败:", e);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isOpen && character?.id) {
+      loadDocs();
+    }
+  }, [isOpen, character?.id]);
+
+  if (!isOpen || !character) return null;
+
+  // 处理上传文档
+  const handleUploadFile = async (file) => {
+    if (!file) return;
+    setIsUploading(true);
+    try {
+      const docItem = await parseCharacterDocFile(file);
+      const updated = await window.characterDocStore.addDoc(character.id, docItem);
+      setDocs(updated);
+      if (onDocsUpdated) onDocsUpdated(updated);
+      alert(`🎉 成功导入文档《${docItem.name}》（共 ${docItem.wordCount.toLocaleString()} 字），已存入 IndexedDB！`);
+    } catch (err) {
+      console.error("上传文档失败:", err);
+      alert("导入失败: " + err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // 切换启用状态
+  const handleToggle = async (docId) => {
+    try {
+      const updated = await window.characterDocStore.toggleDoc(character.id, docId);
+      setDocs(updated);
+      if (onDocsUpdated) onDocsUpdated(updated);
+    } catch (e) {
+      console.error("切换文档状态失败:", e);
+    }
+  };
+
+  // 删除文档
+  const handleDelete = async (docId, docName) => {
+    if (confirm(`确定要删除文档《${docName}》吗？`)) {
+      try {
+        const updated = await window.characterDocStore.deleteDoc(character.id, docId);
+        setDocs(updated);
+        if (onDocsUpdated) onDocsUpdated(updated);
+      } catch (e) {
+        console.error("删除文档失败:", e);
+      }
+    }
+  };
+
+  // 统计已启用文档总字数
+  const totalWords = docs
+    .filter((d) => d.enabled !== false)
+    .reduce((acc, d) => acc + (d.wordCount || d.content?.length || 0), 0);
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 1200,
+        background: "rgba(18, 15, 22, 0.7)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "16px",
+        boxSizing: "border-box",
+        animation: "t8FadeIn 0.25s ease-out",
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "480px",
+          maxHeight: "88vh",
+          background: "var(--c-bg-card, #FFFFFF)",
+          borderRadius: "24px",
+          display: "flex",
+          flexDirection: "column",
+          boxShadow: "0 24px 60px rgba(0, 0, 0, 0.35)",
+          overflow: "hidden",
+          border: "1px solid rgba(255, 255, 255, 0.4)",
+          animation: "t8ModalPop 0.25s cubic-bezier(0.16, 1, 0.3, 1)",
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* 头部 */}
+        <div
+          style={{
+            padding: "18px 20px 14px 20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            borderBottom: "1px solid rgba(0,0,0,0.06)",
+            background: "linear-gradient(180deg, rgba(245, 240, 235, 0.6) 0%, transparent 100%)",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <div
+              style={{
+                width: "38px",
+                height: "38px",
+                borderRadius: "12px",
+                background: "linear-gradient(135deg, #6B8E23 0%, #3B5323 100%)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#FFFFFF",
+                fontSize: "18px",
+                boxShadow: "0 4px 10px rgba(59, 83, 35, 0.25)",
+              }}
+            >
+              📁
+            </div>
+            <div>
+              <div style={{ fontSize: "16px", fontWeight: "700", color: "var(--c-text-main, #2D3748)" }}>
+                【{character.name}】专属设定档案
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--c-text-sub, #718096)", marginTop: "2px" }}>
+                已启用 {docs.filter((d) => d.enabled !== false).length} 篇 · 共 {totalWords.toLocaleString()} 字设定将注入 AI 记忆
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            style={{
+              width: "32px",
+              height: "32px",
+              borderRadius: "50%",
+              border: "none",
+              background: "rgba(0, 0, 0, 0.05)",
+              color: "#718096",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "16px",
+            }}
+          >
+            ✕
+          </button>
+        </div>
+
+        {/* 内容区 */}
+        <div
+          className="no-scrollbar"
+          style={{
+            flex: 1,
+            overflowY: "auto",
+            padding: "16px 20px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "14px",
+          }}
+        >
+          {/* 上传拖拽区域 */}
+          <div
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDragging(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDragging(false);
+              const f = e.dataTransfer.files && e.dataTransfer.files[0];
+              if (f) handleUploadFile(f);
+            }}
+            onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            style={{
+              border: isDragging ? "2px dashed #48BB78" : "2px dashed rgba(0,0,0,0.15)",
+              background: isDragging ? "rgba(72, 187, 120, 0.06)" : "rgba(0,0,0,0.02)",
+              borderRadius: "16px",
+              padding: "20px 16px",
+              textAlign: "center",
+              cursor: isUploading ? "not-allowed" : "pointer",
+              transition: "all 0.2s",
+            }}
+          >
+            <input
+              type="file"
+              ref={fileInputRef}
+              accept=".docx,.doc,.txt,.md,.markdown"
+              onChange={(e) => {
+                const f = e.target.files && e.target.files[0];
+                if (f) handleUploadFile(f);
+                e.target.value = "";
+              }}
+              style={{ display: "none" }}
+            />
+            <div style={{ fontSize: "28px", marginBottom: "6px" }}>
+              {isUploading ? "⏳" : "📥"}
+            </div>
+            <div style={{ fontSize: "14px", fontWeight: "600", color: "var(--c-text-main, #2D3748)" }}>
+              {isUploading ? "正在读取并解析文档中..." : "点击或将 .docx / .doc / .txt / .md 拖入此处"}
+            </div>
+            <div style={{ fontSize: "11px", color: "#A0AEC0", marginTop: "4px" }}>
+              全文存入 IndexedDB 本地数据库 · 突破单条字数限制 · AI 深度代入
+            </div>
+          </div>
+
+          {/* 文档列表 */}
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div
+              style={{
+                fontSize: "13px",
+                fontWeight: "700",
+                color: "#4A5568",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+              }}
+            >
+              <span>📚 关联长篇档案 ({docs.length})</span>
+              <span style={{ fontSize: "11px", color: "#718096", fontWeight: "normal" }}>
+                可勾选开启/关闭单篇档案
+              </span>
+            </div>
+
+            {docs.length === 0 ? (
+              <div
+                style={{
+                  padding: "24px 16px",
+                  textAlign: "center",
+                  background: "rgba(0,0,0,0.02)",
+                  borderRadius: "14px",
+                  color: "#A0AEC0",
+                  fontSize: "12px",
+                }}
+              >
+                暂无专属档案。上传长篇小说设定、生平故事或剧本后，AI 聊天时将拥有长达数万字的深度背景记忆！
+              </div>
+            ) : (
+              docs.map((d) => (
+                <div
+                  key={d.id}
+                  style={{
+                    padding: "12px 14px",
+                    borderRadius: "14px",
+                    border: d.enabled !== false ? "1.5px solid #48BB78" : "1px solid rgba(0,0,0,0.08)",
+                    background: d.enabled !== false ? "rgba(72, 187, 120, 0.03)" : "#FFFFFF",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.02)",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "10px" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", minWidth: 0, flex: 1 }}>
+                      <span style={{ fontSize: "20px" }}>📄</span>
+                      <div style={{ minWidth: 0, flex: 1 }}>
+                        <div
+                          style={{
+                            fontSize: "14px",
+                            fontWeight: "700",
+                            color: "#1A202C",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {d.name}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#718096", marginTop: "2px" }}>
+                          共 {d.wordCount?.toLocaleString() || d.content?.length?.toLocaleString()} 字 · {d.sizeStr || ""} · {d.uploadTime}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* 开关与操作 */}
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                      <button
+                        onClick={() => handleToggle(d.id)}
+                        style={{
+                          padding: "4px 10px",
+                          borderRadius: "8px",
+                          border: "none",
+                          background: d.enabled !== false ? "#C6F6D5" : "#EDF2F7",
+                          color: d.enabled !== false ? "#22543D" : "#718096",
+                          fontSize: "11px",
+                          fontWeight: "700",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {d.enabled !== false ? "✓ 已启用" : "○ 已停用"}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* 摘要与快捷操作 */}
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      color: "#718096",
+                      background: "rgba(0,0,0,0.02)",
+                      padding: "6px 10px",
+                      borderRadius: "8px",
+                      lineHeight: "1.4",
+                      maxHeight: "40px",
+                      overflow: "hidden",
+                      display: "-webkit-box",
+                      WebkitLineClamp: 2,
+                      WebkitBoxOrient: "vertical",
+                    }}
+                  >
+                    {d.content}
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "2px" }}>
+                    <button
+                      onClick={() => setPreviewDoc(d)}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "8px",
+                        border: "1px solid #E2E8F0",
+                        background: "#FFFFFF",
+                        color: "#3182CE",
+                        fontSize: "11px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                      }}
+                    >
+                      📖 查看全文
+                    </button>
+                    <button
+                      onClick={() => handleDelete(d.id, d.name)}
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "8px",
+                        border: "1px solid #FED7D7",
+                        background: "#FFF5F5",
+                        color: "#E53E3E",
+                        fontSize: "11px",
+                        cursor: "pointer",
+                        fontWeight: "600",
+                      }}
+                    >
+                      🗑️ 删除
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+
+        {/* 底部 */}
+        <div
+          style={{
+            padding: "12px 20px 16px 20px",
+            borderTop: "1px solid rgba(0,0,0,0.06)",
+            background: "#FAFAFA",
+            display: "flex",
+            justifyContent: "flex-end",
+          }}
+        >
+          <button
+            onClick={onClose}
+            style={{
+              padding: "10px 24px",
+              borderRadius: "12px",
+              border: "none",
+              background: "linear-gradient(135deg, #4A5568 0%, #2D3748 100%)",
+              color: "#FFFFFF",
+              fontSize: "13px",
+              fontWeight: "700",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(45, 55, 72, 0.25)",
+            }}
+          >
+            完成
+          </button>
+        </div>
+      </div>
+
+      {/* 查看全文模态框 */}
+      <T8DocReaderModal
+        isOpen={!!previewDoc}
+        onClose={() => setPreviewDoc(null)}
+        doc={previewDoc}
+      />
+    </div>
+  );
+};
+
+
 // [修复补全] 聊天高级设置组件
 const ChatSettingsModal = ({
   settings,
@@ -68902,6 +71081,24 @@ const ChatSettingsModal = ({
     fetchGroups();
   }, []);
   // ========================================================
+
+  // ======= 【新增：角色专属长篇文档档案状态】 =======
+  const [showDocsModal, setShowDocsModal] = React.useState(false);
+  const [charDocsSummary, setCharDocsSummary] = React.useState({ count: 0, totalCount: 0, words: 0 });
+
+  React.useEffect(() => {
+    const loadDocsSummary = async () => {
+      if (chatData?.id && window.characterDocStore) {
+        try {
+          const list = await window.characterDocStore.getByCharacterId(chatData.id);
+          const enabledList = list.filter((d) => d.enabled !== false);
+          const words = enabledList.reduce((acc, d) => acc + (d.wordCount || d.content?.length || 0), 0);
+          setCharDocsSummary({ count: enabledList.length, totalCount: list.length, words });
+        } catch (e) {}
+      }
+    };
+    loadDocsSummary();
+  }, [chatData?.id]);
 
   // ======= 【新增：备份与恢复相关状态与方法】 =======
   const [showBackupRestore, setShowBackupRestore] = React.useState(false);
@@ -74173,6 +76370,18 @@ const T8ChatDetail = ({
     // [新增] 将长期记忆摘要注入 Prompt
     if (memorySettings.summary) {
       systemInstruction += `\n【核心长期记忆】\n${memorySettings.summary}\n`;
+    }
+
+    // [新增] 读取并注入该角色专属长篇设定档案与生平记忆 (来自 IndexedDB)
+    if (window.characterDocStore && chatData?.id) {
+      try {
+        const docContext = await window.characterDocStore.getEnabledDocContext(chatData.id);
+        if (docContext) {
+          systemInstruction += `\n\n${docContext}\n`;
+        }
+      } catch (e) {
+        console.error("读取角色专属长篇设定文档失败:", e);
+      }
     }
 
     // [修改] Pixabay图片搜索功能说明（降低触发频率）
@@ -85752,6 +87961,7 @@ const T8Page = () => {
   // 初始化聊天列表状态
   const [chats, setChats] = useState(T8_INITIAL_CHATS);
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [isImportOpen, setIsImportOpen] = useState(false); // 控制导入人设弹窗
   const [activeChatId, setActiveChatId] = useState(null);
   const [isGroupChatOpen, setIsGroupChatOpen] = useState(false); // 控制群聊页面显示
   const [showGroupMemberModal, setShowGroupMemberModal] = useState(false); // 控制角色选择弹窗显示
@@ -86171,6 +88381,93 @@ const T8Page = () => {
     }
   };
 
+
+  // 处理批量/单个人设 JSON 导入
+  const handleImportCharacters = async (importedChars) => {
+    try {
+      const newChatItems = [];
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+      for (let i = 0; i < importedChars.length; i++) {
+        const char = importedChars[i];
+        const newChatId = Date.now() + i + Math.floor(Math.random() * 10000);
+        let avatarReference = char.avatar;
+
+        if (char.avatar && (char.avatar.startsWith("data:image") || char.avatar.startsWith("http"))) {
+          try {
+            await avatarStore.put(newChatId, char.avatar);
+            avatarReference = newChatId;
+          } catch (avErr) {
+            console.error("保存导入头像失败:", avErr);
+          }
+        }
+
+        const newChat = {
+          id: newChatId,
+          name: char.name,
+          msg: char.firstMessage || `[系统] ${char.name} 已加入通讯录`,
+          time: "刚刚",
+          avatarColor: char.avatarColor || "#EAD6D6",
+          avatar: avatarReference || null,
+          unread: char.firstMessage ? 1 : 0,
+          section: "recent",
+          status: char.firstMessage ? "unread" : "read",
+          pinned: false,
+          profile: {
+            name: char.name,
+            gender: char.gender || "",
+            age: char.age || "",
+            mbti: char.mbti || "",
+            mbtiEnabled: !!char.mbti,
+            enneagram: char.enneagram || "",
+            constellation: char.constellation || "",
+            constellationEnabled: !!char.constellation,
+            personality: char.personality || "",
+            style: char.style || "",
+            background: char.background || "",
+            avatar: avatarReference || null,
+            avatarColor: char.avatarColor || "#EAD6D6",
+          },
+        };
+
+        // 如果包含开场白，写入首条消息到历史记录
+        if (char.firstMessage && window.chatHistoryStore) {
+          const firstMsg = {
+            id: Date.now() + Math.random(),
+            text: char.firstMessage,
+            type: "text",
+            isMe: false,
+            time: timeStr,
+          };
+          await window.chatHistoryStore.saveMessages(newChatId, [firstMsg]);
+        }
+
+        // 保存到 IndexedDB
+        if (window.chatCharacterStore) {
+          await window.chatCharacterStore.save(newChat);
+        }
+
+        newChatItems.push(newChat);
+      }
+
+      // 更新 React 状态
+      setChats((prev) => [...newChatItems, ...prev]);
+
+      // 同步持久化到 localStorage
+      try {
+        const stored = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        localStorage.setItem("t8_chat_list", JSON.stringify([...newChatItems, ...stored]));
+      } catch (e) {}
+
+      setIsImportOpen(false);
+      alert(`🎉 成功导入 ${newChatItems.length} 位角色！已加入通讯录`);
+    } catch (err) {
+      console.error("导入角色失败:", err);
+      alert("导入角色失败: " + err.message);
+    }
+  };
+
   // [新增] 点击头像触发编辑
   const handleEditClick = (chatData) => {
     setEditingChar(chatData);
@@ -86183,6 +88480,11 @@ const T8Page = () => {
   return (
     <div id="app-root">
       {/* [修改] 传递 editingChar 给模态框 */}
+      <T8ImportPersonaModal
+        isOpen={isImportOpen}
+        onClose={() => setIsImportOpen(false)}
+        onImport={handleImportCharacters}
+      />
       <T8CreateModal
         isOpen={isCreateOpen}
         onClose={() => {

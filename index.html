@@ -39,6 +39,13 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <!-- Phosphor Icons 图标库 -->
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    <!-- Mammoth.js 用于 Word .docx 文档解析 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script>
+      if (!window.mammoth) {
+        document.write('<script src="https://cdn.jsdelivr.net/npm/mammoth@1.6.0/mammoth.browser.min.js"><\/script>');
+      }
+    </script>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link
@@ -127,7 +134,7 @@
     <!-- D3.js 库 -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <link rel="stylesheet" href="Milvus/style.css?v=1787117901716" />
+    <link rel="stylesheet" href="Milvus/style.css?v=1787121432647" />
 
     <!-- IndexedDB 存储模块 -->
     <script src="Milvus/db.js?v=1786779100"></script>
@@ -141,7 +148,7 @@
       style="display: none"
     />
 
-    <script src="Milvus/app.min.js?v=1787117901716"></script>
+    <script src="Milvus/app.min.js?v=1787121432647"></script>
 
     <!-- PWA Service Worker 注册 -->
     <script>

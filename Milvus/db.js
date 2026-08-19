@@ -2186,6 +2186,91 @@ const deliveryOrderStore = {
 };
 window.deliveryOrderStore = deliveryOrderStore;
 
+// ==================== 角色专属长篇人设与记忆文档存储 (characterDocStore) ====================
+const characterDocStore = {
+  // 获取某个角色的所有专属文档
+  getByCharacterId: async (characterId) => {
+    const db = await openDB();
+    return new Promise((resolve) => {
+      try {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get(`char_docs_${characterId}`);
+        req.onsuccess = () => resolve(req.result?.value || []);
+        req.onerror = () => resolve([]);
+      } catch (e) {
+        console.error("读取角色专属文档失败:", e);
+        resolve([]);
+      }
+    });
+  },
+
+  // 保存某个角色的所有文档
+  saveDocs: async (characterId, docs) => {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      try {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: `char_docs_${characterId}`, value: docs });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("保存文档失败");
+      } catch (e) {
+        reject(e);
+      }
+    });
+  },
+
+  // 添加单篇文档
+  addDoc: async (characterId, docItem) => {
+    const existing = await characterDocStore.getByCharacterId(characterId);
+    const updated = [docItem, ...existing.filter((d) => d.id !== docItem.id)];
+    await characterDocStore.saveDocs(characterId, updated);
+    return updated;
+  },
+
+  // 删除单篇文档
+  deleteDoc: async (characterId, docId) => {
+    const existing = await characterDocStore.getByCharacterId(characterId);
+    const updated = existing.filter((d) => d.id !== docId);
+    await characterDocStore.saveDocs(characterId, updated);
+    return updated;
+  },
+
+  // 切换文档启用/停用状态
+  toggleDoc: async (characterId, docId) => {
+    const existing = await characterDocStore.getByCharacterId(characterId);
+    const updated = existing.map((d) =>
+      d.id === docId ? { ...d, enabled: !d.enabled } : d
+    );
+    await characterDocStore.saveDocs(characterId, updated);
+    return updated;
+  },
+
+  // 获取该角色所有已启用文档拼接文本（供 AI 提示词与互动读取）
+  getEnabledDocContext: async (characterId) => {
+    if (!characterId) return "";
+    try {
+      const docs = await characterDocStore.getByCharacterId(characterId);
+      const enabledDocs = docs.filter(
+        (d) => d.enabled !== false && d.content && d.content.trim()
+      );
+      if (enabledDocs.length === 0) return "";
+      return enabledDocs
+        .map(
+          (d) =>
+            `【角色专属长篇设定/生平档案《${d.name}》】\n${d.content.trim()}`
+        )
+        .join("\n\n");
+    } catch (e) {
+      console.error("获取已启用角色文档文本失败:", e);
+      return "";
+    }
+  },
+};
+window.characterDocStore = characterDocStore;
+
+
 window.settingsStore = settingsStore;
 window.migrateUserData = migrateUserData;
 window.chatCharacterStore = chatCharacterStore;
