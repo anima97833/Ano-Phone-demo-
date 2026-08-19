@@ -11090,3 +11090,128 @@
   box-sizing: border-box;
   outline: none;
 }
+
+/* ==================== 折叠卡片个性化装扮弹窗样式 ==================== */
+.foldcard-modal-overlay,
+.foldcard-modal-overlay.open {
+  position: fixed !important;
+  inset: 0 !important;
+  width: 100vw !important;
+  height: 100vh !important;
+  background: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(8px) !important;
+  -webkit-backdrop-filter: blur(8px) !important;
+  z-index: 3000 !important;
+  display: flex !important;
+  align-items: flex-end !important;
+  justify-content: center !important;
+  animation: fadeIn 0.25s ease-out !important;
+}
+
+.foldcard-settings-sheet {
+  width: 100% !important;
+  max-width: 480px !important;
+  max-height: 85vh !important;
+  background: #fdfcf8 !important;
+  border-radius: 28px 28px 0 0 !important;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.2) !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  animation: slideUpSmooth 0.3s ease-out !important;
+  box-sizing: border-box !important;
+}
+
+.foldcard-settings-header {
+  padding: 16px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.foldcard-tab-btn {
+  padding: 8px 14px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #6d735b;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.foldcard-tab-btn.active {
+  background: #6d735b !important;
+  color: #ffffff !important;
+  box-shadow: 0 2px 8px rgba(109, 115, 91, 0.25) !important;
+}
+
+.foldcard-settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  box-sizing: border-box;
+}
+
+.foldcard-setting-group {
+  background: #ffffff;
+  border: 1px solid rgba(0, 0, 0, 0.05);
+  border-radius: 18px;
+  padding: 14px 16px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.02);
+}
+
+.foldcard-setting-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: #4a5040;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.foldcard-range-input {
+  width: 100%;
+  accent-color: #6d735b;
+  cursor: pointer;
+}
+
+.foldcard-preset-chip {
+  padding: 8px 12px;
+  border-radius: 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.foldcard-preset-chip:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 3px 8px rgba(0,0,0,0.06);
+}
+
+.foldcard-css-textarea {
+  width: 100%;
+  height: 180px;
+  background: #23282b;
+  color: #a6e22e;
+  font-family: 'Fira Code', 'Consolas', 'Courier New', monospace;
+  font-size: 12.5px;
+  line-height: 1.5;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid #3c4247;
+  resize: vertical;
+  box-sizing: border-box;
+  outline: none;
+}
