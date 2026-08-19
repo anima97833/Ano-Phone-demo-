@@ -68862,6 +68862,12 @@ const ChatSettingsModal = ({
   setPixabayApiKey,
   voiceId,
   setVoiceId,
+  chatHeaderCss,
+  setChatHeaderCss,
+  chatInputCss,
+  setChatInputCss,
+  chatButtonsCss,
+  setChatButtonsCss,
 }) => {
   // [新增] 读取长期记忆列表与处理挂载切换
   const [memoriesList, setMemoriesList] = React.useState([]);
@@ -69292,41 +69298,28 @@ const ChatSettingsModal = ({
   };
 
   return (
-    <div className="cs-mask" onClick={onClose} style={{ position: 'relative', height: '100vh', overflow: 'hidden' }}>
+    <div className="cs-mask" onClick={onClose}>
       <div
         className="cs-panel"
         onClick={handlePanelClick}
         style={{
-          position: 'absolute',
-          top: '0',
-          left: '0',
-          right: '0',
-          bottom: '0',
-          margin: 'auto',
-          width: '90%',
-          maxHeight: '80vh',
-          display: 'flex',
-          flexDirection: 'column',
-          backgroundColor: '#fff',
-          borderRadius: '16px',
-          overflow: 'hidden'
+          maxHeight: "80vh",
+          overflowY: "auto",
+          paddingRight: "10px",
         }}
       >
         <div
           className="cs-title"
           style={{
-            flexShrink: 0,
-            padding: '20px',
             fontSize: "18px",
             fontWeight: "bold",
             color: "#5a5f4d",
             textAlign: "center",
+            marginBottom: "20px",
           }}
         >
           对话偏好设置
         </div>
-
-        <div style={{ flex: 1, overflowY: 'auto', padding: '0 20px' }}>
           {/* 1. 剧情模式设置 */}
           <div className="cs-row">
             <div>
@@ -70953,6 +70946,263 @@ const ChatSettingsModal = ({
               </button>
             </div>
           </div>
+
+          {/* 13. 聊天界面深度装扮 (顶部导航、输入框、按钮) */}
+          <div style={{ marginBottom: "20px", borderTop: "1px dashed #d6cbb8", paddingTop: "15px" }}>
+            <div className="cs-label" style={{ fontSize: "14px", fontWeight: "bold", color: "#5d4e37", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span>🎨</span> 聊天界面深度装扮
+            </div>
+            <div className="cs-desc" style={{ fontSize: "11px", color: "#8c8279", marginBottom: "12px", marginTop: "2px" }}>
+              自定义顶部导航栏、底部输入框、发送与功能按钮外观，支持原生 CSS 属性及 ::before / ::after 伪元素动效
+            </div>
+
+            {/* A. 顶部导航与状态栏 */}
+            <div style={{ marginBottom: "16px", backgroundColor: "#fbf9f4", padding: "10px 12px", borderRadius: "10px", border: "1px solid #ebd9c8" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "12px", fontWeight: "bold", color: "#5d4e37" }}>🌟 顶部状态与导航栏 CSS</span>
+                <span style={{ fontSize: "10px", color: "#a89b88" }}>目标: .chat-header</span>
+              </div>
+              
+              {/* 快捷模板 */}
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "8px" }}>
+                {[
+                  { label: "毛玻璃微光", css: "background: rgba(255, 255, 255, 0.45) !important; backdrop-filter: blur(16px); border-bottom: 1px solid rgba(255, 255, 255, 0.6); color: #333 !important;" },
+                  { label: "古风卷轴", css: "background: linear-gradient(180deg, #3d3b38 0%, #2b2927 100%) !important; box-shadow: 0 4px 15px rgba(0,0,0,0.2);\n.chat-header::after { content: '🪶'; position: absolute; right: 55px; top: 12px; opacity: 0.7; font-size: 16px; }" },
+                  { label: "暗夜星河", css: "background: linear-gradient(135deg, #1e1b2e 0%, #2d2640 100%) !important; border-bottom: 1px solid rgba(168, 85, 247, 0.3); box-shadow: 0 4px 16px rgba(168,85,247,0.15);" }
+                ].map((tpl, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "12px", background: "#fff", border: "1px solid #d6724b", color: "#d6724b", cursor: "pointer" }}
+                    onClick={async () => {
+                      setChatHeaderCss(tpl.css);
+                      // 触发预览与保存
+                      window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "header", css: tpl.css, chatId: chatData.id } }));
+                      try {
+                        const db = await openDB();
+                        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                        await tx.objectStore(STORES.USER_SETTINGS).put({ key: `chat_header_css_${chatData.id}`, value: tpl.css });
+                      } catch(e) { console.error(e); }
+                    }}
+                  >
+                    +{tpl.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ position: "relative", width: "100%" }}>
+                <textarea
+                  rows={2}
+                  placeholder="可输入CSS代码块或属性，支持 .chat-header::before 等伪元素"
+                  style={{
+                    width: "100%",
+                    padding: "8px 30px 8px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid #d6724b",
+                    fontSize: "11px",
+                    color: "#5d4e37",
+                    backgroundColor: "#fff",
+                    fontFamily: "monospace",
+                    resize: "vertical"
+                  }}
+                  value={chatHeaderCss || ""}
+                  onChange={(e) => setChatHeaderCss(e.target.value)}
+                  onBlur={async (e) => {
+                    const css = e.target.value;
+                    try {
+                      const db = await openDB();
+                      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                      await tx.objectStore(STORES.USER_SETTINGS).put({ key: `chat_header_css_${chatData.id}`, value: css });
+                      window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "header", css, chatId: chatData.id } }));
+                    } catch(err) { console.error("保存顶部导航样式失败:", err); }
+                  }}
+                  onInput={(e) => {
+                    const css = e.target.value;
+                    window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "header", css, chatId: chatData.id } }));
+                  }}
+                />
+                <button
+                  style={{ position: "absolute", right: "6px", top: "8px", background: "transparent", border: "none", cursor: "pointer", color: "#d6724b", fontSize: "14px" }}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    setChatHeaderCss("");
+                    window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "header", css: "", chatId: chatData.id } }));
+                    try {
+                      const db = await openDB();
+                      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                      await tx.objectStore(STORES.USER_SETTINGS).delete(`chat_header_css_${chatData.id}`);
+                    } catch(err) { console.error(err); }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* B. 底部输入框与工具栏 */}
+            <div style={{ marginBottom: "16px", backgroundColor: "#fbf9f4", padding: "10px 12px", borderRadius: "10px", border: "1px solid #ebd9c8" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "12px", fontWeight: "bold", color: "#5d4e37" }}>💬 底部输入框与栏目 CSS</span>
+                <span style={{ fontSize: "10px", color: "#a89b88" }}>目标: .chat-input-field</span>
+              </div>
+
+              {/* 快捷模板 */}
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "8px" }}>
+                {[
+                  { label: "微光毛玻璃", css: "background: rgba(255, 255, 255, 0.85) !important; backdrop-filter: blur(12px); border: 1.5px solid rgba(214, 114, 75, 0.4) !important; border-radius: 20px; box-shadow: 0 2px 8px rgba(0,0,0,0.04);" },
+                  { label: "霓虹边框", css: "background: rgba(26, 26, 36, 0.9) !important; color: #fff !important; border: 1.5px solid #a855f7 !important; box-shadow: 0 0 10px rgba(168, 85, 247, 0.35); border-radius: 18px;" },
+                  { label: "素雅竹简", css: "background: #fdfbf7 !important; border: 1px dashed #bba993 !important; color: #4a3e35 !important; border-radius: 12px;" }
+                ].map((tpl, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "12px", background: "#fff", border: "1px solid #d6724b", color: "#d6724b", cursor: "pointer" }}
+                    onClick={async () => {
+                      setChatInputCss(tpl.css);
+                      window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "input", css: tpl.css, chatId: chatData.id } }));
+                      try {
+                        const db = await openDB();
+                        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                        await tx.objectStore(STORES.USER_SETTINGS).put({ key: `chat_input_css_${chatData.id}`, value: tpl.css });
+                      } catch(e) { console.error(e); }
+                    }}
+                  >
+                    +{tpl.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ position: "relative", width: "100%" }}>
+                <textarea
+                  rows={2}
+                  placeholder="可输入CSS代码块或属性，例如 border: 1px solid #d6724b;"
+                  style={{
+                    width: "100%",
+                    padding: "8px 30px 8px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid #d6724b",
+                    fontSize: "11px",
+                    color: "#5d4e37",
+                    backgroundColor: "#fff",
+                    fontFamily: "monospace",
+                    resize: "vertical"
+                  }}
+                  value={chatInputCss || ""}
+                  onChange={(e) => setChatInputCss(e.target.value)}
+                  onBlur={async (e) => {
+                    const css = e.target.value;
+                    try {
+                      const db = await openDB();
+                      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                      await tx.objectStore(STORES.USER_SETTINGS).put({ key: `chat_input_css_${chatData.id}`, value: css });
+                      window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "input", css, chatId: chatData.id } }));
+                    } catch(err) { console.error("保存输入框样式失败:", err); }
+                  }}
+                  onInput={(e) => {
+                    const css = e.target.value;
+                    window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "input", css, chatId: chatData.id } }));
+                  }}
+                />
+                <button
+                  style={{ position: "absolute", right: "6px", top: "8px", background: "transparent", border: "none", cursor: "pointer", color: "#d6724b", fontSize: "14px" }}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    setChatInputCss("");
+                    window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "input", css: "", chatId: chatData.id } }));
+                    try {
+                      const db = await openDB();
+                      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                      await tx.objectStore(STORES.USER_SETTINGS).delete(`chat_input_css_${chatData.id}`);
+                    } catch(err) { console.error(err); }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+
+            {/* C. 发送与操作按钮 */}
+            <div style={{ marginBottom: "10px", backgroundColor: "#fbf9f4", padding: "10px 12px", borderRadius: "10px", border: "1px solid #ebd9c8" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <span style={{ fontSize: "12px", fontWeight: "bold", color: "#5d4e37" }}>🚀 发送与功能按钮 CSS</span>
+                <span style={{ fontSize: "10px", color: "#a89b88" }}>目标: .chat-send-btn, .chat-action-btn</span>
+              </div>
+
+              {/* 快捷模板 */}
+              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginBottom: "8px" }}>
+                {[
+                  { label: "活力暖橙", css: ".chat-send-btn { background: linear-gradient(135deg, #ff7e5f, #feb47b) !important; box-shadow: 0 4px 12px rgba(255, 126, 95, 0.4) !important; transform: scale(1.05); }" },
+                  { label: "星芒伪元素", css: ".chat-send-btn { background: #d6724b !important; position: relative; }\n.chat-send-btn::after { content: '✦'; position: absolute; top: -5px; right: -5px; font-size: 12px; color: #ffd700; }" },
+                  { label: "赛博荧光", css: ".chat-send-btn { background: #06b6d4 !important; box-shadow: 0 0 12px rgba(6, 182, 212, 0.5) !important; }\n.chat-action-btn { color: #06b6d4 !important; }" }
+                ].map((tpl, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    style={{ fontSize: "10px", padding: "2px 8px", borderRadius: "12px", background: "#fff", border: "1px solid #d6724b", color: "#d6724b", cursor: "pointer" }}
+                    onClick={async () => {
+                      setChatButtonsCss(tpl.css);
+                      window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "buttons", css: tpl.css, chatId: chatData.id } }));
+                      try {
+                        const db = await openDB();
+                        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                        await tx.objectStore(STORES.USER_SETTINGS).put({ key: `chat_buttons_css_${chatData.id}`, value: tpl.css });
+                      } catch(e) { console.error(e); }
+                    }}
+                  >
+                    +{tpl.label}
+                  </button>
+                ))}
+              </div>
+
+              <div style={{ position: "relative", width: "100%" }}>
+                <textarea
+                  rows={2}
+                  placeholder="支持 .chat-send-btn, .chat-send-btn::after, .chat-action-btn"
+                  style={{
+                    width: "100%",
+                    padding: "8px 30px 8px 10px",
+                    borderRadius: "8px",
+                    border: "1px solid #d6724b",
+                    fontSize: "11px",
+                    color: "#5d4e37",
+                    backgroundColor: "#fff",
+                    fontFamily: "monospace",
+                    resize: "vertical"
+                  }}
+                  value={chatButtonsCss || ""}
+                  onChange={(e) => setChatButtonsCss(e.target.value)}
+                  onBlur={async (e) => {
+                    const css = e.target.value;
+                    try {
+                      const db = await openDB();
+                      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                      await tx.objectStore(STORES.USER_SETTINGS).put({ key: `chat_buttons_css_${chatData.id}`, value: css });
+                      window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "buttons", css, chatId: chatData.id } }));
+                    } catch(err) { console.error("保存按钮样式失败:", err); }
+                  }}
+                  onInput={(e) => {
+                    const css = e.target.value;
+                    window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "buttons", css, chatId: chatData.id } }));
+                  }}
+                />
+                <button
+                  style={{ position: "absolute", right: "6px", top: "8px", background: "transparent", border: "none", cursor: "pointer", color: "#d6724b", fontSize: "14px" }}
+                  onClick={async (e) => {
+                    e.preventDefault();
+                    setChatButtonsCss("");
+                    window.dispatchEvent(new CustomEvent("chatCustomStyleUpdated", { detail: { type: "buttons", css: "", chatId: chatData.id } }));
+                    try {
+                      const db = await openDB();
+                      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+                      await tx.objectStore(STORES.USER_SETTINGS).delete(`chat_buttons_css_${chatData.id}`);
+                    } catch(err) { console.error(err); }
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -71760,6 +72010,11 @@ const T8ChatDetail = ({
   // 头像框CSS状态
   const [userAvatarFrameCss, setUserAvatarFrameCss] = React.useState("");
   const [roleAvatarFrameCss, setRoleAvatarFrameCss] = React.useState("");
+
+  // [新增] 聊天页面顶部导航、输入框、按钮自定义CSS状态
+  const [chatHeaderCss, setChatHeaderCss] = React.useState("");
+  const [chatInputCss, setChatInputCss] = React.useState("");
+  const [chatButtonsCss, setChatButtonsCss] = React.useState("");
 
   // 活动选择状态
   const [showActivitySelect, setShowActivitySelect] = React.useState(false);
@@ -72588,13 +72843,107 @@ const T8ChatDetail = ({
           setVoiceId(voiceIdValue);
         }
       };
+
+      // [新增] 加载自定义顶部、输入框、按钮CSS
+      const headerCssReq = store.get(`chat_header_css_${chatData.id}`);
+      headerCssReq.onsuccess = () => {
+        const val = headerCssReq.result?.value;
+        if (val) {
+          setChatHeaderCss(val);
+          applyCustomChatStyle("header", val, chatData.id);
+        }
+      };
+
+      const inputCssReq = store.get(`chat_input_css_${chatData.id}`);
+      inputCssReq.onsuccess = () => {
+        const val = inputCssReq.result?.value;
+        if (val) {
+          setChatInputCss(val);
+          applyCustomChatStyle("input", val, chatData.id);
+        }
+      };
+
+      const buttonsCssReq = store.get(`chat_buttons_css_${chatData.id}`);
+      buttonsCssReq.onsuccess = () => {
+        const val = buttonsCssReq.result?.value;
+        if (val) {
+          setChatButtonsCss(val);
+          applyCustomChatStyle("buttons", val, chatData.id);
+        }
+      };
     } catch (error) {
       console.error("加载头像失败:", error);
     }
   };
 
-  // 监听头像更新事件
+  // [新增] 动态样式注入与解析引擎
+  const applyCustomChatStyle = (type, cssValue, chatId) => {
+    if (!chatId) return;
+    const styleId = `custom-chat-style-${type}-${chatId}`;
+    const existing = document.getElementById(styleId);
+    if (existing) existing.remove();
+    if (!cssValue || !cssValue.trim()) return;
+
+    // 清理 URL 与去除注释 (避免注释粘连到选择器导致解析失败)
+    let css = cssValue.replace(/url\("\s*(.*?)\s*"\)/g, 'url("$1")');
+    const cleanedCss = css.replace(/\/\*[\s\S]*?\*\//g, '').trim();
+    if (!cleanedCss) return;
+
+    let rules = "";
+    if (cleanedCss.includes("{") && cleanedCss.includes("}")) {
+      rules = cleanedCss.replace(/([^{}]+)\{/g, (match, selectorList) => {
+        const trimmed = selectorList.trim();
+        if (trimmed.startsWith("@")) return match;
+        const scoped = selectorList
+          .split(",")
+          .map((sel) => {
+            const s = sel.trim();
+            if (!s) return s;
+            if (s.startsWith("@")) return s;
+            if (s.startsWith(`.chat-${chatId}`)) return s;
+            return `.chat-${chatId} ${s}`;
+          })
+          .join(", ");
+        return `${scoped} {`;
+      });
+    } else {
+      let defaultSelectors = [];
+      if (type === "header") {
+        defaultSelectors = [".chat-header"];
+      } else if (type === "input") {
+        defaultSelectors = [".chat-input-field", ".chat-input-bar", ".chat-input-container"];
+      } else if (type === "buttons") {
+        defaultSelectors = [".chat-send-btn", ".ai-trigger-btn", ".chat-action-btn"];
+      }
+      const selectors = defaultSelectors.map((s) => `.chat-${chatId} ${s}`).join(", ");
+      rules = `${selectors} { ${cleanedCss} }`;
+    }
+
+    const styleTag = document.createElement("style");
+    styleTag.id = styleId;
+    styleTag.textContent = rules;
+    document.head.appendChild(styleTag);
+  };
+
+  // 监听头像更新与自定义界面样式事件
   React.useEffect(() => {
+    const handleCustomStyleUpdated = (e) => {
+      const { type, css, chatId } = e.detail || {};
+      if (chatId === chatData?.id) {
+        if (type === "header") {
+          setChatHeaderCss(css || "");
+          applyCustomChatStyle("header", css, chatId);
+        } else if (type === "input") {
+          setChatInputCss(css || "");
+          applyCustomChatStyle("input", css, chatId);
+        } else if (type === "buttons") {
+          setChatButtonsCss(css || "");
+          applyCustomChatStyle("buttons", css, chatId);
+        }
+      }
+    };
+    window.addEventListener("chatCustomStyleUpdated", handleCustomStyleUpdated);
+
     const handleAvatarUpdated = (e) => {
       const { type, avatar, chatId } = e.detail;
       // 只有当事件中的chatId与当前聊天页面的chatId匹配时才更新头像
@@ -72675,6 +73024,7 @@ const T8ChatDetail = ({
     window.addEventListener("avatarUpdated", handleAvatarUpdated);
     window.addEventListener("avatarFrameUpdated", handleAvatarFrameUpdated);
     return () => {
+      window.removeEventListener("chatCustomStyleUpdated", handleCustomStyleUpdated);
       window.removeEventListener("avatarUpdated", handleAvatarUpdated);
       window.removeEventListener(
         "avatarFrameUpdated",
@@ -74879,6 +75229,12 @@ const T8ChatDetail = ({
             setPixabayApiKey={setPixabayApiKey}
             voiceId={voiceId}
             setVoiceId={setVoiceId}
+            chatHeaderCss={chatHeaderCss}
+            setChatHeaderCss={setChatHeaderCss}
+            chatInputCss={chatInputCss}
+            setChatInputCss={setChatInputCss}
+            chatButtonsCss={chatButtonsCss}
+            setChatButtonsCss={setChatButtonsCss}
           />
         ))}
       <style>{` .typing-dot { width: 6px; height: 6px; background: #ccc; border-radius: 50%; animation: typingBounce 1.4s infinite ease-in-out both; } @keyframes typingBounce { 0%, 80%, 100% { transform: scale(0); } 40% { transform: scale(1); } } @keyframes heartBeat { 0% { transform: scale(1); } 14% { transform: scale(1.3); } 28% { transform: scale(1); } 42% { transform: scale(1.3); } 70% { transform: scale(1); } } `}</style>
@@ -76017,8 +76373,9 @@ const T8ChatDetail = ({
         />
       )}
 
-      {/* 顶部 Header (保持原样) */}
+      {/* 顶部 Header */}
       <div
+        className="chat-header"
         style={{
           minHeight: "var(--header-h)",
           paddingTop: "var(--safe-top)",
@@ -76034,6 +76391,7 @@ const T8ChatDetail = ({
         }}
       >
         <div
+          className="chat-header-btn"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
@@ -76096,6 +76454,7 @@ const T8ChatDetail = ({
             )}
           </div>
           <div
+            className="chat-header-status"
             style={{
               display: "flex",
               flexDirection: "column",
@@ -76181,6 +76540,7 @@ const T8ChatDetail = ({
           ></i>
         </div>
         <div
+          className="chat-header-btn"
           onClick={(e) => {
             e.stopPropagation();
             setShowSettings(true);
@@ -77310,6 +77670,7 @@ const T8ChatDetail = ({
                 {/* 图片按钮 */}
                 <div
                   title="发送图片"
+                  className="chat-action-btn"
                   style={{
                     cursor: "pointer",
                     padding: "4px",
@@ -77356,6 +77717,7 @@ const T8ChatDetail = ({
                 {/* 表情包按钮 (重构为输入栏底部呼出面板) */}
                 <div
                   title="表情包"
+                  className="chat-action-btn"
                   style={{
                     cursor: "pointer",
                     padding: "4px",
@@ -77453,6 +77815,7 @@ const T8ChatDetail = ({
                 {!isGroupChat && (
                   <div
                     title="语音通话"
+                    className="chat-action-btn"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
@@ -77506,6 +77869,7 @@ const T8ChatDetail = ({
                 {!isGroupChat && (
                   <div
                     title="日记"
+                    className="chat-action-btn"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
@@ -77541,6 +77905,7 @@ const T8ChatDetail = ({
                 {!isGroupChat && (
                   <div
                     title="送礼与红包"
+                    className="chat-action-btn"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
@@ -77574,6 +77939,7 @@ const T8ChatDetail = ({
                 {!isGroupChat && (
                   <div
                     title="轨迹"
+                    className="chat-action-btn"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
@@ -77609,7 +77975,7 @@ const T8ChatDetail = ({
 
               {/* 4. 输入栏 (包含修改后的按钮逻辑) */}
               <div
-                className="chat-input-bar"
+                className="chat-input-bar chat-input-container"
                 style={{
                   background: "transparent",
                   borderTop: "none",
@@ -77633,6 +77999,7 @@ const T8ChatDetail = ({
                   // [修改 2] 添加 key="send-btn"，强制 React 重建 DOM，避免与 Lucide 冲突导致白屏
                   <button
                     key="send-btn"
+                    className="chat-send-btn"
                     onClick={handleUserSend}
                     style={{
                       width: "40px",
@@ -77662,6 +78029,7 @@ const T8ChatDetail = ({
                   <>
                     <button
                       key="mic-btn"
+                      className="chat-action-btn chat-mic-btn"
                       style={{ padding: "8px", color: "#8c8293" }}
                       onClick={() => setShowVoiceModal(true)}
                     >
@@ -77671,7 +78039,7 @@ const T8ChatDetail = ({
                       ></i>
                     </button>
                     <button
-                      className="ai-trigger-btn"
+                      className="ai-trigger-btn chat-send-btn"
                       onClick={() => handleAITrigger()}
                     >
                       <i
@@ -92860,6 +93228,995 @@ class IndexedDBManager {
 const dbManager = new IndexedDBManager();
 window.dbManager = dbManager;
 
+
+// ==================== 锁屏与卡片装扮配置与组件 ====================
+
+const DEFAULT_LOCKSCREEN_CONFIG = {
+  bgType: "gradient",
+  bgGradient: "linear-gradient(180deg, #f7f5e8 0%, #e6ece1 100%)",
+  bgColor: "#f7f5e8",
+  bgImage: "",
+  bgOverlayOpacity: 0,
+  timeFontSize: 110,
+  timeColor: "#6d735b",
+  timeOpacity: 1.0,
+  showLunar: true,
+  lunarColor: "#6d735b",
+  lunarOpacity: 0.9,
+  cardOpacity: 0.5,
+  cardBlur: 0,
+  cardBorderRadius: 30,
+  cardBorderStyle: "dashed",
+  cardBorderColor: "rgba(109, 115, 91, 0.4)",
+  cardHeight: 160,
+  cardBottom: 25,
+  cardScale: 1.0,
+  cardFloatAnimation: true,
+  scrollHintText: "向上滑动查看桌面 ⏶",
+  scrollHintColor: "#6d735b",
+  scrollHintOpacity: 0.8,
+  customCss: ""
+};
+
+const LOCKSCREEN_PRESETS = [
+  {
+    name: "官方莫兰迪（默认）",
+    bgType: "gradient",
+    bgGradient: "linear-gradient(180deg, #f7f5e8 0%, #e6ece1 100%)",
+    bgOverlayOpacity: 0,
+    timeColor: "#6d735b",
+    timeFontSize: 110,
+    timeOpacity: 1.0,
+    showLunar: true,
+    lunarColor: "#6d735b",
+    lunarOpacity: 0.9,
+    cardOpacity: 0.5,
+    cardBlur: 0,
+    cardBorderRadius: 30,
+    cardBorderStyle: "dashed",
+    cardBorderColor: "rgba(109, 115, 91, 0.4)",
+    cardFloatAnimation: true,
+    scrollHintText: "向上滑动查看桌面 ⏶",
+    scrollHintColor: "#6d735b",
+    scrollHintOpacity: 0.8,
+    customCss: ""
+  },
+  {
+    name: "远山青黛（磨砂透光）",
+    bgType: "gradient",
+    bgGradient: "linear-gradient(160deg, #dbe4de 0%, #a7b8ad 100%)",
+    bgOverlayOpacity: 0.05,
+    timeColor: "#334139",
+    timeFontSize: 110,
+    timeOpacity: 0.95,
+    showLunar: true,
+    lunarColor: "#47594f",
+    lunarOpacity: 0.85,
+    cardOpacity: 0.35,
+    cardBlur: 16,
+    cardBorderRadius: 28,
+    cardBorderStyle: "solid",
+    cardBorderColor: "rgba(255, 255, 255, 0.6)",
+    cardFloatAnimation: true,
+    scrollHintText: "轻触启门 · 向上滑动 ⏶",
+    scrollHintColor: "#47594f",
+    scrollHintOpacity: 0.85,
+    customCss: ""
+  },
+  {
+    name: "海棠微雨（柔粉暖调）",
+    bgType: "gradient",
+    bgGradient: "linear-gradient(180deg, #fcf3f0 0%, #eedcd6 100%)",
+    bgOverlayOpacity: 0,
+    timeColor: "#7a524a",
+    timeFontSize: 110,
+    timeOpacity: 1.0,
+    showLunar: true,
+    lunarColor: "#8e655c",
+    lunarOpacity: 0.9,
+    cardOpacity: 0.45,
+    cardBlur: 12,
+    cardBorderRadius: 32,
+    cardBorderStyle: "solid",
+    cardBorderColor: "rgba(255, 235, 230, 0.8)",
+    cardFloatAnimation: true,
+    scrollHintText: "见字如晤 ⏶",
+    scrollHintColor: "#8e655c",
+    scrollHintOpacity: 0.8,
+    customCss: ""
+  },
+  {
+    name: "极简墨玉（暗色沉浸）",
+    bgType: "gradient",
+    bgGradient: "linear-gradient(180deg, #23282b 0%, #151819 100%)",
+    bgOverlayOpacity: 0.1,
+    timeColor: "#e5ece7",
+    timeFontSize: 110,
+    timeOpacity: 0.9,
+    showLunar: true,
+    lunarColor: "#9aa8a0",
+    lunarOpacity: 0.75,
+    cardOpacity: 0.15,
+    cardBlur: 20,
+    cardBorderRadius: 24,
+    cardBorderStyle: "solid",
+    cardBorderColor: "rgba(255, 255, 255, 0.15)",
+    cardFloatAnimation: true,
+    scrollHintText: "向上滑动解锁 ⏶",
+    scrollHintColor: "#9aa8a0",
+    scrollHintOpacity: 0.7,
+    customCss: ""
+  }
+];
+
+const DEFAULT_FOLDCARD_CONFIG = {
+  bgType: "gradient",
+  bgGradient: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(246, 244, 235, 0.8) 100%)",
+  bgColor: "#ffffff",
+  bgImage: "",
+  bgOverlayOpacity: 0,
+  cardOpacity: 0.85,
+  cardBlur: 12,
+  cardBorderRadius: 24,
+  cardBorderStyle: "solid",
+  cardBorderColor: "rgba(109, 115, 91, 0.2)",
+  titleColor: "#3a4233",
+  subtitleColor: "#7a826e",
+  iconColor: "#6d735b",
+  customCss: ""
+};
+
+const FOLDCARD_PRESETS = [
+  {
+    name: "官方莫兰迪（默认）",
+    bgType: "gradient",
+    bgGradient: "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(246, 244, 235, 0.8) 100%)",
+    bgOverlayOpacity: 0,
+    cardOpacity: 0.85,
+    cardBlur: 12,
+    cardBorderRadius: 24,
+    cardBorderStyle: "solid",
+    cardBorderColor: "rgba(109, 115, 91, 0.2)",
+    titleColor: "#3a4233",
+    subtitleColor: "#7a826e",
+    iconColor: "#6d735b",
+    customCss: ""
+  },
+  {
+    name: "纯透毛玻璃（Glass）",
+    bgType: "gradient",
+    bgGradient: "linear-gradient(135deg, rgba(255, 255, 255, 0.4) 0%, rgba(255, 255, 255, 0.15) 100%)",
+    bgOverlayOpacity: 0,
+    cardOpacity: 0.35,
+    cardBlur: 20,
+    cardBorderRadius: 26,
+    cardBorderStyle: "solid",
+    cardBorderColor: "rgba(255, 255, 255, 0.6)",
+    titleColor: "#222a24",
+    subtitleColor: "#4f5b52",
+    iconColor: "#4f5b52",
+    customCss: ""
+  },
+  {
+    name: "远山青黛（墨玉柔光）",
+    bgType: "gradient",
+    bgGradient: "linear-gradient(135deg, #323b36 0%, #1e2420 100%)",
+    bgOverlayOpacity: 0.05,
+    cardOpacity: 0.9,
+    cardBlur: 16,
+    cardBorderRadius: 24,
+    cardBorderStyle: "solid",
+    cardBorderColor: "rgba(255, 255, 255, 0.12)",
+    titleColor: "#f1f5f2",
+    subtitleColor: "#a3b5aa",
+    iconColor: "#cbdcd2",
+    customCss: ""
+  },
+  {
+    name: "流金暖杏（温润柔光）",
+    bgType: "gradient",
+    bgGradient: "linear-gradient(135deg, rgba(254, 250, 240, 0.92) 0%, rgba(245, 235, 215, 0.85) 100%)",
+    bgOverlayOpacity: 0,
+    cardOpacity: 0.9,
+    cardBlur: 14,
+    cardBorderRadius: 24,
+    cardBorderStyle: "solid",
+    cardBorderColor: "rgba(215, 185, 140, 0.4)",
+    titleColor: "#5c442a",
+    subtitleColor: "#8c6e4e",
+    iconColor: "#8c6e4e",
+    customCss: ""
+  },
+  {
+    name: "海棠微雨（柔粉暖调）",
+    bgType: "gradient",
+    bgGradient: "linear-gradient(135deg, rgba(255, 245, 242, 0.92) 0%, rgba(245, 228, 224, 0.85) 100%)",
+    bgOverlayOpacity: 0,
+    cardOpacity: 0.9,
+    cardBlur: 14,
+    cardBorderRadius: 24,
+    cardBorderStyle: "solid",
+    cardBorderColor: "rgba(235, 195, 190, 0.45)",
+    titleColor: "#6b3b36",
+    subtitleColor: "#945c57",
+    iconColor: "#945c57",
+    customCss: ""
+  }
+];
+
+const FoldCardSettingsModal = ({ config, onChange, onClose, onReset }) => {
+  const [activeTab, setActiveTab] = React.useState("bg");
+  const localConfig = config || DEFAULT_FOLDCARD_CONFIG;
+
+  const update = (key, value) => {
+    onChange({ ...localConfig, [key]: value });
+  };
+
+  const handleBgUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const url = evt.target.result;
+      if (window.dbManager) {
+        try {
+          await window.dbManager.set("foldcard_bg_image", url);
+        } catch (err) {
+          console.error("保存折叠卡片壁纸到IndexedDB失败:", err);
+        }
+      }
+      onChange({
+        ...localConfig,
+        bgImage: url,
+        bgType: "image"
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  return (
+    <div className="foldcard-modal-overlay open" onClick={onClose}>
+      <div className="foldcard-settings-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="foldcard-settings-header">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "16px", fontWeight: "bold", color: "#3a4233" }}>折叠卡片个性化装扮</span>
+            <span style={{ fontSize: "11px", color: "#8a979d", background: "#f0eee6", padding: "2px 8px", borderRadius: "10px" }}>支持::before/::after</span>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ border: "none", background: "#f0eee6", width: "28px", height: "28px", borderRadius: "50%", cursor: "pointer", color: "#666", fontWeight: "bold" }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ display: "flex", gap: "6px", padding: "10px 20px 0 20px", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+          <button
+            className={`foldcard-tab-btn ${activeTab === "bg" ? "active" : ""}`}
+            onClick={() => setActiveTab("bg")}
+          >
+            🎨 背景配色
+          </button>
+          <button
+            className={`foldcard-tab-btn ${activeTab === "style" ? "active" : ""}`}
+            onClick={() => setActiveTab("style")}
+          >
+            🎚️ 样式与毛玻璃
+          </button>
+          <button
+            className={`foldcard-tab-btn ${activeTab === "css" ? "active" : ""}`}
+            onClick={() => setActiveTab("css")}
+          >
+            💻 高级CSS(伪元素)
+          </button>
+        </div>
+
+        <div className="foldcard-settings-body">
+          {activeTab === "bg" && (
+            <React.Fragment>
+              <div className="foldcard-setting-group">
+                <div className="foldcard-setting-label">💫 预设卡片风格</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "8px" }}>
+                  {FOLDCARD_PRESETS.map((preset, idx) => (
+                    <div
+                      key={idx}
+                      className="foldcard-preset-chip"
+                      style={{
+                        background: preset.bgGradient,
+                        color: preset.titleColor,
+                        borderColor: localConfig.bgGradient === preset.bgGradient && localConfig.bgType === "gradient" ? "#6d735b" : "rgba(0,0,0,0.08)",
+                        borderWidth: localConfig.bgGradient === preset.bgGradient && localConfig.bgType === "gradient" ? "2px" : "1px"
+                      }}
+                      onClick={() => {
+                        if (window.dbManager && preset.bgType !== "image") {
+                          window.dbManager.remove("foldcard_bg_image").catch(console.error);
+                        }
+                        onChange({ ...localConfig, ...preset, bgImage: "" });
+                      }}
+                    >
+                      <span style={{ fontSize: "12px", fontWeight: "bold" }}>{preset.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="foldcard-setting-group">
+                <div className="foldcard-setting-label">🖼️ 自定义卡片背景图</div>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", marginTop: "6px" }}>
+                  <label
+                    style={{
+                      flex: 1,
+                      padding: "10px",
+                      borderRadius: "12px",
+                      background: "#6d735b",
+                      color: "#fff",
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      textAlign: "center",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 8px rgba(109, 115, 91, 0.25)"
+                    }}
+                  >
+                    上传卡片背景图片
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={handleBgUpload}
+                    />
+                  </label>
+                  {localConfig.bgImage && (
+                    <button
+                      onClick={() => {
+                        if (window.dbManager) window.dbManager.remove("foldcard_bg_image").catch(console.error);
+                        onChange({
+                          ...localConfig,
+                          bgImage: "",
+                          bgType: "gradient"
+                        });
+                      }}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "12px",
+                        background: "#f3e8e8",
+                        color: "#ae4025",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        border: "none",
+                        cursor: "pointer"
+                      }}
+                    >
+                      移除背景
+                    </button>
+                  )}
+                </div>
+                {localConfig.bgImage && (
+                  <div style={{ marginTop: "10px", width: "100%", height: "70px", borderRadius: "10px", overflow: "hidden", border: "1px solid #ddd" }}>
+                    <img src={localConfig.bgImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                )}
+              </div>
+
+              <div className="foldcard-setting-group">
+                <div className="foldcard-setting-label">
+                  <span>🌘 卡片暗度遮罩 (Overlay)</span>
+                  <span>{Math.round((localConfig.bgOverlayOpacity || 0) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="0.8"
+                  step="0.05"
+                  value={localConfig.bgOverlayOpacity || 0}
+                  className="foldcard-range-input"
+                  onChange={(e) => update("bgOverlayOpacity", parseFloat(e.target.value))}
+                />
+              </div>
+            </React.Fragment>
+          )}
+
+          {activeTab === "style" && (
+            <React.Fragment>
+              <div className="foldcard-setting-group">
+                <div className="foldcard-setting-label">🟟 透明度与摩砂玻璃 (Glassmorphism)</div>
+                <div className="foldcard-setting-label">
+                  <span>卡片不透明度</span>
+                  <span>{Math.round((localConfig.cardOpacity ?? 0.85) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.1"
+                  max="1.0"
+                  step="0.05"
+                  value={localConfig.cardOpacity ?? 0.85}
+                  className="foldcard-range-input"
+                  onChange={(e) => update("cardOpacity", parseFloat(e.target.value))}
+                />
+
+                <div className="foldcard-setting-label" style={{ marginTop: "10px" }}>
+                  <span>摩砂模糊度 (Backdrop Blur)</span>
+                  <span>{localConfig.cardBlur ?? 12}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="30"
+                  step="1"
+                  value={localConfig.cardBlur ?? 12}
+                  className="foldcard-range-input"
+                  onChange={(e) => update("cardBlur", parseInt(e.target.value))}
+                />
+
+                <div className="foldcard-setting-label" style={{ marginTop: "10px" }}>
+                  <span>圆角大小</span>
+                  <span>{localConfig.cardBorderRadius ?? 24}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="40"
+                  step="2"
+                  value={localConfig.cardBorderRadius ?? 24}
+                  className="foldcard-range-input"
+                  onChange={(e) => update("cardBorderRadius", parseInt(e.target.value))}
+                />
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "12px" }}>
+                  <span style={{ fontSize: "12px", color: "#666" }}>边框样式</span>
+                  <select
+                    value={localConfig.cardBorderStyle || "solid"}
+                    onChange={(e) => update("cardBorderStyle", e.target.value)}
+                    style={{ padding: "4px 8px", borderRadius: "8px", border: "1px solid #ccc", background: "#fff", fontSize: "12px" }}
+                  >
+                    <option value="solid">经典实线</option>
+                    <option value="dashed">虚线描边</option>
+                    <option value="none">无边框</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="foldcard-setting-group">
+                <div className="foldcard-setting-label">🎨 文字与图标配色</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "12px", color: "#666" }}>卡片标题颜色</span>
+                  <input
+                    type="color"
+                    value={localConfig.titleColor || "#3a4233"}
+                    onChange={(e) => update("titleColor", e.target.value)}
+                    style={{ width: "36px", height: "28px", border: "none", borderRadius: "6px", cursor: "pointer" }}
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+                  <span style={{ fontSize: "12px", color: "#666" }}>副标题/天气提示颜色</span>
+                  <input
+                    type="color"
+                    value={localConfig.subtitleColor || "#7a826e"}
+                    onChange={(e) => update("subtitleColor", e.target.value)}
+                    style={{ width: "36px", height: "28px", border: "none", borderRadius: "6px", cursor: "pointer" }}
+                  />
+                </div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "12px", color: "#666" }}>右侧折叠图标颜色</span>
+                  <input
+                    type="color"
+                    value={localConfig.iconColor || "#6d735b"}
+                    onChange={(e) => update("iconColor", e.target.value)}
+                    style={{ width: "36px", height: "28px", border: "none", borderRadius: "6px", cursor: "pointer" }}
+                  />
+                </div>
+              </div>
+            </React.Fragment>
+          )}
+
+          {activeTab === "css" && (
+            <React.Fragment>
+              <div className="foldcard-setting-group">
+                <div className="foldcard-setting-label">
+                  <span>✨ 自定义 CSS (完美支持 ::before / ::after)</span>
+                  <button
+                    onClick={() => update("customCss", "")}
+                    style={{ border: "none", background: "transparent", color: "#ae4025", fontSize: "11px", cursor: "pointer", fontWeight: "600" }}
+                  >
+                    清空 CSS
+                  </button>
+                </div>
+                <div style={{ fontSize: "11px", color: "#8a979d", marginBottom: "8px", lineHeight: "1.4" }}>
+                  点击可快速插入伪元素与类名：
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
+                  {[
+                    { label: "卡片前置伪元素 ::before", code: ".fold-card::before {\n  content: '';\n  position: absolute;\n  inset: 0;\n  border-radius: inherit;\n  pointer-events: none;\n}" },
+                    { label: "卡片后置伪元素 ::after", code: ".fold-card::after {\n  content: '✦';\n  position: absolute;\n  top: 12px;\n  right: 12px;\n  font-size: 14px;\n}" },
+                    { label: "卡片容器 .fold-card", code: ".fold-card { box-shadow: 0 10px 30px rgba(0,0,0,0.06); }" },
+                    { label: "卡片标题 .card-title", code: ".card-title { font-weight: bold; letter-spacing: 1px; }" },
+                    { label: "卡片副标题 .card-subtitle", code: ".card-subtitle { font-size: 12px; }" }
+                  ].map((chip, i) => (
+                    <span
+                      key={i}
+                      onClick={() => {
+                        const next = (localConfig.customCss || "") + "\n" + chip.code;
+                        update("customCss", next);
+                      }}
+                      style={{
+                        fontSize: "10.5px",
+                        background: "#f0eee6",
+                        color: "#4a5040",
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        cursor: "pointer"
+                      }}
+                    >
+                      + {chip.label}
+                    </span>
+                  ))}
+                </div>
+                <textarea
+                  className="foldcard-css-textarea"
+                  value={localConfig.customCss || ""}
+                  placeholder="/* 在此处编写折叠卡片自定义 CSS，例如：\n.fold-card::before {\n  content: '';\n  position: absolute;\n  inset: -1px;\n  border-radius: inherit;\n  background: linear-gradient(90deg, #ff7e5f, #feb47b);\n  z-index: -1;\n}\n*/"
+                  onChange={(e) => update("customCss", e.target.value)}
+                />
+              </div>
+            </React.Fragment>
+          )}
+        </div>
+
+        <div style={{ padding: "12px 20px", display: "flex", gap: "10px", background: "#f8f7f2", borderTop: "1px solid rgba(0,0,0,0.05)" }}>
+          <button
+            onClick={onReset}
+            style={{ flex: 1, padding: "12px", borderRadius: "14px", border: "1px solid #ddd", background: "#fff", color: "#666", fontWeight: "600", fontSize: "13px", cursor: "pointer" }}
+          >
+            恢复默认
+          </button>
+          <button
+            onClick={onClose}
+            style={{ flex: 2, padding: "12px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg, #7b886f 0%, #5d6754 100%)", color: "#fff", fontWeight: "600", fontSize: "13px", cursor: "pointer", boxShadow: "0 4px 12px rgba(93, 103, 84, 0.3)" }}
+          >
+            完成并保存
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const LockScreenSettingsModal = ({ config, onChange, onClose, onReset }) => {
+  const [activeTab, setActiveTab] = React.useState("bg");
+  const localConfig = config || DEFAULT_LOCKSCREEN_CONFIG;
+
+  const update = (key, value) => {
+    onChange({ ...localConfig, [key]: value });
+  };
+
+  const handleBgUpload = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (evt) => {
+      const url = evt.target.result;
+      if (window.dbManager) {
+        try {
+          await window.dbManager.set("lockscreen_bg_image", url);
+        } catch (err) {
+          console.error("保存锁屏壁纸到IndexedDB失败:", err);
+        }
+      }
+      onChange({
+        ...localConfig,
+        bgImage: url,
+        bgType: "image"
+      });
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  return (
+    <div className="lockscreen-modal-overlay open" onClick={onClose}>
+      <div className="lockscreen-settings-sheet" onClick={(e) => e.stopPropagation()}>
+        <div className="lockscreen-settings-header">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <span style={{ fontSize: "16px", fontWeight: "bold", color: "#3a4233" }}>锁屏装扮与个性化</span>
+            <span style={{ fontSize: "11px", color: "#8a979d", background: "#f0eee6", padding: "2px 8px", borderRadius: "10px" }}>实时生效</span>
+          </div>
+          <button
+            onClick={onClose}
+            style={{ border: "none", background: "#f0eee6", width: "28px", height: "28px", borderRadius: "50%", cursor: "pointer", color: "#666", fontWeight: "bold" }}
+          >
+            ✕
+          </button>
+        </div>
+
+        <div style={{ display: "flex", gap: "6px", padding: "10px 20px 0 20px", borderBottom: "1px solid rgba(0,0,0,0.04)" }}>
+          <button
+            className={`lockscreen-tab-btn ${activeTab === "bg" ? "active" : ""}`}
+            onClick={() => setActiveTab("bg")}
+          >
+            🎨 背景壁纸
+          </button>
+          <button
+            className={`lockscreen-tab-btn ${activeTab === "elements" ? "active" : ""}`}
+            onClick={() => setActiveTab("elements")}
+          >
+            🎚️ 元素透明度
+          </button>
+          <button
+            className={`lockscreen-tab-btn ${activeTab === "css" ? "active" : ""}`}
+            onClick={() => setActiveTab("css")}
+          >
+            💻 自定义CSS
+          </button>
+        </div>
+
+        <div className="lockscreen-settings-body">
+          {activeTab === "bg" && (
+            <React.Fragment>
+              <div className="lockscreen-setting-group">
+                <div className="lockscreen-setting-label">💫 预设主题风格</div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", marginTop: "8px" }}>
+                  {LOCKSCREEN_PRESETS.map((preset, idx) => (
+                    <div
+                      key={idx}
+                      className="lockscreen-preset-chip"
+                      style={{
+                        background: preset.bgGradient,
+                        color: preset.timeColor,
+                        borderColor: localConfig.bgGradient === preset.bgGradient && localConfig.bgType === "gradient" ? "#6d735b" : "rgba(0,0,0,0.08)",
+                        borderWidth: localConfig.bgGradient === preset.bgGradient && localConfig.bgType === "gradient" ? "2px" : "1px"
+                      }}
+                      onClick={() => {
+                        if (window.dbManager && preset.bgType !== "image") {
+                          window.dbManager.remove("lockscreen_bg_image").catch(console.error);
+                        }
+                        onChange({ ...localConfig, ...preset, bgImage: "" });
+                      }}
+                    >
+                      <span style={{ fontSize: "12px", fontWeight: "bold" }}>{preset.name}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div className="lockscreen-setting-group">
+                <div className="lockscreen-setting-label">🖼️ 全屏自定义壁纸</div>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center", marginTop: "6px" }}>
+                  <label
+                    style={{
+                      flex: 1,
+                      padding: "10px",
+                      borderRadius: "12px",
+                      background: "#6d735b",
+                      color: "#fff",
+                      fontSize: "13px",
+                      fontWeight: "600",
+                      textAlign: "center",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 8px rgba(109, 115, 91, 0.25)"
+                    }}
+                  >
+                    上传全屏壁纸图片
+                    <input
+                      type="file"
+                      accept="image/*"
+                      style={{ display: "none" }}
+                      onChange={handleBgUpload}
+                    />
+                  </label>
+                  {localConfig.bgImage && (
+                    <button
+                      onClick={() => {
+                        if (window.dbManager) {
+                          window.dbManager.remove("lockscreen_bg_image").catch(console.error);
+                        }
+                        onChange({
+                          ...localConfig,
+                          bgImage: "",
+                          bgType: "gradient"
+                        });
+                      }}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "12px",
+                        background: "#f3e8e8",
+                        color: "#ae4025",
+                        fontSize: "13px",
+                        fontWeight: "600",
+                        border: "none",
+                        cursor: "pointer"
+                      }}
+                    >
+                      移除壁纸
+                    </button>
+                  )}
+                </div>
+                {localConfig.bgImage && (
+                  <div style={{ marginTop: "10px", width: "100%", height: "80px", borderRadius: "10px", overflow: "hidden", border: "1px solid #ddd" }}>
+                    <img src={localConfig.bgImage} style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                  </div>
+                )}
+              </div>
+
+              <div className="lockscreen-setting-group">
+                <div className="lockscreen-setting-label">
+                  <span>🌘 壁纸暗度遮罩 (Overlay)</span>
+                  <span>{Math.round((localConfig.bgOverlayOpacity || 0) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="0.8"
+                  step="0.05"
+                  value={localConfig.bgOverlayOpacity || 0}
+                  className="lockscreen-range-input"
+                  onChange={(e) => update("bgOverlayOpacity", parseFloat(e.target.value))}
+                />
+              </div>
+            </React.Fragment>
+          )}
+
+          {activeTab === "elements" && (
+            <React.Fragment>
+              <div className="lockscreen-setting-group">
+                <div className="lockscreen-setting-label">⏰ 时钟字体与颜色</div>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+                  <span style={{ fontSize: "12px", color: "#666" }}>时钟颜色</span>
+                  <input
+                    type="color"
+                    value={localConfig.timeColor || "#6d735b"}
+                    onChange={(e) => update("timeColor", e.target.value)}
+                    style={{ width: "36px", height: "30px", border: "none", borderRadius: "6px", cursor: "pointer" }}
+                  />
+                </div>
+                <div className="lockscreen-setting-label">
+                  <span>时钟大小</span>
+                  <span>{localConfig.timeFontSize || 110}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="70"
+                  max="150"
+                  step="2"
+                  value={localConfig.timeFontSize || 110}
+                  className="lockscreen-range-input"
+                  onChange={(e) => update("timeFontSize", parseInt(e.target.value))}
+                />
+
+                <div className="lockscreen-setting-label" style={{ marginTop: "10px" }}>
+                  <span>时钟不透明度</span>
+                  <span>{Math.round((localConfig.timeOpacity ?? 1) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.2"
+                  max="1.0"
+                  step="0.05"
+                  value={localConfig.timeOpacity ?? 1}
+                  className="lockscreen-range-input"
+                  onChange={(e) => update("timeOpacity", parseFloat(e.target.value))}
+                />
+              </div>
+
+              <div className="lockscreen-setting-group">
+                <div className="lockscreen-setting-label">
+                  <span>🏮 农历与干支显示</span>
+                  <input
+                    type="checkbox"
+                    checked={localConfig.showLunar !== false}
+                    onChange={(e) => update("showLunar", e.target.checked)}
+                    style={{ width: "18px", height: "18px", accentColor: "#6d735b" }}
+                  />
+                </div>
+                {localConfig.showLunar !== false && (
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "8px" }}>
+                    <span style={{ fontSize: "12px", color: "#666" }}>农历文字颜色</span>
+                    <input
+                      type="color"
+                      value={localConfig.lunarColor || "#6d735b"}
+                      onChange={(e) => update("lunarColor", e.target.value)}
+                      style={{ width: "36px", height: "30px", border: "none", borderRadius: "6px", cursor: "pointer" }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              <div className="lockscreen-setting-group">
+                <div className="lockscreen-setting-label">🟟 展台卡片与摩砂玻璃 (Glassmorphism)</div>
+                <div className="lockscreen-setting-label">
+                  <span>卡片背景透明度</span>
+                  <span>{Math.round((localConfig.cardOpacity ?? 0.5) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="1.0"
+                  step="0.05"
+                  value={localConfig.cardOpacity ?? 0.5}
+                  className="lockscreen-range-input"
+                  onChange={(e) => update("cardOpacity", parseFloat(e.target.value))}
+                />
+
+                <div className="lockscreen-setting-label" style={{ marginTop: "10px" }}>
+                  <span>摩砂模糊度 (Backdrop Blur)</span>
+                  <span>{localConfig.cardBlur || 0}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="30"
+                  step="1"
+                  value={localConfig.cardBlur || 0}
+                  className="lockscreen-range-input"
+                  onChange={(e) => update("cardBlur", parseInt(e.target.value))}
+                />
+
+                <div className="lockscreen-setting-label" style={{ marginTop: "10px" }}>
+                  <span>立绘/展台高度大小</span>
+                  <span>{localConfig.cardHeight ?? 190}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="110"
+                  max="280"
+                  step="5"
+                  value={localConfig.cardHeight ?? 190}
+                  className="lockscreen-range-input"
+                  onChange={(e) => update("cardHeight", parseInt(e.target.value))}
+                />
+
+                <div className="lockscreen-setting-label" style={{ marginTop: "10px" }}>
+                  <span>立绘垂直底部边距</span>
+                  <span>{localConfig.cardBottom ?? 50}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="10"
+                  max="120"
+                  step="5"
+                  value={localConfig.cardBottom ?? 50}
+                  className="lockscreen-range-input"
+                  onChange={(e) => update("cardBottom", parseInt(e.target.value))}
+                />
+
+                <div className="lockscreen-setting-label" style={{ marginTop: "10px" }}>
+                  <span>立绘等比缩放</span>
+                  <span>{Math.round((localConfig.cardScale ?? 1) * 100)}%</span>
+                </div>
+                <input
+                  type="range"
+                  min="0.5"
+                  max="1.2"
+                  step="0.05"
+                  value={localConfig.cardScale ?? 1}
+                  className="lockscreen-range-input"
+                  onChange={(e) => update("cardScale", parseFloat(e.target.value))}
+                />
+
+                <div className="lockscreen-setting-label" style={{ marginTop: "10px" }}>
+                  <span>圆角大小</span>
+                  <span>{localConfig.cardBorderRadius ?? 30}px</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="45"
+                  step="2"
+                  value={localConfig.cardBorderRadius ?? 30}
+                  className="lockscreen-range-input"
+                  onChange={(e) => update("cardBorderRadius", parseInt(e.target.value))}
+                />
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "12px" }}>
+                  <span style={{ fontSize: "12px", color: "#666" }}>边框样式</span>
+                  <select
+                    value={localConfig.cardBorderStyle || "dashed"}
+                    onChange={(e) => update("cardBorderStyle", e.target.value)}
+                    style={{ padding: "4px 8px", borderRadius: "8px", border: "1px solid #ccc", background: "#fff", fontSize: "12px" }}
+                  >
+                    <option value="dashed">经典虚线</option>
+                    <option value="solid">柔光实线</option>
+                    <option value="none">无边框</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "10px" }}>
+                  <span style={{ fontSize: "12px", color: "#666" }}>息浮动微动画 (Float)</span>
+                  <input
+                    type="checkbox"
+                    checked={localConfig.cardFloatAnimation !== false}
+                    onChange={(e) => update("cardFloatAnimation", e.target.checked)}
+                    style={{ width: "18px", height: "18px", accentColor: "#6d735b" }}
+                  />
+                </div>
+              </div>
+
+              <div className="lockscreen-setting-group">
+                <div className="lockscreen-setting-label">📝 底部滑动提示文案</div>
+                <input
+                  type="text"
+                  value={localConfig.scrollHintText || ""}
+                  placeholder="向上滑动查看桌面 ⏶"
+                  onChange={(e) => update("scrollHintText", e.target.value)}
+                  style={{ width: "100%", padding: "8px 12px", borderRadius: "10px", border: "1px solid #ddd", fontSize: "13px", boxSizing: "border-box" }}
+                />
+              </div>
+            </React.Fragment>
+          )}
+
+          {activeTab === "css" && (
+            <React.Fragment>
+              <div className="lockscreen-setting-group">
+                <div className="lockscreen-setting-label">
+                  <span>✨ 自定义 CSS (绝对隔离)</span>
+                  <button
+                    onClick={() => update("customCss", "")}
+                    style={{ border: "none", background: "transparent", color: "#ae4025", fontSize: "11px", cursor: "pointer", fontWeight: "600" }}
+                  >
+                    清空 CSS
+                  </button>
+                </div>
+                <div style={{ fontSize: "11px", color: "#8a979d", marginBottom: "8px", lineHeight: "1.4" }}>
+                  点击可快速插入锁屏专属类名：
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "10px" }}>
+                  {[
+                    { label: "锁屏根容器", code: ".page-e6 { }" },
+                    { label: "大时钟", code: ".time-display-e6 { }" },
+                    { label: "农历", code: ".lunar-text { }" },
+                    { label: "展台区域", code: ".stage-container { }" },
+                    { label: "卡片内层", code: ".upload-placeholder { }" },
+                    { label: "滑动提示", code: ".scroll-hint { }" }
+                  ].map((chip, i) => (
+                    <span
+                      key={i}
+                      onClick={() => {
+                        const next = (localConfig.customCss || "") + "\n" + chip.code;
+                        update("customCss", next);
+                      }}
+                      style={{
+                        fontSize: "10.5px",
+                        background: "#f0eee6",
+                        color: "#4a5040",
+                        padding: "3px 8px",
+                        borderRadius: "6px",
+                        cursor: "pointer"
+                      }}
+                    >
+                      + {chip.label}
+                    </span>
+                  ))}
+                </div>
+                <textarea
+                  className="lockscreen-css-textarea"
+                  value={localConfig.customCss || ""}
+                  placeholder="/* 在此处输入自定义 CSS，例如：\n.time-display-e6 { text-shadow: 0 4px 15px rgba(0,0,0,0.2); }\n*/"
+                  onChange={(e) => update("customCss", e.target.value)}
+                />
+              </div>
+            </React.Fragment>
+          )}
+        </div>
+
+        <div style={{ padding: "12px 20px", display: "flex", gap: "10px", background: "#f8f7f2", borderTop: "1px solid rgba(0,0,0,0.05)" }}>
+          <button
+            onClick={onReset}
+            style={{ flex: 1, padding: "12px", borderRadius: "14px", border: "1px solid #ddd", background: "#fff", color: "#666", fontWeight: "600", fontSize: "13px", cursor: "pointer" }}
+          >
+            恢复全部默认
+          </button>
+          <button
+            onClick={onClose}
+            style={{ flex: 2, padding: "12px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg, #7b886f 0%, #5d6754 100%)", color: "#fff", fontWeight: "600", fontSize: "13px", cursor: "pointer", boxShadow: "0 4px 12px rgba(93, 103, 84, 0.3)" }}
+          >
+            完成并保存
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+
 // ==================== [修改] 主题设置页面组件 (支持图标图片上传) ====================
 
 const ThemeSettingsPage = ({
@@ -99543,6 +100900,27 @@ const MasterApp = () => {
     currentY: 0,
   });
 
+  // 锁屏与折叠卡片装扮状态
+  const [foldCardConfig, setFoldCardConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem("t8_foldcard_config");
+      return saved ? JSON.parse(saved) : DEFAULT_FOLDCARD_CONFIG;
+    } catch (e) {
+      return DEFAULT_FOLDCARD_CONFIG;
+    }
+  });
+  const [isFoldCardSettingsOpen, setIsFoldCardSettingsOpen] = useState(false);
+  const [isLockSettingsOpen, setIsLockSettingsOpen] = useState(false);
+  const [showLockActionMenu, setShowLockActionMenu] = useState(false);
+  const [lockScreenConfig, setLockScreenConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem("t8_lockscreen_config");
+      return saved ? JSON.parse(saved) : DEFAULT_LOCKSCREEN_CONFIG;
+    } catch (e) {
+      return DEFAULT_LOCKSCREEN_CONFIG;
+    }
+  });
+
   // [新增] 主题设置相关状态
   const [isThemeSettingsOpen, setIsThemeSettingsOpen] = useState(false);
   const [homeBg, setHomeBg] = useState("");
@@ -99625,9 +101003,17 @@ const MasterApp = () => {
           setAppIcons(JSON.parse(savedIcons));
         }
 
-        // 加载主页背景
+        // 加载背景与壁纸
         const savedBg = await dbManager.get("home_bg_image");
         const savedLockBg = await dbManager.get("lockscreen_bg_image");
+        const savedFoldBg = await dbManager.get("foldcard_bg_image");
+        if (savedFoldBg) {
+          setFoldCardConfig((prev) => ({
+            ...prev,
+            bgImage: savedFoldBg,
+            bgType: "image"
+          }));
+        }
         if (savedLockBg) {
           setLockScreenConfig((prev) => ({
             ...prev,
@@ -101472,44 +102858,207 @@ const MasterApp = () => {
       {!isRegistered && (
         <RegistrationModal onVerified={() => setIsRegistered(true)} />
       )}
+
+      {/* 折叠卡片个性化设置弹窗 */}
+      {isFoldCardSettingsOpen && (
+        <FoldCardSettingsModal
+          config={foldCardConfig}
+          onChange={(newCfg) => {
+            setFoldCardConfig(newCfg);
+            try {
+              const toStore = { ...newCfg, bgImage: newCfg.bgType === "image" ? "indexeddb" : "" };
+              localStorage.setItem("t8_foldcard_config", JSON.stringify(toStore));
+            } catch (e) {
+              console.error("localStorage 保存折叠卡片配置失败:", e);
+            }
+          }}
+          onClose={() => setIsFoldCardSettingsOpen(false)}
+          onReset={() => {
+            if (window.dbManager) {
+              window.dbManager.remove("foldcard_bg_image").catch(console.error);
+            }
+            setFoldCardConfig(DEFAULT_FOLDCARD_CONFIG);
+            try {
+              localStorage.removeItem("t8_foldcard_config");
+            } catch (e) {}
+          }}
+        />
+      )}
+
+      {/* 锁屏个性化装扮弹窗 */}
+      {isLockSettingsOpen && (
+        <LockScreenSettingsModal
+          config={lockScreenConfig}
+          onChange={(newCfg) => {
+            setLockScreenConfig(newCfg);
+            try {
+              const toStore = { ...newCfg, bgImage: newCfg.bgType === "image" ? "indexeddb" : "" };
+              localStorage.setItem("t8_lockscreen_config", JSON.stringify(toStore));
+            } catch (e) {
+              console.error("localStorage 保存失败:", e);
+            }
+          }}
+          onClose={() => setIsLockSettingsOpen(false)}
+          onReset={() => {
+            if (window.dbManager) {
+              window.dbManager.remove("lockscreen_bg_image").catch(console.error);
+            }
+            setLockScreenConfig(DEFAULT_LOCKSCREEN_CONFIG);
+            try {
+              localStorage.removeItem("t8_lockscreen_config");
+            } catch (e) {}
+          }}
+        />
+      )}
+
+      {/* 锁屏长按/点击菜单 */}
+      {showLockActionMenu && (
+        <div
+          className="lockscreen-action-menu-overlay open"
+          style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", backdropFilter: "blur(6px)", WebkitBackdropFilter: "blur(6px)", zIndex: 2600, display: "flex", alignItems: "flex-end", justifyContent: "center" }}
+          onClick={() => setShowLockActionMenu(false)}
+        >
+          <div
+            style={{ width: "100%", maxWidth: "420px", background: "#fdfcf8", borderRadius: "24px 24px 0 0", padding: "20px", display: "flex", flexDirection: "column", gap: "10px", boxSizing: "border-box" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: "15px", fontWeight: "bold", color: "#3a4233", textAlign: "center", marginBottom: "6px" }}>锁屏操作</div>
+            <button
+              onClick={() => {
+                setShowLockActionMenu(false);
+                setIsLockSettingsOpen(true);
+              }}
+              style={{ padding: "12px", borderRadius: "14px", border: "none", background: "linear-gradient(135deg, #7b886f 0%, #5d6754 100%)", color: "#fff", fontWeight: "bold", fontSize: "14px", cursor: "pointer" }}
+            >
+              🎨 锁屏装扮与个性化设置
+            </button>
+            <button
+              onClick={() => {
+                setShowLockActionMenu(false);
+                triggerUpload({ preventDefault: () => {} });
+              }}
+              style={{ padding: "12px", borderRadius: "14px", border: "1px solid #e0ded6", background: "#fff", color: "#4a5040", fontWeight: "600", fontSize: "14px", cursor: "pointer" }}
+            >
+              🖼️ 更换立绘图片
+            </button>
+            <button
+              onClick={() => {
+                setShowLockActionMenu(false);
+                images.forEach((i) => {
+                  if (i.url && i.url.startsWith("blob:")) URL.revokeObjectURL(i.url);
+                });
+                setImages([]);
+                setCurrentImgIndex(-1);
+                if (window.lockScreenStore) {
+                  window.lockScreenStore.clearAll().catch((e) => console.error(e));
+                }
+              }}
+              style={{ padding: "12px", borderRadius: "14px", border: "1px solid #eedcd6", background: "#fdf8f6", color: "#ae4025", fontWeight: "600", fontSize: "14px", cursor: "pointer" }}
+            >
+              🗑️ 清空立绘
+            </button>
+            <button
+              onClick={() => setShowLockActionMenu(false)}
+              style={{ padding: "12px", borderRadius: "14px", border: "none", background: "#f0eee6", color: "#666", fontWeight: "600", fontSize: "14px", cursor: "pointer", marginTop: "4px" }}
+            >
+              取消
+            </button>
+          </div>
+        </div>
+      )}
+
       <div
         className="master-scroller"
         style={{ transform: `translateY(-${pageIndex * 100}%)` }}
       >
         {/* PAGE 0: E6 时钟 */}
-        <div className="page page-e6">
+        <div
+          className="page page-e6"
+          style={{
+            backgroundImage: lockScreenConfig.bgType === "image" && lockScreenConfig.bgImage ? `url(${lockScreenConfig.bgImage})` : (lockScreenConfig.bgGradient || "linear-gradient(180deg, #f7f5e8 0%, #e6ece1 100%)"),
+            backgroundColor: lockScreenConfig.bgType === "image" ? "transparent" : (lockScreenConfig.bgColor || "#f7f5e8"),
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+            backgroundRepeat: "no-repeat",
+            position: "relative"
+          }}
+        >
+          {lockScreenConfig.customCss && <style id="lockscreen-user-css">{lockScreenConfig.customCss}</style>}
+          {lockScreenConfig.bgOverlayOpacity > 0 && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                background: `rgba(0, 0, 0, ${lockScreenConfig.bgOverlayOpacity})`,
+                pointerEvents: "none",
+                zIndex: 1
+              }}
+            />
+          )}
           <header
             className="e6-header"
-            onClick={() => {
-              images.forEach((i) => {
-                if (i.url && i.url.startsWith("blob:"))
-                  URL.revokeObjectURL(i.url);
-              });
-              setImages([]);
-              setCurrentImgIndex(-1);
-              if (window.lockScreenStore) {
-                window.lockScreenStore
-                  .clearAll()
-                  .catch((e) => console.error(e));
-              }
+            style={{ position: "relative", zIndex: 10 }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowLockActionMenu(true);
             }}
           >
             ···
           </header>
-          <div className="time-display-e6">
+          <div
+            className="time-display-e6"
+            style={{
+              color: lockScreenConfig.timeColor || "#6d735b",
+              fontSize: `${lockScreenConfig.timeFontSize || 110}px`,
+              opacity: lockScreenConfig.timeOpacity ?? 1,
+              position: "relative",
+              zIndex: 5
+            }}
+          >
             {time.getHours().toString().padStart(2, "0")}:
             {time.getMinutes().toString().padStart(2, "0")}
           </div>
-          <div className="lunar-text">
-            {Lunar.fromDate(time).getYearInGanZhi()}年 [
-            {Lunar.fromDate(time).getYearShengXiao()}]{" "}
-            {Lunar.fromDate(time).getMonthInChinese()}月
-            {Lunar.fromDate(time).getDayInChinese()}
-          </div>
-          <div className="stage-container">
+          {lockScreenConfig.showLunar !== false && (
             <div
-              className={`upload-placeholder ${images.length > 0 ? "no-border" : ""
-                }`}
+              className="lunar-text"
+              style={{
+                color: lockScreenConfig.lunarColor || "#6d735b",
+                opacity: lockScreenConfig.lunarOpacity ?? 0.9,
+                position: "relative",
+                zIndex: 5
+              }}
+            >
+              {Lunar.fromDate(time).getYearInGanZhi()}年 [
+              {Lunar.fromDate(time).getYearShengXiao()}]{" "}
+              {Lunar.fromDate(time).getMonthInChinese()}月
+              {Lunar.fromDate(time).getDayInChinese()}
+            </div>
+          )}
+          <div
+            className="stage-container"
+            style={{
+              bottom: `${lockScreenConfig.cardBottom ?? 25}px`,
+              height: `${lockScreenConfig.cardHeight ?? 160}px`,
+              left: "0",
+              right: "0",
+              maxWidth: "200px",
+              margin: "0 auto",
+              transform: `scale(${lockScreenConfig.cardScale ?? 1})`,
+              animation: lockScreenConfig.cardFloatAnimation !== false ? "float 4s infinite ease-in-out" : "none",
+              position: "relative",
+              zIndex: 5
+            }}
+          >
+            <div
+              className={`upload-placeholder ${images.length > 0 ? "no-border" : ""}`}
+              style={{
+                backgroundColor: images.length > 0 ? "transparent" : `rgba(255, 255, 255, ${lockScreenConfig.cardOpacity ?? 0.5})`,
+                backdropFilter: images.length > 0 ? "none" : ((lockScreenConfig.cardBlur || 0) > 0 ? `blur(${lockScreenConfig.cardBlur}px)` : "none"),
+                WebkitBackdropFilter: images.length > 0 ? "none" : ((lockScreenConfig.cardBlur || 0) > 0 ? `blur(${lockScreenConfig.cardBlur}px)` : "none"),
+                borderRadius: `${lockScreenConfig.cardBorderRadius ?? 30}px`,
+                border: images.length > 0 ? "none" : (lockScreenConfig.cardBorderStyle === "none" ? "none" : lockScreenConfig.cardBorderStyle === "solid" ? `2px solid ${lockScreenConfig.cardBorderColor || "rgba(255,255,255,0.6)"}` : "3px dashed var(--line-color)"),
+                boxShadow: "none"
+              }}
               onClick={triggerUpload}
             >
               {images.length === 0 ? (
@@ -101517,13 +103066,13 @@ const MasterApp = () => {
                   <div
                     style={{
                       fontSize: "40px",
-                      color: "var(--line-color)",
+                      color: lockScreenConfig.timeColor || "var(--line-color)",
                     }}
                   >
                     +
                   </div>
-                  <div style={{ fontSize: "14px", marginTop: "5px" }}>
-                    点击上传
+                  <div style={{ fontSize: "14px", marginTop: "5px", color: lockScreenConfig.timeColor || "inherit" }}>
+                    点击上传立绘
                   </div>
                 </div>
               ) : (
@@ -101532,12 +103081,21 @@ const MasterApp = () => {
                     src={images[currentImgIndex].url}
                     className="media-content"
                   />
-                  {/* 已根据要求删除图片名称的显示块 */}
                 </React.Fragment>
               )}
             </div>
           </div>
-          <div className="scroll-hint">向上滑动查看桌面 ⏶</div>
+          <div
+            className="scroll-hint"
+            style={{
+              color: lockScreenConfig.scrollHintColor || "#6d735b",
+              opacity: lockScreenConfig.scrollHintOpacity ?? 0.8,
+              position: "relative",
+              zIndex: 5
+            }}
+          >
+            {lockScreenConfig.scrollHintText || "向上滑动查看桌面 ⏶"}
+          </div>
         </div>
 
         {/* PAGE 1: R2 桌面 */}
@@ -101562,7 +103120,22 @@ const MasterApp = () => {
               </div>
             </div>
           </nav>
-          <div className="fold-card" onClick={() => setExpanded(!expanded)}>
+          {foldCardConfig.customCss && <style id="foldcard-custom-user-css">{foldCardConfig.customCss}</style>}
+          <div
+            className="fold-card"
+            style={{
+              backgroundImage: foldCardConfig.bgType === "image" && foldCardConfig.bgImage ? `url(${foldCardConfig.bgImage})` : (foldCardConfig.bgType === "gradient" ? (foldCardConfig.bgGradient || "linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(246, 244, 235, 0.8) 100%)") : "none"),
+              backgroundColor: foldCardConfig.bgType === "image" ? "transparent" : (foldCardConfig.bgColor || `rgba(255, 255, 255, ${foldCardConfig.cardOpacity ?? 0.85})`),
+              backgroundSize: "cover",
+              backgroundPosition: "center",
+              backdropFilter: (foldCardConfig.cardBlur || 0) > 0 ? `blur(${foldCardConfig.cardBlur}px)` : "none",
+              WebkitBackdropFilter: (foldCardConfig.cardBlur || 0) > 0 ? `blur(${foldCardConfig.cardBlur}px)` : "none",
+              borderRadius: `${foldCardConfig.cardBorderRadius ?? 24}px`,
+              border: foldCardConfig.cardBorderStyle === "none" ? "none" : foldCardConfig.cardBorderStyle === "dashed" ? `1.5px dashed ${foldCardConfig.cardBorderColor || "rgba(109, 115, 91, 0.3)"}` : `1px solid ${foldCardConfig.cardBorderColor || "rgba(109, 115, 91, 0.2)"}`,
+              position: "relative"
+            }}
+            onClick={() => setExpanded(!expanded)}
+          >
             <div
               style={{
                 display: "flex",
@@ -101571,24 +103144,48 @@ const MasterApp = () => {
               }}
             >
               <div>
-                <h1 className="card-title">折叠式卡片</h1>
-                <p className="card-subtitle">
+                <h1 className="card-title" style={{ color: foldCardConfig.titleColor || "#3a4233" }}>折叠式卡片</h1>
+                <p className="card-subtitle" style={{ color: foldCardConfig.subtitleColor || "#7a826e" }}>
                   {weatherAdvice && weatherAdvice.characterName
                     ? `${weatherAdvice.characterName}的天气提醒 · ${weatherAdvice.temp !== undefined ? `${weatherAdvice.temp}°C` : `${time.getMonth() + 1}月${time.getDate()}日`}`
                     : `天气提醒 · ${time.getMonth() + 1}月${time.getDate()}日`}
                 </p>
               </div>
-              <svg width="50" height="30" viewBox="0 0 100 60">
-                <path
-                  d="M20,40 Q40,10 60,40 T90,40"
-                  fill="none"
-                  stroke="#6d735b"
-                  strokeWidth="3"
-                  strokeLinecap="round"
-                />
-                <circle cx="45" cy="35" r="2" fill="#6d735b" />
-                <circle cx="65" cy="35" r="2" fill="#6d735b" />
-              </svg>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setIsFoldCardSettingsOpen(true);
+                  }}
+                  title="卡片装扮设置"
+                  style={{
+                    border: "none",
+                    background: "rgba(255, 255, 255, 0.5)",
+                    borderRadius: "50%",
+                    width: "28px",
+                    height: "28px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    color: foldCardConfig.iconColor || "#6d735b",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
+                  }}
+                >
+                  🎨
+                </button>
+                <svg width="50" height="30" viewBox="0 0 100 60">
+                  <path
+                    d="M20,40 Q40,10 60,40 T90,40"
+                    fill="none"
+                    stroke={foldCardConfig.iconColor || "#6d735b"}
+                    strokeWidth="3"
+                    strokeLinecap="round"
+                  />
+                  <circle cx="45" cy="35" r="2" fill={foldCardConfig.iconColor || "#6d735b"} />
+                  <circle cx="65" cy="35" r="2" fill={foldCardConfig.iconColor || "#6d735b"} />
+                </svg>
+              </div>
             </div>
             {expanded && (
               <div
@@ -101794,6 +103391,12 @@ const MasterApp = () => {
 
           <div className="group-label">基础配置</div>
           <div className="setting-list">
+            <SettingRow
+              icon="palette"
+              text="锁屏装扮设置"
+              color="#7B886F"
+              onClick={() => setIsLockSettingsOpen(true)}
+            />
             <SettingRow
               icon="type"
               text="字体设置"

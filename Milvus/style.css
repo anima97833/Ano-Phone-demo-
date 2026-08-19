@@ -5827,6 +5827,25 @@
         outline: none;
         font-family: inherit;
         resize: none;
+        position: relative;
+      }
+
+      .chat-header {
+        position: relative;
+      }
+      .chat-header-btn {
+        position: relative;
+      }
+      .chat-header-status {
+        position: relative;
+      }
+      .chat-send-btn {
+        position: relative;
+        cursor: pointer;
+      }
+      .chat-action-btn {
+        position: relative;
+        cursor: pointer;
       }
 
       @keyframes msgFadeIn {
