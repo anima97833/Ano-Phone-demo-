@@ -86492,7 +86492,7 @@ ${commentsContext}
           style={{
             position: "relative",
             width: "100%",
-            height: "140px",
+            height: "160px",
             background: decorImages.cover
               ? `url(${decorImages.cover}) center/cover no-repeat`
               : "linear-gradient(135deg, #4A5568 0%, #718096 50%, #A0AEC0 100%)",
@@ -86505,7 +86505,7 @@ ${commentsContext}
               position: "absolute",
               inset: 0,
               background:
-                "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.5) 100%)",
+                "linear-gradient(to bottom, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.55) 100%)",
             }}
           />
 
@@ -86544,15 +86544,15 @@ ${commentsContext}
             onChange={(e) => handleImageUpload("cover", e)}
           />
 
-          {/* 封面左下：空间主题文字 (支持点击自定义) */}
+          {/* 封面左侧：空间主题文字 (支持点击自定义，位置上移避开下方头像层) */}
           <div
             onClick={handleOpenEditProfile}
             style={{
               position: "absolute",
-              bottom: "12px",
+              bottom: "46px",
               left: "16px",
               color: "#FFF",
-              textShadow: "0 2px 6px rgba(0,0,0,0.4)",
+              textShadow: "0 2px 8px rgba(0,0,0,0.6)",
               zIndex: 2,
               cursor: "pointer",
               display: "flex",
@@ -86575,16 +86575,8 @@ ${commentsContext}
               <span>{spaceProfile.title}</span>
               <i
                 className="ph-bold ph-pencil-simple"
-                style={{ fontSize: "13px", opacity: 0.8 }}
+                style={{ fontSize: "13px", opacity: 0.85 }}
               ></i>
-            </div>
-            <div
-              style={{
-                fontSize: "11px",
-                opacity: 0.9,
-              }}
-            >
-              {spaceProfile.subtitle}
             </div>
           </div>
         </div>
@@ -87811,7 +87803,7 @@ ${commentsContext}
                   marginBottom: "6px",
                 }}
               >
-                空间主标语
+                空间标语
               </label>
               <input
                 type="text"
@@ -87823,41 +87815,6 @@ ${commentsContext}
                   })
                 }
                 placeholder="例如：广陵密探 · 浮生录"
-                style={{
-                  width: "100%",
-                  padding: "10px 12px",
-                  borderRadius: "10px",
-                  border: "1px solid #E2E8F0",
-                  fontSize: "13px",
-                  outline: "none",
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-
-            {/* 空间副标语 / 简介 */}
-            <div>
-              <label
-                style={{
-                  display: "block",
-                  fontSize: "12px",
-                  fontWeight: "600",
-                  color: "#4A5568",
-                  marginBottom: "6px",
-                }}
-              >
-                空间副标语 / 简介
-              </label>
-              <input
-                type="text"
-                value={editProfileForm.subtitle}
-                onChange={(e) =>
-                  setEditProfileForm({
-                    ...editProfileForm,
-                    subtitle: e.target.value,
-                  })
-                }
-                placeholder="例如：隐鸢阁密探秘闻与日常分享"
                 style={{
                   width: "100%",
                   padding: "10px 12px",
@@ -95279,10 +95236,81 @@ const LongTermMemoryOverlay = ({ isOpen, onClose }) => {
   );
 };
 
+// ==================== [新增] 字体与颜色全局管理 ====================
+
+const applyGlobalFontStyles = (fontUrl, fontColor) => {
+  const styleId = "global-custom-font";
+  let styleTag = document.getElementById(styleId);
+
+  const cleanUrl = (fontUrl || "").trim();
+  const cleanColor = (fontColor || "").trim();
+
+  if (!cleanUrl && !cleanColor) {
+    if (styleTag) styleTag.remove();
+    document.documentElement.style.removeProperty("--app-custom-font-color");
+    return;
+  }
+
+  if (!styleTag) {
+    styleTag = document.createElement("style");
+    styleTag.id = styleId;
+    document.head.appendChild(styleTag);
+  }
+
+  let css = "";
+
+  if (cleanUrl) {
+    css += `
+      @font-face {
+        font-family: 'GlobalUserFont';
+        src: url('${cleanUrl}');
+        font-display: swap;
+      }
+      *:not(.material-symbols-outlined):not([class*="ph-"]):not([class*="ph"]):not(iconify-icon):not(svg):not(path):not(i):not(canvas) {
+        font-family: 'GlobalUserFont', "Quicksand", "Noto Sans SC", sans-serif !important;
+      }
+    `;
+  }
+
+  if (cleanColor) {
+    document.documentElement.style.setProperty("--app-custom-font-color", cleanColor);
+    css += `
+      :root {
+        --app-custom-font-color: ${cleanColor};
+      }
+      body, #root, .phone-screen, .app-container {
+        color: ${cleanColor};
+      }
+      p, span:not([class*="ph"]):not(.ph):not(i):not(button *):not(.btn *):not([class*="badge"]), label, h1, h2, h3, h4, h5, h6, input:not([type="color"]):not([type="file"]):not([type="checkbox"]):not([type="radio"]), textarea {
+        color: ${cleanColor} !important;
+      }
+    `;
+  } else {
+    document.documentElement.style.removeProperty("--app-custom-font-color");
+  }
+
+  styleTag.textContent = css;
+};
+
 // ==================== [新增] 字体设置页面组件 ====================
 
 const FontSettingsPage = ({ onClose }) => {
   const [fontUrl, setFontUrl] = React.useState("");
+  const [fontColor, setFontColor] = React.useState("");
+
+  const PRESET_COLORS = [
+    { name: "系统默认", color: "" },
+    { name: "曜石黑", color: "#111827" },
+    { name: "深空灰", color: "#374151" },
+    { name: "莫兰迪绿", color: "#2D4A3E" },
+    { name: "黛青/深海", color: "#1E3A8A" },
+    { name: "车厘子红", color: "#881337" },
+    { name: "焦糖暖褐", color: "#78350F" },
+    { name: "烟熏暮紫", color: "#581C87" },
+    { name: "玫瑰木粉", color: "#9D174D" },
+    { name: "琥珀金褐", color: "#92400E" },
+    { name: "晨曦纯白", color: "#FFFFFF" },
+  ];
 
   // 莫兰迪色系样式配置
   const styles = {
@@ -95297,75 +95325,79 @@ const FontSettingsPage = ({ onClose }) => {
       display: "flex",
       flexDirection: "column",
     },
-    content: { flex: 1, padding: "24px", overflowY: "auto" },
+    content: { flex: 1, padding: "20px 20px 40px", overflowY: "auto" },
     card: {
       background: "#FFFFFF",
       borderRadius: "20px",
-      padding: "24px",
+      padding: "20px",
       boxShadow: "0 8px 24px rgba(163, 177, 164, 0.1)",
-      marginBottom: "24px",
+      marginBottom: "20px",
     },
     label: {
       fontSize: "14px",
       color: "#8C917B",
       marginBottom: "8px",
       display: "block",
-      fontWeight: "500",
+      fontWeight: "600",
     },
     input: {
       width: "100%",
-      padding: "14px",
+      padding: "12px 14px",
       borderRadius: "12px",
       border: "1px solid #EAEAEA",
       background: "#FCFAFA",
       color: "#5A5F4D",
       fontSize: "14px",
       outline: "none",
+      boxSizing: "border-box",
       transition: "all 0.3s",
     },
     previewBox: {
-      marginTop: "16px",
-      padding: "20px",
+      marginTop: "12px",
+      padding: "18px",
       background: "#F2EFDE",
       borderRadius: "16px",
-      color: "#5A5F4D",
+      color: fontColor || "#5A5F4D",
       lineHeight: "1.6",
-      fontSize: "18px",
-      minHeight: "100px",
+      fontSize: "16px",
+      minHeight: "90px",
       fontFamily: fontUrl ? "CustomUserFontPreview" : "inherit",
       border: "1px dashed #C9C9C1",
-      transition: "font-family 0.3s",
+      transition: "all 0.3s",
+      wordBreak: "break-all",
     },
     btnPrimary: {
       width: "100%",
-      padding: "16px",
-      borderRadius: "24px",
+      padding: "14px",
+      borderRadius: "20px",
       border: "none",
       background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
       color: "#FFFFFF",
-      fontSize: "16px",
+      fontSize: "15px",
       fontWeight: "bold",
       cursor: "pointer",
       boxShadow: "0 4px 12px rgba(168, 200, 186, 0.4)",
-      marginTop: "30px",
+      marginTop: "20px",
     },
     btnReset: {
       width: "100%",
-      padding: "16px",
-      borderRadius: "24px",
+      padding: "14px",
+      borderRadius: "20px",
       border: "1px solid #E0E0E0",
       background: "#FFFFFF",
-      color: "#999",
+      color: "#888",
       fontSize: "14px",
       cursor: "pointer",
-      marginTop: "12px",
+      marginTop: "10px",
     },
   };
 
-  // 初始化加载本地存储的URL
+  // 初始化加载本地存储
   React.useEffect(() => {
-    const savedUrl = localStorage.getItem("custom_font_url");
-    if (savedUrl) setFontUrl(savedUrl);
+    const savedUrl = localStorage.getItem("custom_font_url") || "";
+    const savedColor = localStorage.getItem("custom_font_color") || "";
+    setFontUrl(savedUrl);
+    setFontColor(savedColor);
   }, []);
 
   // 动态注入预览字体样式 (仅用于当前预览框，不影响全局)
@@ -95378,50 +95410,47 @@ const FontSettingsPage = ({ onClose }) => {
       styleTag.id = styleId;
       document.head.appendChild(styleTag);
     }
-    // 使用唯一的 font-family 名称避免冲突
     styleTag.textContent = `
-                                                                                                                               @font-face {
-                                                                                                                                 font-family: 'CustomUserFontPreview';
-                                                                                                                                 src: url('${fontUrl}');
-                                                                                                                                 font-display: swap;
-                                                                                                                               }
-                                                                                                                             `;
+      @font-face {
+        font-family: 'CustomUserFontPreview';
+        src: url('${fontUrl}');
+        font-display: swap;
+      }
+    `;
   }, [fontUrl]);
 
   const handleApply = () => {
-    if (!fontUrl.trim()) return alert("请输入字体URL");
-
-    // 注入全局样式
-    const styleId = "global-custom-font";
-    let styleTag = document.getElementById(styleId);
-    if (!styleTag) {
-      styleTag = document.createElement("style");
-      styleTag.id = styleId;
-      document.head.appendChild(styleTag);
+    if (!fontUrl.trim() && !fontColor.trim()) {
+      if (confirm("当前未设置自定义字体和颜色，是否恢复默认？")) {
+        handleReset();
+      }
+      return;
     }
-    styleTag.textContent = `
-                                                                                                                               @font-face {
-                                                                                                                                 font-family: 'GlobalUserFont';
-                                                                                                                                 src: url('${fontUrl}');
-                                                                                                                                 font-display: swap;
-                                                                                                                               }
-                                                                                                                               /* 终极全局字体应用，利用 :not 排除所有图标组件，防止图标变成文字 */
-                                                                                                                               *:not(.material-symbols-outlined):not([class*="ph-"]):not(iconify-icon) {
-                                                                                                                                 font-family: 'GlobalUserFont', "Quicksand", "Noto Sans SC", sans-serif !important;
-                                                                                                                               }
-                                                                                                                             `;
 
-    localStorage.setItem("custom_font_url", fontUrl);
-    alert("字体已成功应用到全局！");
+    if (fontUrl.trim()) {
+      localStorage.setItem("custom_font_url", fontUrl.trim());
+    } else {
+      localStorage.removeItem("custom_font_url");
+    }
+
+    if (fontColor.trim()) {
+      localStorage.setItem("custom_font_color", fontColor.trim());
+    } else {
+      localStorage.removeItem("custom_font_color");
+    }
+
+    applyGlobalFontStyles(fontUrl, fontColor);
+    alert("字体与字体颜色已成功应用到全局！");
     onClose();
   };
 
   const handleReset = () => {
     localStorage.removeItem("custom_font_url");
-    const styleTag = document.getElementById("global-custom-font");
-    if (styleTag) styleTag.remove();
+    localStorage.removeItem("custom_font_color");
+    applyGlobalFontStyles("", "");
     setFontUrl("");
-    alert("已恢复默认字体");
+    setFontColor("");
+    alert("已恢复默认字体与颜色");
   };
 
   return (
@@ -95442,46 +95471,206 @@ const FontSettingsPage = ({ onClose }) => {
             <path d="m15 18-6-6 6-6" />
           </svg>
         </div>
-        <div className="title">字体设置</div>
+        <div className="title">字体与颜色设置</div>
       </div>
       <div className="no-scrollbar" style={styles.content}>
+        {/* 卡片 1：字体文件 URL */}
         <div style={styles.card}>
-          <label style={styles.label}>字体文件 URL (WOFF2/TTF)</label>
+          <label style={styles.label}>
+            <i className="ph-bold ph-text-t" style={{ marginRight: "6px" }}></i>
+            自定义字体文件 URL (WOFF2 / TTF)
+          </label>
           <input
             style={styles.input}
             value={fontUrl}
             onChange={(e) => setFontUrl(e.target.value)}
-            placeholder="例如： `https://example.com/font.woff2` "
+            placeholder="例如：https://example.com/font.woff2"
           />
           <div
             style={{
               fontSize: "12px",
-              color: "#B0B0B0",
-              marginTop: "8px",
+              color: "#A0A595",
+              marginTop: "6px",
               lineHeight: "1.4",
             }}
           >
-            * 推荐使用直链，支持 .ttf, .woff2 格式。
-            <br />* 部分字体可能因跨域限制无法加载。
+            * 推荐使用直链，支持 .ttf, .woff2, .woff 格式。
           </div>
         </div>
 
+        {/* 卡片 2：字体换颜色 (全局颜色) */}
         <div style={styles.card}>
-          <label style={styles.label}>效果预览</label>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "10px",
+            }}
+          >
+            <label style={{ ...styles.label, marginBottom: 0 }}>
+              <i className="ph-bold ph-palette" style={{ marginRight: "6px" }}></i>
+              字体换颜色 (全局颜色设置)
+            </label>
+            {fontColor && (
+              <button
+                type="button"
+                onClick={() => setFontColor("")}
+                style={{
+                  fontSize: "12px",
+                  color: "#8C917B",
+                  background: "none",
+                  border: "none",
+                  cursor: "pointer",
+                  textDecoration: "underline",
+                  padding: 0,
+                }}
+              >
+                重置颜色
+              </button>
+            )}
+          </div>
+
+          {/* 颜色选择器与色值输入 */}
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              marginBottom: "14px",
+            }}
+          >
+            <div
+              style={{
+                position: "relative",
+                width: "42px",
+                height: "42px",
+                borderRadius: "12px",
+                overflow: "hidden",
+                border: "2px solid #E5E7EB",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.08)",
+                flexShrink: 0,
+                background: fontColor || "#5A5F4D",
+                cursor: "pointer",
+              }}
+            >
+              <input
+                type="color"
+                value={fontColor && fontColor.startsWith("#") && fontColor.length === 7 ? fontColor : "#374151"}
+                onChange={(e) => setFontColor(e.target.value)}
+                style={{
+                  position: "absolute",
+                  top: "-10px",
+                  left: "-10px",
+                  width: "60px",
+                  height: "60px",
+                  opacity: 0,
+                  cursor: "pointer",
+                }}
+              />
+            </div>
+
+            <input
+              style={{ ...styles.input, flex: 1 }}
+              value={fontColor}
+              onChange={(e) => setFontColor(e.target.value)}
+              placeholder="自定义颜色代码，如 #374151 或 rgb(55,65,81)"
+            />
+          </div>
+
+          {/* 推荐配色色板 */}
+          <div>
+            <div
+              style={{
+                fontSize: "12px",
+                color: "#8C917B",
+                marginBottom: "8px",
+                fontWeight: "500",
+              }}
+            >
+              🎨 经典与莫兰迪推荐配色
+            </div>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(4, 1fr)",
+                gap: "8px",
+              }}
+            >
+              {PRESET_COLORS.map((item, idx) => {
+                const isSelected = (!item.color && !fontColor) || (item.color && fontColor.toLowerCase() === item.color.toLowerCase());
+                return (
+                  <div
+                    key={idx}
+                    onClick={() => setFontColor(item.color)}
+                    style={{
+                      padding: "6px 8px",
+                      borderRadius: "10px",
+                      background: isSelected ? "#EBF2EE" : "#F8F9FA",
+                      border: isSelected ? "1.5px solid #8FA99D" : "1px solid #EAEAEA",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "4px",
+                      transition: "all 0.2s ease",
+                    }}
+                    className="active-press"
+                  >
+                    <div
+                      style={{
+                        width: "20px",
+                        height: "20px",
+                        borderRadius: "50%",
+                        background: item.color || "linear-gradient(135deg, #333 50%, #999 50%)",
+                        border: item.color === "#FFFFFF" ? "1px solid #D1D5DB" : "1px solid rgba(0,0,0,0.1)",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.1)",
+                      }}
+                    />
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: isSelected ? "#2D4A3E" : "#666",
+                        fontWeight: isSelected ? "600" : "400",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        maxWidth: "100%",
+                      }}
+                    >
+                      {item.name}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+        {/* 卡片 3：效果综合预览 */}
+        <div style={styles.card}>
+          <label style={styles.label}>
+            <i className="ph-bold ph-eye" style={{ marginRight: "6px" }}></i>
+            综合效果实时预览
+          </label>
           <div style={styles.previewBox}>
-            有女青史无名姓，一笔胭脂开眉弓。
-            <br />
-            Watermelon is great！！.
-            <br />
-            1234567890
+            <div style={{ fontWeight: "bold", marginBottom: "6px" }}>
+              有女青史无名姓，一笔胭脂开眉弓。
+            </div>
+            <div style={{ fontSize: "14px", opacity: 0.9, marginBottom: "4px" }}>
+              The quick brown fox jumps over the lazy dog.
+            </div>
+            <div style={{ fontSize: "13px", opacity: 0.8 }}>
+              数字与标点预览：0123456789 「」【】— ！@#
+            </div>
           </div>
         </div>
 
         <button style={styles.btnPrimary} onClick={handleApply}>
-          立即应用
+          立即保存并全局应用
         </button>
         <button style={styles.btnReset} onClick={handleReset}>
-          恢复默认
+          恢复默认字体与颜色
         </button>
       </div>
     </div>
@@ -103464,29 +103653,12 @@ const MasterApp = () => {
     };
   };
 
-  // 初始化字体设置
+    // 初始化字体与颜色设置
   useEffect(() => {
-    const savedFontUrl = localStorage.getItem("custom_font_url");
-    if (savedFontUrl) {
-      // 注入全局样式
-      const styleId = "global-custom-font";
-      let styleTag = document.getElementById(styleId);
-      if (!styleTag) {
-        styleTag = document.createElement("style");
-        styleTag.id = styleId;
-        document.head.appendChild(styleTag);
-      }
-      styleTag.textContent = `
-                                                                                                                                  @font-face {
-                                                                                                                                    font-family: 'GlobalUserFont';
-                                                                                                                                    src: url('${savedFontUrl}');
-                                                                                                                                    font-display: swap;
-                                                                                                                                  }
-                                                                                                                                  /* 终极全局字体应用，利用 :not 排除所有图标组件，防止图标变成文字 */
-                                                                                                                                  *:not(.material-symbols-outlined):not([class*="ph-"]):not(iconify-icon) {
-                                                                                                                                    font-family: 'GlobalUserFont', "Quicksand", "Noto Sans SC", sans-serif !important;
-                                                                                                                                  }
-                                                                                                                                `;
+    const savedFontUrl = localStorage.getItem("custom_font_url") || "";
+    const savedFontColor = localStorage.getItem("custom_font_color") || "";
+    if (savedFontUrl || savedFontColor) {
+      applyGlobalFontStyles(savedFontUrl, savedFontColor);
     }
   }, []);
 
