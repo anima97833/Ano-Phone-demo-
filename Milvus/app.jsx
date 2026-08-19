@@ -101712,26 +101712,7 @@ const MasterApp = () => {
             ))}
           </div>
 
-          <div className="ai-capsule">
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                gap: "10px",
-              }}
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="#F2D06B">
-                <circle cx="12" cy="12" r="10" />
-              </svg>
-              <span style={{ fontSize: "14px", color: "var(--text-light)" }}>
-                此处为ai待办事项提醒
-              </span>
-            </div>
-            <i
-              data-lucide="user"
-              style={{ width: 20, height: 20, color: "#6d735b" }}
-            ></i>
-          </div>
+
         </div>
       </div>
 
