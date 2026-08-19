@@ -71120,7 +71120,7 @@ const ChatSettingsModal = ({
             <div style={{ marginBottom: "16px", backgroundColor: "#fbf9f4", padding: "10px 12px", borderRadius: "10px", border: "1px solid #ebd9c8" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                 <span style={{ fontSize: "12px", fontWeight: "bold", color: "#5d4e37" }}>🛠️ 输入栏上方工具栏 CSS</span>
-                <span style={{ fontSize: "10px", color: "#a89b88" }}>目标: .chat-toolbar, .chat-toolbar::before</span>
+                <span style={{ fontSize: "10px", color: "#a89b88" }}>目标: .chat-toolbar, .chat-btn-image, .chat-btn-call, .chat-btn-gift, .chat-btn-diary 等</span>
               </div>
 
               {/* 快捷模板 */}
@@ -71152,7 +71152,7 @@ const ChatSettingsModal = ({
               <div style={{ position: "relative", width: "100%" }}>
                 <textarea
                   rows={2}
-                  placeholder="支持 .chat-toolbar, .chat-toolbar::before, .chat-action-btn 等"
+                  placeholder="支持 .chat-toolbar 及各按钮 (.chat-btn-image / .chat-btn-call / .chat-btn-diary / .chat-btn-gift / .chat-btn-trajectory / .chat-btn-emoji)"
                   style={{
                     width: "100%",
                     padding: "8px 30px 8px 10px",
@@ -77706,7 +77706,7 @@ const T8ChatDetail = ({
                 {/* 图片按钮 */}
                 <div
                   title="发送图片"
-                  className="chat-action-btn"
+                  className="chat-action-btn chat-btn-image"
                   style={{
                     cursor: "pointer",
                     padding: "4px",
@@ -77753,7 +77753,7 @@ const T8ChatDetail = ({
                 {/* 表情包按钮 (重构为输入栏底部呼出面板) */}
                 <div
                   title="表情包"
-                  className="chat-action-btn"
+                  className="chat-action-btn chat-btn-emoji"
                   style={{
                     cursor: "pointer",
                     padding: "4px",
@@ -77803,6 +77803,7 @@ const T8ChatDetail = ({
                 {isGroupChat && (
                   <div
                     title="群功能"
+                    className="chat-action-btn chat-btn-grouptool"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
@@ -77851,7 +77852,7 @@ const T8ChatDetail = ({
                 {!isGroupChat && (
                   <div
                     title="语音通话"
-                    className="chat-action-btn"
+                    className="chat-action-btn chat-btn-call"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
@@ -77905,7 +77906,7 @@ const T8ChatDetail = ({
                 {!isGroupChat && (
                   <div
                     title="日记"
-                    className="chat-action-btn"
+                    className="chat-action-btn chat-btn-diary"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
@@ -77941,7 +77942,7 @@ const T8ChatDetail = ({
                 {!isGroupChat && (
                   <div
                     title="送礼与红包"
-                    className="chat-action-btn"
+                    className="chat-action-btn chat-btn-gift"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
@@ -77975,7 +77976,7 @@ const T8ChatDetail = ({
                 {!isGroupChat && (
                   <div
                     title="轨迹"
-                    className="chat-action-btn"
+                    className="chat-action-btn chat-btn-trajectory"
                     style={{
                       cursor: "pointer",
                       padding: "4px",
