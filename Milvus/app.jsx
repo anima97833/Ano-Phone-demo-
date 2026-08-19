@@ -70954,7 +70954,7 @@ const ChatSettingsModal = ({
             <div style={{ marginBottom: "16px", backgroundColor: "#fbf9f4", padding: "10px 12px", borderRadius: "10px", border: "1px solid #ebd9c8" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                 <span style={{ fontSize: "12px", fontWeight: "bold", color: "#5d4e37" }}>🌟 顶部状态与导航栏 CSS</span>
-                <span style={{ fontSize: "10px", color: "#a89b88" }}>目标: .chat-header</span>
+                <span style={{ fontSize: "10px", color: "#a89b88" }}>目标: .chat-header, .chat-header-back, .chat-header-calendar, .chat-header-more</span>
               </div>
               
               {/* 快捷模板 */}
@@ -70987,7 +70987,7 @@ const ChatSettingsModal = ({
               <div style={{ position: "relative", width: "100%" }}>
                 <textarea
                   rows={2}
-                  placeholder="可输入CSS代码块或属性，支持 .chat-header::before 等伪元素"
+                  placeholder="支持 .chat-header, .chat-header-back, .chat-header-calendar, .chat-header-more 等"
                   style={{
                     width: "100%",
                     padding: "8px 30px 8px 10px",
@@ -76426,7 +76426,7 @@ const T8ChatDetail = ({
         }}
       >
         <div
-          className="chat-header-btn"
+          className="chat-header-btn chat-header-back"
           onClick={(e) => {
             e.stopPropagation();
             onClose();
@@ -76551,6 +76551,7 @@ const T8ChatDetail = ({
           </div>
         </div>
         <div
+          className="chat-header-btn chat-header-calendar"
           onClick={(e) => {
             e.stopPropagation();
             setShowActivitySelect(true);
@@ -76575,7 +76576,7 @@ const T8ChatDetail = ({
           ></i>
         </div>
         <div
-          className="chat-header-btn"
+          className="chat-header-btn chat-header-more"
           onClick={(e) => {
             e.stopPropagation();
             setShowSettings(true);
