@@ -398,14 +398,33 @@ window.buildSystemPrompt = (charProfile) => {
 };
 
 // 2. 调用 API 发送消息
-window.sendToLLM = async (messages, onChunk, onFinish, onError) => {
-  console.log("开始调用sendToLLM");
+window.sendToLLM = async (messages, customConfigOrChunk, onFinish, onError) => {
+  let customConfig = null;
+  let onChunk = null;
+  let actualFinish = onFinish;
+  let actualError = onError;
 
-  // 检查是否使用 MiniMax 模型
+  if (typeof customConfigOrChunk === "function") {
+    onChunk = customConfigOrChunk;
+  } else if (customConfigOrChunk && typeof customConfigOrChunk === "object") {
+    customConfig = customConfigOrChunk;
+  }
+
+  let temp = 0.8;
+  let topP = 0.95;
+  let presencePenalty = 0.4;
+  let frequencyPenalty = 0.2;
+
+  if (customConfig) {
+    if (typeof customConfig.temperature === "number") temp = customConfig.temperature;
+    if (typeof customConfig.top_p === "number") topP = customConfig.top_p;
+    if (typeof customConfig.presence_penalty === "number") presencePenalty = customConfig.presence_penalty;
+    if (typeof customConfig.frequency_penalty === "number") frequencyPenalty = customConfig.frequency_penalty;
+  }
+
+  console.log("sendToLLM 调用，模型生成参数:", { temperature: temp, top_p: topP, presence_penalty: presencePenalty, frequency_penalty: frequencyPenalty });
   let isMinimaxModel = false;
   let minimaxConfig = null;
-
-  // 首先尝试从 MiniMax 配置中获取
   const savedMinimaxConfig = localStorage.getItem("minimax_api_config");
   if (savedMinimaxConfig) {
     minimaxConfig = JSON.parse(savedMinimaxConfig);
@@ -413,116 +432,208 @@ window.sendToLLM = async (messages, onChunk, onFinish, onError) => {
       isMinimaxModel = true;
     }
   }
-
   if (isMinimaxModel) {
     console.log("使用 MiniMax API");
-    console.log("MiniMax 配置:", minimaxConfig);
-
-    // MiniMax API 端点
     const endpoint = "https://api.minimax.chat/v1/text/chatcompletions";
-
     try {
-      console.log("发送 MiniMax API 请求...");
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${minimaxConfig.apiKey}`,
-          "X-Group-ID": minimaxConfig.groupId,
+          "X-Group-ID": minimaxConfig.groupId
         },
         body: JSON.stringify({
           model: minimaxConfig.model || "abab6.5s-chat",
           messages: messages,
           stream: false,
-          temperature: 0.8,
-          top_p: 0.95,
-        }),
+          temperature: temp,
+          top_p: topP
+        })
       });
-
-      console.log("MiniMax API 响应状态:", response.status);
       if (!response.ok) {
         const errText = await response.text();
         console.error("MiniMax API 错误:", errText);
         throw new Error(`MiniMax API Error: ${response.status} - ${errText}`);
       }
-
       const data = await response.json();
-      console.log("MiniMax API 响应数据:", data);
       const reply = data.choices[0].message.content;
       console.log("MiniMax AI 回复:", reply);
-      onFinish(reply);
+      if (actualFinish) actualFinish(reply);
     } catch (error) {
       console.error("MiniMax Request Failed:", error);
-      onError(error.message);
+      if (actualError) actualError(error.message);
     }
   } else {
     console.log("使用通用 API 配置");
-    // 获取通用 API 配置
     const configs = JSON.parse(localStorage.getItem("api_configs") || "[]");
-    console.log("API配置:", configs);
     if (configs.length === 0) {
       console.error("没有API配置");
-      onError("请先在设置中配置 API");
+      if (actualError) actualError("请先在设置中配置 API");
       return;
     }
-    // 使用用户选中的配置
-    const savedSelectedIndex = localStorage.getItem(
-      "selected_api_config_index",
-    );
+    const savedSelectedIndex = localStorage.getItem("selected_api_config_index");
     const selectedIndex = savedSelectedIndex ? parseInt(savedSelectedIndex) : 0;
-    const config = configs[selectedIndex] || configs[0]; // 如果选中的配置不存在，使用第一个作为 fallback
-    console.log("选中的API配置:", config);
-
+    const config = configs[selectedIndex] || configs[0];
     if (!config.url || !config.apiKey) {
-      console.error("API配置不完整:", {
-        url: config.url,
-        apiKey: config.apiKey,
-      });
-      onError("API 配置不完整");
+      console.error("API配置不完整:", { url: config.url, apiKey: config.apiKey });
+      if (actualError) actualError("API 配置不完整");
       return;
     }
-
-    // 处理 URL 格式
     let endpoint = config.url;
     if (!endpoint.endsWith("/")) endpoint += "/";
     if (config.type === "official") endpoint += "v1/chat/completions";
-    else endpoint += "api/chat/completions"; // 适配公益站常见格式，视具体情况而定
-    console.log("API端点:", endpoint);
-
+    else endpoint += "api/chat/completions";
     try {
-      console.log("发送API请求...");
+      const reqBody = {
+        model: config.model || "gpt-3.5-turbo",
+        messages: messages,
+        stream: false,
+        temperature: temp,
+        top_p: topP,
+        presence_penalty: presencePenalty,
+        frequency_penalty: frequencyPenalty
+      };
       const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${config.apiKey}`,
+          Authorization: `Bearer ${config.apiKey}`
         },
-        body: JSON.stringify({
-          model: config.model || "gpt-3.5-turbo",
-          messages: messages,
-          stream: false, // 暂用非流式，简化逻辑确保稳定性
-          temperature: 0.8, // 增加创造性
-        }),
+        body: JSON.stringify(reqBody)
       });
-
-      console.log("API响应状态:", response.status);
       if (!response.ok) {
         const errText = await response.text();
         console.error("API错误:", errText);
         throw new Error(`API Error: ${response.status} - ${errText}`);
       }
-
       const data = await response.json();
-      console.log("API响应数据:", data);
       const reply = data.choices[0].message.content;
       console.log("AI回复:", reply);
-      onFinish(reply);
+      if (actualFinish) actualFinish(reply);
     } catch (error) {
       console.error("LLM Request Failed:", error);
-      onError(error.message);
+      if (actualError) actualError(error.message);
     }
   }
 };
+
+// ==================== 3. [新增] AI 文生图核心服务 (Text-to-Image) ====================
+// 【严格独立】：永远严格使用 image_generation_api_config，绝对不与传讯 api_configs 或 MiniMax 语音混淆
+window.generateAIImage = async (prompt, customOptions = {}) => {
+  console.log("开始调用 generateAIImage, 提示词:", prompt);
+  const savedConfig = localStorage.getItem("image_generation_api_config");
+  if (!savedConfig) {
+    throw new Error("请先在【设置 -> 隐私与安全 -> AI 文生图配置】中配置生图 API");
+  }
+  let config;
+  try {
+    config = JSON.parse(savedConfig);
+  } catch (e) {
+    throw new Error("生图配置格式解析错误，请重新在隐私与安全中保存");
+  }
+  if (!config.apiKey || !config.url) {
+    throw new Error("生图 API Key 或服务地址未配置完整");
+  }
+
+  let endpoint = config.url.trim();
+  // 智能补全 endpoint 端点
+  if (config.provider === "zhipu" || endpoint.includes("bigmodel.cn")) {
+    if (!endpoint.includes("/images/generations")) {
+      if (!endpoint.endsWith("/")) endpoint += "/";
+      if (!endpoint.includes("/v4") && !endpoint.includes("api/paas")) endpoint += "api/paas/v4/";
+      endpoint += "images/generations";
+    }
+  } else if (!endpoint.includes("/images/generations")) {
+    if (!endpoint.endsWith("/")) endpoint += "/";
+    if (!endpoint.includes("/v1") && !endpoint.includes("/api")) endpoint += "v1/";
+    endpoint += "images/generations";
+  }
+
+  console.log("生图 API 请求端点:", endpoint);
+
+  const model = customOptions.model || config.model || "black-forest-labs/FLUX.1-schnell";
+  const size = customOptions.size || config.size || "1024x1024";
+
+  const payload = {
+    model: model,
+    prompt: prompt,
+    size: size,
+    n: 1,
+  };
+
+  if (config.provider === "openai" || (model && model.includes("dall-e"))) {
+    payload.quality = config.quality || "standard";
+    payload.response_format = "url";
+  }
+
+  const controller = new AbortController();
+  const timeoutMs = (parseInt(config.timeout) || 120) * 1000;
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const headers = {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${config.apiKey.trim()}`,
+    };
+
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: headers,
+      body: JSON.stringify(payload),
+      signal: controller.signal,
+    });
+
+    clearTimeout(timeoutId);
+
+    if (!response.ok) {
+      const errText = await response.text();
+      let errMsg = `生图 API 错误: ${response.status}`;
+      try {
+        const errJson = JSON.parse(errText);
+        if (errJson.error && errJson.error.message) {
+          errMsg = errJson.error.message;
+        } else if (errJson.message) {
+          errMsg = errJson.message;
+        }
+      } catch (e) {}
+      throw new Error(errMsg);
+    }
+
+    const data = await response.json();
+    console.log("生图 API 返回数据:", data);
+
+    let imageUrl = null;
+    if (data.data && data.data.length > 0) {
+      const firstItem = data.data[0];
+      if (firstItem.url) {
+        imageUrl = firstItem.url;
+      } else if (firstItem.b64_json) {
+        imageUrl = `data:image/png;base64,${firstItem.b64_json}`;
+      }
+    } else if (data.images && data.images.length > 0) {
+      const firstImg = data.images[0];
+      if (typeof firstImg === "string") {
+        imageUrl = firstImg.startsWith("http") || firstImg.startsWith("data:") ? firstImg : `data:image/png;base64,${firstImg}`;
+      } else if (firstImg.url) {
+        imageUrl = firstImg.url;
+      }
+    }
+
+    if (!imageUrl) {
+      throw new Error("生图接口未返回有效的图片 URL 或数据");
+    }
+
+    return imageUrl;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === "AbortError") {
+      throw new Error("生图请求超时，请检查网络或更换更轻量的模型");
+    }
+    throw err;
+  }
+};
+
 // ==================== AI 核心通信服务 END ====================
 
 // 抽离 T1 的列表项组件 (修复：强制 Flex 布局，确保箭头在最右侧)
@@ -69819,6 +69930,11 @@ const GroupChatSettingsModal = ({
   // [新增] 读取长期记忆列表与处理挂载切换
   const [memoriesList, setMemoriesList] = React.useState([]);
   const [showMemoryDropdown, setShowMemoryDropdown] = React.useState(false);
+  const [showModelParams, setShowModelParams] = React.useState(false);
+  const [showModelParamHelp, setShowModelParamHelp] = React.useState(false);
+  const [isGeneratingMoment, setIsGeneratingMoment] = React.useState(false);
+  const [isGeneratingMoment, setIsGeneratingMoment] = React.useState(false);
+  const [showModelParamHelp, setShowModelParamHelp] = React.useState(false);
   React.useEffect(() => {
     try {
       const savedMem = JSON.parse(
@@ -70089,6 +70205,142 @@ const GroupChatSettingsModal = ({
             <span className="toggle-slider"></span>
           </label>
         </div>
+
+        {/* 新增：AI 模型高级参数调节折叠面板 */}
+        <div
+          className="cs-row"
+          style={{
+            borderBottom: showModelParams ? "none" : "1px dashed #eee",
+            paddingBottom: showModelParams ? "0" : "16px",
+            marginTop: "16px",
+          }}
+        >
+          <div>
+            <div className="cs-label" style={{ color: "#e67e22", display: "flex", alignItems: "center", gap: "6px" }}>
+              <span>🔥 AI 语气与模型高级参数</span>
+            </div>
+            <div className="cs-desc">调节温度、防复读惩罚与词汇多样性</div>
+          </div>
+          <button
+            type="button"
+            style={{
+              padding: "6px 14px",
+              backgroundColor: showModelParams ? "#f5f5f5" : "#e67e22",
+              color: showModelParams ? "#666" : "#fff",
+              border: showModelParams ? "1px solid #ddd" : "none",
+              borderRadius: "8px",
+              cursor: "pointer",
+              fontSize: "13px",
+              fontWeight: "600",
+            }}
+            onClick={() => setShowModelParams(!showModelParams)}
+          >
+            {showModelParams ? "收起" : "展开调节"}
+          </button>
+        </div>
+
+        {showModelParams && (
+          <div
+            style={{
+              background: "#fffaf4",
+              borderRadius: "12px",
+              padding: "16px",
+              marginBottom: "16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+              border: "1px solid #fed7aa",
+            }}
+          >
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "bold", color: "#8c532b" }}>
+                  🌡️ 采样温度 (Temperature): {settings.temperature ?? 0.8}
+                </span>
+                <span style={{ fontSize: "11px", color: (settings.temperature ?? 0.8) > 1.0 ? "#e67e22" : (settings.temperature ?? 0.8) < 0.6 ? "#4a90e2" : "#27ae60", fontWeight: "600" }}>
+                  {(settings.temperature ?? 0.8) < 0.6 ? "沉稳严谨" : (settings.temperature ?? 0.8) > 1.0 ? "热情放飞/脑洞大" : "鲜活自然(推荐)"}
+                </span>
+              </div>
+              <div style={{ fontSize: "11px", color: "#a8714b", marginBottom: "6px" }}>
+                数值越低越严谨理智，数值越高情绪越丰富、表达越生动奇趣。
+              </div>
+              <input
+                type="range"
+                min="0.1"
+                max="1.5"
+                step="0.05"
+                value={settings.temperature ?? 0.8}
+                onChange={(e) => onChange({ ...settings, temperature: parseFloat(e.target.value) })}
+                style={{ width: "100%", accentColor: "#e67e22", cursor: "pointer" }}
+              />
+            </div>
+
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "bold", color: "#8c532b" }}>
+                  🚫 防复读惩罚 (Presence Penalty): {settings.presence_penalty ?? 0.4}
+                </span>
+                <span style={{ fontSize: "11px", color: (settings.presence_penalty ?? 0.4) > 0.6 ? "#e67e22" : "#27ae60", fontWeight: "600" }}>
+                  {(settings.presence_penalty ?? 0.4) === 0 ? "不惩罚" : "杜绝车轱辘话(推荐)"}
+                </span>
+              </div>
+              <div style={{ fontSize: "11px", color: "#a8714b", marginBottom: "6px" }}>
+                提高该值会强烈抑制角色重复已说过的句式、口癖或称呼。
+              </div>
+              <input
+                type="range"
+                min="0.0"
+                max="1.0"
+                step="0.05"
+                value={settings.presence_penalty ?? 0.4}
+                onChange={(e) => onChange({ ...settings, presence_penalty: parseFloat(e.target.value) })}
+                style={{ width: "100%", accentColor: "#e67e22", cursor: "pointer" }}
+              />
+            </div>
+
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                <span style={{ fontSize: "13px", fontWeight: "bold", color: "#8c532b" }}>
+                  🎯 词汇多样性 (Top P): {settings.top_p ?? 0.95}
+                </span>
+                <span style={{ fontSize: "11px", color: "#8c532b" }}>
+                  {(settings.top_p ?? 0.95) >= 0.9 ? "词汇丰富(推荐)" : "常用词"}
+                </span>
+              </div>
+              <div style={{ fontSize: "11px", color: "#a8714b", marginBottom: "6px" }}>
+                采样核概率阈值，决定候选词汇库的宽广度。
+              </div>
+              <input
+                type="range"
+                min="0.5"
+                max="1.0"
+                step="0.05"
+                value={settings.top_p ?? 0.95}
+                onChange={(e) => onChange({ ...settings, top_p: parseFloat(e.target.value) })}
+                style={{ width: "100%", accentColor: "#e67e22", cursor: "pointer" }}
+              />
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "4px" }}>
+              <button
+                type="button"
+                onClick={() => onChange({ ...settings, temperature: 0.8, presence_penalty: 0.4, top_p: 0.95 })}
+                style={{
+                  padding: "4px 12px",
+                  background: "#fff",
+                  border: "1px solid #fed7aa",
+                  borderRadius: "6px",
+                  color: "#c25528",
+                  fontSize: "11px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }}
+              >
+                🔄 恢复推荐默认值
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* [新增] 核心记忆挂载 */}
         <div className="cs-row">
@@ -71348,21 +71600,47 @@ const ChatSettingsModal = ({
   const backupInputRef = React.useRef(null);
 
     // [新增] 聊天界面深度装扮：自定义 CSS 预设与导入状态
-  const [customPresets, setCustomPresets] = React.useState(() => {
+  const getStoredPresets = (t) => {
     try {
-      return {
-        header: JSON.parse(localStorage.getItem("t8_css_presets_header") || "[]"),
-        input: JSON.parse(localStorage.getItem("t8_css_presets_input") || "[]"),
-        toolbar: JSON.parse(localStorage.getItem("t8_css_presets_toolbar") || "[]"),
-        buttons: JSON.parse(localStorage.getItem("t8_css_presets_buttons") || "[]"),
-        userAvatarFrame: JSON.parse(localStorage.getItem("t8_css_presets_user_avatar_frame") || "[]"),
-        roleAvatarFrame: JSON.parse(localStorage.getItem("t8_css_presets_role_avatar_frame") || "[]"),
-        userDialog: JSON.parse(localStorage.getItem("t8_css_presets_user_dialog") || "[]"),
-        roleDialog: JSON.parse(localStorage.getItem("t8_css_presets_role_dialog") || "[]"),
-      };
+      const val1 = localStorage.getItem(`t8_css_presets_${t}`);
+      if (val1) {
+        const parsed = JSON.parse(val1);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+      const snake = t.replace(/([A-Z])/g, "_$1").toLowerCase();
+      const val2 = localStorage.getItem(`t8_css_presets_${snake}`);
+      if (val2) {
+        const parsed = JSON.parse(val2);
+        if (Array.isArray(parsed)) return parsed;
+      }
+      return [];
     } catch (e) {
-      return { header: [], input: [], toolbar: [], buttons: [], userAvatarFrame: [], roleAvatarFrame: [], userDialog: [], roleDialog: [] };
+      return [];
     }
+  };
+
+  const saveStoredPresets = (t, list) => {
+    try {
+      const jsonStr = JSON.stringify(list);
+      localStorage.setItem(`t8_css_presets_${t}`, jsonStr);
+      const snake = t.replace(/([A-Z])/g, "_$1").toLowerCase();
+      localStorage.setItem(`t8_css_presets_${snake}`, jsonStr);
+    } catch (e) {
+      console.error("保存预设失败:", e);
+    }
+  };
+
+  const [customPresets, setCustomPresets] = React.useState(() => {
+    return {
+      header: getStoredPresets("header"),
+      input: getStoredPresets("input"),
+      toolbar: getStoredPresets("toolbar"),
+      buttons: getStoredPresets("buttons"),
+      userAvatarFrame: getStoredPresets("userAvatarFrame"),
+      roleAvatarFrame: getStoredPresets("roleAvatarFrame"),
+      userDialog: getStoredPresets("userDialog"),
+      roleDialog: getStoredPresets("roleDialog")
+    };
   });
 
     // 载入用户最新发送的这一句
@@ -71553,8 +71831,18 @@ const ChatSettingsModal = ({
       }
     }
 
-    // [修改] Pixabay图片搜索功能说明（降低触发频率）
-    systemInstruction += `\n【图片搜索功能（极其克制）】\n仅当用户明确要求看图片、照片，或者剧情到达非常有必要展示画面（万不得已）时，你才可以使用 [搜索图片:英文关键词] 格式发送图片。\n其他99%的日常聊天中【绝不】使用该功能！宁可少触发，绝不多触发！例如：[搜索图片:cute cat]\n`;
+    // [新增] 文生图与图片搜索能力说明
+    const savedImgGenCfg = localStorage.getItem("image_generation_api_config");
+    let imgGenCfg = null;
+    try {
+      if (savedImgGenCfg) imgGenCfg = JSON.parse(savedImgGenCfg);
+    } catch (e) {}
+
+    if (imgGenCfg && imgGenCfg.apiKey && imgGenCfg.enableChatDraw !== false) {
+      systemInstruction += `\n【AI 绘画与发送图片功能】\n你具备 AI 绘画与发送自拍/照片/画作的能力！当用户要求你看照片、画画、生成图片，或者在聊天中你想向用户展示画作、自拍、当前场景风景、随手拍摄或送出的礼物时，请在回复中包含标签：[生成图片: 画面详细英文提示词]\n例如：[生成图片: a cute little piglet in a lush green spring meadow, masterpiece, highly detailed, photorealistic]\n系统会自动调用独立生图 API 将你画的图片生成并直接渲染在聊天中。\n`;
+    } else {
+      systemInstruction += `\n【图片搜索功能（极其克制）】\n仅当用户明确要求看图片、照片，或者剧情到达非常有必要展示画面（万不得已）时，你才可以使用 [搜索图片:英文关键词] 格式发送图片。\n其他99%的日常聊天中【绝不】使用该功能！宁可少触发，绝不多触发！例如：[搜索图片:cute cat]\n`;
+    }
 
     // [关键修改] 增强线下模式的 Prompt 要求
     if (settings.plotMode === "online")
@@ -71564,9 +71852,18 @@ const ChatSettingsModal = ({
       systemInstruction +=
         "\n【强制模式：线下见面】\n1. 请进行**细致入微**的动作、神态和环境描写。\n2. **所有描写部分【绝对必须】、【无条件】、【不容违反】地用（全角括号）包裹**。\n3. 人物对话部分不要加括号。\n4. **格式要求是最高优先级，必须严格遵守**。\n5. 示例：\n正确格式：（她微微歪头，手指轻轻敲了敲桌面）你今天看起来心情不错啊？\n错误格式：她微微歪头，手指轻轻敲了敲桌面 你今天看起来心情不错啊？\n错误格式：[她微微歪头，手指轻轻敲了敲桌面] 你今天看起来心情不错啊？\n";
 
-    if (settings.showThoughts)
-      systemInstruction +=
-        "\n【读心术开启】请在回复末尾用 (((心声：...))) 格式展示内心独白。\n";
+    if (settings.showThoughts) {
+      systemInstruction += `
+【读心术与内心独白指令（最高强制优先级）】
+每次生成回复时，无论线上聊天还是线下剧情模式，你【绝对必须】由两部分组成：
+1. 表面发言与动作描写（按上述规则正常输出）
+2. 真实内心独白：在整段回复的最末尾单独另起一行，【必须】用 (((心声：此处写下你此刻不可告人的真实内心想法))) 输出！绝对不可遗漏！
+示例：
+（微微偏过头去，指尖轻攥衣角）
+无事，不过是风沙迷了眼。
+(((心声：方才险些被你看穿，好险……)))
+`;
+    }
 
     // [新增] 时间感知功能 (强化版时空认知)
     if (settings.timeAware) {
@@ -71757,7 +72054,7 @@ const ChatSettingsModal = ({
           cleanReply = cleanReply.replace(/\[拒绝通话\]/g, "").trim();
         }
 
-        // === [修改] 剥离修改昵称/群名标签（先处理更新，消息添加稍后处理）===
+        // === 剥离修改昵称/群名标签 ===
         let pendingMsgs = [];
 
         const nicknameMatch = cleanReply.match(/\[修改昵称:(.*?)\]/);
@@ -71789,34 +72086,68 @@ const ChatSettingsModal = ({
             type: "narration",
           });
         }
-        // =========================================================
+
+        // === 剥离生图与搜图标签，提前捕获 Prompt，避免在气泡中作为纯文本显示 ===
+        let imagePromptToProcess = null;
+        let isAiImageRequest = false;
+
+        const aiImageGenerateMatch = cleanReply.match(/\[(?:生成图片|画图|生图|photo|image)[:：]([\s\S]*?)\]/i);
+        const imageSearchMatch = cleanReply.match(/\[搜索图片[:：]([\s\S]*?)\]/i);
+
+        if (aiImageGenerateMatch) {
+          imagePromptToProcess = aiImageGenerateMatch[1].trim();
+          isAiImageRequest = true;
+          cleanReply = cleanReply.replace(aiImageGenerateMatch[0], "").trim();
+        } else if (imageSearchMatch) {
+          imagePromptToProcess = imageSearchMatch[1].trim();
+          // 如果用户配置了 AI 文生图，将 [搜索图片:xxx] 优先当作 AI 绘画
+          isAiImageRequest = !!(localStorage.getItem("image_generation_api_config"));
+          cleanReply = cleanReply.replace(imageSearchMatch[0], "").trim();
+        }
+
+        // 辅助函数：判断是否是刚发起的语音通话请求（仅检查最新一条，绝不检索全量历史）
+        const isLastMsgCallRequest = (historyList) => {
+          if (!historyList || historyList.length === 0) return false;
+          const last = historyList[historyList.length - 1];
+          return (
+            last &&
+            last.isMe &&
+            (last.text === "（发起了语音通话请求）" ||
+              last.text === "\uFF08\u53D1\u8D77\u4E86\u8BED\u97F3\u901A\u8BDD\u8BF7\u6C42\uFF09")
+          );
+        };
 
         // 如果cleanReply为空且是对通话请求的回应，不添加空消息
         if (
           !cleanReply.trim() &&
           (roleInitiateCall || roleAcceptCall || roleRejectCall)
         ) {
-          // 检查是否是对用户通话请求的回应
-          const isResponseToCallRequest = messages.some(
-            (msg) => msg.text === "（发起了语音通话请求）" && msg.isMe,
-          );
+          const isResponseToCallRequest =
+            showVoiceCallPage.show ||
+            isLastMsgCallRequest(messages) ||
+            isLastMsgCallRequest(customHistory);
           if (isResponseToCallRequest) {
-            // 如果是对用户通话请求的回应且没有其他内容，不添加空消息
             return;
           }
         }
+
         const thoughtMatch =
-          reply.match(/\(\(\(心声：([\s\S]*?)\)\)\)/) ||
-          reply.match(/【心声：(.*?)】/);
+          reply.match(/[（\(]{1,3}心声[:：]([\s\S]*?)[）\)]{1,3}/) ||
+          reply.match(/[【\[]心声[:：]([\s\S]*?)[】\]]/) ||
+          reply.match(/[（\(]{1,3}内心(?:独白)?[:：]([\s\S]*?)[）\)]{1,3}/) ||
+          reply.match(/[【\[]内心(?:独白)?[:：]([\s\S]*?)[】\]]/);
 
         if (thoughtMatch) {
           thoughtContent = thoughtMatch[1];
           cleanReply = reply.replace(thoughtMatch[0], "").trim();
+          if (aiImageGenerateMatch) cleanReply = cleanReply.replace(aiImageGenerateMatch[0], "").trim();
+          if (imageSearchMatch) cleanReply = cleanReply.replace(imageSearchMatch[0], "").trim();
         }
 
         if (
           !cleanReply.trim() &&
           !thoughtContent &&
+          !imagePromptToProcess &&
           imageSearchResults.length === 0
         ) {
           setIsTyping(false);
@@ -71829,8 +72160,6 @@ const ChatSettingsModal = ({
         if (pendingMsgs.length > 0) {
           pendingMsgs.forEach((msg, idx) => {
             newAiMsgs.push({
-              // 【修复】将原本的 Date.now() * 1000 + idx 改为如下：
-              // 去掉 * 1000，保持和其他消息相同的时间戳量级，彻底解决退出重进后强制垫底的排序错乱问题
               id: Date.now() + Math.random() + idx,
               text: msg.text,
               type: msg.type,
@@ -71844,7 +72173,7 @@ const ChatSettingsModal = ({
           });
         }
 
-        // 添加图片搜索结果
+        // 添加预先存在的图片搜索结果
         if (imageSearchResults.length > 0) {
           imageSearchResults.forEach((image, index) => {
             newAiMsgs.push({
@@ -71862,215 +72191,23 @@ const ChatSettingsModal = ({
           });
         }
 
-        // 处理AI的图片搜索请求
+        // 处理AI的生图/搜图请求与文本分句
         const processImageSearchRequests = async () => {
-          // [修改] 修复群聊消息重载后顺序错乱的问题（保持与用户ID同数量级）
           let msgIdCounter = Date.now();
 
-          // 处理普通文本
-          if (cleanReply.trim()) {
-            if (String(chatData.id).startsWith("group_chat")) {
-              // 【群聊解析逻辑】：匹配 "[名字]: 文本" 形式
-              const lines = cleanReply.split("\n").filter((l) => l.trim());
-
-              let lastKnownSpeaker = "系统"; // 记录上一个说话的人，防止换行掉名字
-
-              // 【新增】接龙相关的标签列表，这些不应被识别为说话人名字
-              const jielongTags = ["主题", "截止时间", "格式要求", "接龙"];
-
-              // 【新增】接龙内容缓存，用于合并连续的接龙行
-              let jielongBuffer = [];
-              let jielongSpeaker = null;
-
-              lines.forEach((line, idx) => {
-                const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
-                const currentThought =
-                  idx === lines.length - 1 ? thoughtContent : null;
-
-                // 【新增】检查是否是 #接龙 开头的行
-                const isJielongLine = line.trim().startsWith("#接龙");
-
-                if (isJielongLine) {
-                  // 如果是 #接龙 开头的行，加入接龙缓存
-                  if (!jielongSpeaker) {
-                    jielongSpeaker =
-                      lastKnownSpeaker !== "系统" ? lastKnownSpeaker : "群成员";
-                  }
-                  jielongBuffer.push(line.trim());
-                } else if (match) {
-                  const potentialSpeaker = match[1].trim();
-                  // 检查是否是接龙标签
-                  const isJielongTag = jielongTags.some((tag) =>
-                    potentialSpeaker.includes(tag),
-                  );
-
-                  if (isJielongTag) {
-                    // 如果是接龙标签，加入接龙缓存
-                    if (!jielongSpeaker) {
-                      jielongSpeaker =
-                        lastKnownSpeaker !== "系统"
-                          ? lastKnownSpeaker
-                          : "群成员";
-                    }
-                    jielongBuffer.push(line.trim());
-                  } else {
-                    // 如果不是接龙标签，先处理之前缓存的接龙内容
-                    if (jielongBuffer.length > 0) {
-                      msgIdCounter++;
-                      newAiMsgs.push({
-                        id: msgIdCounter,
-                        text: jielongBuffer.join("\n"),
-                        sender: jielongSpeaker,
-                        type: "text",
-                        isMe: false,
-                        time: new Date().toLocaleTimeString([], {
-                          hour: "2-digit",
-                          minute: "2-digit",
-                        }),
-                        thought: null,
-                      });
-                      jielongBuffer = [];
-                      jielongSpeaker = null;
-                    }
-
-                    // 处理当前行
-                    lastKnownSpeaker = potentialSpeaker;
-                    msgIdCounter++;
-                    newAiMsgs.push({
-                      id: msgIdCounter,
-                      text: match[2].trim(),
-                      sender: lastKnownSpeaker,
-                      type: "text",
-                      isMe: false,
-                      time: new Date().toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      }),
-                      thought: currentThought,
-                    });
-                  }
-                } else {
-                  // 如果没匹配到名字格式
-                  if (jielongBuffer.length > 0) {
-                    // 如果正在收集接龙，继续添加
-                    jielongBuffer.push(line.trim());
-                  } else {
-                    // 否则按普通消息处理
-                    msgIdCounter++;
-                    newAiMsgs.push({
-                      id: msgIdCounter,
-                      text: line.trim(),
-                      sender:
-                        lastKnownSpeaker !== "系统"
-                          ? lastKnownSpeaker
-                          : "群成员",
-                      type: "text",
-                      isMe: false,
-                      time: new Date().toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      }),
-                      thought: currentThought,
-                    });
-                  }
-                }
-
-                // 处理最后一行后，检查是否还有未处理的接龙缓存
-                if (idx === lines.length - 1 && jielongBuffer.length > 0) {
+          // 1. 处理文生图或搜索图片
+          if (imagePromptToProcess) {
+            let imgSuccess = false;
+            if (isAiImageRequest && typeof window.generateAIImage === "function") {
+              console.log("检测到 AI 文生图请求，Prompt:", imagePromptToProcess);
+              try {
+                const generatedImageUrl = await window.generateAIImage(imagePromptToProcess);
+                if (generatedImageUrl) {
                   msgIdCounter++;
                   newAiMsgs.push({
                     id: msgIdCounter,
-                    text: jielongBuffer.join("\n"),
-                    sender: jielongSpeaker || "群成员",
-                    type: "text",
-                    isMe: false,
-                    time: new Date().toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }),
-                    thought: currentThought,
-                  });
-                }
-              });
-            } else {
-              // 【单聊解析逻辑】
-              if (settings.plotMode === "offline") {
-                const parts = cleanReply
-                  .split(/([（\(][\s\S]*?[）\)])/g)
-                  .filter((p) => p.trim());
-                parts.forEach((part, idx) => {
-                  const trimmedPart = part.trim();
-                  const isNarration =
-                    /^[（\(]/.test(trimmedPart) && /[）\)]$/.test(trimmedPart);
-                  const content = trimmedPart
-                    .replace(/^[（\(]|[）\)]$/g, "")
-                    .trim();
-                  // 只在最后一条消息带上心声
-                  const currentThought =
-                    idx === parts.length - 1 ? thoughtContent : null;
-
-                  if (content) {
-                    msgIdCounter++; // 严格递增
-                    newAiMsgs.push({
-                      id: msgIdCounter,
-                      text: content,
-                      type: isNarration ? "narration" : "text",
-                      isMe: false,
-                      time: new Date().toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      }),
-                      thought: currentThought,
-                    });
-                  }
-                });
-              } else {
-                // 线上模式
-                const lines = cleanReply
-                  .split("\n")
-                  .filter((line) => line.trim());
-                lines.forEach((line, index) => {
-                  // 只在最后一条消息带上心声
-                  const currentThought =
-                    index === lines.length - 1 ? thoughtContent : null;
-
-                  msgIdCounter++; // 严格递增
-                  newAiMsgs.push({
-                    id: msgIdCounter,
-                    text: line.trim(),
-                    type: "text",
-                    isMe: false,
-                    time: new Date().toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }),
-                    thought: currentThought,
-                  });
-                });
-              }
-            }
-          }
-
-          // 检查是否是图片搜索请求
-          const imageSearchMatch = cleanReply.match(/\[搜索图片:(.*?)\]/);
-          if (imageSearchMatch && pixabayApiKey) {
-            const searchQuery = imageSearchMatch[1].trim();
-            if (searchQuery) {
-              console.log("检测到AI图片搜索请求，搜索关键词:", searchQuery);
-              const aiImageResults = await searchPixabayImages(
-                searchQuery,
-                pixabayApiKey,
-              );
-              console.log("AI图片搜索结果:", aiImageResults);
-
-              // 添加图片搜索结果
-              if (aiImageResults.length > 0) {
-                aiImageResults.forEach((image, index) => {
-                  msgIdCounter++; // 严格递增
-                  newAiMsgs.push({
-                    id: msgIdCounter,
-                    text: image.tags,
-                    content: image.url,
+                    text: imagePromptToProcess,
+                    content: generatedImageUrl,
                     type: "image",
                     isMe: false,
                     time: new Date().toLocaleTimeString([], {
@@ -72079,30 +72216,180 @@ const ChatSettingsModal = ({
                     }),
                     thought: null,
                   });
+                  imgSuccess = true;
+                }
+              } catch (imgErr) {
+                console.error("AI 实时生图失败:", imgErr);
+              }
+            }
+            if (!imgSuccess && pixabayApiKey) {
+              try {
+                console.log("检测到图片搜索请求，关键词:", imagePromptToProcess);
+                const aiImageResults = await searchPixabayImages(imagePromptToProcess, pixabayApiKey);
+                if (aiImageResults && aiImageResults.length > 0) {
+                  aiImageResults.forEach((image) => {
+                    msgIdCounter++;
+                    newAiMsgs.push({
+                      id: msgIdCounter,
+                      text: image.tags || imagePromptToProcess,
+                      content: image.url,
+                      type: "image",
+                      isMe: false,
+                      time: new Date().toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      }),
+                      thought: null,
+                    });
+                  });
+                }
+              } catch (searchErr) {
+                console.error("Pixabay 图片搜索失败:", searchErr);
+              }
+            }
+          }
+
+          // 2. 处理普通文本
+          if (cleanReply.trim()) {
+            if (String(chatData.id).startsWith("group_chat")) {
+              const lines = cleanReply.split("\n").filter((l) => l.trim());
+              let lastKnownSpeaker = "系统";
+              const jielongTags = ["主题", "截止时间", "格式要求", "接龙"];
+              let jielongBuffer = [];
+              let jielongSpeaker = null;
+
+              lines.forEach((line, idx) => {
+                const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
+                const currentThought = idx === lines.length - 1 ? thoughtContent : null;
+                const isJielongLine = line.trim().startsWith("#接龙");
+
+                if (isJielongLine) {
+                  if (!jielongSpeaker) jielongSpeaker = lastKnownSpeaker !== "系统" ? lastKnownSpeaker : "群成员";
+                  jielongBuffer.push(line.trim());
+                } else if (match) {
+                  const potentialSpeaker = match[1].trim();
+                  const isJielongTag = jielongTags.some((tag) => potentialSpeaker.includes(tag));
+                  if (isJielongTag) {
+                    if (!jielongSpeaker) jielongSpeaker = lastKnownSpeaker !== "系统" ? lastKnownSpeaker : "群成员";
+                    jielongBuffer.push(line.trim());
+                  } else {
+                    if (jielongBuffer.length > 0) {
+                      msgIdCounter++;
+                      newAiMsgs.push({
+                        id: msgIdCounter,
+                        text: jielongBuffer.join("\n"),
+                        sender: jielongSpeaker,
+                        type: "text",
+                        isMe: false,
+                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                        thought: null,
+                      });
+                      jielongBuffer = [];
+                      jielongSpeaker = null;
+                    }
+                    lastKnownSpeaker = potentialSpeaker;
+                    msgIdCounter++;
+                    newAiMsgs.push({
+                      id: msgIdCounter,
+                      text: match[2].trim(),
+                      sender: lastKnownSpeaker,
+                      type: "text",
+                      isMe: false,
+                      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                      thought: currentThought,
+                    });
+                  }
+                } else {
+                  if (jielongBuffer.length > 0) {
+                    jielongBuffer.push(line.trim());
+                  } else {
+                    msgIdCounter++;
+                    newAiMsgs.push({
+                      id: msgIdCounter,
+                      text: line.trim(),
+                      sender: lastKnownSpeaker !== "系统" ? lastKnownSpeaker : "群成员",
+                      type: "text",
+                      isMe: false,
+                      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                      thought: currentThought,
+                    });
+                  }
+                }
+                if (idx === lines.length - 1 && jielongBuffer.length > 0) {
+                  msgIdCounter++;
+                  newAiMsgs.push({
+                    id: msgIdCounter,
+                    text: jielongBuffer.join("\n"),
+                    sender: jielongSpeaker || "群成员",
+                    type: "text",
+                    isMe: false,
+                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    thought: currentThought,
+                  });
+                }
+              });
+            } else {
+              if (settings.plotMode === "offline") {
+                const actionRegex = /([（\(\[【][\s\S]*?[）\)\]】]|\*[^*\n]+\*)/g;
+                const rawParts = cleanReply.split(actionRegex).filter((p) => p && p.trim());
+                const finalSegments = [];
+                rawParts.forEach((part) => {
+                  const trimmed = part.trim();
+                  const isAction = /^([（\(\[【][\s\S]*?[）\)\]】]|\*[^*\n]+\*)$/.test(trimmed);
+                  if (isAction) {
+                    const content = trimmed.replace(/^[（\(\[【\*]+|[）\)\]】\*]+$/g, "").trim();
+                    if (content) {
+                      finalSegments.push({ text: content, type: "narration" });
+                    }
+                  } else {
+                    const dialogLines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+                    dialogLines.forEach((line) => {
+                      finalSegments.push({ text: line, type: "text" });
+                    });
+                  }
+                });
+                finalSegments.forEach((seg, idx) => {
+                  const currentThought = idx === finalSegments.length - 1 ? thoughtContent : null;
+                  msgIdCounter++;
+                  newAiMsgs.push({
+                    id: msgIdCounter,
+                    text: seg.text,
+                    type: seg.type,
+                    isMe: false,
+                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    thought: currentThought,
+                  });
+                });
+              } else {
+                const lines = cleanReply.split("\n").filter((line) => line.trim());
+                lines.forEach((line, index) => {
+                  const currentThought = index === lines.length - 1 ? thoughtContent : null;
+                  msgIdCounter++;
+                  newAiMsgs.push({
+                    id: msgIdCounter,
+                    text: line.trim(),
+                    type: "text",
+                    isMe: false,
+                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+                    thought: currentThought,
+                  });
                 });
               }
             }
           }
         };
 
-        // 处理所有段落
         await processImageSearchRequests();
 
-        // 检查是否处于通话呼叫/等待/接听上下文
+        // 检查是否处于通话呼叫/等待/接听上下文（绝不误判历史通话记录）
         const isCallingContext =
           showVoiceCallPage.show ||
           showInCallUI ||
-          (customHistory &&
-            customHistory.some(
-              (msg) => msg.text === "（发起了语音通话请求）" && msg.isMe,
-            )) ||
-          messages.some(
-            (msg) => msg.text === "（发起了语音通话请求）" && msg.isMe,
-          );
+          isLastMsgCallRequest(customHistory) ||
+          isLastMsgCallRequest(messages);
 
         // 触发通话界面的副作用
         if (roleRejectCall && isCallingContext) {
-          // 角色拒绝接听：关闭等待UI，在聊天记录中生成一条精致的拒接通话记录
           setShowVoiceCallPage({ show: false, callType: "role" });
           const rejectRecord = {
             id: Date.now(),
@@ -72129,7 +72416,6 @@ const ChatSettingsModal = ({
           setIsTyping(false);
           return;
         } else if (roleAcceptCall || (isCallingContext && !roleInitiateCall)) {
-          // 无论是明确返回了[接受通话]，还是在呼叫等待中角色回复了台词（未拒绝），均判定为接通并进入通话界面
           setShowVoiceCallPage({ show: false, callType: "role" });
           setTimeout(() => setShowInCallUI(true), 300);
 
@@ -72171,7 +72457,6 @@ const ChatSettingsModal = ({
           setIsTyping(false);
           return;
         } else if (roleInitiateCall) {
-          // 角色主动发起通话，弹出被呼叫界面
           setTimeout(
             () => setShowVoiceCallPage({ show: true, callType: "role" }),
             800,
@@ -81350,8 +81635,22 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
                 };
                 let imageUrl = null;
 
-                // 如果有Pixabay API密钥，搜索图片
-                if (pixabayApiKey) {
+                // 如果配置了 AI 文生图，优先使用 AI 文生图
+                const savedImgGenCfg = localStorage.getItem("image_generation_api_config");
+                if (savedImgGenCfg && typeof window.generateAIImage === "function") {
+                  try {
+                    const parsedImgCfg = JSON.parse(savedImgGenCfg);
+                    if (parsedImgCfg && parsedImgCfg.apiKey && parsedImgCfg.url) {
+                      const imgPrompt = item.imageKeyword ? `high quality illustration, aesthetic, ${item.imageKeyword}` : `aesthetic photography, scenery, ${item.text.substring(0, 30)}`;
+                      imageUrl = await window.generateAIImage(imgPrompt);
+                    }
+                  } catch (imgGenErr) {
+                    console.warn("朋友圈 AI 生图失败，回退至图库搜索:", imgGenErr);
+                  }
+                }
+
+                // 如果未生成且有Pixabay API密钥，降级搜索图片
+                if (!imageUrl && pixabayApiKey) {
                   // 优先使用AI提供的imageKeyword，否则使用动态内容的前20个字符
                   const searchQuery =
                     item.imageKeyword || item.text.substring(0, 20);
@@ -93390,12 +93689,814 @@ const MinimaxSettingsPage = ({ onClose }) => {
   );
 };
 
+
+// ==================== [新增] AI 文生图配置页面组件 ====================
+
+const ImageGenerationSettingsPage = ({ onClose }) => {
+  const { useState, useEffect } = React;
+
+  const PROVIDER_PRESETS = {
+    siliconflow: {
+      name: "⚡ 硅基流动 (SiliconFlow / Flux / SD3)",
+      url: "https://api.siliconflow.cn/v1",
+      models: [
+        { id: "black-forest-labs/FLUX.1-schnell", label: "FLUX.1-schnell (极速生成 / 推荐)" },
+        { id: "black-forest-labs/FLUX.1-dev", label: "FLUX.1-dev (高质量精细)" },
+        { id: "stabilityai/stable-diffusion-3-5-large", label: "Stable Diffusion 3.5 Large" },
+        { id: "Pro/black-forest-labs/FLUX.1-schnell", label: "Pro/FLUX.1-schnell" }
+      ],
+      defaultModel: "black-forest-labs/FLUX.1-schnell",
+      tip: "在硅基流动官网获取 sk- 开头的 API Key，性价比高、支持开源优质模型"
+    },
+    openai: {
+      name: "🤖 OpenAI 官方 & 中转 API (DALL·E 3)",
+      url: "https://api.openai.com/v1",
+      models: [
+        { id: "dall-e-3", label: "DALL·E 3 (旗舰画质)" },
+        { id: "dall-e-2", label: "DALL·E 2 (标准)" }
+      ],
+      defaultModel: "dall-e-3",
+      tip: "支持 OpenAI 官方或各类 OneAPI/NewAPI 等第三方中转 API"
+    },
+    zhipu: {
+      name: "🧠 智谱 AI 开放平台 (CogView-3)",
+      url: "https://open.bigmodel.cn/api/paas/v4",
+      models: [
+        { id: "cogview-3-plus", label: "CogView-3-Plus (高清增强)" },
+        { id: "cogview-3-flash", label: "CogView-3-Flash (免费快速)" },
+        { id: "cogview-3", label: "CogView-3 (通用)" }
+      ],
+      defaultModel: "cogview-3-plus",
+      tip: "在智谱 AI 开放平台获取 API Key，擅长中文理解与中式审美"
+    },
+    custom: {
+      name: "💻 本地 ComfyUI / SD-WebUI 代理 / 自定义端点",
+      url: "http://127.0.0.1:7860/v1",
+      models: [
+        { id: "sd-model", label: "本地默认模型" }
+      ],
+      defaultModel: "sd-model",
+      tip: "支持本地 SD-WebUI (OpenAI 兼容代理插件) 或自建 ComfyUI 代理"
+    }
+  };
+
+  const [config, setConfig] = useState({
+    provider: "siliconflow",
+    url: "https://api.siliconflow.cn/v1",
+    apiKey: "",
+    model: "black-forest-labs/FLUX.1-schnell",
+    size: "1024x1024",
+    timeout: "120",
+    enableChatDraw: true,
+    fetchedModels: [],
+  });
+
+  const [showKey, setShowKey] = useState(false);
+  const [testPrompt, setTestPrompt] = useState("A lovely anime girl enjoying afternoon tea in a sunlit cozy cafe, highly detailed, masterpiece");
+  const [isTesting, setIsTesting] = useState(false);
+  const [testResultImage, setTestResultImage] = useState(null);
+  const [testError, setTestError] = useState(null);
+  const [testTime, setTestTime] = useState(null);
+
+  // 拉取模型相关状态
+  const [isLoadingModels, setIsLoadingModels] = useState(false);
+  const [fetchError, setFetchError] = useState(null);
+  const [fetchSuccessMsg, setFetchSuccessMsg] = useState(null);
+  const [modelSearchKeyword, setModelSearchKeyword] = useState("");
+
+  useEffect(() => {
+    const saved = localStorage.getItem("image_generation_api_config");
+    if (saved) {
+      try {
+        setConfig(prev => ({ ...prev, ...JSON.parse(saved) }));
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleSelectPreset = (providerKey) => {
+    const preset = PROVIDER_PRESETS[providerKey];
+    if (!preset) return;
+    setConfig(prev => ({
+      ...prev,
+      provider: providerKey,
+      url: preset.url,
+      model: preset.defaultModel,
+    }));
+    setFetchSuccessMsg(null);
+    setFetchError(null);
+  };
+
+  // 拉取/获取可用模型
+  const handleFetchModels = async () => {
+    if (!config.url || !config.url.trim()) {
+      alert("请先填写生图 API 地址 (URL)");
+      return;
+    }
+    if (!config.apiKey || !config.apiKey.trim()) {
+      alert("请先填写生图 API Key");
+      return;
+    }
+
+    setIsLoadingModels(true);
+    setFetchError(null);
+    setFetchSuccessMsg(null);
+
+    let baseUrl = config.url.trim();
+    if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+      baseUrl = "https://" + baseUrl;
+    }
+
+    // 去除误填的尾部生图或聊天路径
+    baseUrl = baseUrl.replace(/\/images\/generations\/?$/, "");
+    baseUrl = baseUrl.replace(/\/chat\/completions\/?$/, "");
+    baseUrl = baseUrl.replace(/\/+$/, "");
+
+    let modelsUrl = "";
+    if (baseUrl.includes("bigmodel.cn")) {
+      modelsUrl = baseUrl.endsWith("/v4") ? `${baseUrl}/models` : `${baseUrl}/api/paas/v4/models`;
+    } else if (baseUrl.endsWith("/v1")) {
+      modelsUrl = `${baseUrl}/models`;
+    } else if (baseUrl.includes("/v1/")) {
+      modelsUrl = baseUrl.replace(/\/v1\/.*$/, "/v1/models");
+    } else {
+      modelsUrl = `${baseUrl}/v1/models`;
+    }
+
+    console.log("正在请求文生图可用模型列表:", modelsUrl);
+
+    try {
+      let response = await fetch(modelsUrl, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${config.apiKey.trim()}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.status === 404 && modelsUrl.includes("/v1/models")) {
+        const fallbackUrl = `${baseUrl}/models`;
+        try {
+          const fallbackRes = await fetch(fallbackUrl, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${config.apiKey.trim()}`,
+              "Content-Type": "application/json",
+            },
+          });
+          if (fallbackRes.ok) response = fallbackRes;
+        } catch (e) {}
+      }
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        let msg = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errObj = JSON.parse(errText);
+          if (errObj.error && errObj.error.message) msg = errObj.error.message;
+          else if (errObj.message) msg = errObj.message;
+        } catch (e) {}
+        throw new Error(msg);
+      }
+
+      const data = await response.json();
+      let rawList = [];
+      if (Array.isArray(data.data)) {
+        rawList = data.data;
+      } else if (Array.isArray(data.models)) {
+        rawList = data.models;
+      } else if (Array.isArray(data)) {
+        rawList = data;
+      }
+
+      const modelIds = rawList
+        .map((item) => (typeof item === "string" ? item : item.id || item.name || item.model))
+        .filter(Boolean);
+
+      if (modelIds.length === 0) {
+        throw new Error("接口返回的模型列表为空");
+      }
+
+      const isImgModel = (id) => {
+        const lower = String(id).toLowerCase();
+        return (
+          lower.includes("flux") ||
+          lower.includes("sd") ||
+          lower.includes("stable-diffusion") ||
+          lower.includes("dall-e") ||
+          lower.includes("cogview") ||
+          lower.includes("kolors") ||
+          lower.includes("midjourney") ||
+          lower.includes("image") ||
+          lower.includes("wanx") ||
+          lower.includes("drawing") ||
+          lower.includes("paint")
+        );
+      };
+
+      const sortedModels = [
+        ...modelIds.filter((m) => isImgModel(m)),
+        ...modelIds.filter((m) => !isImgModel(m)),
+      ];
+
+      const newConfig = {
+        ...config,
+        fetchedModels: sortedModels,
+        model: config.model || sortedModels[0] || "",
+      };
+
+      setConfig(newConfig);
+      localStorage.setItem("image_generation_api_config", JSON.stringify(newConfig));
+
+      const imgModelCount = sortedModels.filter((m) => isImgModel(m)).length;
+      const successMsg = `成功拉取 ${sortedModels.length} 个模型${imgModelCount > 0 ? ` (其中 ${imgModelCount} 个生图专用模型已优先置顶)` : ""}`;
+      setFetchSuccessMsg(successMsg);
+    } catch (err) {
+      console.error("拉取生图模型失败:", err);
+      let errMsg = err.message || String(err);
+      if (errMsg.includes("Failed to fetch")) {
+        errMsg = "网络连接失败，请检查 URL 是否正确或是否存在跨域拦截 (CORS)";
+      }
+      setFetchError(errMsg);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
+  const handleSave = () => {
+    if (!config.apiKey.trim() || !config.url.trim()) {
+      alert("请填写完整的 API Key 和服务地址 (URL)");
+      return;
+    }
+    localStorage.setItem("image_generation_api_config", JSON.stringify(config));
+    alert("AI 文生图配置保存成功！");
+    if (onClose) onClose();
+  };
+
+  const handleTestGenerate = async () => {
+    if (!config.apiKey.trim() || !config.url.trim()) {
+      alert("请先填写 API Key 和服务地址再进行生图测试");
+      return;
+    }
+    if (!testPrompt.trim()) {
+      alert("请输入测试生图的提示词");
+      return;
+    }
+    localStorage.setItem("image_generation_api_config", JSON.stringify(config));
+    setIsTesting(true);
+    setTestResultImage(null);
+    setTestError(null);
+    const startTime = Date.now();
+    try {
+      const url = await window.generateAIImage(testPrompt.trim(), {
+        model: config.model,
+        size: config.size
+      });
+      const costSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+      setTestTime(costSeconds);
+      setTestResultImage(url);
+    } catch (err) {
+      setTestError(err.message || String(err));
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const inputStyle = {
+    width: "100%",
+    padding: "12px 16px",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+    fontSize: "14px",
+    outline: "none",
+    backgroundColor: "#fff",
+    transition: "border 0.3s",
+  };
+
+  const currentPreset = PROVIDER_PRESETS[config.provider] || PROVIDER_PRESETS.custom;
+  const hasFetched = config.fetchedModels && config.fetchedModels.length > 0;
+
+  let displayModels = [];
+  if (hasFetched) {
+    displayModels = config.fetchedModels
+      .filter((m) => !modelSearchKeyword.trim() || m.toLowerCase().includes(modelSearchKeyword.trim().toLowerCase()))
+      .map((m) => ({ id: m, label: m }));
+  } else if (currentPreset.models && currentPreset.models.length > 0) {
+    displayModels = currentPreset.models;
+  }
+
+  return (
+    <div
+      style={{
+        flex: 1,
+        padding: "20px",
+        overflowY: "auto",
+        backgroundColor: "#F9F7F5",
+      }}
+    >
+      <div
+        style={{
+          background: "#fff",
+          borderRadius: "16px",
+          padding: "20px",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.03)",
+        }}
+      >
+        {/* 导航与标题 */}
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" }}>
+          <div style={{ fontSize: "16px", fontWeight: "bold", color: "#4c1d95", display: "flex", alignItems: "center", gap: "6px" }}>
+            <span>🎨</span> AI 文生图配置 (Text-to-Image)
+          </div>
+          {onClose && (
+            <button
+              onClick={onClose}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#6b7280",
+                fontSize: "14px",
+                cursor: "pointer",
+                padding: "4px 8px",
+              }}
+            >
+              返回
+            </button>
+          )}
+        </div>
+
+        {/* 独立提示横幅 */}
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "12px 14px",
+            background: "#f5f3ff",
+            border: "1px solid #ddd6fe",
+            borderRadius: "10px",
+            fontSize: "13px",
+            color: "#5b21b6",
+            lineHeight: "1.6",
+          }}
+        >
+          <strong>💡 独立文生图通道说明：</strong>
+          <br />
+          此处配置专用于 <strong>AI 绘画与图像生成 (Text-to-Image)</strong>，驱动角色在对话中主动发送画作照片，以及朋友圈发布时的原创 AI 配图。
+          <br />
+          <span style={{ color: "#059669", fontWeight: "600" }}>
+            ✨ 本接口与主聊天的【传讯大模型 API】及【MiniMax 语音配置】完全独立，绝对不会混淆或互相覆盖。
+          </span>
+        </div>
+
+        {/* 提供商快捷切换 */}
+        <div style={{ marginBottom: "16px" }}>
+          <label
+            style={{
+              display: "block",
+              marginBottom: "8px",
+              fontSize: "14px",
+              fontWeight: "500",
+              color: "#5a5f4d",
+            }}
+          >
+            选择服务提供商预设
+          </label>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+            {Object.entries(PROVIDER_PRESETS).map(([key, preset]) => {
+              const isSelected = config.provider === key;
+              return (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => handleSelectPreset(key)}
+                  style={{
+                    padding: "10px 8px",
+                    border: isSelected ? "2px solid #8b5cf6" : "1px solid #e2e8f0",
+                    borderRadius: "8px",
+                    backgroundColor: isSelected ? "#f5f3ff" : "#fff",
+                    color: isSelected ? "#6d28d9" : "#475569",
+                    fontSize: "12px",
+                    fontWeight: isSelected ? "bold" : "normal",
+                    cursor: "pointer",
+                    textAlign: "left",
+                    lineHeight: "1.3",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {preset.name}
+                </button>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px" }}>
+            📌 当前预设说明：{currentPreset.tip}
+          </div>
+        </div>
+
+        {/* API URL 服务地址 */}
+        <div style={{ marginBottom: "16px" }}>
+          <label
+            style={{
+              display: "block",
+              marginBottom: "8px",
+              fontSize: "14px",
+              fontWeight: "500",
+              color: "#5a5f4d",
+            }}
+          >
+            生图 API 地址 (URL) *
+          </label>
+          <input
+            type="text"
+            value={config.url}
+            onChange={(e) => setConfig({ ...config, url: e.target.value })}
+            placeholder="例如: https://api.siliconflow.cn/v1"
+            style={inputStyle}
+          />
+          <div style={{ fontSize: "11px", color: "#888", marginTop: "4px" }}>
+            支持 OpenAI 兼容规范，系统会自动识别补充 /images/generations 路径
+          </div>
+        </div>
+
+        {/* API Key */}
+        <div style={{ marginBottom: "16px" }}>
+          <label
+            style={{
+              display: "block",
+              marginBottom: "8px",
+              fontSize: "14px",
+              fontWeight: "500",
+              color: "#5a5f4d",
+            }}
+          >
+            生图 API Key *
+          </label>
+          <div style={{ position: "relative" }}>
+            <input
+              type={showKey ? "text" : "password"}
+              value={config.apiKey}
+              onChange={(e) => setConfig({ ...config, apiKey: e.target.value })}
+              placeholder="sk-..."
+              style={{ ...inputStyle, paddingRight: "60px" }}
+            />
+            <button
+              type="button"
+              onClick={() => setShowKey(!showKey)}
+              style={{
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                color: "#888",
+                fontSize: "12px",
+                cursor: "pointer",
+                padding: "4px 8px",
+              }}
+            >
+              {showKey ? "隐藏" : "显示"}
+            </button>
+          </div>
+        </div>
+
+        {/* 生图模型选择与拉取 */}
+        <div style={{ marginBottom: "16px" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "8px" }}>
+            <label
+              style={{
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#5a5f4d",
+              }}
+            >
+              生图模型 (Model) *
+            </label>
+            <button
+              type="button"
+              onClick={handleFetchModels}
+              disabled={isLoadingModels}
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "4px 10px",
+                backgroundColor: isLoadingModels ? "#cbd5e1" : "#8b5cf6",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: "500",
+                cursor: isLoadingModels ? "not-allowed" : "pointer",
+                transition: "all 0.2s",
+              }}
+            >
+              {isLoadingModels ? (
+                <>
+                  <span
+                    style={{
+                      display: "inline-block",
+                      width: "10px",
+                      height: "10px",
+                      border: "2px solid #fff",
+                      borderTopColor: "transparent",
+                      borderRadius: "50%",
+                      animation: "spin 1s linear infinite",
+                    }}
+                  />
+                  拉取中...
+                </>
+              ) : (
+                <>
+                  <span>📥</span> 拉取模型列表
+                </>
+              )}
+            </button>
+          </div>
+
+          {/* 成功拉取或错误状态条 */}
+          {fetchSuccessMsg && (
+            <div style={{ marginBottom: "8px", padding: "6px 10px", backgroundColor: "#ecfdf5", border: "1px solid #a7f3d0", borderRadius: "6px", color: "#065f46", fontSize: "12px" }}>
+              ✅ {fetchSuccessMsg}
+            </div>
+          )}
+          {fetchError && (
+            <div style={{ marginBottom: "8px", padding: "6px 10px", backgroundColor: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", color: "#b91c1c", fontSize: "12px" }}>
+              ❌ 拉取失败: {fetchError}
+            </div>
+          )}
+
+          {/* 如果拉取到了较多模型，提供模型快速过滤搜索 */}
+          {hasFetched && config.fetchedModels.length > 6 && (
+            <input
+              type="text"
+              value={modelSearchKeyword}
+              onChange={(e) => setModelSearchKeyword(e.target.value)}
+              placeholder="🔍 搜索过滤拉取的模型..."
+              style={{
+                ...inputStyle,
+                padding: "8px 12px",
+                fontSize: "13px",
+                marginBottom: "8px",
+                backgroundColor: "#f8fafc",
+              }}
+            />
+          )}
+
+          {/* 模型下拉选择 */}
+          {displayModels.length > 0 && (
+            <select
+              value={config.model}
+              onChange={(e) => setConfig({ ...config, model: e.target.value })}
+              style={{ ...inputStyle, marginBottom: "8px", cursor: "pointer" }}
+            >
+              <option value="">-- 请选择模型 --</option>
+              {displayModels.map((m) => (
+                <option key={m.id} value={m.id}>
+                  {m.label || m.id}
+                </option>
+              ))}
+            </select>
+          )}
+
+          {/* 模型名直接输入/微调框 */}
+          <input
+            type="text"
+            value={config.model}
+            onChange={(e) => setConfig({ ...config, model: e.target.value })}
+            placeholder="输入或选择模型名, 如 black-forest-labs/FLUX.1-schnell"
+            style={inputStyle}
+          />
+          <div style={{ fontSize: "11px", color: "#888", marginTop: "4px" }}>
+            {hasFetched ? (
+              <span>✨ 已从服务器拉取可用模型列表，可直接下拉选择或手动输入。</span>
+            ) : (
+              <span>💡 可点击右上角【拉取模型列表】自动获取，或直接手动填写。</span>
+            )}
+          </div>
+        </div>
+
+        {/* 图片尺寸与超时设置 */}
+        <div style={{ display: "flex", gap: "12px", marginBottom: "16px" }}>
+          <div style={{ flex: 1 }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#5a5f4d",
+              }}
+            >
+              默认尺寸
+            </label>
+            <select
+              value={config.size || "1024x1024"}
+              onChange={(e) => setConfig({ ...config, size: e.target.value })}
+              style={{ ...inputStyle, cursor: "pointer" }}
+            >
+              <option value="1024x1024">1024x1024 (正方形 1:1)</option>
+              <option value="768x1024">768x1024 (竖屏人像 3:4)</option>
+              <option value="1024x768">1024x768 (横屏风景 4:3)</option>
+              <option value="512x512">512x512 (小图 1:1)</option>
+            </select>
+          </div>
+          <div style={{ flex: 1 }}>
+            <label
+              style={{
+                display: "block",
+                marginBottom: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#5a5f4d",
+              }}
+            >
+              超时时间 (秒)
+            </label>
+            <input
+              type="number"
+              value={config.timeout || "120"}
+              onChange={(e) => setConfig({ ...config, timeout: e.target.value })}
+              min="10"
+              max="300"
+              style={inputStyle}
+            />
+          </div>
+        </div>
+
+        {/* 聊天角色作画开关 */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 14px",
+            background: "#f8fafc",
+            borderRadius: "8px",
+            border: "1px solid #e2e8f0",
+            marginBottom: "20px",
+          }}
+        >
+          <div>
+            <div style={{ fontSize: "14px", fontWeight: "500", color: "#334155" }}>
+              允许角色在聊天中主动画图/发照片
+            </div>
+            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+              开启后，角色可通过 [生成图片: 提示词] 触发作画并直接显示在聊天框中
+            </div>
+          </div>
+          <input
+            type="checkbox"
+            checked={config.enableChatDraw !== false}
+            onChange={(e) => setConfig({ ...config, enableChatDraw: e.target.checked })}
+            style={{ width: "18px", height: "18px", cursor: "pointer", accentColor: "#8b5cf6" }}
+          />
+        </div>
+
+        {/* 实时生图测试区域 */}
+        <div
+          style={{
+            marginBottom: "20px",
+            padding: "14px",
+            background: "#fafafa",
+            borderRadius: "10px",
+            border: "1px dashed #cbd5e1",
+          }}
+        >
+          <div style={{ fontSize: "13px", fontWeight: "bold", color: "#334155", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+            <span>🧪</span> 实时生图连通性测试
+          </div>
+          <textarea
+            value={testPrompt}
+            onChange={(e) => setTestPrompt(e.target.value)}
+            rows="2"
+            placeholder="输入测试提示词 (支持中英文)..."
+            style={{
+              width: "100%",
+              padding: "8px 10px",
+              borderRadius: "6px",
+              border: "1px solid #ddd",
+              fontSize: "13px",
+              outline: "none",
+              resize: "vertical",
+              marginBottom: "8px",
+            }}
+          />
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <button
+              type="button"
+              onClick={handleTestGenerate}
+              disabled={isTesting}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: isTesting ? "#cbd5e1" : "#8b5cf6",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: isTesting ? "not-allowed" : "pointer",
+                transition: "background-color 0.2s",
+              }}
+            >
+              {isTesting ? "正在作画生成中 (请稍候)... ⏳" : "测试生图 🎨"}
+            </button>
+            {testTime && (
+              <span style={{ fontSize: "12px", color: "#059669" }}>
+                ✅ 生成成功，耗时 {testTime} 秒
+              </span>
+            )}
+          </div>
+
+          {/* 错误提示 */}
+          {testError && (
+            <div style={{ marginTop: "10px", padding: "8px 10px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "6px", color: "#dc2626", fontSize: "12px" }}>
+              ❌ 测试失败: {testError}
+            </div>
+          )}
+
+          {/* 测试图片预览 */}
+          {testResultImage && (
+            <div style={{ marginTop: "12px", textAlign: "center" }}>
+              <img
+                src={testResultImage}
+                alt="生图测试结果"
+                style={{
+                  maxWidth: "100%",
+                  maxHeight: "260px",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
+                  boxShadow: "0 4px 10px rgba(0,0,0,0.1)",
+                }}
+              />
+              <div style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>
+                ✨ 提示词已成功生成并渲染！接口工作正常。
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* 底部保存配置按钮 */}
+        <div style={{ display: "flex", gap: "10px" }}>
+          <button
+            type="button"
+            onClick={handleSave}
+            style={{
+              width: "100%",
+              padding: "14px",
+              backgroundColor: "#8b5cf6",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "15px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(139, 92, 246, 0.3)",
+              transition: "background-color 0.2s",
+            }}
+          >
+            保存文生图配置
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const ImageGenerationSettingsOverlay = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  return (
+    <div
+      className={`settings-overlay ${isOpen ? "open" : ""}`}
+      style={{ zIndex: 1010 }}
+    >
+      <div className="settings-nav">
+        <div className="back-btn" onClick={onClose}>
+          <svg
+            xmlns="http://www.w3.org/2000/svg"
+            width="24"
+            height="24"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="m15 18-6-6 6-6" />
+          </svg>
+        </div>
+        <div className="title">AI 文生图配置</div>
+      </div>
+      <ImageGenerationSettingsPage onClose={onClose} />
+    </div>
+  );
+};
+
+
 const MinimaxSettingsOverlay = ({ isOpen, onClose }) => {
   if (!isOpen) return null;
   return (
     <div
       className={`settings-overlay ${isOpen ? "open" : ""}`}
-      style={{ zIndex: 206 }}
+      style={{ zIndex: 1010 }}
     >
       <div className="settings-nav">
         <div className="back-btn" onClick={onClose}>
@@ -97780,7 +98881,7 @@ const BackupRestorePage = ({ onClose }) => {
 
 // ==================== [新增] 隐私与安全二级页面组件 ====================
 // ==================== [新增] 隐私与安全二级页面组件 ====================
-const PrivacySecurityPage = ({ onOpenMinimax }) => {
+const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage }) => {
   const [activeSubPage, setActiveSubPage] = React.useState(null);
 
   if (activeSubPage === "wallet") {
@@ -97791,6 +98892,12 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
   }
   if (activeSubPage === "backup_restore") {
     return <BackupRestorePage onClose={() => setActiveSubPage(null)} />;
+  }
+  if (activeSubPage === "minimax") {
+    return <MinimaxSettingsPage onClose={() => setActiveSubPage(null)} />;
+  }
+  if (activeSubPage === "ai_image") {
+    return <ImageGenerationSettingsPage onClose={() => setActiveSubPage(null)} />;
   }
 
   return (
@@ -97936,11 +99043,86 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
           ></i>
         </div>
       </div>
+
+      <div
+        style={{
+          fontSize: "14px",
+          fontWeight: "bold",
+          color: "#5A5F4D",
+          margin: "12px 0 8px",
+        }}
+      >
+        语音与扩展服务
+      </div>
+      <div
+        style={{
+          background: "#FFFFFF",
+          borderRadius: "16px",
+          padding: "16px",
+          boxShadow: "0 4px 12px rgba(163, 177, 164, 0.08)",
+          marginBottom: "16px",
+        }}
+      >
+        {/* MiniMax 语音服务配置 */}
+        <div
+          onClick={() => (onOpenMinimax ? onOpenMinimax() : setActiveSubPage("minimax"))}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 0",
+            borderBottom: "1px solid #f5f5f5",
+            cursor: "pointer",
+          }}
+        >
+          <div>
+            <div
+              style={{ fontSize: "14px", fontWeight: "500", color: "#3B82F6" }}
+            >
+              MiniMax 语音配置 (TTS)
+            </div>
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
+              自主配置 API Key、Group ID 与语音模型（与大模型聊天独立）
+            </div>
+          </div>
+          <i
+            data-lucide="volume-2"
+            style={{ color: "#3B82F6", width: 18, height: 18 }}
+          ></i>
+        </div>
+
+        {/* AI 文生图服务配置 */}
+        <div
+          onClick={() => (onOpenAiImage ? onOpenAiImage() : setActiveSubPage("ai_image"))}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 0",
+            cursor: "pointer",
+          }}
+        >
+          <div>
+            <div
+              style={{ fontSize: "14px", fontWeight: "500", color: "#8B5CF6" }}
+            >
+              🎨 AI 文生图配置 (Text-to-Image)
+            </div>
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
+              支持硅基流动 Flux / OpenAI DALL·E 3 / 智谱 CogView / 本地代理（与传讯独立）
+            </div>
+          </div>
+          <i
+            data-lucide="image"
+            style={{ color: "#8B5CF6", width: 18, height: 18 }}
+          ></i>
+        </div>
+      </div>
     </div>
   );
 };
 
-const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
+const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax, onOpenAiImage }) => {
   if (!isOpen) return null;
   return (
     <div className="settings-overlay open" style={{ zIndex: 1005 }}>
@@ -97962,7 +99144,7 @@ const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
         </div>
         <div className="title">隐私与安全</div>
       </div>
-      <PrivacySecurityPage onOpenMinimax={onOpenMinimax} />
+      <PrivacySecurityPage onOpenMinimax={onOpenMinimax} onOpenAiImage={onOpenAiImage} />
     </div>
   );
 };
@@ -100021,6 +101203,7 @@ const MasterApp = () => {
 
   // [新增] Minimax 配置页面状态
   const [isMinimaxSettingsOpen, setIsMinimaxSettingsOpen] = useState(false);
+  const [isAiImageSettingsOpen, setIsAiImageSettingsOpen] = useState(false);
 
   // [新增] 隐私与安全二级页面状态
   const [isPrivacySecurityOpen, setIsPrivacySecurityOpen] = useState(false);
@@ -103242,12 +104425,18 @@ const MasterApp = () => {
         isOpen={isPrivacySecurityOpen}
         onClose={() => setIsPrivacySecurityOpen(false)}
         onOpenMinimax={() => setIsMinimaxSettingsOpen(true)}
+        onOpenAiImage={() => setIsAiImageSettingsOpen(true)}
       />
 
       {/* [新增] Minimax 设置页面 */}
       <MinimaxSettingsOverlay
         isOpen={isMinimaxSettingsOpen}
         onClose={() => setIsMinimaxSettingsOpen(false)}
+      />
+      {/* [新增] AI 文生图设置页面 */}
+      <ImageGenerationSettingsOverlay
+        isOpen={isAiImageSettingsOpen}
+        onClose={() => setIsAiImageSettingsOpen(false)}
       />
 
       {/* [新增] 阅读详情页 */}
