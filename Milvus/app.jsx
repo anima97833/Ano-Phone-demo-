@@ -74774,75 +74774,123 @@ const T8ChatDetail = ({
   const audioChunksRef = React.useRef([]);
   const recognitionRef = React.useRef(null);
 
-  // 👇 从这里开始插入这段初始化代码
-  React.useEffect(() => {
-    const SpeechRecognition =
-      window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (SpeechRecognition) {
-      console.log("Web Speech API 可用，初始化语音识别");
+  // 语音识别与录音控制
+  const streamRef = React.useRef(null);
+  const recognitionRef = React.useRef(null);
+  const [speechStatus, setSpeechStatus] = React.useState("");
+
+  const startSpeechRecognition = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      setSpeechStatus("当前浏览器不支持实时语音识别，可直接录音");
+      return null;
+    }
+
+    try {
       const recognition = new SpeechRecognition();
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = "zh-CN";
+      recognition.maxAlternatives = 1;
+
+      recognition.onstart = () => {
+        console.log("语音识别会话已启动");
+        setSpeechStatus("🎙️ 正在倾听，请对麦克风说话…");
+      };
+
+      recognition.onspeechstart = () => {
+        setSpeechStatus("✨ 检测到说话声音，正在识别…");
+      };
 
       recognition.onresult = (event) => {
-        console.log("语音识别结果:", event);
         let fullText = "";
         for (let i = 0; i < event.results.length; i++) {
           fullText += event.results[i][0].transcript;
         }
         console.log("识别到的文本:", fullText);
-        setVoiceText(fullText);
+        if (fullText.trim()) {
+          setVoiceText(fullText.trim());
+          setSpeechStatus("✅ 识别成功（可在下方手动修改）");
+        }
       };
 
       recognition.onerror = (e) => {
-        console.error("语音识别错误:", e.error);
-      };
-
-      recognition.onstart = () => {
-        console.log("语音识别已开始");
+        console.warn("语音识别提示:", e.error);
+        if (e.error === "no-speech") {
+          setSpeechStatus("未检测到清晰人声，可大声一点或直接在下方输入文字");
+        } else if (e.error === "network") {
+          setSpeechStatus("语音识别网络连接受限，可在下方手动输入文字");
+        } else if (e.error === "not-allowed") {
+          setSpeechStatus("未授予麦克风权限");
+        }
       };
 
       recognition.onend = () => {
-        console.log("语音识别已结束");
+        console.log("语音识别会话结束");
       };
 
+      recognition.start();
       recognitionRef.current = recognition;
-    } else {
-      console.error("Web Speech API 不可用，无法进行语音识别");
-    }
-  }, []);
-  // 👆 插入结束
-
-  const toggleRecording = async () => {
-    if (isRecording) {
-      mediaRecorderRef.current.stop();
-      recognitionRef.current?.stop(); // [新增] 同步停止识别
-      setIsRecording(false);
-    } else {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: true,
-      });
-      const recorder = new MediaRecorder(stream);
-      audioChunksRef.current = [];
-      recorder.ondataavailable = (e) => audioChunksRef.current.push(e.data);
-      recorder.onstop = () => {
-        const blob = new Blob(audioChunksRef.current, {
-          type: "audio/webm",
-        });
-        setAudioUrl(URL.createObjectURL(blob));
-      };
-
-      recorder.start();
-      recognitionRef.current?.start(); // [新增] 同步开始识别
-      mediaRecorderRef.current = recorder;
-      setIsRecording(true);
-      setAudioUrl(null);
-      setVoiceText(""); // [新增] 清空旧文本
+      return recognition;
+    } catch (e) {
+      console.error("创建语音识别会话失败:", e);
+      return null;
     }
   };
 
-  const handleSendVoice = () => {
+  const toggleRecording = async () => {
+    if (isRecording) {
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        mediaRecorderRef.current.stop();
+      }
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.stop();
+        } catch (e) {}
+        recognitionRef.current = null;
+      }
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach((t) => t.stop());
+        streamRef.current = null;
+      }
+      setIsRecording(false);
+    } else {
+      try {
+        // 请求启用自动增益、降噪与回声消除的高质量音频流
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true, // 启用自动增益控制，解决正常音量拾音不足问题
+          },
+        });
+        streamRef.current = stream;
+        const recorder = new MediaRecorder(stream);
+        audioChunksRef.current = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) audioChunksRef.current.push(e.data);
+        };
+        recorder.onstop = () => {
+          const blob = new Blob(audioChunksRef.current, { type: "audio/webm" });
+          setAudioUrl(URL.createObjectURL(blob));
+        };
+        recorder.start();
+
+        // 启动全新的语音识别会话
+        startSpeechRecognition();
+
+        mediaRecorderRef.current = recorder;
+        setIsRecording(true);
+        setAudioUrl(null);
+        setVoiceText("");
+      } catch (err) {
+        console.error("获取麦克风权限失败:", err);
+        alert("无法访问麦克风，请检查浏览器权限设置！");
+      }
+    }
+  };
+
+    const handleSendVoice = () => {
     if (audioUrl) {
       // 创建音频对象来获取时长
       const audio = new Audio(audioUrl);
@@ -76379,29 +76427,77 @@ const T8ChatDetail = ({
       }
     } catch (e) { }
 
-    const worldContext = window.getWorldBookContext
-      ? window.getWorldBookContext()
-      : "";
+    // 1. 异步完整获取世界书内容
+    let worldContext = "";
+    if (window.getWorldBookContext) {
+      try {
+        worldContext = await window.getWorldBookContext();
+      } catch (e) {
+        console.error("通话中读取世界书失败:", e);
+      }
+    }
+
+    // 2. 获取当前激活的用户面具/设定
     let userContext = "";
     try {
       const savedPersonas = JSON.parse(
         localStorage.getItem("user_personas") || "[]",
       );
-      const activePersonaId = localStorage.getItem("active_user_persona_id");
+      const activePersonaId = localStorage.getItem("active_persona_id") || localStorage.getItem("active_user_persona_id");
       const activePersona = savedPersonas.find(
         (p) => String(p.id) === String(activePersonaId),
       );
       if (activePersona) {
-        userContext = `【当前对话的你的用户/聊天对象人设】：\n- 称呼/姓名：${activePersona.name || "我"}\n- 身份/设定：${activePersona.persona || "暂无特别设定"}\n`;
+        userContext = `【当前对话的你的用户/聊天对象设定】：\n- 称呼/姓名：${activePersona.name || "我"}\n- 性别：${activePersona.gender || "未知"}\n- 年龄：${activePersona.age || "未知"}\n- 身份/设定：${activePersona.personality || activePersona.persona || "暂无特别设定"}\n- 说话风格：${activePersona.style || "无"}\n`;
       }
     } catch (e) { }
 
-    const charPersona =
-      chatData.customPersona ||
-      chatData.persona ||
-      chatData.profile?.persona ||
-      "";
-    const systemInstruction = `你正在扮演【${chatData.name}】。\n${charPersona ? `【角色人设】：\n${charPersona}\n` : ""}${userContext}${worldContext ? `【世界观背景】：\n${worldContext}\n` : ""}${memorySettings.summary ? `【长期记忆背景】：\n${memorySettings.summary}\n` : ""}\n【核心要求：实时语音通话】\n你们当前正在进行电话实时语音通话中。请以【${chatData.name}】的角色口吻进行语音通话回复。\n1. 语言必须高度口语化、自然流畅、简短生动（像在真实打电话一样），请将回复控制在1~3句话以内。\n2. 严禁输出描写性动作或括号（如（微笑着说）或*叹气*），直接输出电话里说出来的真实口语台词。\n3. 严禁输出任何系统控制标签（如 [发起通话]、[接受通话]、[拒绝通话] 等）。`;
+    // 3. 构建全维度角色画像与设定 (性格、背景、语言风格、星座/MBTI等)
+    const profile = chatData.profile || {};
+    let charContext = "";
+    const charDetails = [];
+    if (profile.gender) charDetails.push(`性别：${profile.gender}`);
+    if (profile.age) charDetails.push(`年龄：${profile.age}`);
+    if (profile.mbtiEnabled && profile.mbti) charDetails.push(`MBTI：${profile.mbti}`);
+    if (profile.enneagram) charDetails.push(`九型人格：${profile.enneagram}`);
+    if (profile.constellationEnabled && profile.constellation) charDetails.push(`星座：${profile.constellation}`);
+    if (profile.personality) charDetails.push(`性格：${profile.personality}`);
+    if (profile.background) charDetails.push(`背景：${profile.background}`);
+    if (profile.style) charDetails.push(`语言风格：${profile.style}`);
+
+    const directPersona = chatData.customPersona || chatData.persona || profile.persona || profile.customPersona || "";
+    if (directPersona) {
+      charDetails.push(`补充设定：${directPersona}`);
+    }
+
+    if (charDetails.length > 0) {
+      charContext = `【你的角色设定（${chatData.name}）】：\n${charDetails.map((d) => `- ${d}`).join("\n")}\n`;
+    }
+
+    // 4. 读取该角色专属长篇设定档案与生平记忆 (IndexedDB)
+    let docContext = "";
+    if (window.characterDocStore && chatData?.id) {
+      try {
+        docContext = await window.characterDocStore.getEnabledDocContext(chatData.id);
+      } catch (e) {
+        console.error("通话中读取角色专属长篇设定文档失败:", e);
+      }
+    }
+
+    // 5. 组合完整的语音通话 System Instruction
+    let systemInstruction = `你正在扮演【${chatData.name}】。\n`;
+    if (charContext) systemInstruction += `${charContext}\n`;
+    if (userContext) systemInstruction += `${userContext}\n`;
+    if (worldContext) systemInstruction += `【世界观背景】：\n${worldContext}\n\n`;
+    if (memorySettings.summary) systemInstruction += `【长期记忆背景】：\n${memorySettings.summary}\n\n`;
+    if (docContext) systemInstruction += `【角色生平与专属长篇设定档案】：\n${docContext}\n\n`;
+
+    systemInstruction += `【核心要求：实时语音通话】
+你们当前正在进行电话实时语音通话中。请以【${chatData.name}】的角色口吻进行语音通话回复。
+1. 语言必须高度口语化、自然流畅、简短生动（像在真实打电话一样），请将回复控制在1~3句话以内。
+2. 严禁输出描写性动作或括号（如（微笑着说）或*叹气*），直接输出电话里说出来的真实口语台词。
+3. 严禁输出任何系统控制标签（如 [发起通话]、[接受通话]、[拒绝通话] 等）。
+4. 必须严格遵守上述【你的角色设定】、【世界观背景】与【角色生平与专属设定档案】，保持人设、语气与世界观背景的绝对一致与连贯。`;
 
     const apiMessages = [
       { role: "system", content: systemInstruction },
@@ -78853,7 +78949,181 @@ const T8ChatDetail = ({
       )}
 
       {/* 活动选择页面 */}
-      {/* ================== [新增] 消息整合底部弹窗 ================== */}
+          {/* ================== [新增] 语音录制底部弹窗 ================== */}
+    {showVoiceModal && (
+      <div
+        className="fixed inset-0 bg-black/60 z-[300] flex items-end justify-center animate-fadeIn"
+        onClick={() => {
+          if (isRecording) toggleRecording();
+          setShowVoiceModal(false);
+          setAudioUrl(null);
+          setVoiceText("");
+          setSpeechStatus("");
+        }}
+      >
+        <div
+          className="w-full max-w-md bg-[#FAF9F5] rounded-t-3xl shadow-2xl flex flex-col max-h-[88vh] overflow-hidden font-sans"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="p-4 px-5 flex justify-between items-center bg-[#FDFCF8] border-b border-[#F2EFDE]">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">🎙️</span>
+              <h3 className="text-base font-bold text-[#5A5F4D]">发送语音消息</h3>
+            </div>
+            <button
+              onClick={() => {
+                if (isRecording) toggleRecording();
+                setShowVoiceModal(false);
+                setAudioUrl(null);
+                setVoiceText("");
+                setSpeechStatus("");
+              }}
+              className="w-8 h-8 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#8C8C8C] active:scale-90 transition-transform font-bold text-lg"
+            >
+              ×
+            </button>
+          </div>
+
+          <div className="flex-1 overflow-y-auto p-5 flex flex-col items-center justify-center space-y-4 bg-[#FAF9F5]">
+            {/* 语音转文字实时转写与可编辑区 */}
+            <div className="w-full bg-white rounded-2xl border border-[#EAEAEA] p-3.5 shadow-xs">
+              <div className="flex justify-between items-center mb-1.5">
+                <span className="text-xs font-bold text-[#8C8279]">
+                  {isRecording ? "🎙️ 实时转写内容：" : "📝 语音转文字（可直接编辑）："}
+                </span>
+                {speechStatus && (
+                  <span className="text-[10px] text-[#8FA99D] font-bold">
+                    {speechStatus}
+                  </span>
+                )}
+              </div>
+              <textarea
+                value={voiceText}
+                onChange={(e) => setVoiceText(e.target.value)}
+                placeholder={isRecording ? "正在倾听中… 说话内容将显示在此，也可录音后直接编辑" : "在此输入或修改识别的文字（发送后角色将根据此文本理解您的语音）…"}
+                rows={3}
+                className="w-full p-2.5 bg-[#FBFBF9] rounded-xl border border-[#EFEFEA] text-sm text-[#333] outline-none resize-none leading-relaxed"
+              />
+              {/* 快捷常用语胶囊 */}
+              <div className="flex flex-wrap gap-1.5 mt-2">
+                <span className="text-[11px] text-[#A0988E] self-center">快捷填入:</span>
+                {["你好呀", "在干嘛呢", "想你了", "今晚有空吗", "早安", "晚安"].map((phrase) => (
+                  <button
+                    key={phrase}
+                    type="button"
+                    onClick={() => setVoiceText(phrase)}
+                    className="px-2 py-0.5 rounded-lg bg-[#F5F2EB] text-[#7A7268] text-xs hover:bg-[#EAE5DC] active:scale-95 transition-all"
+                  >
+                    {phrase}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* 录音主操作按钮 */}
+            <div className="flex flex-col items-center justify-center py-2">
+              <button
+                type="button"
+                onClick={toggleRecording}
+                className={`w-20 h-20 rounded-full flex items-center justify-center shadow-lg transition-all duration-300 ${
+                  isRecording
+                    ? "bg-gradient-to-tr from-[#E57373] to-[#EF5350] text-white scale-110 animate-pulse shadow-red-200"
+                    : "bg-gradient-to-tr from-[#8FA99D] to-[#A8C8BA] text-white active:scale-95 shadow-emerald-100"
+                }`}
+              >
+                <i className={`ph-bold ${isRecording ? "ph-stop" : "ph-microphone"} text-3xl`}></i>
+              </button>
+              <span className="mt-2.5 text-xs font-bold text-[#8C8279]">
+                {isRecording ? "🔴 正在录音中… 点击停止" : (audioUrl ? "点击麦克风可重新录制" : "点击麦克风开始录音")}
+              </span>
+            </div>
+
+            {/* 录音完成后的试听、AI听写与发送操作 */}
+            {audioUrl && !isRecording && (
+              <div className="w-full space-y-3 pt-1">
+                <div className="flex items-center gap-2 bg-white p-2.5 rounded-2xl border border-[#EAEAEA] shadow-xs">
+                  <audio src={audioUrl} controls className="flex-1 h-9 rounded-xl outline-none" />
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!audioUrl) return;
+                      setSpeechStatus("⏳ 正在请求 AI 听写转录…");
+                      try {
+                        const response = await fetch(audioUrl);
+                        const blob = await response.blob();
+                        const configs = JSON.parse(localStorage.getItem("api_configs") || "[]");
+                        const selectedIdx = parseInt(localStorage.getItem("selected_api_config_index") || "0");
+                        const config = configs[selectedIdx] || configs[0];
+
+                        if (!config || !config.url || !config.apiKey) {
+                          setSpeechStatus("⚠️ 未配置 API，请直接在上方手动输入文字");
+                          return;
+                        }
+
+                        let whisperUrl = config.url;
+                        if (!whisperUrl.endsWith("/")) whisperUrl += "/";
+                        whisperUrl += "v1/audio/transcriptions";
+
+                        const formData = new FormData();
+                        formData.append("file", blob, "recording.webm");
+                        formData.append("model", "whisper-1");
+                        formData.append("language", "zh");
+
+                        const res = await fetch(whisperUrl, {
+                          method: "POST",
+                          headers: {
+                            Authorization: `Bearer ${config.apiKey}`,
+                          },
+                          body: formData,
+                        });
+
+                        if (res.ok) {
+                          const data = await res.json();
+                          if (data && data.text) {
+                            setVoiceText(data.text.trim());
+                            setSpeechStatus("✨ AI 听写成功！");
+                            return;
+                          }
+                        }
+                        setSpeechStatus("提示：当前模型不支持 Whisper，可直接在上方编辑文字");
+                      } catch (e) {
+                        console.error("AI 听写失败:", e);
+                        setSpeechStatus("AI 听写未响应，请直接在上方输入文字");
+                      }
+                    }}
+                    className="px-3 py-2 bg-[#F5F2EB] text-[#7A7268] text-xs font-bold rounded-xl active:scale-95 transition-all flex items-center gap-1 shrink-0"
+                    title="尝试使用配置的 Whisper 接口转写语音"
+                  >
+                    <span>✨ AI听写</span>
+                  </button>
+                </div>
+                <div className="flex gap-3">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAudioUrl(null);
+                      setVoiceText("");
+                      setSpeechStatus("");
+                    }}
+                    className="flex-1 py-3 rounded-2xl border border-[#EAEAEA] bg-white text-[#777] font-bold text-sm active:scale-98 transition-all"
+                  >
+                    🗑️ 重录
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleSendVoice}
+                    className="flex-1 py-3 rounded-2xl bg-gradient-to-r from-[#A8C8BA] to-[#8FA99D] text-white font-bold text-sm shadow-md active:scale-98 transition-all flex items-center justify-center gap-1.5"
+                  >
+                    📤 发送语音
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    )}
+    {/* ================== [新增] 消息整合底部弹窗 ================== */}
     {showConsolidateModal && (
       <div
         className="fixed inset-0 bg-black/60 z-[300] flex items-end justify-center animate-fadeIn"
