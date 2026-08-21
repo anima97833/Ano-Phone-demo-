@@ -78853,7 +78853,81 @@ const T8ChatDetail = ({
       )}
 
       {/* 活动选择页面 */}
-      {showActivitySelect && (
+      {/* ================== [新增] 消息整合底部弹窗 ================== */}
+    {showConsolidateModal && (
+      <div
+        className="fixed inset-0 bg-black/60 z-[300] flex items-end justify-center animate-fadeIn"
+        onClick={() => setShowConsolidateModal(false)}
+      >
+        <div
+          className="w-full max-w-md bg-[#FAF9F5] rounded-t-3xl shadow-2xl flex flex-col max-h-[85vh] overflow-hidden font-sans"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="p-4 px-5 flex justify-between items-center bg-[#FDFCF8] border-b border-[#F2EFDE]">
+            <div className="flex items-center gap-2">
+              <span className="text-lg">📑</span>
+              <h3 className="text-base font-bold text-[#5A5F4D]">整合选中消息</h3>
+            </div>
+            <button
+              onClick={() => setShowConsolidateModal(false)}
+              className="w-8 h-8 rounded-full bg-[#f0f0f0] flex items-center justify-center text-[#8C8C8C] active:scale-90 transition-transform font-bold text-lg"
+            >
+              ×
+            </button>
+          </div>
+          <div className="flex p-2 bg-[#F7F5F0] gap-2 border-b border-[#EAE6DE]">
+            {["manual", "auto"].map((mode) => (
+              <button
+                key={mode}
+                onClick={() => setConsolidateMode(mode)}
+                className={`flex-1 py-2.5 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-all ${consolidateMode === mode ? "bg-gradient-to-r from-[#8FA99D] to-[#A8C8BA] text-white shadow-md" : "bg-white text-[#777] border border-[#EAEAEA]"}`}
+              >
+                {mode === "manual" ? "✏️ 手动整理" : "✨ AI 自动生成"}
+              </button>
+            ))}
+          </div>
+          <div className="flex-1 overflow-y-auto p-5 space-y-4 bg-[#FAF9F5]">
+            <div>
+              <label className="text-xs font-bold text-[#8C8279] mb-1.5 block">记录标题：</label>
+              <input
+                type="text"
+                value={consolidateTitle}
+                onChange={(e) => setConsolidateTitle(e.target.value)}
+                placeholder="为这段对话取个标题…"
+                className="w-full p-3.5 bg-white rounded-xl border border-[#EAEAEA] text-sm text-[#333] outline-none"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-bold text-[#8C8279] mb-1.5 block">记录内容：</label>
+              <textarea
+                value={consolidateContent}
+                onChange={(e) => setConsolidateContent(e.target.value)}
+                placeholder={consolidateMode === "auto" ? "点击下方「AI 生成」按钮自动填写…" : "在此手动输入摘要或备注内容…"}
+                rows={5}
+                className="w-full p-3.5 bg-white rounded-xl border border-[#EAEAEA] text-sm text-[#333] outline-none resize-none leading-relaxed"
+              />
+            </div>
+            {consolidateMode === "auto" && (
+              <button
+                onClick={handleAutoConsolidate}
+                disabled={isConsolidating}
+                className={`w-full py-3.5 font-bold rounded-2xl shadow-md transition-all text-sm flex items-center justify-center gap-2 ${isConsolidating ? "bg-gray-300 text-gray-500 cursor-not-allowed" : "bg-gradient-to-r from-[#8FA99D] to-[#A8C8BA] text-white active:scale-98"}`}
+              >
+                {isConsolidating ? "⏳ AI 生成中…" : `✨ AI 自动生成摘要（共 ${selectedMsgIds.length} 条）`}
+              </button>
+            )}
+            <button
+              onClick={handleSaveConsolidation}
+              className="w-full py-3.5 bg-gradient-to-r from-[#A8C8BA] to-[#8FA99D] text-white font-bold rounded-2xl shadow-lg active:scale-98 transition-all text-sm flex items-center justify-center gap-2 mt-2"
+            >
+              💾 保存至长期记忆
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+    {/* ================== 消息整合底部弹窗结束 ================== */}
+    {showActivitySelect && (
         <ActivitySelectionPage
           onBack={() => setShowActivitySelect(false)}
           chatData={chatData}
@@ -81567,6 +81641,9 @@ const T8ChatDetail = ({
           </>
         )}
       </div>
+
+      
+
 
 
 
