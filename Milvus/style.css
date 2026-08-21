@@ -11363,3 +11363,318 @@
 .spinning-anim {
   animation: spin-anim 1s linear infinite;
 }
+
+
+/* ================= 心纸居（放置小人互动空间）专属样式 ================= */
+.mansion-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: #231c19;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: "Noto Sans SC", "PingFang SC", sans-serif;
+  user-select: none;
+}
+
+.mansion-blur-in {
+  animation: mansionBlurIn 0.45s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.mansion-blur-out {
+  animation: mansionBlurOut 0.35s ease forwards;
+}
+
+@keyframes mansionBlurIn {
+  0% {
+    opacity: 0;
+    filter: blur(24px) brightness(1.25);
+    transform: scale(1.06);
+  }
+  100% {
+    opacity: 1;
+    filter: blur(0px) brightness(1);
+    transform: scale(1);
+  }
+}
+
+@keyframes mansionBlurOut {
+  0% {
+    opacity: 1;
+    filter: blur(0px);
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    filter: blur(20px);
+    transform: scale(0.96);
+  }
+}
+
+.mansion-room-viewport {
+  position: relative;
+  width: 100%;
+  flex: 1;
+  overflow: hidden;
+  background-color: #2b2623;
+  background-image: url('graph/house-plain.png');
+  background-size: cover;
+  background-position: center bottom;
+  background-repeat: no-repeat;
+  touch-action: none;
+}
+
+.mansion-char-entity {
+  position: absolute;
+  transform-origin: bottom center;
+  will-change: transform, left, top;
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+  transition: filter 0.2s ease;
+}
+
+.mansion-char-entity:active {
+  cursor: grabbing;
+}
+
+/* 角色呼吸与状态动画 */
+.mansion-anim-idle {
+  animation: charIdleBreathing 3.5s ease-in-out infinite;
+}
+
+.mansion-anim-walk {
+  animation: charWaddleStep 0.4s ease-in-out infinite alternate;
+}
+
+.mansion-anim-held {
+  animation: charHeldDangle 0.3s ease-in-out infinite alternate;
+}
+
+.mansion-anim-drop {
+  animation: charDropSquash 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.mansion-anim-poke {
+  animation: charPokeReact 0.4s ease-out;
+}
+
+.mansion-anim-joy {
+  animation: charJoyJump 0.6s ease-in-out infinite alternate;
+}
+
+.mansion-anim-thinking {
+  animation: charThinkingFloat 1.2s ease-in-out infinite alternate;
+}
+
+@keyframes charIdleBreathing {
+  0%, 100% {
+    transform: scale(1, 1);
+  }
+  50% {
+    transform: scale(1.025, 0.975);
+  }
+}
+
+@keyframes charWaddleStep {
+  0% {
+    transform: rotate(-5deg) translateY(-2px);
+  }
+  100% {
+    transform: rotate(5deg) translateY(-6px);
+  }
+}
+
+@keyframes charHeldDangle {
+  0% {
+    transform: rotate(-6deg) scale(1.15) translateY(-12px);
+  }
+  100% {
+    transform: rotate(6deg) scale(1.15) translateY(-18px);
+  }
+}
+
+@keyframes charDropSquash {
+  0% {
+    transform: scale(1.28, 0.72) translateY(5px);
+  }
+  45% {
+    transform: scale(0.92, 1.08) translateY(-4px);
+  }
+  100% {
+    transform: scale(1, 1) translateY(0);
+  }
+}
+
+@keyframes charPokeReact {
+  0% {
+    transform: scale(1);
+  }
+  25% {
+    transform: scale(0.9) rotate(-8deg);
+  }
+  60% {
+    transform: scale(1.1) rotate(4deg);
+  }
+  100% {
+    transform: scale(1) rotate(0deg);
+  }
+}
+
+@keyframes charJoyJump {
+  0% {
+    transform: translateY(0) scale(1, 1);
+  }
+  100% {
+    transform: translateY(-16px) scale(1.08, 0.95);
+  }
+}
+
+@keyframes charThinkingFloat {
+  0% {
+    transform: translateY(0px) rotate(-2deg);
+  }
+  100% {
+    transform: translateY(-8px) rotate(2deg);
+  }
+}
+
+/* 气泡与微表情 */
+.mansion-speech-bubble {
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%) translateY(-10px);
+  background: rgba(255, 252, 245, 0.96);
+  border: 1.5px solid #d6a86e;
+  border-radius: 14px;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #593e25;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(110, 72, 35, 0.18);
+  pointer-events: none;
+  z-index: 999;
+  animation: bubblePop 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+.mansion-speech-bubble::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 6px;
+  border-style: solid;
+  border-color: #d6a86e transparent transparent transparent;
+}
+
+@keyframes bubblePop {
+  0% {
+    opacity: 0;
+    transform: translateX(-50%) translateY(0px) scale(0.6);
+  }
+  100% {
+    opacity: 1;
+    transform: translateX(-50%) translateY(-10px) scale(1);
+  }
+}
+
+/* 悬浮粒子动效 */
+.mansion-float-particle {
+  position: absolute;
+  pointer-events: none;
+  font-size: 16px;
+  animation: particleFloat 1s ease-out forwards;
+  z-index: 1000;
+}
+
+@keyframes particleFloat {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) scale(0.8);
+  }
+  50% {
+    opacity: 1;
+    transform: translate(-5px, -28px) scale(1.25);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(5px, -55px) scale(1);
+  }
+}
+
+/* 心纸便签飞信动效 */
+.mansion-flying-letter {
+  position: absolute;
+  cursor: pointer;
+  z-index: 80;
+  animation: letterFlutter 3s ease-in-out infinite alternate;
+  filter: drop-shadow(0 4px 12px rgba(214, 114, 75, 0.4));
+  transition: transform 0.2s;
+}
+
+.mansion-flying-letter:hover {
+  transform: scale(1.15) !important;
+}
+
+@keyframes letterFlutter {
+  0% {
+    transform: translateY(0px) rotate(-4deg);
+  }
+  50% {
+    transform: translateY(-8px) rotate(4deg);
+  }
+  100% {
+    transform: translateY(2px) rotate(-2deg);
+  }
+}
+
+/* 吸附点涟漪 */
+.mansion-anchor-point {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(245, 215, 160, 0.45) 0%, rgba(245, 215, 160, 0) 70%);
+  border: 1px dashed rgba(214, 168, 110, 0.5);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  transition: all 0.3s;
+}
+
+.mansion-anchor-point:hover {
+  transform: translate(-50%, -50%) scale(1.2);
+  background: radial-gradient(circle, rgba(245, 215, 160, 0.8) 0%, rgba(245, 215, 160, 0) 70%);
+  border-color: #d6724b;
+}
+
+/* 拟态玻璃名士管理抽屉 */
+.mansion-glass-btn {
+  background: rgba(255, 248, 238, 0.16);
+  border: 1px solid rgba(245, 215, 160, 0.45);
+  border-radius: 20px;
+  padding: 5px 12px;
+  color: #ffedd5;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25), inset 0 1px 1px rgba(255, 255, 255, 0.2);
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.mansion-glass-btn:active {
+  transform: scale(0.95);
+  background: rgba(255, 248, 238, 0.28);
+}

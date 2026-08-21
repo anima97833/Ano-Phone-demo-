@@ -1,5 +1,5 @@
 // 鸢小手机 Service Worker
-const CACHE_NAME = 'yuan-phone-pwa-v1';
+const CACHE_NAME = 'yuan-phone-pwa-v1787321518564';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

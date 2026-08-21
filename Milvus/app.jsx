@@ -67500,6 +67500,22 @@ const T8_INITIAL_CHATS = [
 
 // T8 图标组件 (SVG)
 const T8Icons = {
+  House: () => (
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="white"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      style={{ pointerEvents: "none" }}
+    >
+      <path d="M3 10.5L12 3l9 7.5V20a1.5 1.5 0 0 1-1.5 1.5H4.5A1.5 1.5 0 0 1 3 20V10.5z" />
+      <path d="M9 21.5V13h6v8.5" />
+    </svg>
+  ),
   Menu: () => (
     <svg
       width="24"
@@ -83633,6 +83649,1846 @@ ${commentsContext}
   );
 };
 
+
+// ==================== 心纸居（放置小人互动空间）主组件 · 多形态立绘与IndexedDB持久化版 ====================
+const HeartPaperMansion = ({ onClose, chats = [] }) => {
+  const { useState, useEffect, useRef } = React;
+
+  // 退出转场状态 ('entering' | 'active' | 'exiting')
+  const [animState, setAnimState] = useState('entering');
+  const [showRosterModal, setShowRosterModal] = useState(false);
+  const [showDrawer, setShowDrawer] = useState(false);
+  const [showLetterModal, setShowLetterModal] = useState(false);
+  const [activeLetter, setActiveLetter] = useState(null);
+  const [particles, setParticles] = useState([]);
+  const [hasNewLetter, setHasNewLetter] = useState(true);
+  const [rosterSearch, setRosterSearch] = useState('');
+
+  // 多形态立绘库映射：{ [charId]: [imgBase64_1, imgBase64_2, ...] }
+  const [customSpritesMap, setCustomSpritesMap] = useState({});
+  const [resolvedAvatars, setResolvedAvatars] = useState({});
+  const [activeCharIds, setActiveCharIds] = useState([]);
+  const avatarFileInputRef = useRef(null);
+  const [uploadingTargetCharId, setUploadingTargetCharId] = useState(null);
+  const [managingSpritesCharId, setManagingSpritesCharId] = useState(null);
+
+  // 运行模式：'casual'（休闲模式，默认，静憩漫游不触发AI） | 'auto'（自主模式，名士偶遇自主调用AI对谈）
+  const [mansionMode, setMansionMode] = useState(() => {
+    return localStorage.getItem('t8_mansion_mode') || 'casual';
+  });
+  const [modeTip, setModeTip] = useState('');
+
+  // 实体小人列表 (最多 5 位)
+  const [characters, setCharacters] = useState([]);
+
+  // 内部漫游目标点位坐标
+  const anchorSpots = [
+    { x: 22, y: 36 },
+    { x: 74, y: 38 },
+    { x: 50, y: 48 },
+    { x: 30, y: 68 },
+    { x: 68, y: 76 }
+  ];
+
+  // 挂机心纸便签信件池
+  const letterPool = [
+    {
+      title: "【心纸手记 · 晴岚】",
+      sender: "心纸居分身侍从",
+      date: "今日 申时",
+      text: "致楼主：\n今日府邸春光正好，屏风旁的桃花开得极盛。分身名士们方才在案头烹了香茗，楼中一切安泰，静候楼主常归。"
+    },
+    {
+      title: "【暗卫巡视密签】",
+      sender: "巡邸小影",
+      date: "今日 巳时",
+      text: "致楼主：\n方圆五里已巡查完毕，未见宵小。唯见庭前池水清冽，偶有锦鲤跃水。特摘案前青梅一枚，置于心意匣中，楼主得空可尝。"
+    }
+  ];
+
+  // 拖拽手势状态
+  const dragRef = useRef({
+    isDragging: false,
+    charId: null,
+    startX: 0,
+    startY: 0,
+    hasMoved: false
+  });
+  const viewportRef = useRef(null);
+  const lastEncounterRef = useRef(0);
+  const aiBusyRef = useRef(false);
+
+  // 切换休闲 / 自主模式
+  const handleToggleMode = (mode) => {
+    setMansionMode(mode);
+    try {
+      localStorage.setItem('t8_mansion_mode', mode);
+    } catch (e) {}
+
+    const tip = mode === 'auto'
+      ? "✨ 已开启【自主模式】：名士相遇将自主调用AI对谈"
+      : "🍃 已切换为【休闲模式】：名士静憩漫游，不触发AI发言";
+    setModeTip(tip);
+    setTimeout(() => setModeTip(''), 3000);
+  };
+
+  // 1. 从 IndexedDB (USER_SETTINGS) 读取多形态立绘库
+  const loadSpritesFromIndexedDB = async () => {
+    try {
+      if (window.openDB && window.STORES) {
+        const db = await window.openDB();
+        const tx = db.transaction(window.STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(window.STORES.USER_SETTINGS);
+        const req = store.get("mansion_character_sprites");
+        req.onsuccess = () => {
+          const val = req.result?.value;
+          if (val && typeof val === "object") {
+            setCustomSpritesMap(val);
+            return;
+          }
+          // 兜底读取 localStorage
+          readFallbackLocalStorage();
+        };
+        req.onerror = () => readFallbackLocalStorage();
+      } else {
+        readFallbackLocalStorage();
+      }
+    } catch (e) {
+      readFallbackLocalStorage();
+    }
+  };
+
+  const readFallbackLocalStorage = () => {
+    try {
+      const local = JSON.parse(localStorage.getItem("t8_mansion_custom_avatars") || "{}");
+      const normalized = {};
+      for (const k in local) {
+        if (Array.isArray(local[k])) normalized[k] = local[k];
+        else if (typeof local[k] === "string") normalized[k] = [local[k]];
+      }
+      setCustomSpritesMap(normalized);
+    } catch (e) {}
+  };
+
+  // 2. 保存多形态立绘库至 IndexedDB (无大小配额限制)
+  const saveSpritesToIndexedDB = async (newMap) => {
+    try {
+      if (window.openDB && window.STORES) {
+        const db = await window.openDB();
+        const tx = db.transaction(window.STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(window.STORES.USER_SETTINGS);
+        store.put({ key: "mansion_character_sprites", value: newMap });
+      }
+    } catch (e) {
+      console.warn("保存心纸居立绘库至 IndexedDB 失败:", e);
+    }
+    // 冗余一份到 localStorage (若未超限)
+    try {
+      localStorage.setItem("t8_mansion_custom_avatars", JSON.stringify(newMap));
+    } catch (e) {}
+  };
+
+  // 初始化进入动画与加载持久化数据
+  useEffect(() => {
+    const timer = setTimeout(() => setAnimState('active'), 450);
+
+    // 加载多形态立绘库
+    loadSpritesFromIndexedDB();
+
+    // 加载当前激活入驻的名士 ID 列表 (上限 5 人)
+    try {
+      const savedActiveIds = JSON.parse(localStorage.getItem("t8_mansion_active_ids") || "null");
+      if (Array.isArray(savedActiveIds) && savedActiveIds.length > 0) {
+        setActiveCharIds(savedActiveIds.slice(0, 5));
+      } else if (chats && chats.length > 0) {
+        const defaultIds = chats.slice(0, Math.min(3, chats.length)).map(c => c.id);
+        setActiveCharIds(defaultIds);
+        localStorage.setItem("t8_mansion_active_ids", JSON.stringify(defaultIds));
+      } else {
+        setActiveCharIds(["guest_default_1", "guest_default_2"]);
+      }
+    } catch (e) {
+      console.warn("加载心纸居名士列表失败:", e);
+    }
+
+    return () => clearTimeout(timer);
+  }, [chats]);
+
+  // 解析并缓存所有名士的真实头像 Base64 / URL
+  useEffect(() => {
+    let isMounted = true;
+    const resolveAllAvatars = async () => {
+      if (!chats || chats.length === 0) return;
+      const resMap = {};
+      for (const c of chats) {
+        if (!c || !c.id) continue;
+        if (c.avatar) {
+          if (typeof window.resolveAvatarUrl === "function") {
+            try {
+              const url = await window.resolveAvatarUrl(c.avatar, "");
+              if (url) resMap[c.id] = url;
+            } catch (err) {
+              console.warn("解析名士头像失败:", c.name, err);
+            }
+          } else if (typeof c.avatar === "string" && (c.avatar.startsWith("data:") || c.avatar.startsWith("http") || c.avatar.startsWith("/"))) {
+            resMap[c.id] = c.avatar;
+          }
+        }
+      }
+      if (isMounted) {
+        setResolvedAvatars(prev => ({ ...prev, ...resMap }));
+      }
+    };
+    resolveAllAvatars();
+    return () => { isMounted = false; };
+  }, [chats]);
+
+  // 根据 activeCharIds、customSpritesMap、resolvedAvatars 构建小人实体
+  useEffect(() => {
+    const slotPositions = [
+      { x: 30, y: 48, facing: 1 },
+      { x: 68, y: 52, facing: -1 },
+      { x: 50, y: 68, facing: 1 },
+      { x: 22, y: 38, facing: 1 },
+      { x: 76, y: 42, facing: -1 }
+    ];
+
+    const currentMap = new Map(characters.map(c => [c.id, c]));
+
+    const newCharacters = activeCharIds.map((charId, idx) => {
+      const existing = currentMap.get(charId);
+      const chatData = (chats || []).find(c => c.id === charId) || {
+        id: charId,
+        name: charId === "guest_default_1" ? "少侠喵" : charId === "guest_default_2" ? "仙风喵" : `名士·${charId}`,
+        personality: "温雅从容，清逸出尘",
+        desc: "心纸居侍奉名士"
+      };
+
+      const spritesList = customSpritesMap[charId] || [];
+      const resolvedImg = resolvedAvatars[charId];
+      // 随机抽取一个初始形态
+      const currentSprite = spritesList.length > 0
+        ? (existing?.image && spritesList.includes(existing.image) ? existing.image : spritesList[Math.floor(Math.random() * spritesList.length)])
+        : (resolvedImg || (typeof chatData.avatar === "string" && chatData.avatar.startsWith("data:") ? chatData.avatar : null) || (idx % 2 === 0 ? "graph/player-1.png" : "graph/player-2.png"));
+
+      const defaultPos = slotPositions[idx % slotPositions.length];
+
+      if (existing) {
+        return {
+          ...existing,
+          name: chatData.name,
+          image: currentSprite,
+          chatData
+        };
+      }
+
+      return {
+        id: charId,
+        name: chatData.name,
+        image: currentSprite,
+        chatData,
+        x: defaultPos.x,
+        y: defaultPos.y,
+        targetX: defaultPos.x,
+        targetY: defaultPos.y,
+        facing: defaultPos.facing,
+        state: "IDLE", // IDLE | WALK | ENCOUNTER | HELD | DROP | POKE | JOY | THINKING
+        speech: null,
+        affection: chatData.affection || 88,
+        pokes: 0
+      };
+    });
+
+    setCharacters(newCharacters);
+  }, [activeCharIds, customSpritesMap, resolvedAvatars, chats]);
+
+  // 退出处理
+  const handleExit = () => {
+    setAnimState('exiting');
+    setTimeout(() => {
+      onClose();
+    }, 320);
+  };
+
+  // 触发粒子
+  const spawnParticle = (x, y, emoji) => {
+    const id = Date.now() + Math.random();
+    setParticles(prev => [...prev.slice(-12), { id, x, y, emoji }]);
+    setTimeout(() => {
+      setParticles(prev => prev.filter(p => p.id !== id));
+    }, 1000);
+  };
+
+  // 切换名士入驻状态 (上限 5 人)
+  const toggleCharacterActive = (charId) => {
+    if (activeCharIds.includes(charId)) {
+      if (activeCharIds.length <= 1) {
+        alert("心纸居中至少需要留驻一位名士陪伴楼主哦~");
+        return;
+      }
+      const updated = activeCharIds.filter(id => id !== charId);
+      setActiveCharIds(updated);
+      localStorage.setItem("t8_mansion_active_ids", JSON.stringify(updated));
+    } else {
+      if (activeCharIds.length >= 5) {
+        alert("心纸居当前最多容纳 5 位名士分身入驻，请先安排其他名士歇息~");
+        return;
+      }
+      const updated = [...activeCharIds, charId];
+      setActiveCharIds(updated);
+      localStorage.setItem("t8_mansion_active_ids", JSON.stringify(updated));
+    }
+  };
+
+  // 点击触发多张文件上传
+  const handleUploadCustomSprite = (charId) => {
+    setUploadingTargetCharId(charId);
+    if (avatarFileInputRef.current) {
+      avatarFileInputRef.current.value = "";
+      avatarFileInputRef.current.click();
+    }
+  };
+
+  // 处理多立绘形态文件选择与读取
+  const handleFilesSelected = (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !uploadingTargetCharId) return;
+
+    const charId = uploadingTargetCharId;
+    const fileList = Array.from(files);
+    let loadedCount = 0;
+    const newBase64s = [];
+
+    fileList.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        newBase64s.push(event.target.result);
+        loadedCount++;
+        if (loadedCount === fileList.length) {
+          // 全部读取完成，追加到该名士的形态列表
+          setCustomSpritesMap(prev => {
+            const existing = prev[charId] || [];
+            const updatedList = [...existing, ...newBase64s];
+            const updatedMap = { ...prev, [charId]: updatedList };
+            saveSpritesToIndexedDB(updatedMap);
+            return updatedMap;
+          });
+          alert(`✨ 已成功为名士添加 ${newBase64s.length} 个立绘形态！分身将在漫游互动中随机切换展现~`);
+        }
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // 删除某个立绘形态
+  const handleDeleteSprite = (charId, index) => {
+    setCustomSpritesMap(prev => {
+      const list = [...(prev[charId] || [])];
+      list.splice(index, 1);
+      const updatedMap = { ...prev, [charId]: list };
+      saveSpritesToIndexedDB(updatedMap);
+      return updatedMap;
+    });
+  };
+
+  // 清空该名士的所有自定义形态
+  const handleResetAllSprites = (charId) => {
+    if (!confirm("确定要清空该名士上传的所有专属小人立绘形态吗？")) return;
+    setCustomSpritesMap(prev => {
+      const updatedMap = { ...prev };
+      delete updatedMap[charId];
+      saveSpritesToIndexedDB(updatedMap);
+      return updatedMap;
+    });
+  };
+
+  // 自动漫游定时器 (FSM Wander Loop - 漫游或原地动作时随机切换小人形态)
+  useEffect(() => {
+    const wanderInterval = setInterval(() => {
+      setCharacters(prevChars => {
+        return prevChars.map(char => {
+          if (char.state === "HELD" || char.state === "ENCOUNTER" || char.state === "JOY" || char.state === "THINKING") {
+            return char;
+          }
+
+          // 如果该角色有多个形态，随机切换一个立绘形态！
+          const spritesList = customSpritesMap[char.id] || [];
+          let chosenImg = char.image;
+          if (spritesList.length > 1) {
+            chosenImg = spritesList[Math.floor(Math.random() * spritesList.length)];
+          }
+
+          // 25% 概率原地停步并冒出轻量思考表情
+          if (Math.random() < 0.25) {
+            const thoughts = ["💭", "🌸", "✨", "🐟", "💤", "🍵", "📜", "🦋"];
+            const randomThought = thoughts[Math.floor(Math.random() * thoughts.length)];
+            return {
+              ...char,
+              state: "IDLE",
+              image: chosenImg,
+              speech: Math.random() < 0.35 ? randomThought : null
+            };
+          }
+
+          // 决定新的目标点
+          let nextTargetX, nextTargetY;
+          if (Math.random() < 0.35) {
+            const spot = anchorSpots[Math.floor(Math.random() * anchorSpots.length)];
+            nextTargetX = spot.x + (Math.random() * 8 - 4);
+            nextTargetY = spot.y + (Math.random() * 6 - 3);
+          } else {
+            nextTargetX = 12 + Math.random() * 76;
+            nextTargetY = 28 + Math.random() * 52;
+          }
+
+          const facing = nextTargetX > char.x ? 1 : -1;
+          return {
+            ...char,
+            targetX: nextTargetX,
+            targetY: nextTargetY,
+            facing: facing,
+            image: chosenImg,
+            state: "WALK",
+            speech: null
+          };
+        });
+      });
+    }, 4200);
+
+    return () => clearInterval(wanderInterval);
+  }, [customSpritesMap]);
+
+  // 物理移动与多名士碰撞检测 Tick
+  useEffect(() => {
+    const moveInterval = setInterval(() => {
+      setCharacters(prevChars => {
+        if (prevChars.length === 0) return prevChars;
+
+        const updated = prevChars.map(char => {
+          if (char.state !== "WALK") return char;
+
+          const dx = char.targetX - char.x;
+          const dy = char.targetY - char.y;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+
+          if (dist < 1.2) {
+            return {
+              ...char,
+              x: char.targetX,
+              y: char.targetY,
+              state: "IDLE"
+            };
+          }
+
+          const step = 0.65;
+          const vx = (dx / dist) * step;
+          const dyStep = (dy / dist) * step;
+
+          return {
+            ...char,
+            x: char.x + vx,
+            y: char.y + dyStep,
+            facing: dx >= 0 ? 1 : -1
+          };
+        });
+
+        // 碰撞检测逻辑
+        const now = Date.now();
+        if (updated.length >= 2) {
+          // 1. 若为【自主模式】：触发大模型 AI 剧情对白
+          if (mansionMode === 'auto' && now - lastEncounterRef.current > 26000 && !aiBusyRef.current) {
+            for (let i = 0; i < updated.length; i++) {
+              for (let j = i + 1; j < updated.length; j++) {
+                const c1 = updated[i];
+                const c2 = updated[j];
+                const dist = Math.sqrt((c1.x - c2.x) ** 2 + (c1.y - c2.y) ** 2);
+
+                if (
+                  dist < 14 &&
+                  (c1.state === "WALK" || c1.state === "IDLE") &&
+                  (c2.state === "WALK" || c2.state === "IDLE")
+                ) {
+                  lastEncounterRef.current = now;
+                  triggerAIEncounter(c1, c2, updated);
+                  break;
+                }
+              }
+            }
+          }
+          // 2. 若为【休闲模式】：仅作轻量相遇停留并冒轻表情
+          else if (mansionMode === 'casual' && now - lastEncounterRef.current > 12000) {
+            for (let i = 0; i < updated.length; i++) {
+              for (let j = i + 1; j < updated.length; j++) {
+                const c1 = updated[i];
+                const c2 = updated[j];
+                const dist = Math.sqrt((c1.x - c2.x) ** 2 + (c1.y - c2.y) ** 2);
+                if (dist < 12 && c1.state === "WALK" && c2.state === "WALK") {
+                  lastEncounterRef.current = now;
+                  const cuteEmojis = ["🌸", "🍵", "✨", "👀", "🐾"];
+                  const em = cuteEmojis[Math.floor(Math.random() * cuteEmojis.length)];
+                  setCharacters(curr => curr.map(c => {
+                    if (c.id === c1.id || c.id === c2.id) {
+                      return { ...c, state: "IDLE", speech: em };
+                    }
+                    return c;
+                  }));
+                  setTimeout(() => {
+                    setCharacters(curr => curr.map(c => (c.id === c1.id || c.id === c2.id) ? { ...c, speech: null } : c));
+                  }, 2200);
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        return updated;
+      });
+    }, 60);
+
+    return () => clearInterval(moveInterval);
+  }, [mansionMode, customSpritesMap]);
+
+  // 组装完整的名士画像与设定 (性格、世界书、用户身份、专属长篇文档、近期聊天记忆)
+  const buildComprehensiveCharacterPersona = async (charObj) => {
+    const d = charObj.chatData || {};
+    const profile = d.profile || {};
+    const details = [];
+
+    if (profile.gender || d.gender) details.push(`性别：${profile.gender || d.gender}`);
+    if (profile.age || d.age) details.push(`年龄：${profile.age || d.age}`);
+    if (profile.mbtiEnabled && profile.mbti) details.push(`MBTI：${profile.mbti}`);
+    if (profile.constellationEnabled && profile.constellation) details.push(`星座：${profile.constellation}`);
+    if (profile.personality || d.personality) details.push(`性格特征：${profile.personality || d.personality}`);
+    if (profile.background || d.background || d.desc) details.push(`身世背景：${profile.background || d.background || d.desc}`);
+    if (profile.style || d.style) details.push(`语言风格：${profile.style || d.style}`);
+
+    const directPersona = d.customPersona || d.persona || profile.persona || profile.customPersona || d.prompt || d.systemPrompt || "";
+    if (directPersona) {
+      details.push(`核心人设Prompt：${directPersona}`);
+    }
+
+    // 读取专属长篇设定文档
+    let docContext = "";
+    if (window.characterDocStore && d.id) {
+      try {
+        docContext = await window.characterDocStore.getEnabledDocContext(d.id);
+      } catch (e) {}
+    }
+
+    // 读取近期与用户的聊天历史
+    let recentChatSnippet = "";
+    if (window.chatHistoryStore && d.id) {
+      try {
+        const res = await window.chatHistoryStore.getMessages(d.id, 1, 8);
+        const msgs = res && res.messages ? res.messages : Array.isArray(res) ? res : [];
+        if (msgs.length > 0) {
+          recentChatSnippet = msgs.slice(-6).map(m => `[${m.isMe ? "用户" : d.name}]: ${m.text || m.content || ""}`).join("\n");
+        }
+      } catch (e) {}
+    }
+
+    return {
+      name: d.name || charObj.name,
+      personaDesc: details.join("；"),
+      docContext: docContext ? `【专属长篇设定】：${docContext.slice(0, 300)}` : "",
+      recentChat: recentChatSnippet ? `【近期与楼主的聊天回忆】：\n${recentChatSnippet}` : ""
+    };
+  };
+
+  // 触发角色分身 AI 偶遇对话
+  const triggerAIEncounter = async (c1, c2, allChars) => {
+    aiBusyRef.current = true;
+
+    setCharacters(curr => curr.map(c => {
+      if (c.id === c1.id || c.id === c2.id) {
+        return { ...c, state: "THINKING", speech: "💭 凝思中..." };
+      }
+      return c;
+    }));
+
+    try {
+      // 1. 读取用户选定的身份设定 (从身份配置库)
+      let userPersona = { name: "楼主", gender: "未知", personality: "心纸居之主" };
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activePersonaId = localStorage.getItem("active_persona_id") || localStorage.getItem("active_user_persona_id");
+        const active = savedPersonas.find(p => String(p.id) === String(activePersonaId));
+        if (active) userPersona = active;
+        else if (savedPersonas.length > 0) userPersona = savedPersonas[0];
+      } catch (e) {}
+
+      // 2. 读取全局开启的世界书条目 (从设置-世界书设置)
+      let worldBookContext = "";
+      try {
+        if (window.worldBookStore) {
+          const wbData = await window.worldBookStore.getData();
+          if (wbData && Array.isArray(wbData.books)) {
+            const activeBooks = wbData.books.filter(b => b.enable !== false && b.enabled !== false && b.enable);
+            if (activeBooks.length > 0) {
+              worldBookContext = activeBooks.map(b => `【世界设定 · ${b.title}】：${b.content}`).join("\n");
+            }
+          }
+        }
+      } catch (e) {}
+
+      // 3. 构建双方名士的详尽设定
+      const p1 = await buildComprehensiveCharacterPersona(c1);
+      const p2 = await buildComprehensiveCharacterPersona(c2);
+
+      const roomCoPresenceNames = allChars.map(c => c.name).join("、");
+
+      const prompt = `【心纸居名士分身偶遇互动生成】
+场景说明：当前是在府邸的私密互动空间【心纸居】中，同在心纸居的名士有：【${roomCoPresenceNames}】。
+心纸居的主人（用户身份）：【${userPersona.name}】（${userPersona.gender || "未知"}，设定：${userPersona.personality || userPersona.persona || "楼主"}）。
+
+${worldBookContext ? `【当前生效的世界书背景设定】：\n${worldBookContext.slice(0, 500)}\n` : ""}
+
+角色一：【${p1.name}】
+- 角色库设定：${p1.personaDesc || "传讯名士"}
+${p1.docContext ? `${p1.docContext}\n` : ""}
+${p1.recentChat ? `${p1.recentChat}\n` : ""}
+
+角色二：【${p2.name}】
+- 角色库设定：${p2.personaDesc || "传讯名士"}
+${p2.docContext ? `${p2.docContext}\n` : ""}
+${p2.recentChat ? `${p2.recentChat}\n` : ""}
+
+【交互生成要求】：
+1. 必须完全使用各自在角色配置库中的口吻与说话风格！严格体现各自傲娇/清冷/忠勇/温润等鲜明性格。
+2. 角色彼此能知道对方是谁：
+   - 如果根据双方设定或世界书本就相识（同门、同盟、宿敌、知己等），请准确呼唤对方名字或尊称，并体现过往渊源或熟稔对谈；
+   - 如果互不相识，则以自身人设风格进行初见试探、打趣、问候或吐槽。
+3. 可偶尔自然提及楼主（【${userPersona.name}】）或心纸居内的静憩环境。
+4. 请以极精炼的 2 句对话返回（角色一先说一句，角色二回应一句，每句 18 字以内）。
+
+请严格仅返回纯 JSON 格式：
+{"line1": "${p1.name}说的话", "line2": "${p2.name}回应的话"}`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [{ role: "system", content: "你是一个精准的角色扮演生成器，请根据角色设定库、世界书与用户身份，以纯JSON输出生动简明的双人对白。" }, { role: "user", content: prompt }],
+          { temperature: 0.85 },
+          (response) => {
+            try {
+              let cleaned = response.trim();
+              if (cleaned.startsWith("```json")) cleaned = cleaned.replace(/^```json/, "").replace(/```$/, "");
+              else if (cleaned.startsWith("```")) cleaned = cleaned.replace(/^```/, "").replace(/```$/, "");
+              const parsed = JSON.parse(cleaned.trim());
+
+              if (parsed.line1 && parsed.line2) {
+                setCharacters(curr => curr.map(c => {
+                  if (c.id === c1.id) return { ...c, state: "ENCOUNTER", speech: parsed.line1 };
+                  if (c.id === c2.id) return { ...c, state: "ENCOUNTER", speech: "..." };
+                  return c;
+                }));
+
+                setTimeout(() => {
+                  setCharacters(curr => curr.map(c => {
+                    if (c.id === c2.id) return { ...c, state: "ENCOUNTER", speech: parsed.line2 };
+                    return c;
+                  }));
+                }, 2400);
+
+                setTimeout(() => {
+                  setCharacters(curr => curr.map(c => (c.id === c1.id || c.id === c2.id) ? { ...c, state: "IDLE", speech: null } : c));
+                  aiBusyRef.current = false;
+                }, 6800);
+                return;
+              }
+            } catch (e) {
+              console.warn("解析心纸居 AI 偶遇对话失败，使用人设兜底:", e);
+            }
+            fallbackEncounter(c1, c2);
+          },
+          (err) => {
+            console.warn("心纸居 AI 生成异常，使用人设兜底:", err);
+            fallbackEncounter(c1, c2);
+          }
+        );
+      } else {
+        fallbackEncounter(c1, c2);
+      }
+    } catch (e) {
+      fallbackEncounter(c1, c2);
+    }
+  };
+
+  const fallbackEncounter = (c1, c2) => {
+    const fallbackList = [
+      [`${c2.name}，你也来案前烹茶了？`, `正是。与${c1.name}在此清谈正好。` ],
+      [`此地甚是安宁，适合清修。`, `有诸位名士同在，清宁亦有微趣。` ],
+      [`（优雅颔首）今日楼主可曾来看过你？`, `方才楼主才轻抚过我呢。` ],
+      [`案前桃花正好，共饮一杯如何？`, `正有此意，请。`],
+      [`今日心纸居春光甚好。`, `确是如此，与君共赏。`]
+    ];
+    const pair = fallbackList[Math.floor(Math.random() * fallbackList.length)];
+    setCharacters(curr => curr.map(c => {
+      if (c.id === c1.id) return { ...c, state: "ENCOUNTER", speech: pair[0] };
+      if (c.id === c2.id) return { ...c, state: "ENCOUNTER", speech: pair[1] };
+      return c;
+    }));
+
+    setTimeout(() => {
+      setCharacters(curr => curr.map(c => (c.id === c1.id || c.id === c2.id) ? { ...c, state: "IDLE", speech: null } : c));
+      aiBusyRef.current = false;
+    }, 5500);
+  };
+
+  // 手势按下 (PointerDown)
+  const handlePointerDown = (charId, e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const clientX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
+    const clientY = e.clientY || (e.touches && e.touches[0]?.clientY) || 0;
+
+    dragRef.current = {
+      isDragging: true,
+      charId,
+      startX: clientX,
+      startY: clientY,
+      hasMoved: false
+    };
+
+    // 如果有多个形态，悬空时可随机换一个生动形态
+    const spritesList = customSpritesMap[charId] || [];
+    let chosenImg = undefined;
+    if (spritesList.length > 1) {
+      chosenImg = spritesList[Math.floor(Math.random() * spritesList.length)];
+    }
+
+    setCharacters(prev => prev.map(c => {
+      if (c.id === charId) {
+        return {
+          ...c,
+          image: chosenImg || c.image,
+          state: "HELD",
+          speech: `喵！被楼主拎起来了~`
+        };
+      }
+      return c;
+    }));
+  };
+
+  // 手势滑动 (PointerMove)
+  const handlePointerMove = (e) => {
+    if (!dragRef.current.isDragging || !dragRef.current.charId) return;
+    const clientX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
+    const clientY = e.clientY || (e.touches && e.touches[0]?.clientY) || 0;
+
+    const dx = Math.abs(clientX - dragRef.current.startX);
+    const dy = Math.abs(clientY - dragRef.current.startY);
+    if (dx > 4 || dy > 4) {
+      dragRef.current.hasMoved = true;
+    }
+
+    if (!viewportRef.current) return;
+    const rect = viewportRef.current.getBoundingClientRect();
+    let posX = ((clientX - rect.left) / rect.width) * 100;
+    let posY = ((clientY - rect.top) / rect.height) * 100;
+
+    posX = Math.max(8, Math.min(90, posX));
+    posY = Math.max(26, Math.min(86, posY));
+
+    setCharacters(prev => prev.map(c => {
+      if (c.id === dragRef.current.charId) {
+        return { ...c, x: posX, y: posY, state: "HELD" };
+      }
+      return c;
+    }));
+  };
+
+  // 手势松开 (PointerUp)
+  const handlePointerUp = (e) => {
+    if (!dragRef.current.isDragging) return;
+    const { charId, hasMoved } = dragRef.current;
+    dragRef.current.isDragging = false;
+
+    if (!charId) return;
+
+    if (!hasMoved) {
+      handlePoke(charId, e);
+    } else {
+      setCharacters(prev => prev.map(c => {
+        if (c.id === charId) {
+          return { ...c, state: "DROP", speech: "稳稳着陆~ ✨" };
+        }
+        return c;
+      }));
+
+      setTimeout(() => {
+        setCharacters(prev => prev.map(c => c.id === charId ? { ...c, state: "IDLE", speech: null } : c));
+      }, 450);
+    }
+  };
+
+  // 点击/戳弄小人
+  const handlePoke = async (charId, e) => {
+    const charObj = characters.find(c => c.id === charId);
+    if (!charObj) return;
+
+    const emojis = ["💖", "✨", "🌸", "⭐", "🐾", "🍵"];
+    const emoji = emojis[Math.floor(Math.random() * emojis.length)];
+
+    const rect = viewportRef.current?.getBoundingClientRect();
+    if (rect) {
+      const px = (charObj.x / 100) * rect.width;
+      const py = (charObj.y / 100) * rect.height - 40;
+      spawnParticle(px, py, emoji);
+    }
+
+    const d = charObj.chatData || {};
+    const defaultReplies = [
+      `楼主请宽心，有我在心纸居守候~`,
+      `（舒服地微倚）案前的桃花香甚是清甜。`,
+      `今日府邸静谧，楼主得空不妨常来坐坐。`,
+      `（眼里带着盈盈笑意，尾指轻轻勾了勾你的指尖）`,
+      `千里心纸传情，只要楼主呼唤，我随时都在。`
+    ];
+    const reply = (d.personality ? `（${d.personality.slice(0, 10)}）` : "") + defaultReplies[Math.floor(Math.random() * defaultReplies.length)];
+
+    // 戳弄时也可以随机换个形态
+    const spritesList = customSpritesMap[charId] || [];
+    let chosenImg = charObj.image;
+    if (spritesList.length > 1) {
+      chosenImg = spritesList[Math.floor(Math.random() * spritesList.length)];
+    }
+
+    setCharacters(prev => prev.map(c => {
+      if (c.id === charId) {
+        return {
+          ...c,
+          image: chosenImg,
+          state: "POKE",
+          speech: reply,
+          affection: Math.min(100, (c.affection || 80) + 1),
+          pokes: (c.pokes || 0) + 1
+        };
+      }
+      return c;
+    }));
+
+    setTimeout(() => {
+      setCharacters(prev => prev.map(c => c.id === charId ? { ...c, state: "IDLE" } : c));
+    }, 450);
+
+    setTimeout(() => {
+      setCharacters(prev => prev.map(c => c.id === charId ? { ...c, speech: null } : c));
+    }, 3800);
+  };
+
+  // 投喂道具
+  const handleFeedItem = (charId, item) => {
+    const emojis = ["🍰", "❤️", "✨", "🎉", "🍶"];
+    const rect = viewportRef.current?.getBoundingClientRect();
+    const charObj = characters.find(c => c.id === charId);
+    if (rect && charObj) {
+      const px = (charObj.x / 100) * rect.width;
+      const py = (charObj.y / 100) * rect.height - 30;
+      emojis.forEach((em, idx) => {
+        setTimeout(() => spawnParticle(px + (idx - 2) * 12, py, em), idx * 120);
+      });
+    }
+
+    setCharacters(prev => prev.map(c => {
+      if (c.id === charId) {
+        return {
+          ...c,
+          state: "JOY",
+          speech: `享用了【${item.name}】！心意满满~ ❤️`,
+          affection: Math.min(100, (c.affection || 80) + item.val)
+        };
+      }
+      return c;
+    }));
+
+    setShowDrawer(false);
+    setTimeout(() => {
+      setCharacters(prev => prev.map(c => c.id === charId ? { ...c, state: "IDLE" } : c));
+    }, 3000);
+  };
+
+  // 打开心纸信件
+  const handleOpenLetter = () => {
+    const letter = letterPool[Math.floor(Math.random() * letterPool.length)];
+    setActiveLetter(letter);
+    setShowLetterModal(true);
+    setHasNewLetter(false);
+  };
+
+  // 过滤传讯名士列表
+  const filteredChats = (chats || []).filter(c => {
+    if (!rosterSearch) return true;
+    return (c.name && c.name.toLowerCase().includes(rosterSearch.toLowerCase())) ||
+           (c.desc && c.desc.toLowerCase().includes(rosterSearch.toLowerCase()));
+  });
+
+  return React.createElement(
+    "div",
+    {
+      className: `mansion-overlay open ${animState === 'exiting' ? 'mansion-blur-out' : 'mansion-blur-in'}`,
+      onPointerMove: handlePointerMove,
+      onPointerUp: handlePointerUp
+    },
+    // 支持选择多张图片的文件上传 Input (multiple)
+    React.createElement("input", {
+      type: "file",
+      ref: avatarFileInputRef,
+      accept: "image/*",
+      multiple: true,
+      style: { display: "none" },
+      onChange: handleFilesSelected
+    }),
+
+    // 顶部轻盈浅色高透玻璃导航栏 (精致对称布局)
+    React.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "8px 14px",
+          paddingTop: "calc(var(--safe-top, 10px) + 6px)",
+          background: "linear-gradient(180deg, rgba(255, 252, 246, 0.78) 0%, rgba(255, 248, 238, 0.48) 100%)",
+          backdropFilter: "blur(20px)",
+          WebkitBackdropFilter: "blur(20px)",
+          zIndex: 100,
+          borderBottom: "1px solid rgba(255, 255, 255, 0.65)",
+          boxShadow: "0 4px 18px rgba(90, 60, 30, 0.05)"
+        }
+      },
+      // 左侧：返回传讯按钮
+      React.createElement(
+        "button",
+        {
+          onClick: handleExit,
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "3px",
+            background: "rgba(255, 255, 255, 0.65)",
+            border: "1px solid rgba(230, 210, 185, 0.6)",
+            borderRadius: "16px",
+            padding: "5px 11px",
+            color: "#5c4129",
+            fontSize: "12px",
+            fontWeight: "600",
+            cursor: "pointer",
+            backdropFilter: "blur(8px)",
+            boxShadow: "0 2px 6px rgba(100, 60, 20, 0.04)",
+            transition: "all 0.2s"
+          }
+        },
+        React.createElement("span", { style: { fontSize: "14px", fontWeight: "bold" } }, "‹"),
+        "传讯"
+      ),
+
+      // 中间：优雅国风大字「心纸居」
+      React.createElement(
+        "div",
+        {
+          style: {
+            fontSize: "16px",
+            fontWeight: "bold",
+            color: "#5c4129",
+            letterSpacing: "3px",
+            textShadow: "0 1px 4px rgba(255,255,255,0.8)",
+            display: "flex",
+            alignItems: "center",
+            gap: "2px",
+            userSelect: "none"
+          }
+        },
+        React.createElement("span", { style: { color: "#d6a86e", fontSize: "11px", marginRight: "2px" } }, "❖"),
+        "心纸居",
+        React.createElement("span", { style: { color: "#d6a86e", fontSize: "11px", marginLeft: "2px" } }, "❖")
+      ),
+
+      // 右侧：紧凑双层操作区 (上排: 模式+名士，下排: 信笺+礼物)
+      React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "flex-end",
+            gap: "4px"
+          }
+        },
+        // 上排：小巧模式切换 + 调度名士
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "5px" } },
+          // 小巧模式切换胶囊
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                background: "rgba(245, 238, 226, 0.7)",
+                borderRadius: "12px",
+                padding: "1.5px",
+                border: "1px solid rgba(220, 195, 165, 0.55)",
+                boxShadow: "inset 0 1px 2px rgba(0,0,0,0.03)"
+              }
+            },
+            React.createElement(
+              "button",
+              {
+                onClick: () => handleToggleMode('casual'),
+                style: {
+                  padding: "2px 6px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: mansionMode === 'casual' ? "linear-gradient(135deg, #d6a86e, #b8864e)" : "transparent",
+                  color: mansionMode === 'casual' ? "#fff" : "#8c7255",
+                  fontSize: "10px",
+                  fontWeight: mansionMode === 'casual' ? "bold" : "600",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  boxShadow: mansionMode === 'casual' ? "0 1px 4px rgba(184, 134, 78, 0.3)" : "none"
+                },
+                title: "休闲模式：名士静憩漫游，不触发AI对话"
+              },
+              "🍃休闲"
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => handleToggleMode('auto'),
+                style: {
+                  padding: "2px 6px",
+                  borderRadius: "10px",
+                  border: "none",
+                  background: mansionMode === 'auto' ? "linear-gradient(135deg, #d6724b, #b85832)" : "transparent",
+                  color: mansionMode === 'auto' ? "#fff" : "#8c7255",
+                  fontSize: "10px",
+                  fontWeight: mansionMode === 'auto' ? "bold" : "600",
+                  cursor: "pointer",
+                  transition: "all 0.2s",
+                  boxShadow: mansionMode === 'auto' ? "0 1px 4px rgba(214, 114, 75, 0.35)" : "none"
+                },
+                title: "自主模式：名士偶遇相识，自主调用AI生成剧情对白"
+              },
+              "✨自主"
+            )
+          ),
+          // 选择/调度名士按钮
+          React.createElement(
+            "button",
+            {
+              onClick: () => setShowRosterModal(true),
+              style: {
+                background: "rgba(255, 255, 255, 0.75)",
+                border: "1px solid rgba(225, 200, 170, 0.75)",
+                borderRadius: "12px",
+                padding: "2.5px 8px",
+                color: "#5c4129",
+                fontSize: "10.5px",
+                fontWeight: "600",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "2px",
+                boxShadow: "0 1px 4px rgba(100, 60, 20, 0.04)"
+              },
+              title: "调度传讯名士入驻与小人立绘配置"
+            },
+            React.createElement("span", { style: { fontSize: "11px" } }, "🎎"),
+            `名士(${activeCharIds.length}/5)`
+          )
+        ),
+
+        // 下排：信纸 + 礼物
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "5px" } },
+          // 信纸按钮
+          React.createElement(
+            "button",
+            {
+              onClick: handleOpenLetter,
+              title: "查阅心纸来信",
+              style: {
+                background: "rgba(255, 255, 255, 0.75)",
+                border: "1px solid rgba(225, 200, 170, 0.75)",
+                borderRadius: "12px",
+                padding: "2.5px 8px",
+                color: "#5c4129",
+                fontSize: "10.5px",
+                fontWeight: "600",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "2px",
+                position: "relative",
+                boxShadow: "0 1px 4px rgba(100, 60, 20, 0.04)"
+              }
+            },
+            React.createElement("span", { style: { fontSize: "11px" } }, "✉️"),
+            "信纸",
+            hasNewLetter && React.createElement("span", {
+              style: {
+                position: "absolute",
+                top: "-2px",
+                right: "-2px",
+                width: "5px",
+                height: "5px",
+                borderRadius: "50%",
+                background: "#ff5e5e",
+                boxShadow: "0 0 3px #ff5e5e"
+              }
+            })
+          ),
+          // 礼物按钮
+          React.createElement(
+            "button",
+            {
+              onClick: () => setShowDrawer(!showDrawer),
+              title: "心意百宝囊 · 投喂礼物",
+              style: {
+                background: "linear-gradient(135deg, #d6724b 0%, #b85832 100%)",
+                border: "none",
+                borderRadius: "12px",
+                padding: "2.5px 8px",
+                color: "#fff",
+                fontSize: "10.5px",
+                fontWeight: "600",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "2px",
+                boxShadow: "0 2px 6px rgba(214, 114, 75, 0.28)"
+              }
+            },
+            React.createElement("span", { style: { fontSize: "11px" } }, "🎁"),
+            "礼物"
+          )
+        )
+      )
+    ),
+
+    // 模式切换提示气泡
+    modeTip && React.createElement(
+      "div",
+      {
+        style: {
+          position: "absolute",
+          top: "calc(var(--safe-top, 10px) + 58px)",
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "rgba(255, 252, 246, 0.95)",
+          border: "1px solid rgba(214, 168, 110, 0.6)",
+          borderRadius: "20px",
+          padding: "5px 14px",
+          fontSize: "11px",
+          color: "#5c4129",
+          fontWeight: "600",
+          zIndex: 9999,
+          boxShadow: "0 6px 20px rgba(100, 60, 20, 0.12)",
+          animation: "bubblePop 0.3s ease-out",
+          pointerEvents: "none",
+          whiteSpace: "nowrap"
+        }
+      },
+      modeTip
+    ),
+
+    // 主视口容器 (全景 2.5D Room Viewport)
+    React.createElement(
+      "div",
+      {
+        ref: viewportRef,
+        className: "mansion-room-viewport",
+        onPointerUp: handlePointerUp
+      },
+      // 场景柔和光照蒙层
+      React.createElement("div", {
+        style: {
+          position: "absolute",
+          inset: 0,
+          background: "radial-gradient(ellipse at 40% 30%, rgba(255, 240, 200, 0.18) 0%, rgba(0, 0, 0, 0.14) 80%)",
+          pointerEvents: "none",
+          zIndex: 4
+        }
+      }),
+
+      // 角色实体渲染 (1~5 名士分身，支持多形态随机呈现)
+      characters.map(char => {
+        const zIndex = Math.floor(char.y) + 15;
+        const isHeld = char.state === "HELD";
+        const animClass =
+          char.state === "WALK" ? "mansion-anim-walk" :
+          char.state === "HELD" ? "mansion-anim-held" :
+          char.state === "DROP" ? "mansion-anim-drop" :
+          char.state === "POKE" ? "mansion-anim-poke" :
+          char.state === "JOY" ? "mansion-anim-joy" :
+          char.state === "THINKING" ? "mansion-anim-thinking" : "mansion-anim-idle";
+
+        return React.createElement(
+          "div",
+          {
+            key: char.id,
+            className: `mansion-char-entity ${animClass}`,
+            style: {
+              left: `${char.x}%`,
+              top: `${char.y}%`,
+              transform: "translate(-50%, -90%)",
+              zIndex: isHeld ? 990 : zIndex
+            },
+            onPointerDown: (e) => handlePointerDown(char.id, e)
+          },
+          // 角色头顶气泡
+          char.speech && React.createElement(
+            "div",
+            {
+              className: "mansion-speech-bubble",
+              style: {
+                position: "absolute",
+                bottom: "100%",
+                left: "50%",
+                transform: "translateX(-50%) translateY(-10px)",
+                zIndex: 999
+              }
+            },
+            char.speech
+          ),
+
+          // 地面接触阴影
+          React.createElement("div", {
+            style: {
+              position: "absolute",
+              bottom: "-2px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              width: isHeld ? "56px" : "44px",
+              height: "11px",
+              borderRadius: "50%",
+              background: "radial-gradient(ellipse at center, rgba(30,20,12,0.45) 0%, rgba(30,20,12,0) 75%)",
+              filter: isHeld ? "blur(4px)" : "blur(1px)",
+              opacity: isHeld ? 0.3 : 0.75,
+              transition: "all 0.2s"
+            }
+          }),
+
+          // Q版立绘图片 / 头像圆形徽章 (多形态无缝过渡)
+          char.image ? React.createElement("img", {
+            src: char.image,
+            alt: char.name,
+            draggable: false,
+            style: {
+              width: "74px",
+              height: "auto",
+              maxHeight: "92px",
+              objectFit: "contain",
+              display: "block",
+              filter: "drop-shadow(0 4px 10px rgba(0,0,0,0.22))",
+              pointerEvents: "none",
+              transition: "opacity 0.2s"
+            },
+            onError: (e) => {
+              e.target.style.display = "none";
+            }
+          }) : React.createElement(
+            "div",
+            {
+              style: {
+                width: "56px",
+                height: "56px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #d6a86e, #b8864e)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                color: "#fff",
+                fontWeight: "bold",
+                fontSize: "18px",
+                boxShadow: "0 4px 12px rgba(0,0,0,0.25)",
+                border: "2px solid #fffdf8"
+              }
+            },
+            char.name ? char.name[0] : "?"
+          )
+        );
+      }),
+
+      // 悬浮点触粒子
+      particles.map(p => React.createElement(
+        "div",
+        {
+          key: p.id,
+          className: "mansion-float-particle",
+          style: { left: `${p.x}px`, top: `${p.y}px` }
+        },
+        p.emoji
+      ))
+    ),
+
+    // ==================== 拟态玻璃「名士分身阁」调度与多形态立绘管理抽屉 ====================
+    showRosterModal && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0, 0, 0, 0.65)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-end",
+          zIndex: 1100,
+          animation: "fadeIn 0.25s ease-out"
+        },
+        onClick: () => {
+          setShowRosterModal(false);
+          setManagingSpritesCharId(null);
+        }
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            background: "linear-gradient(180deg, #faf6ee 0%, #f3ebd8 100%)",
+            borderTopLeftRadius: "24px",
+            borderTopRightRadius: "24px",
+            maxHeight: "84vh",
+            display: "flex",
+            flexDirection: "column",
+            borderTop: "2px solid #d6a86e",
+            boxShadow: "0 -10px 40px rgba(0, 0, 0, 0.45)",
+            overflow: "hidden"
+          },
+          onClick: (e) => e.stopPropagation()
+        },
+        // 抽屉头部
+        React.createElement(
+          "div",
+          {
+            style: {
+              padding: "14px 18px",
+              borderBottom: "1px solid #ebd8bf",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }
+          },
+          React.createElement(
+            "div",
+            null,
+            React.createElement(
+              "div",
+              { style: { fontSize: "15px", fontWeight: "bold", color: "#5d442a", display: "flex", alignItems: "center", gap: "6px" } },
+              "❖ 名士分身阁",
+              React.createElement(
+                "span",
+                { style: { fontSize: "11px", background: "#d6724b", color: "#fff", padding: "2px 8px", borderRadius: "12px", fontWeight: "bold" } },
+                `入驻 ${activeCharIds.length} / 5 人`
+              )
+            ),
+            React.createElement("div", { style: { fontSize: "11px", color: "#9c8065", marginTop: "2px" } }, "支持为名士上传多个形态立绘（站/坐/走/跑），自动保存至IndexedDB")
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => {
+                setShowRosterModal(false);
+                setManagingSpritesCharId(null);
+              },
+              style: {
+                background: "rgba(0,0,0,0.06)",
+                border: "none",
+                borderRadius: "50%",
+                width: "28px",
+                height: "28px",
+                fontSize: "14px",
+                color: "#6b4a28",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }
+            },
+            "✕"
+          )
+        ),
+
+        // 搜索框
+        React.createElement(
+          "div",
+          { style: { padding: "8px 18px", background: "rgba(255,255,255,0.4)" } },
+          React.createElement("input", {
+            type: "text",
+            placeholder: "🔍 搜索传讯名士姓名或设定...",
+            value: rosterSearch,
+            onChange: (e) => setRosterSearch(e.target.value),
+            style: {
+              width: "100%",
+              padding: "7px 12px",
+              borderRadius: "12px",
+              border: "1px solid #ebd8bf",
+              background: "#fff",
+              fontSize: "12px",
+              color: "#5d442a",
+              outline: "none"
+            }
+          })
+        ),
+
+        // 名士卡片列表
+        React.createElement(
+          "div",
+          {
+            style: {
+              flex: 1,
+              overflowY: "auto",
+              padding: "12px 18px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              maxHeight: "58vh"
+            }
+          },
+          filteredChats.length === 0 ? React.createElement(
+            "div",
+            { style: { textAlign: "center", padding: "30px 10px", color: "#a89078", fontSize: "12px" } },
+            chats && chats.length === 0 ? "传讯中暂无名士，请先在传讯页面添加名士~" : "未找到匹配的名士"
+          ) : filteredChats.map(char => {
+            const isActive = activeCharIds.includes(char.id);
+            const spritesList = customSpritesMap[char.id] || [];
+            const resolvedImg = resolvedAvatars[char.id];
+            const displayImg = spritesList.length > 0 ? spritesList[0] : (resolvedImg || (typeof char.avatar === "string" && char.avatar.startsWith("data:") ? char.avatar : null) || "graph/player-1.png");
+            const isManaging = managingSpritesCharId === char.id;
+
+            return React.createElement(
+              "div",
+              {
+                key: char.id,
+                style: {
+                  background: isActive ? "linear-gradient(135deg, #fff 0%, #fdf8ee 100%)" : "#fff",
+                  border: isActive ? "1.5px solid #d6a86e" : "1px solid #ebd8bf",
+                  borderRadius: "16px",
+                  padding: "10px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  boxShadow: isActive ? "0 4px 14px rgba(214, 168, 110, 0.22)" : "0 2px 6px rgba(0,0,0,0.03)",
+                  transition: "all 0.2s"
+                }
+              },
+              // 卡片主行
+              React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+                // 左侧：头像与名士信息
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 } },
+                  React.createElement(
+                    "div",
+                    { style: { position: "relative" } },
+                    React.createElement("img", {
+                      src: displayImg,
+                      alt: char.name,
+                      style: {
+                        width: "44px",
+                        height: "44px",
+                        borderRadius: spritesList.length > 0 ? "8px" : "50%",
+                        objectFit: "contain",
+                        background: "rgba(0,0,0,0.04)",
+                        border: "1.5px solid #d6b88d"
+                      },
+                      onError: (e) => {
+                        e.target.src = "graph/player-1.png";
+                      }
+                    }),
+                    spritesList.length > 0 && React.createElement(
+                      "span",
+                      {
+                        style: {
+                          position: "absolute",
+                          bottom: "-4px",
+                          right: "-4px",
+                          background: "#d6724b",
+                          color: "#fff",
+                          fontSize: "8.5px",
+                          padding: "0 4px",
+                          borderRadius: "6px",
+                          fontWeight: "bold"
+                        }
+                      },
+                      `${spritesList.length}态`
+                    )
+                  ),
+                  // 中间：姓名与描述
+                  React.createElement(
+                    "div",
+                    { style: { flex: 1, minWidth: 0 } },
+                    React.createElement(
+                      "div",
+                      { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                      React.createElement("span", { style: { fontSize: "13.5px", fontWeight: "bold", color: "#5d442a" } }, char.name),
+                      isActive && React.createElement(
+                        "span",
+                        { style: { fontSize: "9.5px", color: "#d6724b", background: "#fbeae3", padding: "1px 5px", borderRadius: "6px", fontWeight: "600" } },
+                        "在居"
+                      )
+                    ),
+                    React.createElement(
+                      "div",
+                      { style: { fontSize: "10.5px", color: "#8c7255", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+                      char.personality || char.desc || "传讯名士"
+                    )
+                  )
+                ),
+
+                // 右侧：操作按钮群 (形态库管理 + 入驻切换)
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", gap: "5px" } },
+                  // 查看/管理形态库
+                  React.createElement(
+                    "button",
+                    {
+                      onClick: () => setManagingSpritesCharId(isManaging ? null : char.id),
+                      style: {
+                        padding: "4px 8px",
+                        borderRadius: "12px",
+                        border: "1px solid #d6b88d",
+                        background: spritesList.length > 0 ? "#fdf3e7" : "#faf6ee",
+                        color: "#6b4a28",
+                        fontSize: "10.5px",
+                        fontWeight: "600",
+                        cursor: "pointer"
+                      }
+                    },
+                    spritesList.length > 0 ? `🎨 形态(${spritesList.length})` : "🎨 添加形态"
+                  ),
+                  // 入驻/歇息按钮
+                  React.createElement(
+                    "button",
+                    {
+                      onClick: () => toggleCharacterActive(char.id),
+                      style: {
+                        padding: "5px 12px",
+                        borderRadius: "12px",
+                        border: "none",
+                        background: isActive ? "linear-gradient(135deg, #d6724b, #b85832)" : "#ebd8bf",
+                        color: isActive ? "#fff" : "#6b4a28",
+                        fontSize: "11px",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                        boxShadow: isActive ? "0 2px 6px rgba(214, 114, 75, 0.3)" : "none"
+                      }
+                    },
+                    isActive ? "歇息" : "入驻"
+                  )
+                )
+              ),
+
+              // 展开的形态库管理抽屉面板
+              isManaging && React.createElement(
+                "div",
+                {
+                  style: {
+                    background: "rgba(255, 252, 245, 0.85)",
+                    border: "1px dashed #d6b88d",
+                    borderRadius: "12px",
+                    padding: "10px",
+                    marginTop: "4px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px"
+                  }
+                },
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "#6b4a28", fontWeight: "bold" } },
+                  React.createElement("span", null, `【${char.name}】专属小人形态库（当前：${spritesList.length}个）`),
+                  React.createElement(
+                    "div",
+                    { style: { display: "flex", gap: "6px" } },
+                    React.createElement(
+                      "button",
+                      {
+                        onClick: () => handleUploadCustomSprite(char.id),
+                        style: {
+                          padding: "3px 8px",
+                          borderRadius: "10px",
+                          background: "linear-gradient(135deg, #d6724b, #b85832)",
+                          border: "none",
+                          color: "#fff",
+                          fontSize: "10px",
+                          fontWeight: "bold",
+                          cursor: "pointer"
+                        }
+                      },
+                      "+ 上传新形态 (多选)"
+                    ),
+                    spritesList.length > 0 && React.createElement(
+                      "button",
+                      {
+                        onClick: () => handleResetAllSprites(char.id),
+                        style: {
+                          padding: "3px 6px",
+                          borderRadius: "10px",
+                          background: "none",
+                          border: "1px solid #ebd8bf",
+                          color: "#9c8065",
+                          fontSize: "10px",
+                          cursor: "pointer"
+                        }
+                      },
+                      "清空"
+                    )
+                  )
+                ),
+
+                // 形态列表缩略图 Grid
+                spritesList.length === 0 ? React.createElement(
+                  "div",
+                  { style: { textAlign: "center", padding: "12px", color: "#a89078", fontSize: "11px" } },
+                  "暂未上传专属形态，小人将使用传讯头像；点击右上角「+ 上传新形态」可上传任意形态立绘（站立/坐下/走动/跑动等）"
+                ) : React.createElement(
+                  "div",
+                  {
+                    style: {
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, 1fr)",
+                      gap: "8px"
+                    }
+                  },
+                  spritesList.map((imgUrl, sIdx) => React.createElement(
+                    "div",
+                    {
+                      key: sIdx,
+                      style: {
+                        position: "relative",
+                        background: "#fff",
+                        border: "1px solid #ebd8bf",
+                        borderRadius: "10px",
+                        padding: "4px",
+                        display: "flex",
+                        flexDirection: "column",
+                        alignItems: "center",
+                        boxShadow: "0 2px 4px rgba(0,0,0,0.03)"
+                      }
+                    },
+                    React.createElement("img", {
+                      src: imgUrl,
+                      alt: `形态 ${sIdx + 1}`,
+                      style: { width: "100%", height: "52px", objectFit: "contain", display: "block" }
+                    }),
+                    React.createElement(
+                      "div",
+                      { style: { fontSize: "9px", color: "#9c8065", marginTop: "2px" } },
+                      `形态 ${sIdx + 1}`
+                    ),
+                    // 单个形态删除按钮
+                    React.createElement(
+                      "button",
+                      {
+                        onClick: () => handleDeleteSprite(char.id, sIdx),
+                        style: {
+                          position: "absolute",
+                          top: "-4px",
+                          right: "-4px",
+                          background: "#ff5e5e",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "16px",
+                          height: "16px",
+                          color: "#fff",
+                          fontSize: "9px",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          cursor: "pointer"
+                        },
+                        title: "删除该形态"
+                      },
+                      "✕"
+                    )
+                  ))
+                )
+              )
+            );
+          })
+        )
+      )
+    ),
+
+    // 心意百宝囊抽屉 (Gift Drawer)
+    showDrawer && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.5)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-end",
+          zIndex: 1050
+        },
+        onClick: () => setShowDrawer(false)
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            background: "linear-gradient(180deg, #fffdf8 0%, #f6efe3 100%)",
+            borderTopLeftRadius: "24px",
+            borderTopRightRadius: "24px",
+            padding: "20px",
+            boxShadow: "0 -8px 30px rgba(0,0,0,0.35)",
+            animation: "bubblePop 0.3s ease-out"
+          },
+          onClick: (e) => e.stopPropagation()
+        },
+        React.createElement(
+          "div",
+          { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" } },
+          React.createElement("div", { style: { fontSize: "15px", fontWeight: "bold", color: "#5d442a" } }, "🎁 心意百宝匣 · 投喂名士分身"),
+          React.createElement(
+            "button",
+            {
+              onClick: () => setShowDrawer(false),
+              style: { background: "none", border: "none", fontSize: "16px", color: "#8c7255", cursor: "pointer" }
+            },
+            "✕"
+          )
+        ),
+        React.createElement(
+          "div",
+          { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px", marginBottom: "16px" } },
+          [
+            { name: "桃花羹", icon: "🍡", val: 15, desc: "甜糯芳馨" },
+            { name: "鲜鱼脍", icon: "🐟", val: 20, desc: "鲜嫩爽口" },
+            { name: "桂花酿", icon: "🍶", val: 15, desc: "温润清芬" },
+            { name: "同心结", icon: "🎀", val: 25, desc: "情义长存" }
+          ].map((item, idx) => React.createElement(
+            "div",
+            {
+              key: idx,
+              style: {
+                background: "#fff",
+                border: "1px solid #ebd8bf",
+                borderRadius: "14px",
+                padding: "10px 6px",
+                textAlign: "center",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.03)"
+              }
+            },
+            React.createElement("div", { style: { fontSize: "24px", marginBottom: "4px" } }, item.icon),
+            React.createElement("div", { style: { fontSize: "12px", fontWeight: "bold", color: "#5d442a" } }, item.name),
+            React.createElement("div", { style: { fontSize: "10px", color: "#9c8065", marginBottom: "8px" } }, item.desc),
+            React.createElement(
+              "div",
+              { style: { display: "flex", flexDirection: "column", gap: "4px" } },
+              characters.map(char => React.createElement(
+                "button",
+                {
+                  key: char.id,
+                  onClick: () => handleFeedItem(char.id, item),
+                  style: {
+                    fontSize: "10px",
+                    padding: "3px 0",
+                    borderRadius: "8px",
+                    background: "linear-gradient(135deg, #d6724b, #b85832)",
+                    border: "none",
+                    color: "#fff",
+                    cursor: "pointer"
+                  }
+                },
+                `喂${char.name.slice(0, 3)}`
+              ))
+            )
+          ))
+        )
+      )
+    ),
+
+    // 心纸飞信查阅弹窗 (Letter Modal)
+    showLetterModal && activeLetter && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.65)",
+          backdropFilter: "blur(8px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          zIndex: 1200
+        },
+        onClick: () => setShowLetterModal(false)
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            width: "100%",
+            maxWidth: "360px",
+            background: "linear-gradient(180deg, #fbf7ee 0%, #f3ebd8 100%)",
+            border: "2px solid #d6a86e",
+            borderRadius: "20px",
+            padding: "24px",
+            boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+            position: "relative",
+            animation: "bubblePop 0.3s ease-out"
+          },
+          onClick: (e) => e.stopPropagation()
+        },
+        React.createElement("div", { style: { fontSize: "16px", fontWeight: "bold", color: "#6b4a28", marginBottom: "8px", textAlign: "center" } }, activeLetter.title),
+        React.createElement(
+          "div",
+          { style: { display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#a1876c", marginBottom: "14px", borderBottom: "1px dashed #d6b88d", paddingBottom: "6px" } },
+          React.createElement("span", null, "寄信人：" + activeLetter.sender),
+          React.createElement("span", null, activeLetter.date)
+        ),
+        React.createElement(
+          "div",
+          {
+            style: {
+              fontSize: "13px",
+              color: "#523b24",
+              lineHeight: "1.8",
+              whiteSpace: "pre-line",
+              marginBottom: "20px",
+              fontFamily: "'Zhi Mang Xing', cursive, sans-serif"
+            }
+          },
+          activeLetter.text
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: () => setShowLetterModal(false),
+            style: {
+              width: "100%",
+              padding: "10px",
+              borderRadius: "12px",
+              background: "linear-gradient(135deg, #d6724b, #b85832)",
+              border: "none",
+              color: "#fff",
+              fontSize: "13px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(214, 114, 75, 0.3)"
+            }
+          },
+          "收下心意 · 阖上信笺"
+        )
+      )
+    )
+  );
+};
+
 const T8Page = () => {
   const { useState, useEffect } = React; // 确保引入了 useEffect
 
@@ -83652,6 +85508,7 @@ const T8Page = () => {
   const [searchQuery, setSearchQuery] = useState(""); // 搜索关键词
   const [loading, setLoading] = useState(true); // 加载状态
   const [subTab, setSubTab] = useState("chat"); // 'chat' 或 'moments'
+  const [showMansion, setShowMansion] = useState(false); // 控制心纸居放置空间页面
   // Pixabay API状态
   const [pixabayApiKey, setPixabayApiKey] = React.useState("");
 
@@ -84157,6 +86014,7 @@ const T8Page = () => {
 
   return (
     <div id="app-root">
+      {showMansion && <HeartPaperMansion onClose={() => setShowMansion(false)} chats={chats} />}
       {/* [修改] 传递 editingChar 给模态框 */}
       <T8ImportPersonaModal
         isOpen={isImportOpen}
@@ -84417,8 +86275,30 @@ const T8Page = () => {
           position: "relative",
         }}
       >
-        <div style={{ opacity: 0.9 }}>
-          <T8Icons.Menu />
+        <div
+          onClick={(e) => {
+            if (e) {
+              e.preventDefault();
+              e.stopPropagation();
+            }
+            setShowMansion(true);
+          }}
+          style={{
+            opacity: 0.95,
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "6px",
+            borderRadius: "10px",
+            transition: "all 0.2s",
+            pointerEvents: "auto",
+            touchAction: "manipulation",
+            userSelect: "none"
+          }}
+          title="心纸居（放置小人互动空间）"
+        >
+          <T8Icons.House />
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
           {/* 传讯 Tab */}
