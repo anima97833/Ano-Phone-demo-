@@ -80634,10 +80634,13 @@ const ChatSettingsModal = ({
       {showDiaryPage && (
         <BambooDiaryPage
           characterName={chatData.name}
+          isGenerating={isGeneratingDiary}
           onBack={() => setShowDiaryPage(false)}
-          onGenerateDiary={() => {
+          onGenerateDiary={async () => {
             // 生成日记逻辑
             console.log("生成日记");
+            if (isGeneratingDiary) return;
+            setIsGeneratingDiary(true);
 
             // 获取当前选中的身份信息
             const getUserPersonaInfo = () => {
@@ -80728,6 +80731,7 @@ const ChatSettingsModal = ({
               apiMessages,
               null, // onChunk
               (reply) => {
+                setIsGeneratingDiary(false);
                 // 解析AI回复，提取内容（忽略AI生成的标题，使用固定格式标题）
                 const diaryText = reply;
                 const lines = diaryText
@@ -80754,6 +80758,7 @@ const ChatSettingsModal = ({
                 }
               },
               (error) => {
+                setIsGeneratingDiary(false);
                 console.error("生成日记失败:", error);
                 // 生成默认日记
                 setDiaryContent({
@@ -87878,6 +87883,7 @@ const BambooDiaryPage = ({
   onGenerateDiary,
   diaryContent,
   characterName,
+  isGenerating = false,
 }) => {
   const [content, setContent] = React.useState(
     diaryContent || {
@@ -87888,6 +87894,8 @@ const BambooDiaryPage = ({
       ],
     },
   );
+  const [isLocalGenerating, setIsLocalGenerating] = React.useState(false);
+  const effectiveIsGenerating = isGenerating || isLocalGenerating;
 
   // 分页状态
   const [currentPage, setCurrentPage] = React.useState(0);
@@ -88011,6 +88019,14 @@ const BambooDiaryPage = ({
     return pages[currentPage] || [];
   };
 
+  const handlePrevPage = () => {
+    setCurrentPage((prev) => Math.max(0, prev - 1));
+  };
+
+  const handleNextPage = () => {
+    setCurrentPage((prev) => Math.min(totalPages - 1, prev + 1));
+  };
+
   // 生成固定16片具有天然参差错落质感的竹简参数
   const stripsData = React.useMemo(() => {
     return Array.from({ length: 16 }).map((_, i) => ({
@@ -88056,7 +88072,20 @@ const BambooDiaryPage = ({
         {/* 左上角：生成日记按钮 */}
         <div
           className="watermark"
-          onClick={onGenerateDiary}
+          onClick={async () => {
+            if (effectiveIsGenerating) return;
+            setIsLocalGenerating(true);
+            try {
+              const res = onGenerateDiary && onGenerateDiary();
+              if (res && typeof res.then === "function") {
+                await res;
+              }
+            } catch (err) {
+              console.error("生成日记出错:", err);
+            } finally {
+              setIsLocalGenerating(false);
+            }
+          }}
           style={{
             padding: "6px 14px",
             border: "1px solid rgba(138, 114, 80, 0.35)",
@@ -88066,7 +88095,8 @@ const BambooDiaryPage = ({
             letterSpacing: "1px",
             backgroundColor: "rgba(255, 255, 255, 0.45)",
             backdropFilter: "blur(4px)",
-            cursor: "pointer",
+            cursor: effectiveIsGenerating ? "not-allowed" : "pointer",
+            opacity: effectiveIsGenerating ? 0.75 : 1,
             display: "flex",
             alignItems: "center",
             gap: "6px",
@@ -88075,10 +88105,14 @@ const BambooDiaryPage = ({
           }}
         >
           <i
-            className="ph-bold ph-pencil-simple-line"
+            className={
+              effectiveIsGenerating
+                ? "ph-bold ph-spinner animate-spin"
+                : "ph-bold ph-pencil-simple-line"
+            }
             style={{ fontSize: "16px", color: "#8a5a30" }}
           ></i>
-          <span>生成日记</span>
+          <span>{effectiveIsGenerating ? "正在撰写..." : "生成日记"}</span>
         </div>
 
         {/* 右上角：返回关闭按钮 */}
@@ -88132,6 +88166,46 @@ const BambooDiaryPage = ({
             justifyContent: "flex-end",
           }}
         >
+          {/* 生成中遮罩提示 */}
+          {effectiveIsGenerating && (
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                backgroundColor: "rgba(249, 245, 232, 0.78)",
+                backdropFilter: "blur(2px)",
+                zIndex: 60,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "12px",
+                borderRadius: "8px",
+              }}
+            >
+              <div
+                style={{
+                  width: "38px",
+                  height: "38px",
+                  border: "3px solid rgba(138, 90, 48, 0.2)",
+                  borderTopColor: "#8a5a30",
+                  borderRadius: "50%",
+                }}
+                className="animate-spin"
+              />
+              <span
+                style={{
+                  color: "#5a4f3f",
+                  fontSize: "15px",
+                  fontWeight: "bold",
+                  letterSpacing: "2px",
+                  fontFamily: '"STKaiti", "KaiTi", serif',
+                }}
+              >
+                墨迹未干，正在研墨撰写日记...
+              </span>
+            </div>
+          )}
           {/* 竹简展开平铺区域 (Flat Area) */}
           <div
             className="flat-area"
@@ -104651,17 +104725,21 @@ const TrajectoryPage = ({
               {characterName || "角色"}今日轨迹
             </span>
             {/* 搜索/AI重新生成图标 */}
-            <i
-              className="ph-bold ph-magnifying-glass"
+            <div
               style={{
-                cursor: "pointer",
-                color: "#505643",
-                fontSize: "20px",
-                padding: "2px",
-                transition: "transform 0.2s ease",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "28px",
+                height: "28px",
+                borderRadius: "6px",
+                backgroundColor: isLoading ? "rgba(80, 86, 67, 0.12)" : "transparent",
+                cursor: isLoading ? "not-allowed" : "pointer",
+                transition: "all 0.2s ease",
               }}
-              title="AI生成新轨迹"
+              title={isLoading ? "AI正在推演轨迹..." : "AI生成新轨迹"}
               onClick={async () => {
+                if (isLoading) return;
                 setIsLoading(true);
                 try {
                   await onGenerateTrajectory();
@@ -104671,55 +104749,61 @@ const TrajectoryPage = ({
                   setIsLoading(false);
                 }
               }}
-            ></i>
+            >
+              <i
+                className={
+                  isLoading
+                    ? "ph-bold ph-spinner animate-spin"
+                    : "ph-bold ph-magnifying-glass"
+                }
+                style={{
+                  color: "#505643",
+                  fontSize: "20px",
+                  transition: "all 0.2s ease",
+                }}
+              ></i>
+            </div>
             {isLoading && (
               <span
                 style={{
-                  fontSize: "12px",
-                  color: "#D6724B",
+                  fontSize: "13px",
+                  color: "#505643",
                   display: "inline-flex",
                   alignItems: "center",
                   gap: "4px",
+                  fontFamily: '"SimSun", "STKaiti", serif',
+                  fontWeight: "bold",
                 }}
               >
-                <i
-                  className="ph-bold ph-spinner ph-spin"
-                  style={{ fontSize: "13px" }}
-                ></i>
-                生成中...
+                推演中...
               </span>
             )}
           </div>
         </div>
 
-        {/* 右上角返回/刷新弧形箭头 (完全还原图1) */}
+        {/* 右上角返回按钮（清晰直观的圆形返回箭头） */}
         <div
           onClick={onBack}
           style={{
             width: "36px",
             height: "36px",
+            borderRadius: "50%",
+            backgroundColor: "rgba(255, 255, 255, 0.65)",
+            border: "1px solid rgba(80, 86, 67, 0.25)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
             cursor: "pointer",
-            color: "#333",
-            transition: "transform 0.2s",
+            color: "#505643",
+            transition: "all 0.2s ease",
+            boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
           }}
-          title="返回"
+          title="返回上一页"
         >
-          <svg
-            width="28"
-            height="28"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="#2B2D26"
-            strokeWidth="2.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          >
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-            <path d="M3 3v5h5" />
-          </svg>
+          <i
+            className="ph-bold ph-arrow-left"
+            style={{ fontSize: "18px", color: "#505643" }}
+          ></i>
         </div>
       </div>
 
@@ -104764,6 +104848,46 @@ const TrajectoryPage = ({
           boxSizing: "border-box",
         }}
       >
+        {/* 加载中遮罩提示 */}
+        {isLoading && (
+          <div
+            style={{
+              position: "absolute",
+              inset: 0,
+              backgroundColor: "rgba(244, 239, 230, 0.78)",
+              backdropFilter: "blur(2px)",
+              zIndex: 50,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "10px",
+              borderRadius: "8px",
+            }}
+          >
+            <div
+              style={{
+                width: "36px",
+                height: "36px",
+                border: "3px solid rgba(80, 86, 67, 0.2)",
+                borderTopColor: "#505643",
+                borderRadius: "50%",
+              }}
+              className="animate-spin"
+            />
+            <span
+              style={{
+                color: "#505643",
+                fontSize: "14px",
+                fontWeight: "bold",
+                letterSpacing: "1px",
+                fontFamily: '"SimSun", "STKaiti", serif',
+              }}
+            >
+              正在推演【{characterName || "角色"}】今日行踪与轨迹...
+            </span>
+          </div>
+        )}
         {/* 左侧时间轴 (固定 76px 宽) */}
         <div
           style={{
