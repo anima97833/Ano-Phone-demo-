@@ -290,6 +290,150 @@ window.resolveAvatarUrl = async (avatarOrId, fallback = "") => {
   return fallback;
 };
 
+const AvatarSourcePicker = ({ open, onClose, onLocalSelect, onUrlConfirm }) => {
+  const [mode, setMode] = React.useState("local");
+  const [urlValue, setUrlValue] = React.useState("");
+  const [urlError, setUrlError] = React.useState("");
+  const [isChecking, setIsChecking] = React.useState(false);
+  const fileInputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (open) {
+      setMode("local");
+      setUrlValue("");
+      setUrlError("");
+      setIsChecking(false);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleUrlSubmit = async (event) => {
+    event.preventDefault();
+    const url = urlValue.trim();
+    if (!url || isChecking) return;
+
+    try {
+      const parsed = new URL(url);
+      if (!/^https?:$/.test(parsed.protocol)) throw new Error("invalid protocol");
+    } catch (error) {
+      setUrlError("请输入有效的图片 URL");
+      return;
+    }
+
+    setIsChecking(true);
+    setUrlError("");
+    try {
+      await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = resolve;
+        image.onerror = reject;
+        image.src = url;
+      });
+      await onUrlConfirm(url);
+      onClose();
+    } catch (error) {
+      setUrlError("图片无法加载，请检查 URL");
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleLocalChange = (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+    onLocalSelect(file);
+    onClose();
+  };
+
+  return (
+    <div className="avatar-source-picker-mask" onClick={onClose}>
+      <div
+        className="avatar-source-picker"
+        role="dialog"
+        aria-modal="true"
+        aria-label="选择头像来源"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="avatar-source-header">
+          <span>选择头像来源</span>
+          <button type="button" className="avatar-source-close" onClick={onClose} aria-label="关闭">
+            ×
+          </button>
+        </div>
+        <div className="avatar-source-tabs">
+          <button
+            type="button"
+            className={`avatar-source-tab${mode === "local" ? " active" : ""}`}
+            onClick={() => {
+              setMode("local");
+              setUrlError("");
+            }}
+          >
+            本地上传
+          </button>
+          <button
+            type="button"
+            className={`avatar-source-tab${mode === "url" ? " active" : ""}`}
+            onClick={() => {
+              setMode("url");
+              setUrlError("");
+            }}
+          >
+            URL
+          </button>
+        </div>
+
+        {mode === "local" ? (
+          <>
+            <button
+              type="button"
+              className="avatar-local-upload-area"
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            >
+              <span className="avatar-local-upload-icon">＋</span>
+              <span>点击上传图片</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleLocalChange}
+              style={{ display: "none" }}
+            />
+          </>
+        ) : (
+          <form className="avatar-url-form" onSubmit={handleUrlSubmit} noValidate>
+            <input
+              type="url"
+              className="avatar-url-input"
+              value={urlValue}
+              onChange={(event) => {
+                setUrlValue(event.target.value);
+                setUrlError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleUrlSubmit(event);
+              }}
+              placeholder="https://example.com/avatar.jpg"
+              autoFocus
+            />
+            {urlError && <div className="avatar-url-error">{urlError}</div>}
+            <button
+              type="submit"
+              className="avatar-url-confirm"
+              disabled={!urlValue.trim() || isChecking}
+            >
+              {isChecking ? "正在检查..." : "确认"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
+
 // ==================== 钱包与交易全局记录系统 ====================
 window.addTransactionRecord = (type, amount, source) => {
   try {
@@ -75112,11 +75256,11 @@ const T8ImportPersonaModal = ({ isOpen, onClose, onImport }) => {
 
 // [修改] T8 人物创建/编辑模态框 (支持自定义头像和回显)
 const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
-  const fileInputRef = React.useRef(null);
   const docQuickInputRef = React.useRef(null);
   const [showJsonImportModal, setShowJsonImportModal] = React.useState(false);
   const [showDocsModal, setShowDocsModal] = React.useState(false);
   const [docImportLoading, setDocImportLoading] = React.useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = React.useState(false);
 
   // [新增] 识别当前传入的数据是否为群聊
   const isGroup =
@@ -75197,15 +75341,18 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
 
   if (!isOpen) return null;
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, avatar: reader.result }));
-      };
-      reader.readAsDataURL(file);
+  const applyAvatar = async (avatar) => {
+    setFormData((prev) => ({ ...prev, avatar }));
+    if (isGroup && onSave) {
+      await onSave({ ...formData, avatar }, true);
     }
+  };
+
+  const handleImageUpload = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => applyAvatar(reader.result);
+    reader.readAsDataURL(file);
   };
 
   // 从 Doc / TXT 文档快速导入并自动填充人物设定
@@ -75368,7 +75515,13 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
             }}
           >
             {/* [新增功能 1] 群头像支持用户上传更改 */}
-            <label
+            <div
+              role="button"
+              tabIndex="0"
+              onClick={() => setShowAvatarPicker(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") setShowAvatarPicker(true);
+              }}
               style={{
                 position: "relative",
                 cursor: "pointer",
@@ -75442,31 +75595,7 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
                   <circle cx="12" cy="13" r="4"></circle>
                 </svg>
               </div>
-              {/* 隐藏的上传选择器 */}
-              <input
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  const file = e.target.files[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      const base64Data = reader.result;
-                      setFormData((prev) => ({
-                        ...prev,
-                        avatar: base64Data,
-                      }));
-                      // 读取完成后，通过 onSave 立即执行保存，keepOpen 传入 true 保持窗口开启
-                      if (onSave) {
-                        onSave({ ...formData, avatar: base64Data }, true);
-                      }
-                    };
-                    reader.readAsDataURL(file);
-                  }
-                }}
-              />
-            </label>
+            </div>
 
             {/* [新增功能 2] 群聊名称支持用户输入更改 */}
             <input
@@ -75620,7 +75749,7 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
               }}
             >
               <div
-                onClick={() => fileInputRef.current.click()}
+                onClick={() => setShowAvatarPicker(true)}
                 style={{
                   width: "80px",
                   height: "80px",
@@ -75674,13 +75803,6 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
                   <span style={{ fontSize: "10px", color: "white" }}>修改</span>
                 </div>
               </div>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleImageUpload}
-                accept="image/*"
-                style={{ display: "none" }}
-              />
             </div>
 
             {/* ================= 快速导入工具栏 (JSON 角色卡 & Doc 长篇设定) ================= */}
@@ -75971,6 +76093,13 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
         isOpen={showJsonImportModal}
         onClose={() => setShowJsonImportModal(false)}
         onImport={handleJsonImportToForm}
+      />
+
+      <AvatarSourcePicker
+        open={showAvatarPicker}
+        onClose={() => setShowAvatarPicker(false)}
+        onLocalSelect={handleImageUpload}
+        onUrlConfirm={applyAvatar}
       />
 
       {/* 嵌套在创建弹窗中的文档管理弹窗 */}
@@ -95707,7 +95836,10 @@ const T8Page = () => {
     try {
       // 处理头像存储
       let avatarReference = formData.avatar;
-      if (formData.avatar && formData.avatar.startsWith("data:image")) {
+      if (
+        formData.avatar &&
+        (formData.avatar.startsWith("data:image") || /^https?:\/\//i.test(formData.avatar))
+      ) {
         // 生成头像ID
         const avatarId = editingChar ? editingChar.id : Date.now();
         // 存储头像到IndexedDB (长久保存)
@@ -97789,8 +97921,8 @@ const WorldBookOverlay = ({ isOpen, onClose }) => {
 // ==================== 用户身份 (Persona) 管理组件 START ====================
 
 const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
-  const { useState, useEffect, useRef } = React;
-  const fileInputRef = useRef(null);
+  const { useState, useEffect } = React;
+  const [showAvatarPicker, setShowAvatarPicker] = useState(false);
 
   // 默认空表单数据
   const initialForm = {
@@ -97831,8 +97963,7 @@ const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
   }, []);
 
   // 处理图片上传 (转Base64以存入localStorage)
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
+  const handleImageUpload = (file) => {
     if (file) {
       const reader = new FileReader();
       reader.onloadend = () => {
@@ -97842,6 +97973,10 @@ const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleAvatarUrl = (url) => {
+    setFormData((prev) => ({ ...prev, avatar: url }));
   };
 
   // 保存表单
@@ -97933,7 +98068,7 @@ const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
 
           <div
             className="avatar-uploader"
-            onClick={() => fileInputRef.current.click()}
+            onClick={() => setShowAvatarPicker(true)}
           >
             {formData.avatar ? (
               <img
@@ -97950,14 +98085,14 @@ const UserProfilePage = ({ onClose, onUpdateActiveUser }) => {
                 点击上传
               </div>
             )}
-            <input
-              type="file"
-              ref={fileInputRef}
-              onChange={handleImageUpload}
-              accept="image/*"
-              style={{ display: "none" }}
-            />
           </div>
+
+          <AvatarSourcePicker
+            open={showAvatarPicker}
+            onClose={() => setShowAvatarPicker(false)}
+            onLocalSelect={handleImageUpload}
+            onUrlConfirm={handleAvatarUrl}
+          />
 
           <div className="pf-form-group">
             <label className="pf-label">名字</label>
