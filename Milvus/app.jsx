@@ -40975,10 +40975,10 @@ const T13_GAMES = [
   },
   {
     id: 3,
-    title: "画猜游戏",
-    category: "益智",
-    imgColor: "#D99E82",
-    icon: "ph-question",
+    title: "团建活动",
+    category: "休闲",
+    imgColor: "#7A9EA8",
+    icon: "ph-users-three",
   },
   {
     id: 4,
@@ -64601,6 +64601,6023 @@ ${selectedChars.map((c) => `【${c.name}】(当前好感度:${affections[c.name]
 };
 
 
+// ==================== T13 团建活动 · 密探汤泉泡澡主页面组件 ====================
+const T13TeamBuildingPage = ({ onBack }) => {
+  const { useState, useEffect, useRef } = React;
+
+  // 场景定义配置（场景一：温泉温汤，场景二：晴岚海滩）
+  const SCENES_CONFIG = [
+    {
+      id: 1,
+      name: "东海温汤",
+      title: "温泉汤池",
+      icon: "♨",
+      bg: "graph/场景1.jfif",
+      spots: [
+        { x: 26, y: 62 },
+        { x: 50, y: 58 },
+        { x: 74, y: 62 },
+        { x: 36, y: 75 },
+        { x: 64, y: 75 },
+        { x: 50, y: 86 },
+        { x: 20, y: 78 },
+        { x: 80, y: 78 },
+      ]
+    },
+    {
+      id: 2,
+      name: "晴岚海滩",
+      title: "海滨沙滩",
+      icon: "🏖️",
+      bg: "graph/场景2.jfif",
+      spots: [
+        { x: 28, y: 65 },
+        { x: 52, y: 64 },
+        { x: 76, y: 68 },
+        { x: 38, y: 78 },
+        { x: 65, y: 78 },
+        { x: 50, y: 88 },
+        { x: 22, y: 82 },
+        { x: 82, y: 82 },
+      ]
+    }
+  ];
+
+  // 1. 基础状态
+  const [allMessagingChars, setAllMessagingChars] = useState([]);
+
+  // 当前场景 ID (1 或 2)
+  const [currentSceneId, setCurrentSceneId] = useState(() => {
+    try {
+      const saved = parseInt(localStorage.getItem("t8_teambuilding_current_scene") || "1", 10);
+      return saved === 2 ? 2 : 1;
+    } catch (e) {
+      return 1;
+    }
+  });
+
+  // 场景一入驻密探列表 (最多8人)
+  const [scene1CharIds, setScene1CharIds] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("t8_teambuilding_scene1_ids") || localStorage.getItem("t8_teambuilding_active_ids") || "null");
+      if (Array.isArray(saved) && saved.length > 0) return saved.slice(0, 8);
+      const mansionSaved = JSON.parse(localStorage.getItem("t8_mansion_active_ids") || "null");
+      if (Array.isArray(mansionSaved) && mansionSaved.length > 0) return mansionSaved.slice(0, 4);
+      return [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // 场景二入驻密探列表 (最多8人)
+  const [scene2CharIds, setScene2CharIds] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("t8_teambuilding_scene2_ids") || "null");
+      if (Array.isArray(saved) && saved.length > 0) return saved.slice(0, 8);
+      return [];
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // 当前活跃场景的入驻名单
+  const activeCharIds = currentSceneId === 1 ? scene1CharIds : scene2CharIds;
+  const currentSceneConfig = SCENES_CONFIG.find(s => s.id === currentSceneId) || SCENES_CONFIG[0];
+  const [modalTargetScene, setModalTargetScene] = useState(1);
+
+  const [customSpritesMap, setCustomSpritesMap] = useState({});
+  const [selectedSpritesMap, setSelectedSpritesMap] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("t8_teambuilding_selected_sprites") || "{}");
+    } catch (e) {
+      return {};
+    }
+  });
+  const [resolvedAvatars, setResolvedAvatars] = useState({});
+  const [bathers, setBathers] = useState([]);
+
+  // 2. 镜头特写聚焦状态 (点击密探后进入)
+  const [focusedCharId, setFocusedCharId] = useState(null);
+
+  // 3. 用户真实金库余额状态 (对接隐私与安全-我的金库)
+  const [userCoins, setUserCoins] = useState(() => {
+    try {
+      return parseInt(localStorage.getItem("farm_coins") || "500", 10);
+    } catch (e) {
+      return 500;
+    }
+  });
+
+  // 监听金库更新事件
+  useEffect(() => {
+    const handleUpdateCoins = () => {
+      try {
+        setUserCoins(parseInt(localStorage.getItem("farm_coins") || "500", 10));
+      } catch (e) {}
+    };
+    window.addEventListener("walletTransactionsUpdated", handleUpdateCoins);
+    return () => window.removeEventListener("walletTransactionsUpdated", handleUpdateCoins);
+  }, []);
+
+  // 金库扣款与记账辅助方法
+  const checkAndDeductVaultCoins = (amount, sourceDesc) => {
+    if (amount <= 0) return true;
+    const current = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+    if (current < amount) {
+      alert(`金库余额不足！此操作需 ${amount} 元五铢钱（当前金库余额：${current} 元）。\n请前往【设置 - 隐私与安全 - 我的金库】充值。`);
+      return false;
+    }
+    const newBalance = current - amount;
+    try {
+      localStorage.setItem("farm_coins", newBalance.toString());
+      setUserCoins(newBalance);
+    } catch (e) {}
+
+    if (typeof window.addTransactionRecord === "function") {
+      window.addTransactionRecord("expense", amount, sourceDesc);
+    }
+    return true;
+  };
+
+  // 4. 猜拳对决状态
+  const [rpsStage, setRpsStage] = useState("idle");
+  const [userGesture, setUserGesture] = useState(null); // 0: 石头, 1: 剪刀, 2: 布
+  const [botGesture, setBotGesture] = useState(null);
+  const [rpsCurrentFlash, setRpsCurrentFlash] = useState(0);
+  const [rpsResult, setRpsResult] = useState(null); // "win" | "lose" | "draw"
+
+  // 5. 真心话特写发问面板状态 ("idle" | "picker")
+  const [truthStage, setTruthStage] = useState("idle");
+  const [customTruthInput, setCustomTruthInput] = useState("");
+  const [truthPickerPage, setTruthPickerPage] = useState(0);
+
+  // 6. 赠送特产面板状态 ("idle" | "picker")
+  const [giftStage, setGiftStage] = useState("idle");
+
+  // 7. 闲聊 / 真心话 / 密探回礼 对白展示
+  const [activeDialogue, setActiveDialogue] = useState(null);
+  const [isGeneratingChat, setIsGeneratingChat] = useState(false);
+  const [isGeneratingGiftBack, setIsGeneratingGiftBack] = useState(false);
+
+  // 8. 密探性格标签字典 (按角色 ID 持久化)
+  const [customTagsMap, setCustomTagsMap] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("t8_teambuilding_character_tags") || "{}");
+    } catch (e) {
+      return {};
+    }
+  });
+  const [archiveTagPage, setArchiveTagPage] = useState(0);
+  const [floatingNewTagNotice, setFloatingNewTagNotice] = useState(null);
+  const [giftPreparingNotice, setGiftPreparingNotice] = useState(null);
+
+  // 9. 密探真心话问答历史字典 (按角色 ID 持久化)
+  const [customTruthQAMap, setCustomTruthQAMap] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("t8_teambuilding_character_truth_qa") || "{}");
+    } catch (e) {
+      return {};
+    }
+  });
+  const [archiveTruthPage, setArchiveTruthPage] = useState(0);
+
+  // 10. 密探喜好物品字典 (按角色 ID 持久化，支持赠送后动态扩充)
+  const [customLikesMap, setCustomLikesMap] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("t8_teambuilding_character_likes") || "{}");
+    } catch (e) {
+      return {};
+    }
+  });
+  const [archiveLikesPage, setArchiveLikesPage] = useState(0);
+
+  // 11. 密探赠送给楼主的礼物字典 (按角色 ID 持久化留痕)
+  const [customGivenGiftsMap, setCustomGivenGiftsMap] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("t8_teambuilding_character_given_gifts") || "{}");
+    } catch (e) {
+      return {};
+    }
+  });
+  const [archiveGivenGiftsPage, setArchiveGivenGiftsPage] = useState(0);
+
+  // 12. 用户购买/获赠的背包物品库存
+  const [userInventory, setUserInventory] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("t8_teambuilding_user_inventory") || "[]");
+    } catch (e) {
+      return [];
+    }
+  });
+
+  // 13. 弹窗与形态管理
+  const [showHeartModal, setShowHeartModal] = useState(false);
+  const [managingSpritesCharId, setManagingSpritesCharId] = useState(null);
+  const [rosterSearch, setRosterSearch] = useState("");
+  const fileInputRef = useRef(null);
+  const [uploadingTargetCharId, setUploadingTargetCharId] = useState(null);
+
+  // 14. 密探档案·团建名单弹窗状态
+  const [showArchivePicker, setShowArchivePicker] = useState(false);
+  const [showArchiveDetail, setShowArchiveDetail] = useState(false);
+  const [selectedArchiveCharId, setSelectedArchiveCharId] = useState(null);
+  const [archiveSearch, setArchiveSearch] = useState("");
+  const [archiveTruthAnswer, setArchiveTruthAnswer] = useState(null);
+  const [archiveItemTooltip, setArchiveItemTooltip] = useState(null);
+
+  // 15. 海滨商社商店弹窗状态与商品数据 (IndexedDB 持久化)
+  const [showShopModal, setShowShopModal] = useState(false);
+  const [isGeneratingShop, setIsGeneratingShop] = useState(false);
+  const [selectedShopItemDetail, setSelectedShopItemDetail] = useState(null);
+
+  // 默认商社商品库 (价格统一为真钱)
+  const defaultShopGoodsList = [
+    {
+      id: "g_1",
+      name: "海景单日手环",
+      icon: "📿",
+      count: 1,
+      statusText: "本日限购4/4",
+      price: 120,
+      currencyIcon: "🪙",
+      desc: "东海海水浴场单日专属手环，凭此环可畅享全部温汤与海滨设施。"
+    },
+    {
+      id: "g_2",
+      name: "捞网",
+      icon: "🏸",
+      count: 1,
+      statusText: "",
+      price: 30,
+      currencyIcon: "🪙",
+      desc: "轻巧细密的竹柄捞网，可在海滨浅滩捕捞灵蝶或贝壳游鱼。"
+    },
+    {
+      id: "g_3",
+      name: "冰饮子",
+      icon: "🍧",
+      count: 1,
+      statusText: "",
+      price: 30,
+      currencyIcon: "🪙",
+      desc: "清甜爽口的冰镇梅子饮，温汤泡澡后饮用最是沁人心脾。"
+    },
+    {
+      id: "g_4",
+      name: "五铢钱",
+      icon: "💰",
+      count: 1000,
+      statusText: "",
+      price: 10,
+      currencyIcon: "🪙",
+      desc: "成捆整齐的五铢铜钱，楼中打点与日常开销必备。"
+    },
+    {
+      id: "g_5",
+      name: "东海浴盐",
+      icon: "🧂",
+      count: 1,
+      statusText: "每日特供",
+      price: 60,
+      currencyIcon: "🪙",
+      desc: "采自东海深处结晶的海盐，散发淡淡清幽香气，舒筋活络。"
+    },
+    {
+      id: "g_6",
+      name: "紫檀按摩梳",
+      icon: "🪮",
+      count: 1,
+      statusText: "畅销爆款",
+      price: 80,
+      currencyIcon: "🪙",
+      desc: "紫檀木精工打磨的经络按摩梳，缓解疲乏助益安神。"
+    },
+  ];
+
+  const [shopGoods, setShopGoods] = useState(() => {
+    try {
+      const local = JSON.parse(localStorage.getItem("t8_teambuilding_shop_goods") || "null");
+      if (Array.isArray(local) && local.length > 0) return local;
+    } catch (e) {}
+    return defaultShopGoodsList;
+  });
+
+  // 16. 动态波纹与特效
+  const [dynamicRipples, setDynamicRipples] = useState([]);
+  const [splashes, setSplashes] = useState([]);
+
+  // 拖拽手势
+  const dragRef = useRef({
+    isDragging: false,
+    charId: null,
+    startX: 0,
+    startY: 0,
+    charStartX: 0,
+    charStartY: 0,
+    hasMoved: false,
+  });
+
+  const waterAreaRef = useRef(null);
+
+  // 猜拳手势资源
+  const rpsGestures = [
+    { id: 0, name: "石头", img: "graph/猜拳-石头-removebg-preview.png" },
+    { id: 1, name: "剪刀", img: "graph/猜拳-剪刀-removebg-preview.png" },
+    { id: 2, name: "布", img: "graph/猜拳-布-removebg-preview.png" },
+  ];
+
+  // 汤泉全景下水点位分布坐标
+  const bathSpots = [
+    { x: 26, y: 62 },
+    { x: 50, y: 58 },
+    { x: 74, y: 62 },
+    { x: 36, y: 75 },
+    { x: 64, y: 75 },
+    { x: 50, y: 86 },
+    { x: 20, y: 78 },
+    { x: 80, y: 78 },
+  ];
+
+  // 闲聊保底对话库
+  const chatDialoguePool = [
+    "汤水温热，正好涤尽楼中机务的喧嚣。楼主若是累了，不妨靠在池边多歇息片刻。",
+    "偷得浮生半日闲，今日能与楼主同游海滨温汤，当真惬意舒畅。",
+    "水温刚刚好，身子骨都轻快了不少。在此处，不必去想那些纷繁谍报与机锋。",
+    "这泉水洗去了连日奔波的乏累……有楼主相伴左右，心下甚安。",
+    "难得有这般悠闲静谧的时辰。楼主若觉得水温凉了，我再去添些热水。"
+  ];
+
+  // 真心话保底对话库
+  const truthDialoguePool = [
+    "其实……我鲜少在他人面前卸下防备。唯有在楼主身边，才敢放下所有戒备与算计。",
+    "这世间风云变幻，名利纷争何其多。于我而言，最安心的归处，不过是楼主回首唤我名字之时。",
+    "有些话平日里总觉得轻狂，未曾诉诸于口……能得遇楼主相知相守，实乃我此生最大之幸。",
+    "楼主可知，每一次出任务，让我必定平安归来的执念，不过是想再见你一面罢了。"
+  ];
+
+  // 预设真心话候选题库
+  const presetTruthQuestionsPool = [
+    "有没有良心不安过？",
+    "会因为什么感到烦躁？",
+    "为何能轻易舍弃性命？",
+    "最近有什么苦恼？",
+    "在你心中，楼主是怎样的存在？",
+    "你最害怕失去的是什么？",
+    "如果乱世平定，最想过怎样的生活？",
+    "有什么秘密是从未对他人提起过的？",
+  ];
+
+  // 密探档案：预设性格标签池
+  const defaultMacaronTags = [
+    { text: "知白守黑", bg: "#e1f5ec", color: "#2b664d", decor: "🐤" },
+    { text: "舍生取义", bg: "#e1effa", color: "#28537b", decor: "🕊️" },
+    { text: "人形算盘", bg: "#fae4e4", color: "#7b283b", decor: "🦀" },
+    { text: "非攻", bg: "#eaf5e6", color: "#35652e", decor: "🦊" },
+    { text: "假装淡定", bg: "#e4ecf8", color: "#2d4b76", decor: "🕊️" },
+    { text: "狂炫糯米团", bg: "#fae8de", color: "#823e24", decor: "🦀" },
+    { text: "泡澡战神", bg: "#ebf6e5", color: "#3d6b2c", decor: "🐤" },
+    { text: "嘴硬心软", bg: "#e2effa", color: "#265278", decor: "🕊️" },
+  ];
+
+  // 密探档案：预设真心话回顾题库
+  const defaultArchiveTruthQuestions = [
+    {
+      id: "def_1",
+      q: "有没有良心不安过？",
+      a: "在这乱世之中行事，若说从未动摇过那是虚妄。但唯有守护楼主与楼中同袍之事，我问心无愧。"
+    },
+    {
+      id: "def_2",
+      q: "会因为什么感到烦躁？",
+      a: "大概是……看到楼主不顾自身安危勉强自己，或是那些没完没了又漏洞百出的繁杂账目吧。"
+    },
+    {
+      id: "def_3",
+      q: "为何能轻易舍弃性命？",
+      a: "这并非轻掷，而是有些信念与珍视之人，远比苟全性命更值得倾尽所有去守护。"
+    },
+    {
+      id: "def_4",
+      q: "最近有什么苦恼？",
+      a: "近来见楼主总是步履匆匆，不知该如何才能替楼主分担更多重担……"
+    }
+  ];
+
+  // 密探档案：默认 7 格喜好物品
+  const defaultArchiveLikesList = [
+    { icon: "🍡", name: "芝麻糯米团", desc: "香甜软糯的江南小食，入口温热甜润。" },
+    { icon: "🐟", name: "烤海游鱼", desc: "东海现捕鲜鱼，佐以细盐焦香四溢。" },
+    { icon: "🧮", name: "紫檀铜算盘", desc: "精打细算，账目分明方能立足。" },
+    { icon: "🏸", name: "织锦捕蝶网", desc: "竹制轻巧手柄，捕捉林间灵蝶。" },
+    { icon: "🧸", name: "绒毛小萌兽", desc: "柔软治愈的暖手玩偶，手感极佳。" },
+    { icon: "🖌️", name: "紫毫宣颖笔", desc: "书写密函与账本的称手利器。" },
+    { icon: "🍶", name: "杜康醉仙酿", desc: "清洌甘醇，温汤小酌最是怡情。" },
+  ];
+
+  // 密探档案：默认密探赠送给楼主的初始心意礼物
+  const defaultArchiveGivenGiftsList = [
+    {
+      id: "g_def_1",
+      icon: "🍵",
+      name: "暖胃红枣姜茶",
+      desc: "温热香浓的姜茶，驱散海水微寒，暖胃安神。",
+      reason: "见楼主在温汤中泡得久了，特意去沏的，饮些免受寒气入侵。"
+    },
+    {
+      id: "g_def_2",
+      icon: "🧣",
+      name: "素罗轻纱巾",
+      desc: "轻柔防风的素色罗巾，出浴后披之免受海风微凉。",
+      reason: "夜风稍凉，楼主身子金贵，披着总归妥帖些。"
+    },
+    {
+      id: "g_def_3",
+      icon: "🌸",
+      name: "海棠珊瑚发簪",
+      desc: "温润典雅的珊瑚海棠簪，光泽清丽动人。",
+      reason: "方才在海滨集市瞧见的……觉得很衬楼主气度。"
+    },
+  ];
+
+  // ==================== 从 IndexedDB 读取商品数据 ====================
+  const loadShopGoodsFromIndexedDB = async () => {
+    try {
+      if (window.openDB && window.STORES) {
+        const db = await window.openDB();
+        const tx = db.transaction(window.STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(window.STORES.USER_SETTINGS);
+        const req = store.get("teambuilding_shop_goods");
+        return new Promise((resolve) => {
+          req.onsuccess = () => {
+            if (req.result?.value && Array.isArray(req.result.value) && req.result.value.length > 0) {
+              resolve(req.result.value);
+            } else {
+              resolve(null);
+            }
+          };
+          req.onerror = () => resolve(null);
+        });
+      }
+    } catch (e) {
+      console.warn("从 IndexedDB 读取商品失败:", e);
+    }
+    try {
+      const local = JSON.parse(localStorage.getItem("t8_teambuilding_shop_goods") || "null");
+      if (Array.isArray(local) && local.length > 0) return local;
+    } catch (e) {}
+    return null;
+  };
+
+  // ==================== 保存商品数据至 IndexedDB ====================
+  const saveShopGoodsToIndexedDB = async (goodsList) => {
+    try {
+      if (window.openDB && window.STORES) {
+        const db = await window.openDB();
+        const tx = db.transaction(window.STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(window.STORES.USER_SETTINGS);
+        store.put({ key: "teambuilding_shop_goods", value: goodsList });
+      }
+    } catch (e) {
+      console.warn("保存商品至 IndexedDB 失败:", e);
+    }
+    try {
+      localStorage.setItem("t8_teambuilding_shop_goods", JSON.stringify(goodsList));
+    } catch (e) {}
+  };
+
+  // 加载传讯名士、立绘与商品库
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        let allChars = [];
+        if (window.chatCharacterStore) {
+          allChars = await window.chatCharacterStore.getAll();
+        } else {
+          allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const validChars = allChars.filter(
+          (c) => !String(c.id).startsWith("group") && c.type !== "decor" && c.name
+        );
+        setAllMessagingChars(validChars);
+
+        if (scene1CharIds.length === 0 && validChars.length > 0) {
+          const defaultIds = validChars.slice(0, Math.min(4, validChars.length)).map(c => c.id);
+          setScene1CharIds(defaultIds);
+          localStorage.setItem("t8_teambuilding_scene1_ids", JSON.stringify(defaultIds));
+          localStorage.setItem("t8_teambuilding_active_ids", JSON.stringify(defaultIds));
+        }
+      } catch (e) {
+        console.warn("加载传讯角色失败:", e);
+      }
+
+      // 读取立绘库
+      try {
+        if (window.openDB && window.STORES) {
+          const db = await window.openDB();
+          const tx = db.transaction(window.STORES.USER_SETTINGS, "readonly");
+          const store = tx.objectStore(window.STORES.USER_SETTINGS);
+          const req = store.get("mansion_character_sprites");
+          req.onsuccess = () => {
+            const val = req.result?.value;
+            if (val && typeof val === "object") {
+              setCustomSpritesMap(val);
+            } else {
+              loadFallbackSprites();
+            }
+          };
+          req.onerror = () => loadFallbackSprites();
+        } else {
+          loadFallbackSprites();
+        }
+      } catch (e) {
+        loadFallbackSprites();
+      }
+
+      // 从 IndexedDB 读取商品库
+      const dbGoods = await loadShopGoodsFromIndexedDB();
+      if (dbGoods && Array.isArray(dbGoods) && dbGoods.length > 0) {
+        setShopGoods(dbGoods);
+      }
+    };
+
+    const loadFallbackSprites = () => {
+      try {
+        const local = JSON.parse(localStorage.getItem("t8_mansion_custom_avatars") || "{}");
+        setCustomSpritesMap(local);
+      } catch (e) {}
+    };
+
+    loadData();
+  }, []);
+
+  // 解析传讯头像 URL
+  useEffect(() => {
+    let isMounted = true;
+    const resolveAvatars = async () => {
+      if (!allMessagingChars || allMessagingChars.length === 0) return;
+      const resMap = {};
+      for (const c of allMessagingChars) {
+        if (!c || !c.id) continue;
+        if (c.avatar) {
+          if (typeof window.resolveAvatarUrl === "function") {
+            try {
+              const url = await window.resolveAvatarUrl(c.avatar, "");
+              if (url) resMap[c.id] = url;
+            } catch (err) {}
+          } else if (typeof c.avatar === "string" && (c.avatar.startsWith("data:") || c.avatar.startsWith("http") || c.avatar.startsWith("/"))) {
+            resMap[c.id] = c.avatar;
+          }
+        }
+      }
+      if (isMounted) {
+        setResolvedAvatars((prev) => ({ ...prev, ...resMap }));
+      }
+    };
+    resolveAvatars();
+    return () => { isMounted = false; };
+  }, [allMessagingChars]);
+
+  // 构建泡澡名士实体
+  useEffect(() => {
+    const currentMap = new Map(bathers.map(b => [b.id, b]));
+
+    const newBathers = activeCharIds.map((charId, idx) => {
+      const existing = currentMap.get(charId);
+      const chatData = allMessagingChars.find(c => c.id === charId) || {
+        id: charId,
+        name: "密探·" + charId,
+        personality: "温雅从容"
+      };
+
+      const spritesList = customSpritesMap[charId] || [];
+      const resolvedImg = resolvedAvatars[charId];
+      const selectedSprite = selectedSpritesMap[charId];
+
+      let currentSprite = selectedSprite;
+      if (!currentSprite || (spritesList.length > 0 && !spritesList.includes(currentSprite) && currentSprite !== resolvedImg && currentSprite !== chatData.avatar)) {
+        currentSprite = spritesList.length > 0
+          ? spritesList[0]
+          : (resolvedImg || (typeof chatData.avatar === "string" && chatData.avatar.startsWith("data:") ? chatData.avatar : null) || (idx % 2 === 0 ? "graph/player-1.png" : "graph/player-2.png"));
+      }
+
+      const sceneSpots = currentSceneConfig.spots;
+      const defaultPos = sceneSpots[idx % sceneSpots.length];
+
+      if (existing) {
+        return {
+          ...existing,
+          name: chatData.name,
+          sprite: currentSprite,
+          chatData
+        };
+      }
+
+      return {
+        id: charId,
+        name: chatData.name,
+        sprite: currentSprite,
+        chatData,
+        x: defaultPos.x,
+        y: defaultPos.y,
+      };
+    });
+
+    setBathers(newBathers);
+  }, [activeCharIds, currentSceneId, customSpritesMap, selectedSpritesMap, resolvedAvatars, allMessagingChars]);
+
+  // 当前聚焦的密探对象
+  const focusedBather = bathers.find(b => b.id === focusedCharId);
+
+  // 当前选中的档案密探实体
+  const activeArchiveChar = allMessagingChars.find(c => c.id === selectedArchiveCharId) || bathers[0] || (allMessagingChars[0] || {
+    id: "default",
+    name: "文丑",
+    personality: "舍生取义"
+  });
+
+  const activeArchiveSprite = (selectedArchiveCharId && selectedSpritesMap[selectedArchiveCharId]) ||
+    (selectedArchiveCharId && customSpritesMap[selectedArchiveCharId]?.[0]) ||
+    (selectedArchiveCharId && resolvedAvatars[selectedArchiveCharId]) ||
+    (activeArchiveChar && activeArchiveChar.avatar) ||
+    "graph/player-1.png";
+
+  // 当前档案展示的全部性格标签
+  const allActiveArchiveTags = (customTagsMap[activeArchiveChar.id] && customTagsMap[activeArchiveChar.id].length > 0)
+    ? customTagsMap[activeArchiveChar.id]
+    : defaultMacaronTags;
+
+  const totalTagPages = Math.ceil(allActiveArchiveTags.length / 6) || 1;
+  const currentPagedTags = allActiveArchiveTags.slice(archiveTagPage * 6, (archiveTagPage + 1) * 6);
+
+  // 当前档案展示的全部真心话问答列表
+  const allActiveTruthQA = (customTruthQAMap[activeArchiveChar.id] && customTruthQAMap[activeArchiveChar.id].length > 0)
+    ? customTruthQAMap[activeArchiveChar.id]
+    : defaultArchiveTruthQuestions;
+
+  const totalTruthPages = Math.ceil(allActiveTruthQA.length / 4) || 1;
+  const currentPagedTruthQA = allActiveTruthQA.slice(archiveTruthPage * 4, (archiveTruthPage + 1) * 4);
+
+  // 当前档案展示的全部喜好物品列表
+  const allActiveArchiveLikes = (customLikesMap[activeArchiveChar.id] && customLikesMap[activeArchiveChar.id].length > 0)
+    ? customLikesMap[activeArchiveChar.id]
+    : defaultArchiveLikesList;
+
+  const totalLikesPages = Math.ceil(allActiveArchiveLikes.length / 7) || 1;
+  const currentPagedLikes = allActiveArchiveLikes.slice(archiveLikesPage * 7, (archiveLikesPage + 1) * 7);
+
+  // 当前档案展示的全部「赠送的礼物」列表
+  const allActiveGivenGifts = (customGivenGiftsMap[activeArchiveChar.id] && customGivenGiftsMap[activeArchiveChar.id].length > 0)
+    ? customGivenGiftsMap[activeArchiveChar.id]
+    : defaultArchiveGivenGiftsList;
+
+  const totalGivenGiftsPages = Math.ceil(allActiveGivenGifts.length / 6) || 1;
+  const currentPagedGivenGifts = allActiveGivenGifts.slice(archiveGivenGiftsPage * 6, (archiveGivenGiftsPage + 1) * 6);
+
+  // 删除特定性格标签
+  const handleDeleteTag = (charId, globalIndex) => {
+    const currentTags = customTagsMap[charId] || defaultMacaronTags;
+    const updated = currentTags.filter((_, i) => i !== globalIndex);
+    const nextMap = { ...customTagsMap, [charId]: updated };
+    setCustomTagsMap(nextMap);
+    try {
+      localStorage.setItem("t8_teambuilding_character_tags", JSON.stringify(nextMap));
+    } catch (e) {}
+    if (archiveTagPage > 0 && archiveTagPage * 6 >= updated.length) {
+      setArchiveTagPage(p => Math.max(0, p - 1));
+    }
+  };
+
+  // 删除特定真心话问答记录
+  const handleDeleteTruthQA = (charId, qaId) => {
+    const currentList = customTruthQAMap[charId] || defaultArchiveTruthQuestions;
+    const updated = currentList.filter(item => String(item.id) !== String(qaId));
+    const nextMap = { ...customTruthQAMap, [charId]: updated };
+    setCustomTruthQAMap(nextMap);
+    try {
+      localStorage.setItem("t8_teambuilding_character_truth_qa", JSON.stringify(nextMap));
+    } catch (e) {}
+    setArchiveTruthAnswer(null);
+    if (archiveTruthPage > 0 && archiveTruthPage * 4 >= updated.length) {
+      setArchiveTruthPage(p => Math.max(0, p - 1));
+    }
+  };
+
+  // 购买商店商品存入背包 (真实金库扣款与流水记账)
+  const handleBuyShopItem = (item) => {
+    const price = Number(item.price) || 0;
+    const success = checkAndDeductVaultCoins(price, `海滨商社 · 购买特产【${item.name}】`);
+    if (!success) return;
+
+    setUserInventory(prev => {
+      const existingIdx = prev.findIndex(i => i.name === item.name);
+      let next;
+      const addCount = Number(item.count) || 1;
+      if (existingIdx >= 0) {
+        next = prev.map((inv, idx) => idx === existingIdx ? { ...inv, count: (inv.count || 1) + addCount } : inv);
+      } else {
+        next = [...prev, {
+          id: "inv_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+          name: item.name,
+          icon: item.icon || "🎁",
+          desc: item.desc || "海滨商社特选佳品。",
+          count: addCount
+        }];
+      }
+      try {
+        localStorage.setItem("t8_teambuilding_user_inventory", JSON.stringify(next));
+      } catch (e) {}
+      return next;
+    });
+    alert(`已从金库扣除 ${price} 元！已购买【${item.name}】存入背包，交易已记入金库账目 ✨`);
+  };
+
+  // ==================== 智能聚合 4/5 维上下文 ====================
+  const assembleBathContext = async (char) => {
+    let worldContext = "";
+    try {
+      if (typeof window.getWorldBookContext === "function") {
+        worldContext = await window.getWorldBookContext();
+      } else if (window.worldBookStore) {
+        const wbData = await window.worldBookStore.getData();
+        const activeBooks = (wbData?.books || []).filter(b => b.enabled !== false);
+        worldContext = activeBooks.map(b => `【${b.title}】：${b.content}`).join("\n");
+      }
+    } catch (e) {}
+
+    let userPersona = { name: "广陵王", role: "绣衣楼楼主", personality: "机警从容，深谋远虑", background: "绣衣楼之主" };
+    try {
+      const rawPersonas = localStorage.getItem("user_personas");
+      if (rawPersonas) {
+        const personas = JSON.parse(rawPersonas);
+        const activeId = localStorage.getItem("active_persona_id") || localStorage.getItem("active_user_persona_id");
+        const found = (Array.isArray(personas) && activeId) ? personas.find(p => String(p.id) === String(activeId)) : (personas[0] || null);
+        if (found) {
+          userPersona = {
+            name: found.name || "广陵王",
+            role: found.role || found.name || "绣衣楼楼主",
+            personality: found.personality || "机警从容",
+            background: found.background || found.description || "绣衣楼之主"
+          };
+        }
+      }
+    } catch (e) {}
+
+    const chatData = char.chatData || char;
+    let charSetting = `姓名：${char.name}\n性格：${chatData.personality || char.personality || "温润雅致"}\n人物小传：${chatData.desc || chatData.description || "绣衣楼名士密探"}`;
+    if (chatData.systemPrompt) charSetting += `\n角色核心设定：${chatData.systemPrompt}`;
+    if (chatData.roleSetting) charSetting += `\n背景设定：${chatData.roleSetting}`;
+
+    let chatHistory = "【暂无近期传讯往来】";
+    try {
+      let messages = [];
+      if (window.chatHistoryStore && typeof window.chatHistoryStore.getMessages === "function") {
+        const res = await window.chatHistoryStore.getMessages(char.id, 1, 15);
+        if (res && Array.isArray(res.messages)) messages = res.messages;
+      }
+      if (messages.length === 0) {
+        const raw = localStorage.getItem(`t8_messages_${char.id}`) || localStorage.getItem(`t8_chat_history_${char.id}`);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) messages = parsed;
+        }
+      }
+      if (messages.length > 0) {
+        const recent = messages.slice(-10);
+        chatHistory = recent.map(m => {
+          const sender = (m.sender === "user" || m.isMe) ? `${userPersona.name}(楼主)` : char.name;
+          return `${sender}: ${m.text || m.content || ""}`;
+        }).join("\n");
+      }
+    } catch (e) {}
+
+    return { worldContext, userPersona, charSetting, chatHistory };
+  };
+
+  // ==================== 触发密探主动为用户回礼 ====================
+  const triggerCharacterGiftBack = async (char) => {
+    if (!char) return;
+    setIsGeneratingGiftBack(true);
+
+    try {
+      const { worldContext, userPersona, charSetting } = await assembleBathContext(char);
+
+      const systemPrompt = `你正在扮演《代号鸢》中的名士【${char.name}】。
+当前情境：你正与你的主公/楼主在东海海水浴场的温汤中共憩。池水温润，刚刚与楼主亲近互动（闲聊/猜拳/真心话）之后，你心中感念，决定主动挑选【2 样】精致体贴的心意礼物赠予楼主。
+
+【世界观设定】
+${worldContext || "东汉末年乱世，绣衣楼隐于朝野之间。"}
+
+【主公/楼主(用户)身份设定】
+姓名/称呼：${userPersona.name}
+身份职位：${userPersona.role}
+性格特质：${userPersona.personality}
+背景故事：${userPersona.background}
+
+【你的角色设定】
+${charSetting}
+
+【任务要求】
+1. 请从【${char.name}】的独特思维方式、人设性格以及对楼主日常起居/体恤劳碌/喜好的深刻认知出发，挑选出【2 样】楼主可能会喜欢、或当前浴场/海滨情境下最需要的贴心礼物（如：自制点心、驱寒药茶、精致手作发饰、解乏香囊、防风罗巾、海边偶得奇石或灵贝 等）。
+2. 每样礼物必须包含：
+   - name: 礼物名称（2~6字古风名称）
+   - icon: 单个合适生动的 Emoji 图标（如 🍵、🧣、🌸、🍡、🐚、🪮、🪆、👝 等）
+   - desc: 礼物外观与功效细节的优美介绍（15~35字）
+   - reason: 你赠送此物的专属台词（15~30字，说明为什么觉得楼主会喜欢或需要，【严禁要求】：只输出纯说话台词，绝对禁止任何括号（）、()及动作神态描写）
+3. 必须严格以标准 JSON 数组格式输出，不要包含任何 markdown 说明：
+[
+  {
+    "name": "暖胃红枣姜茶",
+    "icon": "🍵",
+    "desc": "温热香浓的姜茶，驱散海风微寒，暖胃安神。",
+    "reason": "（递过热茶）见楼主在池中泡得久了，特意去沏的，饮些免受风寒。"
+  },
+  {
+    "name": "白玉海棠发簪",
+    "icon": "🌸",
+    "desc": "以细腻温润白玉琢成的海棠发簪，清雅端方。",
+    "reason": "（微微侧过头）方才在海滨摊肆瞧见的……觉得很配楼主。"
+  }
+]`;
+
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `${char.name}，在想些什么呢？` }
+      ];
+
+      const applyGiftResults = (giftsList) => {
+        setIsGeneratingGiftBack(false);
+        setGiftPreparingNotice(null);
+        if (!Array.isArray(giftsList) || giftsList.length === 0) return;
+
+        setCustomGivenGiftsMap(prev => {
+          const existing = prev[char.id] || [];
+          const combined = [...giftsList, ...existing];
+          const next = { ...prev, [char.id]: combined };
+          try {
+            localStorage.setItem("t8_teambuilding_character_given_gifts", JSON.stringify(next));
+          } catch (e) {}
+          return next;
+        });
+
+        setUserInventory(prev => {
+          let updated = [...prev];
+          giftsList.forEach(gift => {
+            const existingIdx = updated.findIndex(i => i.name === gift.name);
+            if (existingIdx >= 0) {
+              updated[existingIdx] = { ...updated[existingIdx], count: (updated[existingIdx].count || 1) + 1 };
+            } else {
+              updated.push({
+                id: "gift_" + Date.now() + "_" + Math.random().toString(36).slice(2, 6),
+                name: gift.name,
+                icon: gift.icon,
+                desc: gift.desc,
+                count: 1
+              });
+            }
+          });
+          try {
+            localStorage.setItem("t8_teambuilding_user_inventory", JSON.stringify(updated));
+          } catch (e) {}
+          return updated;
+        });
+
+        const splashId = Date.now();
+        setSplashes(prev => [...prev, { id: splashId, x: 50, y: 35 }]);
+        setTimeout(() => setSplashes(prev => prev.filter(s => s.id !== splashId)), 1200);
+
+        const giftNames = giftsList.map(g => `【${g.name}】`).join(" 与 ");
+        const firstReason = giftsList[0]?.reason || "特意为楼主备下的心意之物。";
+        setActiveDialogue({
+          type: "gift_back",
+          title: "密探赠礼",
+          text: `为你备了 ${giftNames}。${firstReason.replace(/（.*?）|\(.*?\)|【.*?】|\[.*?\]/g, "").trim()}`,
+        });
+
+        setFloatingNewTagNotice({
+          charName: char.name,
+          tags: giftsList.map(g => `获赠${g.name}`),
+        });
+        setTimeout(() => setFloatingNewTagNotice(null), 3200);
+      };
+
+      if (typeof window.sendToLLM === "function") {
+        window.sendToLLM(
+          messages,
+          null,
+          (reply) => {
+            let parsed = null;
+            try {
+              let clean = String(reply || "").trim();
+              if (clean.startsWith("```")) {
+                clean = clean.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
+              }
+              parsed = JSON.parse(clean);
+            } catch (e) {
+              const match = String(reply || "").match(/\[\s*\{.*?\}\s*\]/s);
+              if (match) {
+                try { parsed = JSON.parse(match[0]); } catch (err) {}
+              }
+            }
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              const formatted = parsed.slice(0, 2).map((item, idx) => ({
+                id: "given_" + Date.now() + "_" + idx,
+                name: item.name || "贴心好礼",
+                icon: item.icon || "🎁",
+                desc: item.desc || "密探亲手挑选赠予楼主的心意之物。",
+                reason: item.reason || "给楼主的一点心意。",
+                time: Date.now(),
+              }));
+              applyGiftResults(formatted);
+            } else {
+              applyGiftResults(defaultArchiveGivenGiftsList.slice(0, 2));
+            }
+          },
+          (err) => {
+            console.warn("AI 礼物生成失败，使用保底:", err);
+            applyGiftResults(defaultArchiveGivenGiftsList.slice(0, 2));
+          }
+        );
+      } else {
+        applyGiftResults(defaultArchiveGivenGiftsList.slice(0, 2));
+      }
+    } catch (e) {
+      console.warn("生成密探回礼异常:", e);
+      setIsGeneratingGiftBack(false);
+      setGiftPreparingNotice(null);
+    }
+  };
+
+  // 概率判定是否触发密探送礼 (30%~45%，取约 38%)
+  const checkAndTriggerGiftBack = (char) => {
+    if (!char) return;
+    const willGift = Math.random() < 0.38;
+    if (willGift) {
+      setGiftPreparingNotice(`${char.name}正在为你准备礼物`);
+      setTimeout(() => {
+        triggerCharacterGiftBack(char);
+      }, 1600);
+    }
+  };
+
+  // ==================== 赠送物品给密探并判定喜好 ====================
+  const handleGiftItemToChar = (char, item) => {
+    if (!char || !item) return;
+
+    const descText = String(item.desc || "");
+    const charName = char.name;
+    const isExplicitlyLiked = descText.includes(charName) && (
+      descText.includes("喜欢") || descText.includes("中意") || descText.includes("爱") ||
+      descText.includes("赞") || descText.includes("点头") || descText.includes("欣喜")
+    );
+
+    const isRandomLiked = Math.random() < 0.55;
+    const isLiked = isExplicitlyLiked || isRandomLiked;
+
+    setUserInventory(prev => {
+      const updated = prev.map(inv => {
+        if (inv.name === item.name) {
+          return { ...inv, count: Math.max(0, (inv.count || 1) - 1) };
+        }
+        return inv;
+      }).filter(inv => (inv.count || 0) > 0);
+      try {
+        localStorage.setItem("t8_teambuilding_user_inventory", JSON.stringify(updated));
+      } catch (e) {}
+      return updated;
+    });
+
+    setGiftStage("idle");
+
+    if (isLiked) {
+      const newLikeItem = {
+        id: "like_" + Date.now(),
+        icon: item.icon || "🎁",
+        name: item.name,
+        desc: item.desc || "楼主赠予的珍爱物品，甚合心意。"
+      };
+
+      setCustomLikesMap(prev => {
+        const existing = prev[char.id] || defaultArchiveLikesList;
+        const filtered = existing.filter(i => i.name !== item.name);
+        const combined = [newLikeItem, ...filtered];
+        const next = { ...prev, [char.id]: combined };
+        try {
+          localStorage.setItem("t8_teambuilding_character_likes", JSON.stringify(next));
+        } catch (e) {}
+        return next;
+      });
+
+      const splashId = Date.now();
+      setSplashes(prev => [...prev, { id: splashId, x: 50, y: 35 }]);
+      setTimeout(() => setSplashes(prev => prev.filter(s => s.id !== splashId)), 1200);
+
+      setFloatingNewTagNotice({
+        charName: char.name,
+        tags: [`喜爱【${item.name}】`, "好感+50"],
+      });
+      setTimeout(() => setFloatingNewTagNotice(null), 2800);
+    } else {
+      setFloatingNewTagNotice({
+        charName: char.name,
+        tags: [`已赠予【${item.name}】`],
+      });
+      setTimeout(() => setFloatingNewTagNotice(null), 2400);
+    }
+  };
+
+  // 保存立绘库
+  const saveSprites = async (newMap) => {
+    setCustomSpritesMap(newMap);
+    try {
+      if (window.openDB && window.STORES) {
+        const db = await window.openDB();
+        const tx = db.transaction(window.STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(window.STORES.USER_SETTINGS);
+        store.put({ key: "mansion_character_sprites", value: newMap });
+      }
+    } catch (e) {
+      console.warn("保存立绘库失败:", e);
+    }
+    try {
+      localStorage.setItem("t8_mansion_custom_avatars", JSON.stringify(newMap));
+    } catch (e) {}
+  };
+
+  // 切换当前场景
+  const handleOpenHeartModal = () => {
+    setModalTargetScene(currentSceneId);
+    setShowHeartModal(true);
+  };
+
+  const handleSwitchScene = (sceneId) => {
+    if (focusedCharId) setFocusedCharId(null);
+    setCurrentSceneId(sceneId);
+    setModalTargetScene(sceneId);
+    try {
+      localStorage.setItem("t8_teambuilding_current_scene", String(sceneId));
+    } catch (e) {}
+  };
+
+  // 切换名士在特定场景入驻/歇息 (每个场景完全独立管理，各最多容纳8人，共16人)
+  const toggleCharacterActiveInScene = (charId, targetSceneId) => {
+    const isScene1 = targetSceneId === 1;
+    const currentList = isScene1 ? scene1CharIds : scene2CharIds;
+    const setList = isScene1 ? setScene1CharIds : setScene2CharIds;
+    const storageKey = isScene1 ? "t8_teambuilding_scene1_ids" : "t8_teambuilding_scene2_ids";
+    const sceneName = isScene1 ? "汤泉温汤" : "晴岚海滩";
+
+    if (currentList.includes(charId)) {
+      const next = currentList.filter(id => id !== charId);
+      setList(next);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+        if (isScene1) localStorage.setItem("t8_teambuilding_active_ids", JSON.stringify(next));
+      } catch (e) {}
+      if (focusedCharId === charId) setFocusedCharId(null);
+    } else {
+      if (currentList.length >= 8) {
+        alert(`【${sceneName}】当前已满 8 位密探，请先让本场景其他密探歇息~`);
+        return;
+      }
+      const next = [...currentList, charId];
+      setList(next);
+      try {
+        localStorage.setItem(storageKey, JSON.stringify(next));
+        if (isScene1) localStorage.setItem("t8_teambuilding_active_ids", JSON.stringify(next));
+      } catch (e) {}
+    }
+  };
+
+  // 兼容老逻辑调用
+  const toggleCharacterActive = (charId) => {
+    toggleCharacterActiveInScene(charId, currentSceneId);
+  };
+
+  // 选择穿戴特定形态
+  const handleSelectSprite = (charId, spriteUrl) => {
+    const next = { ...selectedSpritesMap, [charId]: spriteUrl };
+    setSelectedSpritesMap(next);
+    localStorage.setItem("t8_teambuilding_selected_sprites", JSON.stringify(next));
+  };
+
+  // 触发图片上传
+  const handleUploadCustomSprite = (charId) => {
+    setUploadingTargetCharId(charId);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+      fileInputRef.current.click();
+    }
+  };
+
+  // 处理多选上传
+  const handleFilesSelected = (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !uploadingTargetCharId) return;
+
+    const charId = uploadingTargetCharId;
+    const fileList = Array.from(files);
+
+    const readers = fileList.map(file => {
+      return new Promise((resolve) => {
+        const reader = new FileReader();
+        reader.onload = (event) => resolve(event.target.result);
+        reader.onerror = () => resolve(null);
+        reader.readAsDataURL(file);
+      });
+    });
+
+    Promise.all(readers).then(results => {
+      const validResults = results.filter(r => r && typeof r === "string");
+      if (validResults.length === 0) return;
+
+      const currentList = customSpritesMap[charId] || [];
+      const updatedList = [...currentList, ...validResults];
+      const newMap = { ...customSpritesMap, [charId]: updatedList };
+
+      saveSprites(newMap);
+      handleSelectSprite(charId, validResults[0]);
+    });
+  };
+
+  // 删除形态
+  const handleDeleteSprite = (charId, idx) => {
+    const currentList = customSpritesMap[charId] || [];
+    const updatedList = currentList.filter((_, i) => i !== idx);
+    const newMap = { ...customSpritesMap, [charId]: updatedList };
+    saveSprites(newMap);
+
+    if (selectedSpritesMap[charId] === currentList[idx]) {
+      const nextSprite = updatedList[0] || resolvedAvatars[charId] || "";
+      handleSelectSprite(charId, nextSprite);
+    }
+  };
+
+  // 清空形态
+  const handleResetAllSprites = (charId) => {
+    if (!window.confirm("确定要清空该名士的所有专属形态吗？")) return;
+    const newMap = { ...customSpritesMap, [charId]: [] };
+    saveSprites(newMap);
+    handleSelectSprite(charId, resolvedAvatars[charId] || "");
+  };
+
+  // 水面点击激起波纹
+  const handleWaterClick = (e) => {
+    if (dragRef.current.hasMoved) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const rippleId = Date.now() + Math.random();
+    setDynamicRipples(prev => [...prev, { id: rippleId, x, y }]);
+    setTimeout(() => {
+      setDynamicRipples(prev => prev.filter(r => r.id !== rippleId));
+    }, 1800);
+  };
+
+  // 点击全景密探 -> 摄像头平滑移到该密探单人身上
+  const handleFocusCharacter = (e, char) => {
+    e.stopPropagation();
+    if (dragRef.current.hasMoved) return;
+
+    setFocusedCharId(char.id);
+    setRpsStage("idle");
+    setTruthStage("idle");
+    setGiftStage("idle");
+    setUserGesture(null);
+    setBotGesture(null);
+    setRpsResult(null);
+    setActiveDialogue(null);
+
+    const splashId = Date.now() + Math.random();
+    setSplashes(prev => [...prev, { id: splashId, charId: char.id, x: 50, y: 35 }]);
+    setTimeout(() => {
+      setSplashes(prev => prev.filter(s => s.id !== splashId));
+    }, 1000);
+  };
+
+  // 退出特写聚焦模式
+  const handleExitFocus = () => {
+    setFocusedCharId(null);
+    setRpsStage("idle");
+    setTruthStage("idle");
+    setGiftStage("idle");
+    setUserGesture(null);
+    setBotGesture(null);
+    setRpsResult(null);
+    setActiveDialogue(null);
+  };
+
+  // 用户点击「猜拳」 (0元)
+  const handleOpenRpsPicker = () => {
+    setActiveDialogue(null);
+    setTruthStage("idle");
+    setGiftStage("idle");
+    setRpsStage("user_choosing");
+    setUserGesture(null);
+    setBotGesture(null);
+    setRpsResult(null);
+  };
+
+  // 用户选定手势出招
+  const handleUserChooseGesture = (gestureIdx) => {
+    setUserGesture(gestureIdx);
+    setRpsStage("bot_rolling");
+
+    let count = 0;
+    const interval = setInterval(() => {
+      setRpsCurrentFlash(prev => (prev + 1) % 3);
+      count++;
+      if (count > 16) {
+        clearInterval(interval);
+        const randomBotChoice = Math.floor(Math.random() * 3);
+        setBotGesture(randomBotChoice);
+        setRpsCurrentFlash(randomBotChoice);
+
+        let result = "draw";
+        if (gestureIdx === randomBotChoice) {
+          result = "draw";
+        } else if (
+          (gestureIdx === 0 && randomBotChoice === 1) ||
+          (gestureIdx === 1 && randomBotChoice === 2) ||
+          (gestureIdx === 2 && randomBotChoice === 0)
+        ) {
+          result = "win";
+        } else {
+          result = "lose";
+        }
+
+        setRpsResult(result);
+        setRpsStage("finished");
+
+        const splashId = Date.now() + Math.random();
+        setSplashes(prev => [...prev, { id: splashId, x: 50, y: 35 }]);
+        setTimeout(() => {
+          setSplashes(prev => prev.filter(s => s.id !== splashId));
+        }, 1200);
+
+        if (focusedBather) {
+          checkAndTriggerGiftBack(focusedBather);
+        }
+      }
+    }, 75);
+  };
+
+  // 触发 AI 闲聊生成
+  const generateAIChatAndTags = async (char) => {
+    if (!char) return;
+    setIsGeneratingChat(true);
+    setRpsStage("idle");
+    setTruthStage("idle");
+    setGiftStage("idle");
+
+    setActiveDialogue({
+      type: "chat",
+      title: "闲聊",
+      text: "正在聆听心声……",
+      loading: true,
+    });
+
+    try {
+      const { worldContext, userPersona, charSetting, chatHistory } = await assembleBathContext(char);
+
+      const systemPrompt = `你正在扮演《代号鸢》中的名士【${char.name}】。
+当前情境：你正与你的主公/楼主在东海海水浴场的温汤中泡澡共憩。水汽袅袅升腾，微风拂面，波光粼粼。
+
+【世界观设定】
+${worldContext || "东汉末年乱世，绣衣楼隐于朝野之间。"}
+
+【主公/楼主(用户)身份设定】
+姓名/称呼：${userPersona.name}
+身份职位：${userPersona.role}
+性格特质：${userPersona.personality}
+背景故事：${userPersona.background}
+
+【你的角色设定】
+${charSetting}
+
+【你与楼主近期的传讯往来】
+${chatHistory}
+
+【任务要求】
+1. 以【${char.name}】的第一人称口吻对楼主说一句话闲聊（字数30~65字）。【严禁要求】：只输出角色口吻说出来的纯台词/纯话语！绝对禁止包含任何括号（）、()，绝对禁止任何动作、神态、心理或旁白描写！直接输出纯台词。
+2. 内容可以为一切类型，浴场和温汤泡澡相关最好，表达与楼主相伴的真实温情与心境。
+3. 请同时根据该名士在此次闲聊及平日性格表现，提炼 2~4 个【极其抽象、幽默有梗、生动鲜明】的二次元/乙女/网络热梗向性格特质标签（字数2~6字，如：人形算盘、金钱过敏、假装淡定、阴阳怪气、脆皮刺客、狂炫糯米团、水鬼潜质、楼塌不惊、打工人狂怒、嘴硬心软、泡澡战神、脑回路清奇、傲娇本娇 等富有梗感和画面感的个性标签，拒绝平庸枯燥的公文化词汇）。
+4. 必须严格以标准 JSON 格式输出，不要包含任何额外 markdown 标记：
+{"dialogue": "纯台词说话内容", "tags": ["标签1", "标签2", "标签3"]}`;
+
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `${char.name}，今日在此泡澡，感觉如何？` }
+      ];
+
+      if (typeof window.sendToLLM === "function") {
+        window.sendToLLM(
+          messages,
+          null,
+          (reply) => {
+            setIsGeneratingChat(false);
+            let parsedDialogue = "";
+            let parsedTags = [];
+
+            try {
+              let cleanJson = String(reply || "").trim();
+              if (cleanJson.startsWith("```")) {
+                cleanJson = cleanJson.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
+              }
+              const obj = JSON.parse(cleanJson);
+              parsedDialogue = (obj.dialogue || "").replace(/（.*?）|\(.*?\)|【.*?】|\[.*?\]/g, "").trim();
+              parsedTags = Array.isArray(obj.tags) ? obj.tags : [];
+            } catch (err) {
+              parsedDialogue = String(reply || "").replace(/\{.*?\}/gs, "").trim() || reply;
+              const tagMatch = String(reply || "").match(/"tags"\s*:\s*\[(.*?)\]/);
+              if (tagMatch) {
+                try {
+                  parsedTags = JSON.parse(`[${tagMatch[1]}]`);
+                } catch (e) {}
+              }
+            }
+
+            if (!parsedDialogue) {
+              parsedDialogue = chatDialoguePool[Math.floor(Math.random() * chatDialoguePool.length)];
+            }
+
+            setActiveDialogue({
+              type: "chat",
+              title: "闲聊",
+              text: parsedDialogue,
+              loading: false,
+            });
+
+            if (parsedTags && parsedTags.length > 0) {
+              const tagPalettes = [
+                { bg: "#e1effa", color: "#28537b", decor: "🕊️" },
+                { bg: "#e1f5ec", color: "#2b664d", decor: "🐤" },
+                { bg: "#fae4e4", color: "#7b283b", decor: "🦀" },
+                { bg: "#eaf5e6", color: "#35652e", decor: "🦊" },
+                { bg: "#e4ecf8", color: "#2d4b76", decor: "🕊️" },
+                { bg: "#fae8de", color: "#823e24", decor: "🦀" },
+                { bg: "#ebf6e5", color: "#3d6b2c", decor: "🐤" },
+                { bg: "#e2effa", color: "#265278", decor: "🕊️" },
+              ];
+
+              const formattedTags = parsedTags.map((t, idx) => {
+                const p = tagPalettes[idx % tagPalettes.length];
+                const cleanText = String(t).replace(/[^\u4e00-\u9fa5a-zA-Z0-9]/g, "").slice(0, 6) || "灵慧";
+                return {
+                  text: cleanText,
+                  bg: p.bg,
+                  color: p.color,
+                  decor: p.decor,
+                };
+              });
+
+              setFloatingNewTagNotice({
+                charName: char.name,
+                tags: formattedTags.map(t => t.text),
+              });
+              setTimeout(() => {
+                setFloatingNewTagNotice(null);
+              }, 2800);
+
+              setCustomTagsMap(prev => {
+                const existing = prev[char.id] || [];
+                const existingTexts = new Set(existing.map(item => item.text));
+                const uniqueNew = formattedTags.filter(item => !existingTexts.has(item.text));
+                const combined = [...uniqueNew, ...existing];
+                const next = { ...prev, [char.id]: combined };
+                try {
+                  localStorage.setItem("t8_teambuilding_character_tags", JSON.stringify(next));
+                } catch (e) {}
+                return next;
+              });
+            }
+
+            checkAndTriggerGiftBack(char);
+          },
+          (error) => {
+            console.warn("AI 闲聊生成失败，使用保底台词:", error);
+            setIsGeneratingChat(false);
+            const fallbackText = chatDialoguePool[Math.floor(Math.random() * chatDialoguePool.length)];
+            setActiveDialogue({
+              type: "chat",
+              title: "闲聊",
+              text: fallbackText,
+              loading: false,
+            });
+            checkAndTriggerGiftBack(char);
+          }
+        );
+      } else {
+        setIsGeneratingChat(false);
+        const fallbackText = chatDialoguePool[Math.floor(Math.random() * chatDialoguePool.length)];
+        setActiveDialogue({
+          type: "chat",
+          title: "闲聊",
+          text: fallbackText,
+          loading: false,
+        });
+        checkAndTriggerGiftBack(char);
+      }
+    } catch (err) {
+      console.error("生成闲聊异常:", err);
+      setIsGeneratingChat(false);
+      const fallbackText = chatDialoguePool[Math.floor(Math.random() * chatDialoguePool.length)];
+      setActiveDialogue({
+        type: "chat",
+        title: "闲聊",
+        text: fallbackText,
+        loading: false,
+      });
+      checkAndTriggerGiftBack(char);
+    }
+  };
+
+  // 触发 AI 真心话发问与回答生成 (扣除 5 元五铢钱)
+  const askCharacterTruthQuestion = async (char, questionText) => {
+    if (!char || !questionText || !questionText.trim()) return;
+    const cleanQ = questionText.trim();
+
+    // 实际金库校验与扣除 5 元
+    const success = checkAndDeductVaultCoins(5, `东海海水浴场 · 向【${char.name}】真心话发问消费`);
+    if (!success) return;
+
+    setIsGeneratingChat(true);
+    setTruthStage("idle");
+    setRpsStage("idle");
+    setGiftStage("idle");
+    setCustomTruthInput("");
+
+    setActiveDialogue({
+      type: "truth",
+      title: "真心话",
+      question: cleanQ,
+      text: "正在叩问心声……",
+      loading: true,
+    });
+
+    try {
+      const { worldContext, userPersona, charSetting, chatHistory } = await assembleBathContext(char);
+
+      const systemPrompt = `你正在扮演《代号鸢》中的名士【${char.name}】。
+当前情境：你正与你的主公/楼主在东海海水浴场的温汤中泡澡共憩。池水温热，水汽氤氲，周围只有你们二人相伴。
+此时，楼主认真地向你提出了真心话发问：『${cleanQ}』。
+
+【世界观设定】
+${worldContext || "东汉末年乱世，绣衣楼隐于朝野之间。"}
+
+【主公/楼主(用户)身份设定】
+姓名/称呼：${userPersona.name}
+身份职位：${userPersona.role}
+性格特质：${userPersona.personality}
+背景故事：${userPersona.background}
+
+【你的角色设定】
+${charSetting}
+
+【你与楼主近期的传讯往来】
+${chatHistory}
+
+【任务要求】
+1. 请以【${char.name}】的第一人称口吻和独特人设语气，真挚、深刻地正面回答楼主提出的真心话问题。
+2. 字数 35~80 字。【严禁要求】：只输出角色正面回答的纯台词/纯口法语音！绝对禁止包含任何括号（）、()，绝对禁止任何动作、神态、表情或旁白描写！直接输出纯回答台词。
+3. 请直接输出回答内容，不要输出任何多余的前缀、标题或解释。`;
+
+      const messages = [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: `${char.name}，${cleanQ}` }
+      ];
+
+      if (typeof window.sendToLLM === "function") {
+        window.sendToLLM(
+          messages,
+          null,
+          (reply) => {
+            setIsGeneratingChat(false);
+            let cleanReply = String(reply || "").replace(/（.*?）|\(.*?\)|【.*?】|\[.*?\]/g, "").trim();
+            if (cleanReply.startsWith("```")) {
+              cleanReply = cleanReply.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
+            }
+            if (!cleanReply) {
+              cleanReply = truthDialoguePool[Math.floor(Math.random() * truthDialoguePool.length)];
+            }
+
+            setActiveDialogue({
+              type: "truth",
+              title: "真心话",
+              question: cleanQ,
+              text: cleanReply,
+              loading: false,
+            });
+
+            const newQA = {
+              id: Date.now(),
+              q: cleanQ,
+              a: cleanReply,
+              time: Date.now(),
+            };
+
+            setCustomTruthQAMap(prev => {
+              const existing = prev[char.id] || [];
+              const filtered = existing.filter(item => item.q !== cleanQ);
+              const combined = [newQA, ...filtered];
+              const next = { ...prev, [char.id]: combined };
+              try {
+                localStorage.setItem("t8_teambuilding_character_truth_qa", JSON.stringify(next));
+              } catch (e) {}
+              return next;
+            });
+
+            checkAndTriggerGiftBack(char);
+          },
+          (error) => {
+            console.warn("AI 真心话生成失败，使用保底回答:", error);
+            setIsGeneratingChat(false);
+            const fallbackText = truthDialoguePool[Math.floor(Math.random() * truthDialoguePool.length)];
+            setActiveDialogue({
+              type: "truth",
+              title: "真心话",
+              question: cleanQ,
+              text: fallbackText,
+              loading: false,
+            });
+            checkAndTriggerGiftBack(char);
+          }
+        );
+      } else {
+        setIsGeneratingChat(false);
+        const fallbackText = truthDialoguePool[Math.floor(Math.random() * truthDialoguePool.length)];
+        setActiveDialogue({
+          type: "truth",
+          title: "真心话",
+          question: cleanQ,
+          text: fallbackText,
+          loading: false,
+        });
+        checkAndTriggerGiftBack(char);
+      }
+    } catch (err) {
+      console.error("生成真心话异常:", err);
+      setIsGeneratingChat(false);
+      const fallbackText = truthDialoguePool[Math.floor(Math.random() * truthDialoguePool.length)];
+      setActiveDialogue({
+        type: "truth",
+        title: "真心话",
+        question: cleanQ,
+        text: fallbackText,
+        loading: false,
+      });
+      checkAndTriggerGiftBack(char);
+    }
+  };
+
+  // 触发 AI 进货生成海滨商社商品
+  const generateAIShopGoods = async () => {
+    setIsGeneratingShop(true);
+
+    let worldContext = "";
+    try {
+      if (typeof window.getWorldBookContext === "function") {
+        worldContext = await window.getWorldBookContext();
+      } else if (window.worldBookStore) {
+        const wbData = await window.worldBookStore.getData();
+        const activeBooks = (wbData?.books || []).filter(b => b.enabled !== false);
+        worldContext = activeBooks.map(b => `【${b.title}】：${b.content}`).join("\n");
+      }
+    } catch (e) {}
+
+    let userPersona = { name: "广陵王", role: "绣衣楼楼主", personality: "机警从容", background: "绣衣楼之主" };
+    try {
+      const rawPersonas = localStorage.getItem("user_personas");
+      if (rawPersonas) {
+        const personas = JSON.parse(rawPersonas);
+        const activeId = localStorage.getItem("active_persona_id") || localStorage.getItem("active_user_persona_id");
+        const found = (Array.isArray(personas) && activeId) ? personas.find(p => String(p.id) === String(activeId)) : (personas[0] || null);
+        if (found) {
+          userPersona = {
+            name: found.name || "广陵王",
+            role: found.role || "绣衣楼楼主",
+            personality: found.personality || "机警从容",
+            background: found.background || "绣衣楼之主"
+          };
+        }
+      }
+    } catch (e) {}
+
+    const activeCharsInfo = (bathers.length > 0 ? bathers : allMessagingChars.slice(0, 5)).map(c => {
+      const chatData = c.chatData || c;
+      return `名士【${c.name}】：性格【${chatData.personality || "温雅从容"}】，设定【${(chatData.desc || chatData.description || "绣衣楼密探").slice(0, 45)}】`;
+    }).join("\n");
+
+    const systemPrompt = `你是一个二次元古风沉浸式乙女/策略游戏《代号鸢》的「海滨商社·浴场温泉特产商店」系统。
+当前情境：楼主与密探们正在东海海水浴场温汤泡澡。商社需要进货 5~6 款精致、日常、与海水浴场/温汤泡澡/海滨休闲紧密相关且契合在场名士喜好的特色商品。
+
+【世界观设定】
+${worldContext || "东汉末年乱世，绣衣楼隐于朝野之间。"}
+
+【主公/楼主身份设定】
+姓名/称呼：${userPersona.name}，职位：${userPersona.role}，性格：${userPersona.personality}
+
+【在场共浴的名士们】
+${activeCharsInfo}
+
+【任务要求】
+1. 生成 5~6 个日常、温汤泡澡、海滨休闲的商品（如：海景手环、竹编捞网、冰饮子、五铢钱、海盐浴盐、按摩木梳、刺绣浴袍、浮水小黄鸭、薄荷清凉膏、秘制烤海鱼 等）。
+2. 每个商品包含：
+   - name: 商品名称（2~6字古风/日常名称）
+   - icon: 单个合适生动的 Emoji 图标（如 📿、🏸、🍧、💰、🧂、🪮、🦆、🍵、👘、🍡、🧴 等）
+   - count: 数量角标数字（如 1、2、10、1000 等，纯数字或简短文字）
+   - statusText: 限购/状态提示（如 "本日限购4/4"、"每日特供"、"畅销爆款"、"限购1/1" 或空字符串 ""）
+   - price: 价格数字（整数如 10、30、60、120、300 等，单位为五铢钱）
+   - currencyIcon: 货币图标（统一使用 "🪙"）
+   - desc: 商品风趣优美的古风介绍（20~50字，可提及某位在场密探对该物品的反应或喜爱）
+3. 必须严格以标准 JSON 数组格式输出，不要包含任何 markdown 说明：
+[
+  {
+    "name": "海景单日手环",
+    "icon": "📿",
+    "count": 1,
+    "statusText": "本日限购4/4",
+    "price": 120,
+    "currencyIcon": "🪙",
+    "desc": "东海海水浴场单日专属手环，凭此环可畅享全部温汤与海滨设施。"
+  }
+]`;
+
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: "请为海滨商社进货 5~6 款特色浴场商品。" }
+    ];
+
+    if (typeof window.sendToLLM === "function") {
+      window.sendToLLM(
+        messages,
+        null,
+        (reply) => {
+          setIsGeneratingShop(false);
+          let parsed = null;
+          try {
+            let cleanJson = String(reply || "").trim();
+            if (cleanJson.startsWith("```")) {
+              cleanJson = cleanJson.replace(/^```[a-zA-Z]*\n?/, "").replace(/```$/, "").trim();
+            }
+            parsed = JSON.parse(cleanJson);
+          } catch (e) {
+            const match = String(reply || "").match(/\[\s*\{.*?\}\s*\]/s);
+            if (match) {
+              try { parsed = JSON.parse(match[0]); } catch (err) {}
+            }
+          }
+
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            const newGoods = parsed.map((item, idx) => ({
+              id: "ai_" + Date.now() + "_" + idx,
+              name: String(item.name || "海滨特产").slice(0, 8),
+              icon: item.icon || "🎁",
+              count: item.count || 1,
+              statusText: item.statusText || "",
+              price: Number(item.price) || 30,
+              currencyIcon: "🪙",
+              desc: item.desc || "海滨商社特供珍品。",
+            }));
+            setShopGoods(newGoods);
+            saveShopGoodsToIndexedDB(newGoods);
+            alert("✨ 海滨商社进货成功！全新浴场特产已上架。");
+          } else {
+            alert("AI 选品解析异常，已保留商社当前商品~");
+          }
+        },
+        (err) => {
+          console.warn("AI 进货失败:", err);
+          setIsGeneratingShop(false);
+          alert("AI 进货网络稍有延迟，已保留商社当前商品~");
+        }
+      );
+    } else {
+      setIsGeneratingShop(false);
+      alert("未检测到 API 配置，已保留商社经典商品库~");
+    }
+  };
+
+  // 点击「闲聊」按钮 (扣除 1 元五铢钱)
+  const handleStartChat = () => {
+    if (focusedBather) {
+      const success = checkAndDeductVaultCoins(1, `东海海水浴场 · 与【${focusedBather.name}】闲聊消费`);
+      if (!success) return;
+      generateAIChatAndTags(focusedBather);
+    } else {
+      const randomText = chatDialoguePool[Math.floor(Math.random() * chatDialoguePool.length)];
+      setActiveDialogue({
+        type: "chat",
+        title: "闲聊",
+        text: randomText,
+      });
+    }
+  };
+
+  // 点击「真心话」选项面板
+  const handleOpenTruthPicker = () => {
+    setActiveDialogue(null);
+    setRpsStage("idle");
+    setGiftStage("idle");
+    setTruthStage("picker");
+    setCustomTruthInput("");
+  };
+
+  // 点击右上角「赠送」按钮
+  const handleOpenGiftPicker = () => {
+    setActiveDialogue(null);
+    setRpsStage("idle");
+    setTruthStage("idle");
+    setGiftStage("picker");
+  };
+
+  // 点击打开指定联系人的档案详情
+  const handleSelectContactForArchive = (charId) => {
+    setSelectedArchiveCharId(charId);
+    setArchiveTagPage(0);
+    setArchiveTruthPage(0);
+    setArchiveLikesPage(0);
+    setArchiveGivenGiftsPage(0);
+    setShowArchivePicker(false);
+    setShowArchiveDetail(true);
+    setArchiveTruthAnswer(null);
+    setArchiveItemTooltip(null);
+  };
+
+  // 全景拖拽手势
+  const handleStartDrag = (e, char) => {
+    const touch = e.touches ? e.touches[0] : e;
+    dragRef.current = {
+      isDragging: true,
+      charId: char.id,
+      startX: touch.clientX,
+      startY: touch.clientY,
+      charStartX: char.x,
+      charStartY: char.y,
+      hasMoved: false,
+    };
+  };
+
+  const handleGlobalMove = (e) => {
+    if (!dragRef.current.isDragging) return;
+    const touch = e.touches ? e.touches[0] : e;
+    if (!touch || !waterAreaRef.current) return;
+
+    const dx = touch.clientX - dragRef.current.startX;
+    const dy = touch.clientY - dragRef.current.startY;
+
+    if (Math.abs(dx) > 3 || Math.abs(dy) > 3) {
+      dragRef.current.hasMoved = true;
+      if (e.cancelable) e.preventDefault();
+    }
+
+    const rect = waterAreaRef.current.getBoundingClientRect();
+    const newX = Math.max(12, Math.min(88, dragRef.current.charStartX + (dx / rect.width) * 100));
+    const newY = Math.max(48, Math.min(90, dragRef.current.charStartY + (dy / rect.height) * 100));
+
+    setBathers(prev => prev.map(b => {
+      if (b.id === dragRef.current.charId) {
+        return { ...b, x: newX, y: newY };
+      }
+      return b;
+    }));
+  };
+
+  const handleGlobalEnd = () => {
+    if (dragRef.current.isDragging) {
+      dragRef.current.isDragging = false;
+    }
+  };
+
+  useEffect(() => {
+    window.addEventListener("mousemove", handleGlobalMove);
+    window.addEventListener("mouseup", handleGlobalEnd);
+    window.addEventListener("touchmove", handleGlobalMove, { passive: false });
+    window.addEventListener("touchend", handleGlobalEnd);
+    return () => {
+      window.removeEventListener("mousemove", handleGlobalMove);
+      window.removeEventListener("mouseup", handleGlobalEnd);
+      window.removeEventListener("touchmove", handleGlobalMove);
+      window.removeEventListener("touchend", handleGlobalEnd);
+    };
+  }, []);
+
+  const filteredChars = allMessagingChars.filter(c =>
+    (c.name || "").includes(rosterSearch) ||
+    (c.personality || "").includes(rosterSearch) ||
+    (c.desc || "").includes(rosterSearch)
+  );
+
+  const filteredArchiveChars = allMessagingChars.filter(c =>
+    (c.name || "").includes(archiveSearch) ||
+    (c.personality || "").includes(archiveSearch)
+  );
+
+  const totalPickerPages = Math.ceil(presetTruthQuestionsPool.length / 4) || 1;
+  const currentPickerQuestions = presetTruthQuestionsPool.slice(truthPickerPage * 4, (truthPickerPage + 1) * 4);
+
+  return React.createElement(
+    "div",
+    {
+      className: "teambuilding-container",
+      style: {
+        position: "fixed",
+        inset: 0,
+        zIndex: 260,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden",
+        userSelect: "none",
+        backgroundColor: "#161b22",
+      }
+    },
+
+    // 隐藏的文件上传 input
+    React.createElement("input", {
+      type: "file",
+      ref: fileInputRef,
+      accept: "image/*",
+      multiple: true,
+      style: { display: "none" },
+      onChange: handleFilesSelected,
+    }),
+
+    // 背景图层
+    React.createElement("div", {
+      style: {
+        position: "absolute",
+        inset: 0,
+        backgroundImage: `url('${currentSceneConfig.bg}')`,
+        backgroundSize: "cover",
+        backgroundPosition: "center center",
+        backgroundRepeat: "no-repeat",
+        zIndex: 1,
+        transition: "all 0.4s ease-out",
+        filter: focusedCharId ? "blur(2px) brightness(0.95)" : "none",
+      }
+    }),
+
+    // 水汽雾气氛围光晕层
+    React.createElement("div", {
+      style: {
+        position: "absolute",
+        inset: 0,
+        background: "radial-gradient(ellipse at 50% 70%, rgba(255, 255, 255, 0.12) 0%, rgba(30, 45, 60, 0.25) 100%)",
+        pointerEvents: "none",
+        zIndex: 2,
+      }
+    }),
+
+    // 升腾水雾粒子
+    [1, 2, 3, 4, 5].map((sId) =>
+      React.createElement("div", {
+        key: sId,
+        style: {
+          position: "absolute",
+          left: (15 + sId * 15) + "%",
+          bottom: (15 + (sId % 3) * 10) + "%",
+          width: "70px",
+          height: "70px",
+          borderRadius: "50%",
+          background: "radial-gradient(circle, rgba(255, 255, 255, 0.22) 0%, rgba(255, 255, 255, 0) 70%)",
+          pointerEvents: "none",
+          filter: "blur(10px)",
+          zIndex: 3,
+          animation: "steamRise 4.5s ease-in-out infinite",
+          animationDelay: (sId * 0.8) + "s",
+        }
+      })
+    ),
+
+    // 顶部礼物正在准备提示
+    giftPreparingNotice && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          top: "calc(var(--safe-top, 10px) + 54px)",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 360,
+          background: "linear-gradient(135deg, rgba(255, 252, 245, 0.98) 0%, rgba(255, 238, 215, 0.98) 100%)",
+          border: "1.5px solid #d6a86e",
+          borderRadius: "22px",
+          padding: "6px 16px",
+          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.28), 0 0 16px rgba(214, 168, 110, 0.45)",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          animation: "newTagToastPop 3.5s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+          pointerEvents: "none",
+        }
+      },
+      React.createElement("span", { style: { fontSize: "16px" } }, "🎁"),
+      React.createElement(
+        "span",
+        { style: { fontSize: "12px", color: "#54381e", fontWeight: "bold" } },
+        `${giftPreparingNotice}...`
+      ),
+      React.createElement(
+        "span",
+        { style: { fontSize: "10.5px", color: "#d6724b", fontWeight: "bold" } },
+        "✨ 敬请期待"
+      )
+    ),
+
+    // ==================== 顶部一闪而过的新性格标签/赠礼浮动提示 ====================
+    floatingNewTagNotice && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          top: "calc(var(--safe-top, 10px) + 54px)",
+          left: "50%",
+          transform: "translateX(-50%)",
+          zIndex: 350,
+          background: "linear-gradient(135deg, rgba(255, 252, 245, 0.98) 0%, rgba(255, 238, 215, 0.98) 100%)",
+          border: "1.5px solid #d6a86e",
+          borderRadius: "22px",
+          padding: "6px 14px",
+          boxShadow: "0 8px 24px rgba(0, 0, 0, 0.28), 0 0 16px rgba(214, 168, 110, 0.45)",
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+          animation: "newTagToastPop 3.2s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+          pointerEvents: "none",
+        }
+      },
+      React.createElement("span", { style: { fontSize: "15px" } }, "✨"),
+      React.createElement(
+        "span",
+        { style: { fontSize: "11.5px", color: "#54381e", fontWeight: "bold" } },
+        `【${floatingNewTagNotice.charName}】心动动态：`
+      ),
+      floatingNewTagNotice.tags.map((t, idx) =>
+        React.createElement(
+          "span",
+          {
+            key: idx,
+            style: {
+              background: "#ffffff",
+              border: "1px solid #d6b88d",
+              borderRadius: "10px",
+              padding: "1px 6px",
+              fontSize: "10.5px",
+              color: "#d6724b",
+              fontWeight: "bold",
+            }
+          },
+          `#${t}`
+        )
+      )
+    ),
+
+    // 顶部毛玻璃导航栏
+    React.createElement(
+      "div",
+      {
+        style: {
+          position: "relative",
+          zIndex: 50,
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "8px 16px",
+          paddingTop: "calc(var(--safe-top, 10px) + 8px)",
+          background: "linear-gradient(180deg, rgba(20, 28, 35, 0.78) 0%, rgba(20, 28, 35, 0.35) 100%)",
+          backdropFilter: "blur(16px)",
+          WebkitBackdropFilter: "blur(16px)",
+          borderBottom: "1px solid rgba(255, 255, 255, 0.12)",
+          boxShadow: "0 4px 20px rgba(0, 0, 0, 0.2)",
+        }
+      },
+      // 左侧返回按钮
+      React.createElement(
+        "button",
+        {
+          onClick: focusedCharId ? handleExitFocus : onBack,
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            background: "rgba(255, 255, 255, 0.18)",
+            border: "1px solid rgba(255, 255, 255, 0.3)",
+            borderRadius: "18px",
+            padding: "5px 12px",
+            color: "#ffffff",
+            fontSize: "12px",
+            fontWeight: "600",
+            cursor: "pointer",
+            backdropFilter: "blur(8px)",
+            boxShadow: "0 2px 8px rgba(0, 0, 0, 0.15)",
+            transition: "all 0.2s",
+          }
+        },
+        React.createElement("span", { style: { fontSize: "15px", fontWeight: "bold" } }, "‹"),
+        focusedCharId ? "返回汤泉" : "休闲一刻"
+      ),
+
+      // 中间：场景切换胶囊 + 浴场标题
+      React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }
+        },
+        // 场景切换胶囊 (汤泉 / 海滩)
+        !focusedCharId ? React.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              background: "rgba(10, 16, 22, 0.55)",
+              borderRadius: "20px",
+              padding: "2.5px",
+              border: "1px solid rgba(255, 255, 255, 0.2)",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.25)",
+            }
+          },
+          React.createElement(
+            "button",
+            {
+              onClick: () => handleSwitchScene(1),
+              style: {
+                background: currentSceneId === 1 ? "linear-gradient(135deg, #e6b77c 0%, #c88d4c 100%)" : "transparent",
+                color: currentSceneId === 1 ? "#ffffff" : "rgba(255, 255, 255, 0.75)",
+                border: "none",
+                borderRadius: "16px",
+                padding: "3px 9px",
+                fontSize: "11px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                boxShadow: currentSceneId === 1 ? "0 2px 6px rgba(200, 141, 76, 0.45)" : "none",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+                transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+              },
+              className: "active-press",
+            },
+            "♨ 汤泉",
+            React.createElement("span", { style: { fontSize: "9px", opacity: 0.85 } }, `(${scene1CharIds.length}/8)`)
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => handleSwitchScene(2),
+              style: {
+                background: currentSceneId === 2 ? "linear-gradient(135deg, #7ec7c0 0%, #4ca8a0 100%)" : "transparent",
+                color: currentSceneId === 2 ? "#ffffff" : "rgba(255, 255, 255, 0.75)",
+                border: "none",
+                borderRadius: "16px",
+                padding: "3px 9px",
+                fontSize: "11px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                boxShadow: currentSceneId === 2 ? "0 2px 6px rgba(76, 168, 160, 0.45)" : "none",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px",
+                transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+              },
+              className: "active-press",
+            },
+            "🏖️ 海滩",
+            React.createElement("span", { style: { fontSize: "9px", opacity: 0.85 } }, `(${scene2CharIds.length}/8)`)
+          )
+        ) : React.createElement(
+          "div",
+          {
+            style: {
+              fontSize: "15px",
+              fontWeight: "bold",
+              color: "#ffffff",
+              letterSpacing: "2.5px",
+              textShadow: "0 2px 8px rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              fontFamily: "'Noto Serif SC', 'Songti SC', serif",
+            }
+          },
+          React.createElement("span", { style: { color: "#e8b4b8", fontSize: "11px" } }, "❖"),
+          currentSceneConfig.name,
+          React.createElement("span", { style: { color: "#e8b4b8", fontSize: "11px" } }, "❖")
+        )
+      ),
+
+      // 右侧：爱心形态与调度按钮
+      React.createElement(
+        "button",
+        {
+          onClick: handleOpenHeartModal,
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            width: "36px",
+            height: "36px",
+            borderRadius: "50%",
+            background: "linear-gradient(135deg, rgba(255, 120, 150, 0.85) 0%, rgba(220, 80, 110, 0.95) 100%)",
+            border: "1.5px solid rgba(255, 255, 255, 0.65)",
+            color: "#ffffff",
+            fontSize: "18px",
+            cursor: "pointer",
+            boxShadow: "0 4px 14px rgba(255, 105, 135, 0.45)",
+            animation: "heartGlowPulse 2.4s ease-in-out infinite",
+            transition: "transform 0.2s",
+          },
+          title: "密探形态与入驻管理"
+        },
+        "💖"
+      )
+    ),
+
+    // ==================== 主视口区域 ====================
+    !focusedCharId ? (
+      // A. 全景汤泉视图
+      React.createElement(
+        "div",
+        {
+          ref: waterAreaRef,
+          onClick: handleWaterClick,
+          style: {
+            position: "relative",
+            flex: 1,
+            width: "100%",
+            zIndex: 10,
+            touchAction: "none",
+            overflow: "hidden",
+          }
+        },
+
+        // 左右浮动快捷场景切换按钮
+        React.createElement(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              handleSwitchScene(currentSceneId === 1 ? 2 : 1);
+            },
+            style: {
+              position: "absolute",
+              top: "50%",
+              right: "8px",
+              transform: "translateY(-50%)",
+              zIndex: 35,
+              background: "rgba(20, 30, 40, 0.65)",
+              border: "1px solid rgba(255, 255, 255, 0.4)",
+              borderRadius: "18px",
+              padding: "8px 6px",
+              color: "#ffffff",
+              fontSize: "11px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.3)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              gap: "2px",
+              backdropFilter: "blur(6px)",
+            },
+            className: "active-press",
+            title: `前往${currentSceneId === 1 ? "晴岚海滩" : "温泉温汤"}`
+          },
+          React.createElement("span", { style: { fontSize: "14px" } }, currentSceneId === 1 ? "🏖️" : "♨"),
+          React.createElement("span", { style: { writingMode: "vertical-rl", letterSpacing: "1px", fontSize: "10.5px" } }, currentSceneId === 1 ? "前往海滩 ›" : "前往汤泉 ›")
+        ),
+
+        // 动态点击涟漪
+        dynamicRipples.map(r =>
+          React.createElement("div", {
+            key: r.id,
+            style: {
+              position: "absolute",
+              left: r.x + "px",
+              top: r.y + "px",
+              borderRadius: "50%",
+              border: "2px solid rgba(255, 255, 255, 0.9)",
+              pointerEvents: "none",
+              animation: "dynamicWaterRipple 1.8s cubic-bezier(0.1, 0.5, 0.7, 1) forwards",
+              zIndex: 15,
+            }
+          })
+        ),
+
+        // 全景泡澡名士列表
+        bathers.map(char => {
+          return React.createElement(
+            "div",
+            {
+              key: char.id,
+              onMouseDown: (e) => handleStartDrag(e, char),
+              onTouchStart: (e) => handleStartDrag(e, char),
+              onClick: (e) => handleFocusCharacter(e, char),
+              style: {
+                position: "absolute",
+                left: char.x + "%",
+                top: char.y + "%",
+                transform: "translate(-50%, -50%)",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                cursor: "pointer",
+                zIndex: Math.round(char.y) + 20,
+              }
+            },
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  position: "relative",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  animation: "bathBob 3.6s ease-in-out infinite",
+                  animationDelay: ((char.x % 5) * 0.4) + "s",
+                  background: "transparent",
+                  boxShadow: "none",
+                  filter: "none",
+                }
+              },
+
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    height: "58px",
+                    width: "86px",
+                    overflow: "hidden",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    justifyContent: "center",
+                    position: "relative",
+                  }
+                },
+                React.createElement("img", {
+                  src: char.sprite || "graph/player-1.png",
+                  alt: char.name,
+                  className: "bath-char-clean",
+                  style: {
+                    height: "86px",
+                    width: "auto",
+                    maxHeight: "86px",
+                    objectFit: "contain",
+                    background: "transparent",
+                    boxShadow: "none",
+                    filter: "none",
+                    pointerEvents: "none",
+                    display: "block",
+                  },
+                  onError: (e) => {
+                    e.target.src = "graph/player-1.png";
+                  }
+                })
+              ),
+
+              React.createElement("div", {
+                className: "bath-water-ripple",
+                style: {
+                  left: "50%",
+                  bottom: "-2px",
+                  width: "44px",
+                  height: "18px",
+                }
+              }),
+              React.createElement("div", {
+                className: "bath-water-ripple-2",
+                style: {
+                  left: "50%",
+                  bottom: "-2px",
+                  width: "44px",
+                  height: "18px",
+                }
+              }),
+
+              React.createElement("div", {
+                style: {
+                  position: "absolute",
+                  bottom: "0px",
+                  left: "50%",
+                  transform: "translateX(-50%)",
+                  width: "62px",
+                  height: "6px",
+                  background: "radial-gradient(ellipse, rgba(255, 255, 255, 0.95) 0%, rgba(180, 235, 255, 0.5) 60%, rgba(160, 220, 255, 0) 90%)",
+                  borderRadius: "50%",
+                  pointerEvents: "none",
+                  border: "0.5px solid rgba(255,255,255,0.6)",
+                }
+              })
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  marginTop: "-2px",
+                  background: "rgba(20, 28, 35, 0.72)",
+                  border: "1px solid rgba(230, 200, 160, 0.55)",
+                  borderRadius: "10px",
+                  padding: "1.5px 7px",
+                  fontSize: "10px",
+                  color: "#fff7eb",
+                  fontWeight: "600",
+                  letterSpacing: "0.5px",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.3)",
+                  pointerEvents: "none",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3px",
+                }
+              },
+              React.createElement("span", { style: { color: "#e8b4b8", fontSize: "8px" } }, "♨"),
+              char.name
+            )
+          );
+        }),
+
+        splashes.map(s =>
+          React.createElement(
+            "div",
+            {
+              key: s.id,
+              style: {
+                position: "absolute",
+                left: s.x + "%",
+                top: (s.y - 6) + "%",
+                transform: "translate(-50%, -50%)",
+                fontSize: "26px",
+                pointerEvents: "none",
+                zIndex: 999,
+                animation: "splashPop 1s ease-out forwards",
+              }
+            },
+            "💦"
+          )
+        )
+      )
+    ) : (
+      // B. 密探单人聚焦特写视图
+      React.createElement(
+        "div",
+        {
+          style: {
+            position: "relative",
+            flex: 1,
+            width: "100%",
+            display: "flex",
+            flexDirection: "column",
+            zIndex: 10,
+            overflow: "hidden",
+          }
+        },
+
+        // 上半部：密探单人放大特写区域
+        React.createElement(
+          "div",
+          {
+            style: {
+              position: "relative",
+              flex: "0 0 50%",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              paddingBottom: "16px",
+            }
+          },
+
+          // 密探头顶：猜拳动效展示框
+          (rpsStage === "bot_rolling" || rpsStage === "finished") && React.createElement(
+            "div",
+            {
+              style: {
+                position: "absolute",
+                top: "10%",
+                left: "50%",
+                transform: "translateX(-50%)",
+                zIndex: 100,
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+              }
+            },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  width: "80px",
+                  height: "80px",
+                  borderRadius: "50%",
+                  background: "radial-gradient(circle, rgba(255, 255, 255, 0.98) 0%, rgba(253, 246, 235, 0.95) 100%)",
+                  border: "2.5px solid #d6a86e",
+                  boxShadow: "0 8px 24px rgba(0, 0, 0, 0.28)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  overflow: "hidden",
+                  padding: "3px",
+                  animation: rpsStage === "bot_rolling" ? "rpsFlashCycle 0.15s linear infinite" : "rpsSettlePop 0.4s ease-out forwards",
+                }
+              },
+              React.createElement("img", {
+                src: rpsGestures[rpsStage === "bot_rolling" ? rpsCurrentFlash : botGesture].img,
+                alt: "手势",
+                style: {
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "contain",
+                  display: "block",
+                }
+              })
+            )
+          ),
+
+          // 特写密探放大立绘容器
+          React.createElement(
+            "div",
+            {
+              style: {
+                position: "relative",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                animation: "bathFocusBob 3.6s ease-in-out infinite",
+                background: "transparent",
+                boxShadow: "none",
+                filter: "none",
+              }
+            },
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  height: "118px",
+                  width: "172px",
+                  overflow: "hidden",
+                  display: "flex",
+                  alignItems: "flex-start",
+                  justifyContent: "center",
+                  position: "relative",
+                }
+              },
+              React.createElement("img", {
+                src: focusedBather.sprite || "graph/player-1.png",
+                alt: focusedBather.name,
+                className: "bath-char-clean",
+                style: {
+                  height: "172px",
+                  width: "auto",
+                  maxHeight: "172px",
+                  objectFit: "contain",
+                  background: "transparent",
+                  boxShadow: "none",
+                  filter: "none",
+                  pointerEvents: "none",
+                  display: "block",
+                },
+                onError: (e) => {
+                  e.target.src = "graph/player-1.png";
+                }
+              })
+            ),
+
+            React.createElement("div", {
+              className: "bath-water-ripple",
+              style: {
+                left: "50%",
+                bottom: "-4px",
+                width: "88px",
+                height: "30px",
+              }
+            }),
+            React.createElement("div", {
+              className: "bath-water-ripple-2",
+              style: {
+                left: "50%",
+                bottom: "-4px",
+                width: "88px",
+                height: "30px",
+              }
+            }),
+
+            React.createElement("div", {
+              style: {
+                position: "absolute",
+                bottom: "-2px",
+                left: "50%",
+                transform: "translateX(-50%)",
+                width: "130px",
+                height: "8px",
+                background: "radial-gradient(ellipse, rgba(255, 255, 255, 0.98) 0%, rgba(180, 235, 255, 0.6) 60%, rgba(160, 220, 255, 0) 90%)",
+                borderRadius: "50%",
+                pointerEvents: "none",
+                border: "1px solid rgba(255, 255, 255, 0.75)",
+              }
+            })
+          )
+        ),
+
+        // 下半部操作区
+        activeDialogue ? (
+          // 分支 0: Galgame 风格拟态磨砂玻璃对话框
+          React.createElement(
+            "div",
+            {
+              style: {
+                flex: "0 0 46%",
+                margin: "0 14px calc(var(--safe-bottom, 16px) + 8px) 14px",
+                background: "linear-gradient(135deg, rgba(255, 252, 246, 0.78) 0%, rgba(246, 240, 230, 0.62) 100%)",
+                backdropFilter: "blur(24px)",
+                WebkitBackdropFilter: "blur(24px)",
+                borderRadius: "24px",
+                border: "1.5px solid rgba(255, 255, 255, 0.85)",
+                boxShadow: "0 14px 38px rgba(0, 0, 0, 0.22), inset 0 1px 2px rgba(255, 255, 255, 0.9)",
+                padding: "14px 16px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                animation: "optionSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                zIndex: 85,
+              }
+            },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                }
+              },
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    background: "linear-gradient(135deg, #d6a86e 0%, #b8864e 100%)",
+                    color: "#ffffff",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    letterSpacing: "1.5px",
+                    padding: "2.5px 12px",
+                    borderRadius: "12px",
+                    boxShadow: "0 2px 6px rgba(184, 134, 78, 0.35)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                  }
+                },
+                React.createElement("span", { style: { fontSize: "10px" } }, "❖"),
+                focusedBather ? focusedBather.name : "密探",
+                React.createElement("span", { style: { fontSize: "10px" } }, "❖")
+              ),
+
+              React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "8px" } },
+                React.createElement(
+                  "span",
+                  {
+                    style: {
+                      fontSize: "10.5px",
+                      color: "#8c7255",
+                      background: "rgba(255, 255, 255, 0.6)",
+                      padding: "1.5px 7px",
+                      borderRadius: "8px",
+                      fontWeight: "600",
+                    }
+                  },
+                  activeDialogue.title === "真心话" ? (activeDialogue.loading ? "💖 叩问真心..." : "💖 真心话回答") :
+                  activeDialogue.title === "密探赠礼" ? "🎁 密探心意赠礼" :
+                  activeDialogue.title === "赠送礼物" ? "🎁 礼物心意" : (activeDialogue.loading ? "✨ AI 思考中..." : "🌸 闲聊中")
+                ),
+                React.createElement(
+                  "button",
+                  {
+                    onClick: () => setActiveDialogue(null),
+                    style: {
+                      background: "rgba(0, 0, 0, 0.06)",
+                      border: "none",
+                      borderRadius: "50%",
+                      width: "24px",
+                      height: "24px",
+                      fontSize: "12px",
+                      color: "#6b4a28",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }
+                  },
+                  "✕"
+                )
+              )
+            ),
+
+            activeDialogue.question && React.createElement(
+              "div",
+              {
+                style: {
+                  fontSize: "11px",
+                  color: "#d6724b",
+                  fontWeight: "bold",
+                  marginTop: "4px",
+                  marginBottom: "2px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "4px",
+                }
+              },
+              "🌸 问：",
+              activeDialogue.question
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  gap: "12px",
+                  alignItems: "center",
+                  margin: "6px 0",
+                  flex: 1,
+                }
+              },
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    flex: 1,
+                    color: "#3d2c1c",
+                    fontSize: "13px",
+                    lineHeight: "1.65",
+                    letterSpacing: "0.5px",
+                    fontFamily: "'Noto Serif SC', 'Songti SC', 'SimSun', serif",
+                    textShadow: "0 1px 1px rgba(255, 255, 255, 0.6)",
+                    opacity: activeDialogue.loading ? 0.65 : 1,
+                    animation: activeDialogue.loading ? "steamRise 1.5s infinite" : "none",
+                  }
+                },
+                activeDialogue.text
+              ),
+
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    width: "72px",
+                    height: "72px",
+                    borderRadius: "18px",
+                    background: "radial-gradient(circle, #ffffff 0%, #f6eee2 100%)",
+                    border: "2px solid rgba(255, 255, 255, 0.9)",
+                    boxShadow: "0 4px 12px rgba(0, 0, 0, 0.12)",
+                    flexShrink: 0,
+                    overflow: "hidden",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }
+                },
+                React.createElement("img", {
+                  src: focusedBather.sprite || "graph/player-1.png",
+                  alt: focusedBather.name,
+                  style: {
+                    width: "100%",
+                    height: "100%",
+                    objectFit: "contain",
+                    background: "transparent",
+                  },
+                  onError: (e) => {
+                    e.target.src = "graph/player-1.png";
+                  }
+                })
+              )
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  paddingTop: "6px",
+                  borderTop: "1px dashed rgba(214, 168, 110, 0.4)",
+                }
+              },
+              activeDialogue.title === "赠送礼物" ? (
+                React.createElement(
+                  "button",
+                  {
+                    onClick: handleOpenGiftPicker,
+                    style: {
+                      background: "rgba(255, 255, 255, 0.75)",
+                      border: "1px solid rgba(214, 168, 110, 0.6)",
+                      borderRadius: "12px",
+                      padding: "3px 10px",
+                      fontSize: "11px",
+                      color: "#6b4a28",
+                      fontWeight: "600",
+                      cursor: "pointer",
+                    }
+                  },
+                  "🎁 再送一件"
+                )
+              ) : activeDialogue.title === "密探赠礼" ? (
+                React.createElement(
+                  "button",
+                  {
+                    onClick: () => {
+                      setShowArchiveDetail(true);
+                      setSelectedArchiveCharId(focusedBather.id);
+                      setActiveDialogue(null);
+                    },
+                    style: {
+                      background: "linear-gradient(135deg, #fae298, #f7cd73)",
+                      border: "1px solid rgba(255, 255, 255, 0.9)",
+                      borderRadius: "12px",
+                      padding: "3px 10px",
+                      fontSize: "11px",
+                      color: "#54381e",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                    }
+                  },
+                  "📁 查看密探档案"
+                )
+              ) : (
+                React.createElement(
+                  "button",
+                  {
+                    disabled: isGeneratingChat,
+                    onClick: () => {
+                      if (activeDialogue.title === "真心话") {
+                        if (activeDialogue.question) {
+                          askCharacterTruthQuestion(focusedBather, activeDialogue.question);
+                        } else {
+                          const nextText = truthDialoguePool[Math.floor(Math.random() * truthDialoguePool.length)];
+                          setActiveDialogue({ ...activeDialogue, text: nextText });
+                        }
+                      } else {
+                        // 换一句闲聊同样扣除 1 元
+                        const success = checkAndDeductVaultCoins(1, `东海海水浴场 · 与【${focusedBather.name}】闲聊消费`);
+                        if (!success) return;
+                        generateAIChatAndTags(focusedBather);
+                      }
+                    },
+                    style: {
+                      background: isGeneratingChat ? "rgba(220, 220, 220, 0.6)" : "rgba(255, 255, 255, 0.75)",
+                      border: "1px solid rgba(214, 168, 110, 0.6)",
+                      borderRadius: "12px",
+                      padding: "3px 10px",
+                      fontSize: "11px",
+                      color: isGeneratingChat ? "#999" : "#6b4a28",
+                      fontWeight: "600",
+                      cursor: isGeneratingChat ? "not-allowed" : "pointer",
+                    }
+                  },
+                  isGeneratingChat ? "⏳ 生成中..." : "▶ 换一句"
+                )
+              ),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => setActiveDialogue(null),
+                  style: {
+                    background: "linear-gradient(135deg, #d6724b 0%, #b85832 100%)",
+                    border: "none",
+                    borderRadius: "12px",
+                    padding: "3.5px 12px",
+                    fontSize: "11px",
+                    color: "#ffffff",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(214, 114, 75, 0.3)",
+                  }
+                },
+                "‹ 返回选项"
+              )
+            )
+          )
+        ) :
+        // 分支 1: 真心话 - 发问选择与自定义输入面板
+        truthStage === "picker" ? (
+          React.createElement(
+            "div",
+            {
+              style: {
+                flex: "0 0 50%",
+                background: "linear-gradient(180deg, rgba(246, 250, 252, 0.75) 0%, rgba(240, 245, 250, 0.94) 20%, rgba(244, 242, 235, 0.98) 100%)",
+                backdropFilter: "blur(14px)",
+                WebkitBackdropFilter: "blur(14px)",
+                borderTopLeftRadius: "28px",
+                borderTopRightRadius: "28px",
+                borderTop: "1.5px solid rgba(255, 255, 255, 0.8)",
+                boxShadow: "0 -8px 32px rgba(0, 0, 0, 0.18)",
+                padding: "14px 18px calc(var(--safe-bottom, 16px) + 8px) 18px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                animation: "optionSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                zIndex: 80,
+              }
+            },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "4px",
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "5px" } },
+                React.createElement(
+                  "span",
+                  {
+                    style: {
+                      fontFamily: "'Noto Serif SC', 'Songti SC', serif",
+                      fontSize: "14.5px",
+                      fontWeight: "700",
+                      color: "#4a3520",
+                      letterSpacing: "1.2px",
+                    }
+                  },
+                  "真心话发问"
+                ),
+                React.createElement(
+                  "span",
+                  {
+                    style: {
+                      fontSize: "10px",
+                      color: "#d6724b",
+                      background: "rgba(214, 114, 75, 0.12)",
+                      padding: "1px 6px",
+                      borderRadius: "8px",
+                      fontWeight: "bold",
+                    }
+                  },
+                  "每次 5元"
+                )
+              ),
+
+              totalPickerPages > 1 && React.createElement(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "3px",
+                    fontSize: "10.5px",
+                    color: "#8c7255",
+                    background: "rgba(255, 255, 255, 0.75)",
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    border: "1px solid #d6b88d",
+                  }
+                },
+                React.createElement(
+                  "button",
+                  {
+                    disabled: truthPickerPage === 0,
+                    onClick: () => setTruthPickerPage(p => Math.max(0, p - 1)),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      color: truthPickerPage === 0 ? "#ccc" : "#6b4a28",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: truthPickerPage === 0 ? "default" : "pointer",
+                      padding: "0 2px",
+                    }
+                  },
+                  "‹"
+                ),
+                React.createElement("span", null, `${truthPickerPage + 1}/${totalPickerPages}`),
+                React.createElement(
+                  "button",
+                  {
+                    disabled: truthPickerPage >= totalPickerPages - 1,
+                    onClick: () => setTruthPickerPage(p => Math.min(totalPickerPages - 1, p + 1)),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      color: truthPickerPage >= totalPickerPages - 1 ? "#ccc" : "#6b4a28",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: truthPickerPage >= totalPickerPages - 1 ? "default" : "pointer",
+                      padding: "0 2px",
+                    }
+                  },
+                  "›"
+                )
+              )
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                  gap: "6px",
+                  margin: "6px 0",
+                }
+              },
+              currentPickerQuestions.map((qText, qIdx) =>
+                React.createElement(
+                  "button",
+                  {
+                    key: qIdx,
+                    onClick: () => askCharacterTruthQuestion(focusedBather, qText),
+                    style: {
+                      background: "linear-gradient(180deg, #ffffff 0%, #fdf8ee 100%)",
+                      border: "1px solid #d6a86e",
+                      borderRadius: "14px",
+                      padding: "8px 8px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      textAlign: "center",
+                      minHeight: "44px",
+                      cursor: "pointer",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                      color: "#4a3520",
+                      fontSize: "11px",
+                      fontWeight: "600",
+                      lineHeight: "1.3",
+                      fontFamily: "'Noto Serif SC', 'Songti SC', serif",
+                    },
+                    className: "active-press",
+                  },
+                  "🌸 " + qText
+                )
+              )
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  gap: "6px",
+                  alignItems: "center",
+                  marginTop: "2px",
+                  marginBottom: "4px",
+                }
+              },
+              React.createElement("input", {
+                type: "text",
+                placeholder: "✍️ 自定义真心话 (需5元)...",
+                value: customTruthInput,
+                onChange: (e) => setCustomTruthInput(e.target.value),
+                onKeyDown: (e) => {
+                  if (e.key === "Enter" && customTruthInput.trim()) {
+                    askCharacterTruthQuestion(focusedBather, customTruthInput);
+                  }
+                },
+                style: {
+                  flex: 1,
+                  padding: "7px 12px",
+                  borderRadius: "16px",
+                  border: "1px solid #d6a86e",
+                  background: "#ffffff",
+                  fontSize: "12px",
+                  color: "#4a3520",
+                  outline: "none",
+                }
+              }),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => {
+                    if (customTruthInput.trim()) {
+                      askCharacterTruthQuestion(focusedBather, customTruthInput);
+                    } else {
+                      alert("请输入您想问的问题哦~");
+                    }
+                  },
+                  style: {
+                    background: "linear-gradient(135deg, #d6724b 0%, #b85832 100%)",
+                    border: "none",
+                    borderRadius: "16px",
+                    padding: "7px 14px",
+                    color: "#ffffff",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(214, 114, 75, 0.35)",
+                    flexShrink: 0,
+                  },
+                  className: "active-press",
+                },
+                "提问(5元)"
+              )
+            ),
+
+            React.createElement(
+              "div",
+              { style: { display: "flex", justifyContent: "center" } },
+              React.createElement(
+                "button",
+                {
+                  onClick: () => setTruthStage("idle"),
+                  style: {
+                    background: "rgba(0, 0, 0, 0.05)",
+                    border: "1px solid rgba(220, 200, 175, 0.8)",
+                    borderRadius: "14px",
+                    padding: "4px 20px",
+                    color: "#6b4a28",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }
+                },
+                "‹ 返回操作"
+              )
+            )
+          )
+        ) :
+        // 分支 1.5: 赠送礼物 - 背包商品选择面板
+        giftStage === "picker" ? (
+          React.createElement(
+            "div",
+            {
+              style: {
+                flex: "0 0 50%",
+                background: "linear-gradient(180deg, rgba(246, 250, 252, 0.75) 0%, rgba(240, 245, 250, 0.94) 20%, rgba(244, 242, 235, 0.98) 100%)",
+                backdropFilter: "blur(14px)",
+                WebkitBackdropFilter: "blur(14px)",
+                borderTopLeftRadius: "28px",
+                borderTopRightRadius: "28px",
+                borderTop: "1.5px solid rgba(255, 255, 255, 0.8)",
+                boxShadow: "0 -8px 32px rgba(0, 0, 0, 0.18)",
+                padding: "14px 18px calc(var(--safe-bottom, 16px) + 8px) 18px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                animation: "optionSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                zIndex: 80,
+              }
+            },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "4px",
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                React.createElement("span", { style: { fontSize: "16px" } }, "🎁"),
+                React.createElement(
+                  "span",
+                  {
+                    style: {
+                      fontFamily: "'Noto Serif SC', 'Songti SC', serif",
+                      fontSize: "15px",
+                      fontWeight: "700",
+                      color: "#4a3520",
+                      letterSpacing: "1.5px",
+                    }
+                  },
+                  `赠送给【${focusedBather ? focusedBather.name : "密探"}】`
+                )
+              ),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => {
+                    setGiftStage("idle");
+                    setShowShopModal(true);
+                  },
+                  style: {
+                    background: "linear-gradient(135deg, #fae298, #f7cd73)",
+                    border: "1px solid rgba(255, 255, 255, 0.9)",
+                    borderRadius: "12px",
+                    padding: "3px 8px",
+                    fontSize: "10.5px",
+                    color: "#54381e",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }
+                },
+                "🏪 去商店选购"
+              )
+            ),
+
+            // 背包物品列表
+            React.createElement(
+              "div",
+              {
+                style: {
+                  flex: 1,
+                  overflowY: "auto",
+                  WebkitOverflowScrolling: "touch",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                  gap: "8px",
+                  margin: "6px 0",
+                  minHeight: "100px",
+                }
+              },
+              userInventory.length === 0 ? React.createElement(
+                "div",
+                {
+                  style: {
+                    gridColumn: "1 / -1",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: "#8c7255",
+                    fontSize: "12px",
+                    padding: "20px 10px",
+                    gap: "8px",
+                  }
+                },
+                React.createElement("span", { style: { fontSize: "28px" } }, "🎒"),
+                React.createElement("span", null, "背包中暂无海滨商品，快去商社进货吧~"),
+                React.createElement(
+                  "button",
+                  {
+                    onClick: () => {
+                      setGiftStage("idle");
+                      setShowShopModal(true);
+                    },
+                    style: {
+                      background: "linear-gradient(135deg, #d6724b, #b85832)",
+                      border: "none",
+                      borderRadius: "14px",
+                      padding: "5px 14px",
+                      color: "#ffffff",
+                      fontSize: "11.5px",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      marginTop: "4px",
+                    }
+                  },
+                  "打开海滨商社"
+                )
+              ) : userInventory.map((item, iIdx) =>
+                React.createElement(
+                  "div",
+                  {
+                    key: item.id || iIdx,
+                    style: {
+                      background: "#ffffff",
+                      border: "1px solid #ebd8a8",
+                      borderRadius: "12px",
+                      padding: "8px",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
+                    }
+                  },
+                  React.createElement(
+                    "div",
+                    {
+                      style: {
+                        position: "relative",
+                        width: "38px",
+                        height: "38px",
+                        borderRadius: "50%",
+                        background: "radial-gradient(circle, #e6f4fb 0%, #b8dcf2 100%)",
+                        border: "1.5px solid #d6b88d",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "20px",
+                        flexShrink: 0,
+                      }
+                    },
+                    item.icon,
+                    React.createElement(
+                      "span",
+                      {
+                        style: {
+                          position: "absolute",
+                          bottom: "-2px",
+                          right: "-2px",
+                          background: "rgba(50, 60, 70, 0.75)",
+                          color: "#ffffff",
+                          fontSize: "8px",
+                          borderRadius: "8px",
+                          padding: "0 4px",
+                          fontWeight: "bold",
+                        }
+                      },
+                      "x" + (item.count || 1)
+                    )
+                  ),
+                  React.createElement(
+                    "div",
+                    { style: { flex: 1, minWidth: 0 } },
+                    React.createElement(
+                      "div",
+                      { style: { fontSize: "11.5px", fontWeight: "bold", color: "#4a3520", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+                      item.name
+                    ),
+                    React.createElement(
+                      "button",
+                      {
+                        onClick: () => handleGiftItemToChar(focusedBather, item),
+                        style: {
+                          marginTop: "3px",
+                          background: "linear-gradient(135deg, #d6724b 0%, #b85832 100%)",
+                          border: "none",
+                          borderRadius: "10px",
+                          padding: "2.5px 8px",
+                          color: "#ffffff",
+                          fontSize: "10.5px",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                          boxShadow: "0 1.5px 4px rgba(214,114,75,0.3)",
+                        },
+                        className: "active-press",
+                      },
+                      "赠 送"
+                    )
+                  )
+                )
+              )
+            ),
+
+            React.createElement(
+              "div",
+              { style: { display: "flex", justifyContent: "center" } },
+              React.createElement(
+                "button",
+                {
+                  onClick: () => setGiftStage("idle"),
+                  style: {
+                    background: "rgba(0, 0, 0, 0.05)",
+                    border: "1px solid rgba(220, 200, 175, 0.8)",
+                    borderRadius: "14px",
+                    padding: "4px 20px",
+                    color: "#6b4a28",
+                    fontSize: "11px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }
+                },
+                "‹ 返回操作"
+              )
+            )
+          )
+        ) :
+        // 分支 2: 猜拳 - 用户选择出招面板
+        rpsStage === "user_choosing" ? (
+          React.createElement(
+            "div",
+            {
+              style: {
+                flex: "0 0 50%",
+                background: "linear-gradient(180deg, rgba(246, 250, 252, 0.75) 0%, rgba(240, 245, 250, 0.94) 20%, rgba(244, 242, 235, 0.98) 100%)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                borderTopLeftRadius: "28px",
+                borderTopRightRadius: "28px",
+                borderTop: "1.5px solid rgba(255, 255, 255, 0.8)",
+                boxShadow: "0 -8px 32px rgba(0, 0, 0, 0.18)",
+                padding: "18px 20px calc(var(--safe-bottom, 16px) + 12px) 20px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "space-between",
+                animation: "optionSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                zIndex: 80,
+              }
+            },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  fontFamily: "'Noto Serif SC', 'Songti SC', serif",
+                  fontSize: "17px",
+                  fontWeight: "700",
+                  color: "#4a3520",
+                  letterSpacing: "2.5px",
+                }
+              },
+              "请楼主出招 (0元)"
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "center",
+                  alignItems: "center",
+                  gap: "20px",
+                  width: "100%",
+                  padding: "10px 0",
+                }
+              },
+              rpsGestures.map(g =>
+                React.createElement(
+                  "div",
+                  {
+                    key: g.id,
+                    onClick: () => handleUserChooseGesture(g.id),
+                    style: {
+                      width: "82px",
+                      height: "82px",
+                      borderRadius: "50%",
+                      background: "radial-gradient(circle, rgba(255, 255, 255, 0.98) 0%, rgba(252, 244, 230, 0.92) 100%)",
+                      border: "2.5px solid #d6a86e",
+                      boxShadow: "0 6px 18px rgba(0,0,0,0.18)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      padding: "4px",
+                      transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                    },
+                    className: "active-press",
+                  },
+                  React.createElement("img", {
+                    src: g.img,
+                    alt: g.name,
+                    style: {
+                      width: "100%",
+                      height: "100%",
+                      objectFit: "contain",
+                      pointerEvents: "none",
+                    }
+                  })
+                )
+              )
+            ),
+
+            React.createElement(
+              "button",
+              {
+                onClick: () => setRpsStage("idle"),
+                style: {
+                  background: "rgba(0, 0, 0, 0.06)",
+                  border: "1px solid rgba(220, 200, 175, 0.8)",
+                  borderRadius: "16px",
+                  padding: "6px 24px",
+                  color: "#6b4a28",
+                  fontSize: "12px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                }
+              },
+              "取消"
+            )
+          )
+        ) : rpsStage === "finished" ? (
+          // 分支 3: 猜拳 - 胜负结果极简展示卡片
+          React.createElement(
+            "div",
+            {
+              style: {
+                flex: "0 0 50%",
+                background: "linear-gradient(180deg, rgba(246, 250, 252, 0.8) 0%, rgba(240, 245, 250, 0.95) 20%, rgba(244, 242, 235, 0.98) 100%)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                borderTopLeftRadius: "28px",
+                borderTopRightRadius: "28px",
+                borderTop: "1.5px solid rgba(255, 255, 255, 0.8)",
+                boxShadow: "0 -8px 32px rgba(0, 0, 0, 0.18)",
+                padding: "16px 20px calc(var(--safe-bottom, 16px) + 10px) 20px",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "space-between",
+                animation: "optionSlideUp 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                zIndex: 80,
+              }
+            },
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  fontSize: "20px",
+                  fontWeight: "800",
+                  color: rpsResult === "win" ? "#d65d2a" : rpsResult === "lose" ? "#4a6b82" : "#7d6b55",
+                  letterSpacing: "3px",
+                  fontFamily: "'Noto Serif SC', 'Songti SC', serif",
+                  animation: "bubblePop 0.35s ease-out",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }
+              },
+              rpsResult === "win" ? "✨ 楼主赢了！" : rpsResult === "lose" ? ("✨ " + (focusedBather ? focusedBather.name : "密探") + "赢了！") : "🤝 平局！"
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "28px",
+                  width: "100%",
+                  padding: "4px 0",
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" } },
+                React.createElement(
+                  "div",
+                  {
+                    style: {
+                      width: "66px",
+                      height: "66px",
+                      borderRadius: "50%",
+                      background: "#ffffff",
+                      border: "2px solid #d6a86e",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "3px",
+                    }
+                  },
+                  React.createElement("img", {
+                    src: rpsGestures[userGesture !== null ? userGesture : 0].img,
+                    alt: "楼主手势",
+                    style: { width: "100%", height: "100%", objectFit: "contain" }
+                  })
+                ),
+                React.createElement("span", { style: { fontSize: "11px", color: "#6b4a28", fontWeight: "600" } }, "楼主")
+              ),
+
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    fontSize: "18px",
+                    fontWeight: "bold",
+                    color: "#a88a6d",
+                    fontStyle: "italic",
+                  }
+                },
+                "VS"
+              ),
+
+              React.createElement(
+                "div",
+                { style: { display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" } },
+                React.createElement(
+                  "div",
+                  {
+                    style: {
+                      width: "66px",
+                      height: "66px",
+                      borderRadius: "50%",
+                      background: "#ffffff",
+                      border: "2px solid #d6a86e",
+                      boxShadow: "0 4px 12px rgba(0,0,0,0.15)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      padding: "3px",
+                    }
+                  },
+                  React.createElement("img", {
+                    src: rpsGestures[botGesture !== null ? botGesture : 0].img,
+                    alt: "密探手势",
+                    style: { width: "100%", height: "100%", objectFit: "contain" }
+                  })
+                ),
+                React.createElement("span", { style: { fontSize: "11px", color: "#6b4a28", fontWeight: "600" } }, (focusedBather ? focusedBather.name : "密探"))
+              )
+            ),
+
+            React.createElement(
+              "div",
+              { style: { display: "flex", gap: "14px", width: "100%", justifyContent: "center" } },
+              React.createElement(
+                "button",
+                {
+                  onClick: handleOpenRpsPicker,
+                  style: {
+                    flex: "0 0 42%",
+                    height: "40px",
+                    background: "linear-gradient(135deg, #d6724b 0%, #b85832 100%)",
+                    border: "none",
+                    borderRadius: "20px",
+                    color: "#ffffff",
+                    fontSize: "13px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow: "0 3px 10px rgba(214, 114, 75, 0.35)",
+                  },
+                  className: "active-press",
+                },
+                "再来一局(0元)"
+              ),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => {
+                    setRpsStage("idle");
+                    setUserGesture(null);
+                    setBotGesture(null);
+                    setRpsResult(null);
+                  },
+                  style: {
+                    flex: "0 0 42%",
+                    height: "40px",
+                    background: "rgba(255, 255, 255, 0.9)",
+                    border: "1.5px solid #c9d8e8",
+                    borderRadius: "20px",
+                    color: "#5c4129",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+                  },
+                  className: "active-press",
+                },
+                "返回"
+              )
+            )
+          )
+        ) : (
+          // 分支 4: 默认特写操作选项框 (角标全面替换为 0元、1元、5元)
+          React.createElement(
+            "div",
+            {
+              style: {
+                flex: "0 0 50%",
+                background: "linear-gradient(180deg, rgba(246, 250, 252, 0.72) 0%, rgba(240, 245, 250, 0.92) 20%, rgba(244, 242, 235, 0.98) 100%)",
+                backdropFilter: "blur(12px)",
+                WebkitBackdropFilter: "blur(12px)",
+                borderTopLeftRadius: "28px",
+                borderTopRightRadius: "28px",
+                borderTop: "1.5px solid rgba(255, 255, 255, 0.8)",
+                boxShadow: "0 -8px 32px rgba(0, 0, 0, 0.18)",
+                padding: "16px 22px calc(var(--safe-bottom, 16px) + 10px) 22px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                animation: "optionSlideUp 0.35s cubic-bezier(0.16, 1, 0.3, 1) forwards",
+                zIndex: 80,
+              }
+            },
+
+            // 顶部标题栏 + 右上角「🎁 赠送」按钮
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  justifyContent: "space-between",
+                  alignItems: "center",
+                  marginBottom: "10px",
+                  position: "relative",
+                }
+              },
+              React.createElement("div", { style: { width: "62px" } }),
+
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    textAlign: "center",
+                    fontFamily: "'Noto Serif SC', 'Songti SC', 'SimSun', 'STSong', serif",
+                    fontSize: "17px",
+                    fontWeight: "700",
+                    color: "#4a3520",
+                    letterSpacing: "2.5px",
+                    textShadow: "0 1px 2px rgba(255,255,255,0.8)",
+                  }
+                },
+                "你想对密探做什么"
+              ),
+
+              React.createElement(
+                "button",
+                {
+                  onClick: handleOpenGiftPicker,
+                  style: {
+                    background: "linear-gradient(135deg, #fae298 0%, #f7cd73 100%)",
+                    border: "1px solid rgba(255, 255, 255, 0.9)",
+                    borderRadius: "14px",
+                    padding: "3px 8px",
+                    color: "#54381e",
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 6px rgba(247, 205, 115, 0.45)",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "3px",
+                  },
+                  className: "active-press",
+                  title: "给密探赠送海滨商社特产"
+                },
+                React.createElement("span", { style: { fontSize: "12px" } }, "🎁"),
+                "赠送"
+              )
+            ),
+
+            // 选项按钮 1：闲聊 (1元)
+            React.createElement(
+              "button",
+              {
+                className: "bath-action-btn",
+                onClick: handleStartChat,
+                style: { marginBottom: "11px" }
+              },
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    left: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }
+                },
+                React.createElement("span", { style: { fontSize: "16px", filter: "drop-shadow(0 1px 2px rgba(255, 150, 180, 0.5))" } }, "🌸")
+              ),
+              React.createElement(
+                "span",
+                {
+                  style: {
+                    fontSize: "16.5px",
+                    fontWeight: "600",
+                    color: "#2b3b4c",
+                    letterSpacing: "2px",
+                    fontFamily: "'Noto Serif SC', 'Songti SC', serif",
+                  }
+                },
+                "闲 聊"
+              ),
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    right: "12px",
+                    top: "6px",
+                    background: "linear-gradient(135deg, #e4a76c 0%, #d48b48 100%)",
+                    borderRadius: "10px",
+                    padding: "1px 8px",
+                    fontSize: "10px",
+                    fontWeight: "bold",
+                    color: "#ffffff",
+                    boxShadow: "0 1px 4px rgba(212, 139, 72, 0.4)",
+                  }
+                },
+                "1元"
+              ),
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    right: "10px",
+                    bottom: "3px",
+                    fontSize: "12px",
+                    opacity: 0.65,
+                  }
+                },
+                "🫧"
+              )
+            ),
+
+            // 选项按钮 2：猜拳 (0元)
+            React.createElement(
+              "button",
+              {
+                className: "bath-action-btn",
+                onClick: handleOpenRpsPicker,
+                style: { marginBottom: "11px" }
+              },
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    left: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }
+                },
+                React.createElement("span", { style: { fontSize: "16px", filter: "drop-shadow(0 1px 2px rgba(255, 150, 180, 0.5))" } }, "🌸")
+              ),
+              React.createElement(
+                "span",
+                {
+                  style: {
+                    fontSize: "16.5px",
+                    fontWeight: "600",
+                    color: "#2b3b4c",
+                    letterSpacing: "2px",
+                    fontFamily: "'Noto Serif SC', 'Songti SC', serif",
+                  }
+                },
+                "猜 拳"
+              ),
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    right: "12px",
+                    top: "6px",
+                    background: "linear-gradient(135deg, #74b89f 0%, #529c81 100%)",
+                    borderRadius: "10px",
+                    padding: "1px 8px",
+                    fontSize: "10px",
+                    fontWeight: "bold",
+                    color: "#ffffff",
+                    boxShadow: "0 1px 4px rgba(82, 156, 129, 0.4)",
+                  }
+                },
+                "0元"
+              ),
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    right: "10px",
+                    bottom: "3px",
+                    fontSize: "12px",
+                    opacity: 0.65,
+                  }
+                },
+                "🫧"
+              )
+            ),
+
+            // 选项按钮 3：真心话 (5元)
+            React.createElement(
+              "button",
+              {
+                className: "bath-action-btn",
+                onClick: handleOpenTruthPicker,
+                style: { marginBottom: "4px" }
+              },
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    left: "14px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }
+                },
+                React.createElement("span", { style: { fontSize: "16px", filter: "drop-shadow(0 1px 2px rgba(255, 150, 180, 0.5))" } }, "🌸")
+              ),
+              React.createElement(
+                "span",
+                {
+                  style: {
+                    fontSize: "16.5px",
+                    fontWeight: "600",
+                    color: "#2b3b4c",
+                    letterSpacing: "2px",
+                    fontFamily: "'Noto Serif SC', 'Songti SC', serif",
+                  }
+                },
+                "真 心 话"
+              ),
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    right: "12px",
+                    top: "6px",
+                    background: "linear-gradient(135deg, #d6724b 0%, #b85832 100%)",
+                    borderRadius: "10px",
+                    padding: "1px 8px",
+                    fontSize: "10px",
+                    fontWeight: "bold",
+                    color: "#ffffff",
+                    boxShadow: "0 1px 4px rgba(214, 114, 75, 0.4)",
+                  }
+                },
+                "5元"
+              ),
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    position: "absolute",
+                    right: "10px",
+                    bottom: "3px",
+                    fontSize: "12px",
+                    opacity: 0.65,
+                  }
+                },
+                "🫧"
+              )
+            )
+          )
+        )
+      )
+    ),
+
+    // ==================== 整体页面右下角功能按钮组 ====================
+    !focusedCharId && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          right: "14px",
+          bottom: "calc(var(--safe-bottom, 16px) + 14px)",
+          zIndex: 120,
+          display: "flex",
+          alignItems: "center",
+          gap: "8px",
+        }
+      },
+      React.createElement(
+        "button",
+        {
+          onClick: () => setShowShopModal(true),
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            background: "linear-gradient(135deg, rgba(255, 248, 235, 0.96) 0%, rgba(240, 220, 185, 0.96) 100%)",
+            border: "1.5px solid rgba(255, 255, 255, 0.9)",
+            borderRadius: "18px",
+            padding: "5px 11px",
+            color: "#54381e",
+            fontSize: "11.5px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            boxShadow: "0 3px 12px rgba(0, 0, 0, 0.22)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+          },
+          className: "active-press",
+          title: "打开海滨商社商店"
+        },
+        React.createElement("span", { style: { fontSize: "13px" } }, "🏪"),
+        "商店"
+      ),
+
+      React.createElement(
+        "button",
+        {
+          onClick: () => setShowArchivePicker(true),
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            background: "linear-gradient(135deg, rgba(255, 248, 235, 0.96) 0%, rgba(240, 220, 185, 0.96) 100%)",
+            border: "1.5px solid rgba(255, 255, 255, 0.9)",
+            borderRadius: "18px",
+            padding: "5px 11px",
+            color: "#54381e",
+            fontSize: "11.5px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            boxShadow: "0 3px 12px rgba(0, 0, 0, 0.22)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+          },
+          className: "active-press",
+          title: "查看密探团建名单档案"
+        },
+        React.createElement("span", { style: { fontSize: "13px" } }, "📁"),
+        "密探档案"
+      )
+    ),
+
+    // ==================== 弹窗 0：海滨商社商店 ====================
+    showShopModal && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          inset: 0,
+          zIndex: 600,
+          background: "rgba(0, 0, 0, 0.72)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "10px 8px",
+          animation: "fadeIn 0.25s ease-out",
+        },
+        onClick: () => setShowShopModal(false),
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            position: "relative",
+            width: "100%",
+            maxWidth: "380px",
+            height: "94vh",
+            maxHeight: "720px",
+            backgroundImage: "url('graph/大框架.jfif')",
+            backgroundSize: "100% 100%",
+            backgroundPosition: "center center",
+            backgroundRepeat: "no-repeat",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+            borderRadius: "28px",
+            animation: "bubblePop 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
+          },
+          onClick: (e) => e.stopPropagation(),
+        },
+
+        // 1. 顶部 Header (展示标题、金库余额、进货与关闭)
+        React.createElement(
+          "div",
+          {
+            style: {
+              position: "relative",
+              height: "64px",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "14px 18px 0 20px",
+            }
+          },
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                gap: "5px",
+              }
+            },
+            React.createElement("span", { style: { fontSize: "18px" } }, "⛲🐤"),
+            React.createElement(
+              "span",
+              {
+                style: {
+                  fontFamily: "'STKaiti', 'KaiTi', 'Noto Serif SC', 'Songti SC', serif",
+                  fontSize: "22px",
+                  fontWeight: "900",
+                  color: "#28465c",
+                  letterSpacing: "2.5px",
+                  textShadow: "0 1px 3px rgba(255, 255, 255, 0.9), 0 0 12px rgba(255, 255, 255, 0.8)",
+                }
+              },
+              "海滨商社"
+            )
+          ),
+
+          React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "5px", marginTop: "-6px" } },
+
+            // 金库余额展示胶囊
+            React.createElement(
+              "div",
+              {
+                style: {
+                  background: "rgba(255, 255, 255, 0.85)",
+                  border: "1px solid #d6a86e",
+                  borderRadius: "14px",
+                  padding: "3px 8px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  color: "#d6724b",
+                  boxShadow: "0 1px 4px rgba(0,0,0,0.06)",
+                },
+                title: "当前金库余额"
+              },
+              React.createElement("span", { style: { fontSize: "11.5px" } }, "🪙"),
+              `${userCoins}元`
+            ),
+
+            React.createElement(
+              "button",
+              {
+                disabled: isGeneratingShop,
+                onClick: generateAIShopGoods,
+                style: {
+                  background: isGeneratingShop ? "rgba(180, 180, 180, 0.8)" : "linear-gradient(135deg, #d6724b 0%, #b85832 100%)",
+                  border: "1px solid rgba(255, 255, 255, 0.9)",
+                  borderRadius: "14px",
+                  padding: "3.5px 8px",
+                  color: "#ffffff",
+                  fontSize: "10.5px",
+                  fontWeight: "bold",
+                  cursor: isGeneratingShop ? "not-allowed" : "pointer",
+                  boxShadow: "0 2px 8px rgba(214, 114, 75, 0.4)",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "2px",
+                },
+                className: "active-press",
+                title: "结合世界书、身份与密探人设生成特色商品"
+              },
+              React.createElement("span", { style: { fontSize: "10.5px" } }, isGeneratingShop ? "⏳" : "✨"),
+              isGeneratingShop ? "选品中" : "AI进货"
+            ),
+
+            React.createElement(
+              "button",
+              {
+                onClick: () => setShowShopModal(false),
+                style: {
+                  background: "rgba(220, 160, 90, 0.2)",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "32px",
+                  height: "32px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "16px",
+                  fontWeight: "bold",
+                  color: "#6b3c1b",
+                  cursor: "pointer",
+                },
+                title: "离开商社"
+              },
+              "✕"
+            )
+          )
+        ),
+
+        // 2. 主体商品网格容器
+        React.createElement(
+          "div",
+          {
+            style: {
+              flex: 1,
+              margin: "4px 18px 18px 18px",
+              background: "linear-gradient(180deg, rgba(184, 223, 219, 0.85) 0%, rgba(224, 242, 239, 0.9) 35%, rgba(247, 250, 249, 0.95) 100%)",
+              borderRadius: "18px",
+              border: "1.5px solid rgba(178, 214, 209, 0.75)",
+              boxShadow: "inset 0 1px 3px rgba(255, 255, 255, 0.9), 0 4px 16px rgba(0, 0, 0, 0.08)",
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              padding: "10px 10px 16px 10px",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: 0,
+            }
+          },
+
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "grid",
+                gridTemplateColumns: "repeat(2, 1fr)",
+                gap: "10px",
+              }
+            },
+            shopGoods.map((item, idx) =>
+              React.createElement(
+                "div",
+                {
+                  key: item.id || idx,
+                  onClick: () => setSelectedShopItemDetail(item),
+                  style: {
+                    background: "#ffffff",
+                    border: "1px solid #c9e4df",
+                    borderRadius: "12px",
+                    boxShadow: "0 2px 8px rgba(0, 0, 0, 0.05)",
+                    overflow: "hidden",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    paddingBottom: "8px",
+                    cursor: "pointer",
+                    minHeight: "152px",
+                    transition: "transform 0.15s cubic-bezier(0.16, 1, 0.3, 1)",
+                  },
+                  className: "active-press",
+                },
+
+                React.createElement(
+                  "div",
+                  {
+                    style: {
+                      background: "#fcf3d9",
+                      width: "100%",
+                      padding: "4px 6px",
+                      textAlign: "center",
+                      fontFamily: "'STKaiti', 'KaiTi', 'Noto Serif SC', 'Songti SC', serif",
+                      fontSize: "12.5px",
+                      fontWeight: "bold",
+                      color: "#4a3520",
+                      letterSpacing: "0.5px",
+                      borderBottom: "1px solid #f2e0b6",
+                      overflow: "hidden",
+                      textOverflow: "ellipsis",
+                      whiteSpace: "nowrap",
+                    }
+                  },
+                  item.name
+                ),
+
+                React.createElement(
+                  "div",
+                  {
+                    style: {
+                      position: "relative",
+                      width: "60px",
+                      height: "60px",
+                      borderRadius: "50%",
+                      margin: "8px 0 3px 0",
+                      border: "2px solid #e8d0a2",
+                      boxShadow: "inset 0 0 0 2px #ffffff",
+                      background: "radial-gradient(circle, #e6f4fb 0%, #b8dcf2 100%)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                    }
+                  },
+                  React.createElement(
+                    "span",
+                    { style: { fontSize: "28px", filter: "drop-shadow(0 1px 2px rgba(0,0,0,0.1))" } },
+                    item.icon || "🎁"
+                  ),
+                  React.createElement(
+                    "span",
+                    {
+                      style: {
+                        position: "absolute",
+                        bottom: "-2px",
+                        right: "-2px",
+                        background: "rgba(55, 65, 75, 0.72)",
+                        color: "#ffffff",
+                        borderRadius: "10px",
+                        padding: "0.5px 5px",
+                        fontSize: "8.5px",
+                        fontWeight: "bold",
+                        lineHeight: "1.2",
+                      }
+                    },
+                    item.count !== undefined ? item.count : 1
+                  )
+                ),
+
+                React.createElement(
+                  "div",
+                  {
+                    style: {
+                      minHeight: "18px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "9.5px",
+                      color: "#a84a32",
+                      fontWeight: "600",
+                      lineHeight: "1.1",
+                      textAlign: "center",
+                      padding: "0 4px",
+                    }
+                  },
+                  item.statusText || ""
+                ),
+
+                React.createElement(
+                  "button",
+                  {
+                    onClick: (e) => {
+                      e.stopPropagation();
+                      handleBuyShopItem(item);
+                    },
+                    style: {
+                      width: "82%",
+                      height: "26px",
+                      background: "linear-gradient(90deg, #fae298 0%, #f7cd73 50%, #f4be5e 100%)",
+                      border: "1px solid rgba(255, 255, 255, 0.9)",
+                      borderRadius: "14px",
+                      boxShadow: "0 2px 6px rgba(247, 205, 115, 0.45), inset 0 1px 2px rgba(255, 255, 255, 0.85)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "4px",
+                      color: "#4e2b0b",
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      marginTop: "2px",
+                    },
+                    className: "active-press",
+                  },
+                  React.createElement("span", { style: { fontSize: "12px" } }, "🪙"),
+                  React.createElement("span", null, `${item.price}元`)
+                )
+              )
+            )
+          )
+        ),
+
+        // 浮层：商品详情弹窗
+        selectedShopItemDetail && React.createElement(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              inset: 0,
+              background: "rgba(0, 0, 0, 0.5)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+              zIndex: 700,
+              animation: "fadeIn 0.2s",
+            },
+            onClick: () => setSelectedShopItemDetail(null),
+          },
+          React.createElement(
+            "div",
+            {
+              style: {
+                background: "linear-gradient(180deg, #fffdf8 0%, #fdf5e6 100%)",
+                border: "1.5px solid #d6a86e",
+                borderRadius: "18px",
+                padding: "16px",
+                maxWidth: "280px",
+                textAlign: "center",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                animation: "bubblePop 0.25s ease-out",
+              },
+              onClick: (e) => e.stopPropagation(),
+            },
+            React.createElement("div", { style: { fontSize: "32px", marginBottom: "4px" } }, selectedShopItemDetail.icon),
+            React.createElement(
+              "div",
+              { style: { fontSize: "14px", fontWeight: "bold", color: "#543e2b", marginBottom: "4px" } },
+              selectedShopItemDetail.name
+            ),
+            selectedShopItemDetail.statusText && React.createElement(
+              "div",
+              { style: { fontSize: "10.5px", color: "#a84a32", fontWeight: "600", marginBottom: "6px" } },
+              selectedShopItemDetail.statusText
+            ),
+            React.createElement(
+              "div",
+              { style: { fontSize: "11.5px", color: "#6b4a28", lineHeight: "1.55", margin: "6px 0 12px 0", textAlign: "left", background: "rgba(255,255,255,0.7)", padding: "8px", borderRadius: "10px" } },
+              selectedShopItemDetail.desc || "海滨商社特选佳品。"
+            ),
+            React.createElement(
+              "div",
+              { style: { display: "flex", gap: "8px" } },
+              React.createElement(
+                "button",
+                {
+                  onClick: () => setSelectedShopItemDetail(null),
+                  style: {
+                    flex: "0 0 35%",
+                    padding: "6px 0",
+                    borderRadius: "12px",
+                    background: "rgba(0,0,0,0.06)",
+                    border: "1px solid #d6b88d",
+                    color: "#6b4a28",
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }
+                },
+                "返回"
+              ),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => {
+                    handleBuyShopItem(selectedShopItemDetail);
+                    setSelectedShopItemDetail(null);
+                  },
+                  style: {
+                    flex: 1,
+                    padding: "6px 0",
+                    borderRadius: "12px",
+                    background: "linear-gradient(90deg, #fae298 0%, #f7cd73 50%, #f4be5e 100%)",
+                    border: "1px solid rgba(255,255,255,0.9)",
+                    color: "#4e2b0b",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }
+                },
+                `购买 (🪙${selectedShopItemDetail.price}元)`
+              )
+            )
+          )
+        )
+      )
+    ),
+
+    // ==================== 弹窗 1：传讯联系人选择列表 ====================
+    showArchivePicker && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0, 0, 0, 0.65)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-end",
+          zIndex: 510,
+          animation: "fadeIn 0.25s ease-out",
+        },
+        onClick: () => setShowArchivePicker(false),
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            background: "linear-gradient(180deg, #fffdf8 0%, #f7efe4 100%)",
+            borderTopLeftRadius: "24px",
+            borderTopRightRadius: "24px",
+            borderTop: "2px solid #d6a86e",
+            boxShadow: "0 -8px 30px rgba(0, 0, 0, 0.4)",
+            maxHeight: "75vh",
+            display: "flex",
+            flexDirection: "column",
+            animation: "bubblePop 0.3s ease-out",
+          },
+          onClick: (e) => e.stopPropagation(),
+        },
+
+        React.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "16px 18px 10px 18px",
+              borderBottom: "1px solid #ebd8bf",
+            }
+          },
+          React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "6px" } },
+            React.createElement("span", { style: { fontSize: "16px" } }, "📁"),
+            React.createElement("span", { style: { fontSize: "15px", fontWeight: "bold", color: "#5d442a" } }, "选择要查阅档案的密探")
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => setShowArchivePicker(false),
+              style: {
+                background: "rgba(0,0,0,0.06)",
+                border: "none",
+                borderRadius: "50%",
+                width: "28px",
+                height: "28px",
+                fontSize: "14px",
+                color: "#6b4a28",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }
+            },
+            "✕"
+          )
+        ),
+
+        // 场景管理选择 Tab
+        React.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              padding: "6px 18px 2px 18px",
+              gap: "8px",
+              background: "#fcf8f0",
+              borderBottom: "1px solid #ebd8bf",
+            }
+          },
+          React.createElement(
+            "button",
+            {
+              onClick: () => setModalTargetScene(1),
+              style: {
+                flex: 1,
+                padding: "6px 0",
+                borderRadius: "10px",
+                border: modalTargetScene === 1 ? "1.5px solid #d6a86e" : "1px solid #ebd8bf",
+                background: modalTargetScene === 1 ? "linear-gradient(135deg, #fae298, #f7cd73)" : "#ffffff",
+                color: modalTargetScene === 1 ? "#54381e" : "#8c7255",
+                fontSize: "11.5px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+              }
+            },
+            "♨ 场景一 · 汤泉区",
+            React.createElement("span", { style: { fontSize: "10px" } }, `(${scene1CharIds.length}/8)`)
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => setModalTargetScene(2),
+              style: {
+                flex: 1,
+                padding: "6px 0",
+                borderRadius: "10px",
+                border: modalTargetScene === 2 ? "1.5px solid #7ec7c0" : "1px solid #ebd8bf",
+                background: modalTargetScene === 2 ? "linear-gradient(135deg, #a4ded9, #7ec7c0)" : "#ffffff",
+                color: modalTargetScene === 2 ? "#184f4a" : "#8c7255",
+                fontSize: "11.5px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+              }
+            },
+            "🏖️ 场景二 · 海滩区",
+            React.createElement("span", { style: { fontSize: "10px" } }, `(${scene2CharIds.length}/8)`)
+          )
+        ),
+
+        React.createElement(
+          "div",
+          { style: { padding: "8px 18px", background: "rgba(255, 255, 255, 0.5)" } },
+          React.createElement("input", {
+            type: "text",
+            placeholder: "🔍 搜索传讯联系人姓名...",
+            value: archiveSearch,
+            onChange: (e) => setArchiveSearch(e.target.value),
+            style: {
+              width: "100%",
+              padding: "7px 12px",
+              borderRadius: "12px",
+              border: "1px solid #ebd8bf",
+              background: "#ffffff",
+              fontSize: "12px",
+              color: "#5d442a",
+              outline: "none",
+            }
+          })
+        ),
+
+        React.createElement(
+          "div",
+          {
+            style: {
+              flex: 1,
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              touchAction: "pan-y",
+              overscrollBehavior: "contain",
+              padding: "12px 18px 30px 18px",
+              display: "grid",
+              gridTemplateColumns: "repeat(2, 1fr)",
+              gap: "10px",
+              minHeight: "0",
+            }
+          },
+          filteredArchiveChars.length === 0 ? React.createElement(
+            "div",
+            { style: { gridColumn: "1 / -1", textAlign: "center", padding: "30px 10px", color: "#a89078", fontSize: "12px" } },
+            "未找到匹配的传讯密探"
+          ) : filteredArchiveChars.map(char => {
+            const charSprite = selectedSpritesMap[char.id] || customSpritesMap[char.id]?.[0] || resolvedAvatars[char.id] || char.avatar || "graph/player-1.png";
+            return React.createElement(
+              "div",
+              {
+                key: char.id,
+                onClick: () => handleSelectContactForArchive(char.id),
+                style: {
+                  background: "#ffffff",
+                  border: "1.5px solid #ebd8bf",
+                  borderRadius: "14px",
+                  padding: "10px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                  transition: "all 0.2s",
+                },
+                className: "active-press",
+              },
+              React.createElement("img", {
+                src: charSprite,
+                alt: char.name,
+                style: {
+                  width: "44px",
+                  height: "44px",
+                  borderRadius: "10px",
+                  objectFit: "contain",
+                  background: "transparent",
+                  border: "1px solid #ebd8bf",
+                },
+                onError: (e) => {
+                  e.target.src = "graph/player-1.png";
+                }
+              }),
+              React.createElement(
+                "div",
+                { style: { flex: 1, minWidth: 0 } },
+                React.createElement(
+                  "div",
+                  { style: { fontSize: "13px", fontWeight: "bold", color: "#4a3520", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+                  char.name
+                ),
+                React.createElement(
+                  "div",
+                  { style: { fontSize: "10px", color: "#9c8065", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+                  char.personality || "传讯密探"
+                )
+              )
+            );
+          })
+        )
+      )
+    ),
+
+    // ==================== 弹窗 2：密探档案 · 团建名单 ====================
+    showArchiveDetail && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          inset: 0,
+          zIndex: 600,
+          background: "rgba(0, 0, 0, 0.72)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "10px 8px",
+          animation: "fadeIn 0.25s ease-out",
+        },
+        onClick: () => setShowArchiveDetail(false),
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            position: "relative",
+            width: "100%",
+            maxWidth: "380px",
+            height: "94vh",
+            maxHeight: "720px",
+            backgroundImage: "url('graph/大框架.jfif')",
+            backgroundSize: "100% 100%",
+            backgroundPosition: "center center",
+            backgroundRepeat: "no-repeat",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden",
+            boxShadow: "0 16px 48px rgba(0,0,0,0.5)",
+            borderRadius: "28px",
+            animation: "bubblePop 0.35s cubic-bezier(0.16, 1, 0.3, 1)",
+          },
+          onClick: (e) => e.stopPropagation(),
+        },
+
+        // 1. 顶部标题栏
+        React.createElement(
+          "div",
+          {
+            style: {
+              position: "relative",
+              height: "64px",
+              flexShrink: 0,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              padding: "16px 20px 0 24px",
+            }
+          },
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
+              }
+            },
+            React.createElement(
+              "span",
+              {
+                style: {
+                  fontFamily: "'STKaiti', 'KaiTi', 'Noto Serif SC', 'Songti SC', serif",
+                  fontSize: "23px",
+                  fontWeight: "900",
+                  color: "#28465c",
+                  letterSpacing: "3px",
+                  textShadow: "0 1px 3px rgba(255, 255, 255, 0.9), 0 0 12px rgba(255, 255, 255, 0.8)",
+                }
+              },
+              "团建名单"
+            )
+          ),
+
+          React.createElement(
+            "button",
+            {
+              onClick: () => setShowArchiveDetail(false),
+              style: {
+                background: "rgba(220, 160, 90, 0.2)",
+                border: "none",
+                borderRadius: "50%",
+                width: "36px",
+                height: "36px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "18px",
+                fontWeight: "bold",
+                color: "#6b3c1b",
+                cursor: "pointer",
+                marginTop: "-6px",
+                marginRight: "2px",
+              },
+              title: "关闭档案"
+            },
+            "✕"
+          )
+        ),
+
+        // 内部主内容区域
+        React.createElement(
+          "div",
+          {
+            style: {
+              flex: 1,
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              padding: "4px 22px 18px 22px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              minHeight: 0,
+            }
+          },
+
+          // 模块 1：性格标签
+          React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontFamily: "'STKaiti', 'KaiTi', 'Noto Serif SC', serif",
+                  fontSize: "15px",
+                  fontWeight: "bold",
+                  color: "#4e3b2b",
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px", flex: 1 } },
+                React.createElement("span", { style: { fontSize: "14px" } }, "🌸"),
+                React.createElement("span", null, "性格标签"),
+                React.createElement("div", {
+                  style: {
+                    flex: 1,
+                    height: "1px",
+                    borderBottom: "1.5px dashed #c4b39b",
+                    marginLeft: "4px",
+                    marginRight: "6px",
+                  }
+                })
+              ),
+
+              totalTagPages > 1 && React.createElement(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    fontSize: "10px",
+                    fontWeight: "600",
+                    color: "#8c7255",
+                    background: "rgba(255, 255, 255, 0.7)",
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    border: "1px solid #d6b88d",
+                  }
+                },
+                React.createElement(
+                  "button",
+                  {
+                    disabled: archiveTagPage === 0,
+                    onClick: () => setArchiveTagPage(p => Math.max(0, p - 1)),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      color: archiveTagPage === 0 ? "#ccc" : "#6b4a28",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: archiveTagPage === 0 ? "default" : "pointer",
+                      padding: "0 2px",
+                    }
+                  },
+                  "‹"
+                ),
+                React.createElement("span", null, `${archiveTagPage + 1}/${totalTagPages}`),
+                React.createElement(
+                  "button",
+                  {
+                    disabled: archiveTagPage >= totalTagPages - 1,
+                    onClick: () => setArchiveTagPage(p => Math.min(totalTagPages - 1, p + 1)),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      color: archiveTagPage >= totalTagPages - 1 ? "#ccc" : "#6b4a28",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: archiveTagPage >= totalTagPages - 1 ? "default" : "pointer",
+                      padding: "0 2px",
+                    }
+                  },
+                  "›"
+                )
+              )
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  gap: "10px",
+                  alignItems: "stretch",
+                }
+              },
+
+              // 左侧宣纸立绘卡片
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    flex: "0 0 38%",
+                    position: "relative",
+                    background: "#fef8ed",
+                    border: "1px solid #decab0",
+                    borderRadius: "10px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.06)",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    minHeight: "155px",
+                    padding: "8px 4px",
+                    overflow: "hidden",
+                  }
+                },
+                React.createElement(
+                  "div",
+                  {
+                    style: {
+                      position: "absolute",
+                      left: "6px",
+                      top: "6px",
+                      background: "#fcedd0",
+                      border: "1px solid #dca468",
+                      borderRadius: "3px",
+                      padding: "3px 2px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      color: "#9a4c16",
+                      fontSize: "10px",
+                      fontWeight: "900",
+                      lineHeight: "1.1",
+                      letterSpacing: "0.5px",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.08)",
+                      zIndex: 2,
+                    }
+                  },
+                  activeArchiveChar.name.split("").map((ch, i) =>
+                    React.createElement("span", { key: i }, ch)
+                  )
+                ),
+
+                React.createElement(
+                  "div",
+                  {
+                    onClick: () => {
+                      const sId = Date.now();
+                      setSplashes(prev => [...prev, { id: splashId, x: 50, y: 50 }]);
+                      setTimeout(() => setSplashes(prev => prev.filter(s => s.id !== sId)), 1000);
+                    },
+                    style: {
+                      position: "absolute",
+                      right: "6px",
+                      top: "6px",
+                      fontSize: "14px",
+                      cursor: "pointer",
+                      opacity: 0.8,
+                      filter: "drop-shadow(0 1px 2px rgba(220, 160, 90, 0.5))",
+                      zIndex: 2,
+                    },
+                    title: "轻触互动"
+                  },
+                  "🖐️"
+                ),
+
+                React.createElement("img", {
+                  src: activeArchiveSprite,
+                  alt: activeArchiveChar.name,
+                  style: {
+                    height: "128px",
+                    width: "auto",
+                    maxHeight: "128px",
+                    objectFit: "contain",
+                    background: "transparent",
+                    filter: "none",
+                  },
+                  onError: (e) => {
+                    e.target.src = "graph/player-1.png";
+                  }
+                })
+              ),
+
+              // 右侧气泡标签自适应穿插流
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    flex: 1,
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "space-around",
+                    gap: "4px",
+                    minHeight: "155px",
+                  }
+                },
+                currentPagedTags.map((tag, tIdx) => {
+                  const globalIdx = archiveTagPage * 6 + tIdx;
+                  const isEven = tIdx % 2 === 0;
+                  return React.createElement(
+                    "div",
+                    {
+                      key: globalIdx,
+                      style: {
+                        background: tag.bg || "#e1effa",
+                        borderRadius: "18px",
+                        padding: "3.5px 8px 3.5px 10px",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "4px",
+                        width: "fit-content",
+                        maxWidth: "96%",
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        color: tag.color || "#28537b",
+                        boxShadow: "0 1.5px 4px rgba(0,0,0,0.05)",
+                        alignSelf: isEven ? "flex-start" : "flex-end",
+                        marginLeft: isEven ? (tIdx === 0 ? "2px" : "10px") : "0",
+                        marginRight: !isEven ? (tIdx === 1 ? "2px" : "8px") : "0",
+                        transition: "all 0.2s cubic-bezier(0.16, 1, 0.3, 1)",
+                      }
+                    },
+                    React.createElement("span", null, tag.text),
+                    React.createElement("span", { style: { fontSize: "11px" } }, tag.decor || "✨"),
+                    React.createElement(
+                      "span",
+                      {
+                        onClick: (e) => {
+                          e.stopPropagation();
+                          handleDeleteTag(activeArchiveChar.id, globalIdx);
+                        },
+                        style: {
+                          marginLeft: "3px",
+                          fontSize: "9px",
+                          color: "inherit",
+                          opacity: 0.45,
+                          cursor: "pointer",
+                          padding: "0 2px",
+                          borderRadius: "50%",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          transition: "opacity 0.15s",
+                        },
+                        className: "active-press",
+                        title: "删除此标签"
+                      },
+                      "✕"
+                    )
+                  );
+                })
+              )
+            )
+          ),
+
+          // 模块 2：真心话回顾
+          React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "6px", marginTop: "2px" } },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontFamily: "'STKaiti', 'KaiTi', 'Noto Serif SC', serif",
+                  fontSize: "15px",
+                  fontWeight: "bold",
+                  color: "#4e3b2b",
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px", flex: 1 } },
+                React.createElement("span", { style: { fontSize: "14px" } }, "🌸"),
+                React.createElement("span", null, "真心话回顾"),
+                React.createElement("div", {
+                  style: {
+                    flex: 1,
+                    height: "1px",
+                    borderBottom: "1.5px dashed #c4b39b",
+                    marginLeft: "4px",
+                    marginRight: "6px",
+                  }
+                })
+              ),
+
+              totalTruthPages > 1 && React.createElement(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    fontSize: "10px",
+                    fontWeight: "600",
+                    color: "#8c7255",
+                    background: "rgba(255, 255, 255, 0.7)",
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    border: "1px solid #d6b88d",
+                  }
+                },
+                React.createElement(
+                  "button",
+                  {
+                    disabled: archiveTruthPage === 0,
+                    onClick: () => setArchiveTruthPage(p => Math.max(0, p - 1)),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      color: archiveTruthPage === 0 ? "#ccc" : "#6b4a28",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: archiveTruthPage === 0 ? "default" : "pointer",
+                      padding: "0 2px",
+                    }
+                  },
+                  "‹"
+                ),
+                React.createElement("span", null, `${archiveTruthPage + 1}/${totalTruthPages}`),
+                React.createElement(
+                  "button",
+                  {
+                    disabled: archiveTruthPage >= totalTruthPages - 1,
+                    onClick: () => setArchiveTruthPage(p => Math.min(totalTruthPages - 1, p + 1)),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      color: archiveTruthPage >= totalTruthPages - 1 ? "#ccc" : "#6b4a28",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: archiveTruthPage >= totalTruthPages - 1 ? "default" : "pointer",
+                      padding: "0 2px",
+                    }
+                  },
+                  "›"
+                )
+              )
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "grid",
+                  gridTemplateColumns: "repeat(2, 1fr)",
+                  gap: "6px",
+                }
+              },
+              currentPagedTruthQA.map((qItem, qIdx) =>
+                React.createElement(
+                  "div",
+                  {
+                    key: qItem.id || qIdx,
+                    onClick: () => setArchiveTruthAnswer(qItem),
+                    style: {
+                      background: "linear-gradient(180deg, #fffef6 0%, #fdf8e8 100%)",
+                      border: "1px solid #ebd8a8",
+                      borderRadius: "14px",
+                      padding: "6px 8px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      minHeight: "38px",
+                      cursor: "pointer",
+                      boxShadow: "0 1px 4px rgba(0,0,0,0.03)",
+                      position: "relative",
+                      transition: "transform 0.15s",
+                    },
+                    className: "active-press",
+                  },
+                  React.createElement(
+                    "span",
+                    {
+                      style: {
+                        fontSize: "10px",
+                        color: "#543e2b",
+                        fontWeight: "600",
+                        lineHeight: "1.25",
+                        letterSpacing: "0.2px",
+                        flex: 1,
+                        textAlign: "left",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        display: "-webkit-box",
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: "vertical",
+                      }
+                    },
+                    "🌸 " + qItem.q
+                  ),
+                  React.createElement(
+                    "span",
+                    {
+                      onClick: (e) => {
+                        e.stopPropagation();
+                        handleDeleteTruthQA(activeArchiveChar.id, qItem.id);
+                      },
+                      style: {
+                        fontSize: "8.5px",
+                        color: "#9a6a42",
+                        opacity: 0.45,
+                        padding: "2px 4px",
+                        cursor: "pointer",
+                      },
+                      title: "删除该条真心话记录"
+                    },
+                    "✕"
+                  )
+                )
+              )
+            )
+          ),
+
+          // 模块 3：喜好 (每行/每页最多 7 个，支持翻页)
+          React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "6px", marginTop: "2px" } },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontFamily: "'STKaiti', 'KaiTi', 'Noto Serif SC', serif",
+                  fontSize: "15px",
+                  fontWeight: "bold",
+                  color: "#4e3b2b",
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px", flex: 1 } },
+                React.createElement("span", { style: { fontSize: "14px" } }, "🌸"),
+                React.createElement("span", null, "喜好"),
+                React.createElement("div", {
+                  style: {
+                    flex: 1,
+                    height: "1px",
+                    borderBottom: "1.5px dashed #c4b39b",
+                    marginLeft: "4px",
+                    marginRight: "6px",
+                  }
+                })
+              ),
+
+              totalLikesPages > 1 && React.createElement(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    fontSize: "10px",
+                    fontWeight: "600",
+                    color: "#8c7255",
+                    background: "rgba(255, 255, 255, 0.7)",
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    border: "1px solid #d6b88d",
+                  }
+                },
+                React.createElement(
+                  "button",
+                  {
+                    disabled: archiveLikesPage === 0,
+                    onClick: () => setArchiveLikesPage(p => Math.max(0, p - 1)),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      color: archiveLikesPage === 0 ? "#ccc" : "#6b4a28",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: archiveLikesPage === 0 ? "default" : "pointer",
+                      padding: "0 2px",
+                    }
+                  },
+                  "‹"
+                ),
+                React.createElement("span", null, `${archiveLikesPage + 1}/${totalLikesPages}`),
+                React.createElement(
+                  "button",
+                  {
+                    disabled: archiveLikesPage >= totalLikesPages - 1,
+                    onClick: () => setArchiveLikesPage(p => Math.min(totalLikesPages - 1, p + 1)),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      color: archiveLikesPage >= totalLikesPages - 1 ? "#ccc" : "#6b4a28",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: archiveLikesPage >= totalLikesPages - 1 ? "default" : "pointer",
+                      padding: "0 2px",
+                    }
+                  },
+                  "›"
+                )
+              )
+            ),
+
+            // 7 格横向排列
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "grid",
+                  gridTemplateColumns: "repeat(7, 1fr)",
+                  gap: "4px",
+                }
+              },
+              currentPagedLikes.map((item, lIdx) =>
+                React.createElement(
+                  "div",
+                  {
+                    key: item.id || lIdx,
+                    onClick: () => setArchiveItemTooltip(item),
+                    style: {
+                      background: lIdx % 2 === 0 ? "linear-gradient(180deg, #edf3f7 0%, #e2ebf2 100%)" : "linear-gradient(180deg, #fbeee8 0%, #f6e3db 100%)",
+                      border: "1px solid #d4c4b0",
+                      borderRadius: "6px",
+                      height: "38px",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      fontSize: "17px",
+                      cursor: "pointer",
+                      boxShadow: "inset 0 1px 2px rgba(255,255,255,0.8), 0 1px 3px rgba(0,0,0,0.05)",
+                    },
+                    className: "active-press",
+                    title: item.name
+                  },
+                  item.icon
+                )
+              )
+            )
+          ),
+
+          // 模块 4：赠送的礼物 (密探赠送给楼主的心意礼物留痕，6 格一页，支持翻页)
+          React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "6px", marginTop: "2px" } },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontFamily: "'STKaiti', 'KaiTi', 'Noto Serif SC', serif",
+                  fontSize: "15px",
+                  fontWeight: "bold",
+                  color: "#4e3b2b",
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px", flex: 1 } },
+                React.createElement("span", { style: { fontSize: "14px" } }, "🌸"),
+                React.createElement("span", null, "赠送的礼物"),
+                React.createElement("div", {
+                  style: {
+                    flex: 1,
+                    height: "1px",
+                    borderBottom: "1.5px dashed #c4b39b",
+                    marginLeft: "4px",
+                    marginRight: "6px",
+                  }
+                })
+              ),
+
+              totalGivenGiftsPages > 1 && React.createElement(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    fontSize: "10px",
+                    fontWeight: "600",
+                    color: "#8c7255",
+                    background: "rgba(255, 255, 255, 0.7)",
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    border: "1px solid #d6b88d",
+                  }
+                },
+                React.createElement(
+                  "button",
+                  {
+                    disabled: archiveGivenGiftsPage === 0,
+                    onClick: () => setArchiveGivenGiftsPage(p => Math.max(0, p - 1)),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      color: archiveGivenGiftsPage === 0 ? "#ccc" : "#6b4a28",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: archiveGivenGiftsPage === 0 ? "default" : "pointer",
+                      padding: "0 2px",
+                    }
+                  },
+                  "‹"
+                ),
+                React.createElement("span", null, `${archiveGivenGiftsPage + 1}/${totalGivenGiftsPages}`),
+                React.createElement(
+                  "button",
+                  {
+                    disabled: archiveGivenGiftsPage >= totalGivenGiftsPages - 1,
+                    onClick: () => setArchiveGivenGiftsPage(p => Math.min(totalGivenGiftsPages - 1, p + 1)),
+                    style: {
+                      border: "none",
+                      background: "transparent",
+                      color: archiveGivenGiftsPage >= totalGivenGiftsPages - 1 ? "#ccc" : "#6b4a28",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: archiveGivenGiftsPage >= totalGivenGiftsPages - 1 ? "default" : "pointer",
+                      padding: "0 2px",
+                    }
+                  },
+                  "›"
+                )
+              )
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  display: "grid",
+                  gridTemplateColumns: "repeat(6, 1fr)",
+                  gap: "5px",
+                }
+              },
+              currentPagedGivenGifts.map((slot, gIdx) =>
+                React.createElement(
+                  "div",
+                  {
+                    key: slot.id || gIdx,
+                    onClick: () => setArchiveItemTooltip(slot),
+                    style: {
+                      position: "relative",
+                      background: "linear-gradient(180deg, #f2f7fb 0%, #e6f0f7 100%)",
+                      border: "1px solid #bed6e8",
+                      borderRadius: "8px",
+                      height: "44px",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.05)",
+                      overflow: "hidden",
+                    },
+                    className: "active-press",
+                    title: slot.name
+                  },
+                  React.createElement(
+                    "span",
+                    {
+                      style: {
+                        fontSize: "19px",
+                      }
+                    },
+                    slot.icon || "🎁"
+                  ),
+                  React.createElement(
+                    "span",
+                    {
+                      style: {
+                        position: "absolute",
+                        bottom: "0",
+                        width: "100%",
+                        background: "rgba(50, 70, 90, 0.72)",
+                        color: "#fff",
+                        fontSize: "7.5px",
+                        textAlign: "center",
+                        fontWeight: "bold",
+                        lineHeight: "1.2",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                        whiteSpace: "nowrap",
+                        padding: "0 1px",
+                      }
+                    },
+                    slot.name
+                  )
+                )
+              )
+            )
+          ),
+
+          // 模块 5：底部操作栏
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "18px",
+                marginTop: "6px",
+                paddingBottom: "4px",
+              }
+            },
+            React.createElement(
+              "button",
+              {
+                onClick: () => {
+                  alert("已向 " + activeArchiveChar.name + " 赠送海滨团建特产好礼！好感度 +50 ✨");
+                },
+                style: {
+                  flex: "0 0 44%",
+                  height: "36px",
+                  background: "linear-gradient(135deg, #a4ded9 0%, #7ec7c0 100%)",
+                  border: "1.5px solid #ffffff",
+                  borderRadius: "20px",
+                  color: "#184f4a",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  letterSpacing: "3px",
+                  fontFamily: "'STKaiti', 'KaiTi', 'Noto Serif SC', serif",
+                  cursor: "pointer",
+                  boxShadow: "0 3px 10px rgba(126, 199, 192, 0.45)",
+                },
+                className: "active-press",
+              },
+              "送礼"
+            ),
+
+            React.createElement(
+              "button",
+              {
+                onClick: () => {
+                  toggleCharacterActiveInScene(activeArchiveChar.id, currentSceneId);
+                  setShowArchiveDetail(false);
+                },
+                style: {
+                  flex: "0 0 44%",
+                  height: "36px",
+                  background: currentSceneId === 1 ? "linear-gradient(135deg, #fcd58c 0%, #f8a846 100%)" : "linear-gradient(135deg, #a4ded9 0%, #7ec7c0 100%)",
+                  border: "1.5px solid #ffffff",
+                  borderRadius: "20px",
+                  color: currentSceneId === 1 ? "#4e2b0b" : "#184f4a",
+                  fontSize: "13.5px",
+                  fontWeight: "bold",
+                  letterSpacing: "2px",
+                  fontFamily: "'STKaiti', 'KaiTi', 'Noto Serif SC', serif",
+                  cursor: "pointer",
+                  boxShadow: currentSceneId === 1 ? "0 3px 10px rgba(248, 168, 70, 0.45)" : "0 3px 10px rgba(126, 199, 192, 0.45)",
+                },
+                className: "active-press",
+              },
+              activeCharIds.includes(activeArchiveChar.id) ? `移出${currentSceneId === 1 ? "汤泉" : "海滩"}` : `入驻${currentSceneId === 1 ? "汤泉" : "海滩"}`
+            )
+          )
+        ),
+
+        // 浮层：真心话卡片详情
+        archiveTruthAnswer && React.createElement(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              inset: 0,
+              background: "rgba(0, 0, 0, 0.55)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+              zIndex: 700,
+              animation: "fadeIn 0.2s",
+            },
+            onClick: () => setArchiveTruthAnswer(null),
+          },
+          React.createElement(
+            "div",
+            {
+              style: {
+                background: "linear-gradient(180deg, #fffdf8 0%, #fdf5e6 100%)",
+                border: "1.5px solid #d6a86e",
+                borderRadius: "18px",
+                padding: "16px",
+                maxWidth: "300px",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                animation: "bubblePop 0.25s ease-out",
+              },
+              onClick: (e) => e.stopPropagation(),
+            },
+            React.createElement(
+              "div",
+              { style: { fontSize: "13px", fontWeight: "bold", color: "#d6724b", borderBottom: "1px solid #eedecb", paddingBottom: "6px", marginBottom: "8px" } },
+              "🌸 " + archiveTruthAnswer.q
+            ),
+            React.createElement(
+              "div",
+              { style: { fontSize: "12.5px", color: "#4a3520", lineHeight: "1.6", letterSpacing: "0.5px" } },
+              archiveTruthAnswer.a
+            ),
+            React.createElement(
+              "div",
+              { style: { display: "flex", gap: "8px", marginTop: "14px" } },
+              React.createElement(
+                "button",
+                {
+                  onClick: () => handleDeleteTruthQA(activeArchiveChar.id, archiveTruthAnswer.id),
+                  style: {
+                    flex: "0 0 35%",
+                    padding: "6px 0",
+                    borderRadius: "12px",
+                    background: "rgba(220, 80, 80, 0.12)",
+                    border: "1px solid rgba(220, 80, 80, 0.3)",
+                    color: "#b83232",
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }
+                },
+                "删除此条"
+              ),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => setArchiveTruthAnswer(null),
+                  style: {
+                    flex: 1,
+                    padding: "6px 0",
+                    borderRadius: "12px",
+                    background: "linear-gradient(135deg, #d6724b, #b85832)",
+                    border: "none",
+                    color: "#fff",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }
+                },
+                "知晓心意"
+              )
+            )
+          )
+        ),
+
+        // 浮层：物品说明 Tooltip (支持展示心意赠语 reason)
+        archiveItemTooltip && React.createElement(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              inset: 0,
+              background: "rgba(0, 0, 0, 0.4)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+              zIndex: 700,
+              animation: "fadeIn 0.2s",
+            },
+            onClick: () => setArchiveItemTooltip(null),
+          },
+          React.createElement(
+            "div",
+            {
+              style: {
+                background: "linear-gradient(180deg, #fffdf8 0%, #fdf5e6 100%)",
+                border: "1.5px solid #d6a86e",
+                borderRadius: "16px",
+                padding: "14px",
+                maxWidth: "280px",
+                textAlign: "center",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.25)",
+                animation: "bubblePop 0.25s ease-out",
+              },
+              onClick: (e) => e.stopPropagation(),
+            },
+            React.createElement("div", { style: { fontSize: "28px", marginBottom: "4px" } }, archiveItemTooltip.icon),
+            React.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", color: "#543e2b" } }, archiveItemTooltip.name),
+            React.createElement("div", { style: { fontSize: "11.5px", color: "#8c7255", marginTop: "4px", lineHeight: "1.5" } }, archiveItemTooltip.desc || "密探珍藏物品"),
+            archiveItemTooltip.reason && React.createElement(
+              "div",
+              {
+                style: {
+                  marginTop: "8px",
+                  padding: "6px 8px",
+                  background: "rgba(245, 230, 210, 0.6)",
+                  border: "1px dashed #d6a86e",
+                  borderRadius: "8px",
+                  fontSize: "11px",
+                  color: "#d6724b",
+                  lineHeight: "1.45",
+                  textAlign: "left",
+                  fontFamily: "'Noto Serif SC', 'Songti SC', serif",
+                }
+              },
+              "🌸 心声：",
+              archiveItemTooltip.reason
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => setArchiveItemTooltip(null),
+                style: {
+                  marginTop: "10px",
+                  padding: "4px 16px",
+                  borderRadius: "10px",
+                  background: "#ecd9c0",
+                  border: "none",
+                  color: "#6b4a28",
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                }
+              },
+              "关闭"
+            )
+          )
+        )
+      )
+    ),
+
+    // ==================== 右上角爱心弹出的「密探形态与入驻管理」弹窗 ====================
+    showHeartModal && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0, 0, 0, 0.65)",
+          backdropFilter: "blur(8px)",
+          WebkitBackdropFilter: "blur(8px)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-end",
+          zIndex: 500,
+          animation: "fadeIn 0.25s ease-out",
+        },
+        onClick: () => setShowHeartModal(false),
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            background: "linear-gradient(180deg, #fffdf8 0%, #f7efe4 100%)",
+            borderTopLeftRadius: "24px",
+            borderTopRightRadius: "24px",
+            borderTop: "2px solid #d6a86e",
+            boxShadow: "0 -8px 30px rgba(0, 0, 0, 0.4)",
+            maxHeight: "82vh",
+            display: "flex",
+            flexDirection: "column",
+            animation: "bubblePop 0.3s ease-out",
+          },
+          onClick: (e) => e.stopPropagation(),
+        },
+
+        React.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "16px 18px 10px 18px",
+              borderBottom: "1px solid #ebd8bf",
+            }
+          },
+          React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "6px" } },
+            React.createElement("span", { style: { fontSize: "16px" } }, "💖"),
+            React.createElement("span", { style: { fontSize: "15px", fontWeight: "bold", color: "#5d442a" } }, "密探形态与度假入驻"),
+            React.createElement(
+              "span",
+              { style: { fontSize: "10px", color: "#8c7255", background: "#fbeee0", padding: "1px 6px", borderRadius: "8px", fontWeight: "600" } },
+              `共 ${scene1CharIds.length + scene2CharIds.length}/16人`
+            )
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => setShowHeartModal(false),
+              style: {
+                background: "rgba(0,0,0,0.06)",
+                border: "none",
+                borderRadius: "50%",
+                width: "28px",
+                height: "28px",
+                fontSize: "14px",
+                color: "#6b4a28",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }
+            },
+            "✕"
+          )
+        ),
+
+        React.createElement(
+          "div",
+          { style: { padding: "8px 18px", background: "rgba(255, 255, 255, 0.5)" } },
+          React.createElement("input", {
+            type: "text",
+            placeholder: "🔍 搜索密探姓名或性格设定...",
+            value: rosterSearch,
+            onChange: (e) => setRosterSearch(e.target.value),
+            style: {
+              width: "100%",
+              padding: "7px 12px",
+              borderRadius: "12px",
+              border: "1px solid #ebd8bf",
+              background: "#ffffff",
+              fontSize: "12px",
+              color: "#5d442a",
+              outline: "none",
+            }
+          })
+        ),
+
+        React.createElement(
+          "div",
+          {
+            style: {
+              flex: 1,
+              overflowY: "auto",
+              WebkitOverflowScrolling: "touch",
+              touchAction: "pan-y",
+              overscrollBehavior: "contain",
+              padding: "12px 18px 30px 18px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              minHeight: "0",
+            }
+          },
+          filteredChars.length === 0 ? React.createElement(
+            "div",
+            { style: { textAlign: "center", padding: "30px 10px", color: "#a89078", fontSize: "12px" } },
+            allMessagingChars.length === 0 ? "传讯中暂无密探，请先在传讯页面添加密探角色~" : "未找到匹配的密探"
+          ) : filteredChars.map(char => {
+            const inScene1 = scene1CharIds.includes(char.id);
+            const inScene2 = scene2CharIds.includes(char.id);
+            const isTargetActive = modalTargetScene === 1 ? inScene1 : inScene2;
+            const targetSceneName = modalTargetScene === 1 ? "汤泉" : "海滩";
+            const spritesList = customSpritesMap[char.id] || [];
+            const resolvedImg = resolvedAvatars[char.id];
+            const currentSelected = selectedSpritesMap[char.id];
+            const displayImg = currentSelected || (spritesList.length > 0 ? spritesList[0] : (resolvedImg || (typeof char.avatar === "string" && char.avatar.startsWith("data:") ? char.avatar : null) || "graph/player-1.png"));
+            const isManaging = managingSpritesCharId === char.id;
+
+            return React.createElement(
+              "div",
+              {
+                key: char.id,
+                style: {
+                  background: isTargetActive ? (modalTargetScene === 1 ? "linear-gradient(135deg, #ffffff 0%, #fdf8ee 100%)" : "linear-gradient(135deg, #ffffff 0%, #f0faf8 100%)") : "#ffffff",
+                  border: isTargetActive ? (modalTargetScene === 1 ? "1.5px solid #d6a86e" : "1.5px solid #7ec7c0") : "1px solid #ebd8bf",
+                  borderRadius: "16px",
+                  padding: "10px 12px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  boxShadow: isTargetActive ? (modalTargetScene === 1 ? "0 4px 14px rgba(214, 168, 110, 0.22)" : "0 4px 14px rgba(126, 199, 192, 0.25)") : "0 2px 6px rgba(0,0,0,0.03)",
+                  transition: "all 0.2s",
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 } },
+                  React.createElement(
+                    "div",
+                    { style: { position: "relative" } },
+                    React.createElement("img", {
+                      src: displayImg,
+                      alt: char.name,
+                      style: {
+                        width: "44px",
+                        height: "44px",
+                        borderRadius: spritesList.length > 0 ? "10px" : "50%",
+                        objectFit: "contain",
+                        background: "transparent",
+                        border: "1.5px solid #d6b88d",
+                      },
+                      onError: (e) => {
+                        e.target.src = "graph/player-1.png";
+                      }
+                    }),
+                    spritesList.length > 0 && React.createElement(
+                      "span",
+                      {
+                        style: {
+                          position: "absolute",
+                          bottom: "-4px",
+                          right: "-4px",
+                          background: "#d6724b",
+                          color: "#fff",
+                          fontSize: "8.5px",
+                          padding: "0 4px",
+                          borderRadius: "6px",
+                          fontWeight: "bold",
+                        }
+                      },
+                      spritesList.length + "态"
+                    )
+                  ),
+                  React.createElement(
+                    "div",
+                    { style: { flex: 1, minWidth: 0 } },
+                    React.createElement(
+                      "div",
+                      { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                      React.createElement("span", { style: { fontSize: "13.5px", fontWeight: "bold", color: "#5d442a" } }, char.name),
+                      inScene1 && React.createElement(
+                        "span",
+                        { style: { fontSize: "9px", color: "#d6724b", background: "#fbeae3", padding: "1px 5px", borderRadius: "6px", fontWeight: "600" } },
+                        "♨ 汤泉中"
+                      ),
+                      inScene2 && React.createElement(
+                        "span",
+                        { style: { fontSize: "9px", color: "#287b72", background: "#e1f5f2", padding: "1px 5px", borderRadius: "6px", fontWeight: "600" } },
+                        "🏖️ 海滩中"
+                      )
+                    ),
+                    React.createElement(
+                      "div",
+                      { style: { fontSize: "10.5px", color: "#8c7255", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+                      char.personality || char.desc || "传讯密探"
+                    )
+                  )
+                ),
+
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", gap: "5px" } },
+                  React.createElement(
+                    "button",
+                    {
+                      onClick: () => setManagingSpritesCharId(isManaging ? null : char.id),
+                      style: {
+                        padding: "4px 8px",
+                        borderRadius: "12px",
+                        border: "1px solid #d6b88d",
+                        background: spritesList.length > 0 ? "#fdf3e7" : "#faf6ee",
+                        color: "#6b4a28",
+                        fontSize: "10.5px",
+                        fontWeight: "600",
+                        cursor: "pointer",
+                      }
+                    },
+                    spritesList.length > 0 ? ("🎨 形态(" + spritesList.length + ")") : "🎨 选择形态"
+                  ),
+                  React.createElement(
+                    "button",
+                    {
+                      onClick: () => toggleCharacterActiveInScene(char.id, modalTargetScene),
+                      style: {
+                        padding: "5px 10px",
+                        borderRadius: "12px",
+                        border: "none",
+                        background: isTargetActive ? (modalTargetScene === 1 ? "linear-gradient(135deg, #d6724b, #b85832)" : "linear-gradient(135deg, #4ca8a0, #2b776f)") : "#ebd8bf",
+                        color: isTargetActive ? "#ffffff" : "#6b4a28",
+                        fontSize: "11px",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                        boxShadow: isTargetActive ? "0 2px 6px rgba(0,0,0,0.2)" : "none",
+                      }
+                    },
+                    isTargetActive ? `移出${targetSceneName}` : `入驻${targetSceneName}`
+                  )
+                )
+              ),
+
+              isManaging && React.createElement(
+                "div",
+                {
+                  style: {
+                    background: "rgba(255, 252, 245, 0.88)",
+                    border: "1px dashed #d6b88d",
+                    borderRadius: "12px",
+                    padding: "10px",
+                    marginTop: "4px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px",
+                  }
+                },
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "#6b4a28", fontWeight: "bold" } },
+                  React.createElement("span", null, "【" + char.name + "】专属形态选择（点击选用）："),
+                  React.createElement(
+                    "div",
+                    { style: { display: "flex", gap: "6px" } },
+                    React.createElement(
+                      "button",
+                      {
+                        onClick: () => handleUploadCustomSprite(char.id),
+                        style: {
+                          padding: "3px 8px",
+                          borderRadius: "10px",
+                          background: "linear-gradient(135deg, #d6724b, #b85832)",
+                          border: "none",
+                          color: "#ffffff",
+                          fontSize: "10px",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                        }
+                      },
+                      "+ 上传新形态 (多选)"
+                    ),
+                    spritesList.length > 0 && React.createElement(
+                      "button",
+                      {
+                        onClick: () => handleResetAllSprites(char.id),
+                        style: {
+                          padding: "3px 6px",
+                          borderRadius: "10px",
+                          background: "none",
+                          border: "1px solid #ebd8bf",
+                          color: "#9c8065",
+                          fontSize: "10px",
+                          cursor: "pointer",
+                        }
+                      },
+                      "清空"
+                    )
+                  )
+                ),
+
+                spritesList.length === 0 ? React.createElement(
+                  "div",
+                  { style: { textAlign: "center", padding: "12px", color: "#a89078", fontSize: "11px" } },
+                  "暂未上传专属形态，小人将使用传讯默认头像；点击右上角「+ 上传新形态」可上传任意形态立绘（泡澡/浴袍/Q版等）"
+                ) : React.createElement(
+                  "div",
+                  {
+                    style: {
+                      display: "grid",
+                      gridTemplateColumns: "repeat(4, 1fr)",
+                      gap: "8px",
+                    }
+                  },
+                  spritesList.map((imgUrl, sIdx) => {
+                    const isCurrent = currentSelected === imgUrl || (!currentSelected && sIdx === 0);
+                    return React.createElement(
+                      "div",
+                      {
+                        key: sIdx,
+                        onClick: () => handleSelectSprite(char.id, imgUrl),
+                        style: {
+                          position: "relative",
+                          background: isCurrent ? "#fff6eb" : "#ffffff",
+                          border: isCurrent ? "2px solid #d6724b" : "1px solid #ebd8bf",
+                          borderRadius: "10px",
+                          padding: "4px",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          cursor: "pointer",
+                          boxShadow: isCurrent ? "0 2px 8px rgba(214, 114, 75, 0.35)" : "0 1px 3px rgba(0,0,0,0.03)",
+                        }
+                      },
+                      React.createElement("img", {
+                        src: imgUrl,
+                        alt: "形态 " + (sIdx + 1),
+                        style: { width: "100%", height: "52px", objectFit: "contain", display: "block", background: "transparent" }
+                      }),
+                      React.createElement(
+                        "div",
+                        {
+                          style: {
+                            fontSize: "9px",
+                            color: isCurrent ? "#d6724b" : "#9c8065",
+                            fontWeight: isCurrent ? "bold" : "normal",
+                            marginTop: "2px",
+                          }
+                        },
+                        isCurrent ? "✓ 穿戴中" : ("形态 " + (sIdx + 1))
+                      ),
+                      React.createElement(
+                        "button",
+                        {
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            handleDeleteSprite(char.id, sIdx);
+                          },
+                          style: {
+                            position: "absolute",
+                            top: "-4px",
+                            right: "-4px",
+                            background: "#ff5e5e",
+                            border: "none",
+                            borderRadius: "50%",
+                            width: "16px",
+                            height: "16px",
+                            color: "#fff",
+                            fontSize: "9px",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            cursor: "pointer",
+                          },
+                          title: "删除该形态"
+                        },
+                        "✕"
+                      )
+                    );
+                  })
+                )
+              )
+            );
+          })
+        )
+      )
+    )
+  );
+};
+
+
 const T13Page = ({
   setIsStarChartOpen,
   setIsButterflyEffectOpen,
@@ -64625,6 +70642,7 @@ const T13Page = ({
   const [showWaterMirror, setShowWaterMirror] = useState(false);
   const [showTaibai, setShowTaibai] = useState(false);
   const [showLyingGhost, setShowLyingGhost] = useState(false);
+  const [showTeamBuilding, setShowTeamBuilding] = useState(false);
 
   const getContentByTab = () => {
     switch (activeTab) {
@@ -64678,6 +70696,9 @@ const T13Page = ({
       {showLyingGhost && (
         <LyingRulesGhostPage onBack={() => setShowLyingGhost(false)} />
       )}
+      {showTeamBuilding && (
+        <T13TeamBuildingPage onBack={() => setShowTeamBuilding(false)} />
+      )}
       <div className="scroll-container hide-scrollbar">
         <T13Header />
 
@@ -64724,6 +70745,8 @@ const T13Page = ({
                     setShowTaibai(true);
                   } else if (item.title === "谁在说谎" || item.title.includes("说谎")) {
                     setShowLyingGhost(true);
+                  } else if (item.title === "团建活动" || item.title.includes("团建") || item.title === "画猜游戏") {
+                    setShowTeamBuilding(true);
                   }
                 }}
               >
