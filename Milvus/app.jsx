@@ -83650,7 +83650,7 @@ ${commentsContext}
 };
 
 
-// ==================== 心纸居（放置小人互动空间）主组件 · 多形态立绘与IndexedDB持久化版 ====================
+// ==================== 心纸居（放置小人互动空间）主组件 · AI研墨写信与历史信函集版 ====================
 const HeartPaperMansion = ({ onClose, chats = [] }) => {
   const { useState, useEffect, useRef } = React;
 
@@ -83659,7 +83659,10 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
   const [showRosterModal, setShowRosterModal] = useState(false);
   const [showDrawer, setShowDrawer] = useState(false);
   const [showLetterModal, setShowLetterModal] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [activeLetter, setActiveLetter] = useState(null);
+  const [lettersHistory, setLettersHistory] = useState([]);
+  const [isGeneratingLetter, setIsGeneratingLetter] = useState(false);
   const [particles, setParticles] = useState([]);
   const [hasNewLetter, setHasNewLetter] = useState(true);
   const [rosterSearch, setRosterSearch] = useState('');
@@ -83690,19 +83693,25 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     { x: 68, y: 76 }
   ];
 
-  // 挂机心纸便签信件池
-  const letterPool = [
+  // 初始默认信件
+  const defaultInitialLetters = [
     {
-      title: "【心纸手记 · 晴岚】",
+      id: "letter_init_1",
       sender: "心纸居分身侍从",
+      title: "【心纸手记 · 晴岚】",
       date: "今日 申时",
-      text: "致楼主：\n今日府邸春光正好，屏风旁的桃花开得极盛。分身名士们方才在案头烹了香茗，楼中一切安泰，静候楼主常归。"
+      text: "致楼主：\n今日府邸春光正好，屏风旁的桃花开得极盛。分身名士们方才在案头烹了香茗，楼中一切安泰，静候楼主常归。",
+      createdAt: Date.now() - 3600000,
+      isAIGenerated: false
     },
     {
-      title: "【暗卫巡视密签】",
+      id: "letter_init_2",
       sender: "巡邸小影",
+      title: "【暗卫巡视密签】",
       date: "今日 巳时",
-      text: "致楼主：\n方圆五里已巡查完毕，未见宵小。唯见庭前池水清冽，偶有锦鲤跃水。特摘案前青梅一枚，置于心意匣中，楼主得空可尝。"
+      text: "致楼主：\n方圆五里已巡查完毕，未见宵小。唯见庭前池水清冽，偶有锦鲤跃水。特摘案前青梅一枚，置于心意匣中，楼主得空可尝。",
+      createdAt: Date.now() - 7200000,
+      isAIGenerated: false
     }
   ];
 
@@ -83746,7 +83755,6 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
             setCustomSpritesMap(val);
             return;
           }
-          // 兜底读取 localStorage
           readFallbackLocalStorage();
         };
         req.onerror = () => readFallbackLocalStorage();
@@ -83770,7 +83778,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     } catch (e) {}
   };
 
-  // 2. 保存多形态立绘库至 IndexedDB (无大小配额限制)
+  // 保存多形态立绘库至 IndexedDB
   const saveSpritesToIndexedDB = async (newMap) => {
     try {
       if (window.openDB && window.STORES) {
@@ -83782,18 +83790,64 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     } catch (e) {
       console.warn("保存心纸居立绘库至 IndexedDB 失败:", e);
     }
-    // 冗余一份到 localStorage (若未超限)
     try {
       localStorage.setItem("t8_mansion_custom_avatars", JSON.stringify(newMap));
     } catch (e) {}
+  };
+
+  // 2. 从 IndexedDB 读取历史信件库
+  const loadLettersFromIndexedDB = async () => {
+    try {
+      if (window.openDB && window.STORES) {
+        const db = await window.openDB();
+        const tx = db.transaction(window.STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(window.STORES.USER_SETTINGS);
+        const req = store.get("mansion_letters_history");
+        req.onsuccess = () => {
+          const val = req.result?.value;
+          if (Array.isArray(val) && val.length > 0) {
+            setLettersHistory(val);
+            setActiveLetter(val[0]);
+            return;
+          }
+          setLettersHistory(defaultInitialLetters);
+          setActiveLetter(defaultInitialLetters[0]);
+        };
+        req.onerror = () => {
+          setLettersHistory(defaultInitialLetters);
+          setActiveLetter(defaultInitialLetters[0]);
+        };
+      } else {
+        setLettersHistory(defaultInitialLetters);
+        setActiveLetter(defaultInitialLetters[0]);
+      }
+    } catch (e) {
+      setLettersHistory(defaultInitialLetters);
+      setActiveLetter(defaultInitialLetters[0]);
+    }
+  };
+
+  // 保存历史信件库至 IndexedDB
+  const saveLettersToIndexedDB = async (newList) => {
+    try {
+      if (window.openDB && window.STORES) {
+        const db = await window.openDB();
+        const tx = db.transaction(window.STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(window.STORES.USER_SETTINGS);
+        store.put({ key: "mansion_letters_history", value: newList });
+      }
+    } catch (e) {
+      console.warn("保存历史信件至 IndexedDB 失败:", e);
+    }
   };
 
   // 初始化进入动画与加载持久化数据
   useEffect(() => {
     const timer = setTimeout(() => setAnimState('active'), 450);
 
-    // 加载多形态立绘库
+    // 加载多形态立绘库与历史信件
     loadSpritesFromIndexedDB();
+    loadLettersFromIndexedDB();
 
     // 加载当前激活入驻的名士 ID 列表 (上限 5 人)
     try {
@@ -83866,7 +83920,6 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
 
       const spritesList = customSpritesMap[charId] || [];
       const resolvedImg = resolvedAvatars[charId];
-      // 随机抽取一个初始形态
       const currentSprite = spritesList.length > 0
         ? (existing?.image && spritesList.includes(existing.image) ? existing.image : spritesList[Math.floor(Math.random() * spritesList.length)])
         : (resolvedImg || (typeof chatData.avatar === "string" && chatData.avatar.startsWith("data:") ? chatData.avatar : null) || (idx % 2 === 0 ? "graph/player-1.png" : "graph/player-2.png"));
@@ -83965,7 +84018,6 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
         newBase64s.push(event.target.result);
         loadedCount++;
         if (loadedCount === fileList.length) {
-          // 全部读取完成，追加到该名士的形态列表
           setCustomSpritesMap(prev => {
             const existing = prev[charId] || [];
             const updatedList = [...existing, ...newBase64s];
@@ -84002,7 +84054,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     });
   };
 
-  // 自动漫游定时器 (FSM Wander Loop - 漫游或原地动作时随机切换小人形态)
+  // 自动漫游定时器 (FSM Wander Loop)
   useEffect(() => {
     const wanderInterval = setInterval(() => {
       setCharacters(prevChars => {
@@ -84011,14 +84063,12 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
             return char;
           }
 
-          // 如果该角色有多个形态，随机切换一个立绘形态！
           const spritesList = customSpritesMap[char.id] || [];
           let chosenImg = char.image;
           if (spritesList.length > 1) {
             chosenImg = spritesList[Math.floor(Math.random() * spritesList.length)];
           }
 
-          // 25% 概率原地停步并冒出轻量思考表情
           if (Math.random() < 0.25) {
             const thoughts = ["💭", "🌸", "✨", "🐟", "💤", "🍵", "📜", "🦋"];
             const randomThought = thoughts[Math.floor(Math.random() * thoughts.length)];
@@ -84030,7 +84080,6 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
             };
           }
 
-          // 决定新的目标点
           let nextTargetX, nextTargetY;
           if (Math.random() < 0.35) {
             const spot = anchorSpots[Math.floor(Math.random() * anchorSpots.length)];
@@ -84092,10 +84141,8 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
           };
         });
 
-        // 碰撞检测逻辑
         const now = Date.now();
         if (updated.length >= 2) {
-          // 1. 若为【自主模式】：触发大模型 AI 剧情对白
           if (mansionMode === 'auto' && now - lastEncounterRef.current > 26000 && !aiBusyRef.current) {
             for (let i = 0; i < updated.length; i++) {
               for (let j = i + 1; j < updated.length; j++) {
@@ -84114,9 +84161,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
                 }
               }
             }
-          }
-          // 2. 若为【休闲模式】：仅作轻量相遇停留并冒轻表情
-          else if (mansionMode === 'casual' && now - lastEncounterRef.current > 12000) {
+          } else if (mansionMode === 'casual' && now - lastEncounterRef.current > 12000) {
             for (let i = 0; i < updated.length; i++) {
               for (let j = i + 1; j < updated.length; j++) {
                 const c1 = updated[i];
@@ -84168,7 +84213,6 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
       details.push(`核心人设Prompt：${directPersona}`);
     }
 
-    // 读取专属长篇设定文档
     let docContext = "";
     if (window.characterDocStore && d.id) {
       try {
@@ -84176,19 +84220,19 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
       } catch (e) {}
     }
 
-    // 读取近期与用户的聊天历史
     let recentChatSnippet = "";
     if (window.chatHistoryStore && d.id) {
       try {
-        const res = await window.chatHistoryStore.getMessages(d.id, 1, 8);
+        const res = await window.chatHistoryStore.getMessages(d.id, 1, 10);
         const msgs = res && res.messages ? res.messages : Array.isArray(res) ? res : [];
         if (msgs.length > 0) {
-          recentChatSnippet = msgs.slice(-6).map(m => `[${m.isMe ? "用户" : d.name}]: ${m.text || m.content || ""}`).join("\n");
+          recentChatSnippet = msgs.slice(-8).map(m => `[${m.isMe ? "用户" : d.name}]: ${m.text || m.content || ""}`).join("\n");
         }
       } catch (e) {}
     }
 
     return {
+      id: d.id,
       name: d.name || charObj.name,
       personaDesc: details.join("；"),
       docContext: docContext ? `【专属长篇设定】：${docContext.slice(0, 300)}` : "",
@@ -84208,7 +84252,6 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     }));
 
     try {
-      // 1. 读取用户选定的身份设定 (从身份配置库)
       let userPersona = { name: "楼主", gender: "未知", personality: "心纸居之主" };
       try {
         const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
@@ -84218,7 +84261,6 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
         else if (savedPersonas.length > 0) userPersona = savedPersonas[0];
       } catch (e) {}
 
-      // 2. 读取全局开启的世界书条目 (从设置-世界书设置)
       let worldBookContext = "";
       try {
         if (window.worldBookStore) {
@@ -84232,10 +84274,8 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
         }
       } catch (e) {}
 
-      // 3. 构建双方名士的详尽设定
       const p1 = await buildComprehensiveCharacterPersona(c1);
       const p2 = await buildComprehensiveCharacterPersona(c2);
-
       const roomCoPresenceNames = allChars.map(c => c.name).join("、");
 
       const prompt = `【心纸居名士分身偶遇互动生成】
@@ -84335,6 +84375,169 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
     }, 5500);
   };
 
+  // ==================== AI 智能研墨写信逻辑 ====================
+  const generateAILetter = async () => {
+    if (isGeneratingLetter) return;
+    setIsGeneratingLetter(true);
+
+    try {
+      // 1. 选取空间内已布置的名士中的随机一位
+      const currentActiveChars = characters.filter(c => activeCharIds.includes(c.id));
+      const pool = currentActiveChars.length > 0 ? currentActiveChars : characters.length > 0 ? characters : (chats || []);
+      const picked = pool.length > 0 ? pool[Math.floor(Math.random() * pool.length)] : null;
+      
+      const charObj = picked ? (picked.chatData ? picked : { id: picked.id, name: picked.name, chatData: picked }) : {
+        id: "guest_default_1",
+        name: "心纸侍从",
+        chatData: { name: "心纸侍从", personality: "温润忠诚，细心体贴", desc: "心纸居分身侍从" }
+      };
+
+      // 2. 读取用户身份设定
+      let userPersona = { name: "楼主", gender: "未知", personality: "心纸居之主" };
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activePersonaId = localStorage.getItem("active_persona_id") || localStorage.getItem("active_user_persona_id");
+        const active = savedPersonas.find(p => String(p.id) === String(activePersonaId));
+        if (active) userPersona = active;
+        else if (savedPersonas.length > 0) userPersona = savedPersonas[0];
+      } catch (e) {}
+
+      // 3. 读取世界书背景
+      let worldBookContext = "";
+      try {
+        if (window.worldBookStore) {
+          const wbData = await window.worldBookStore.getData();
+          if (wbData && Array.isArray(wbData.books)) {
+            const activeBooks = wbData.books.filter(b => b.enable !== false && b.enabled !== false && b.enable);
+            if (activeBooks.length > 0) {
+              worldBookContext = activeBooks.map(b => `【世界设定 · ${b.title}】：${b.content}`).join("\n");
+            }
+          }
+        }
+      } catch (e) {}
+
+      // 4. 读取名士人设与近期聊天历史
+      const persona = await buildComprehensiveCharacterPersona(charObj);
+
+      const prompt = `【心纸居名士真情飞信生成】
+场景说明：当前是在府邸的私密静憩空间【心纸居】中，名士【${persona.name}】正在为心纸居的主人【${userPersona.name}】亲笔研墨书写一封心纸短笺/飞信。
+
+收信人（用户身份）：【${userPersona.name}】（${userPersona.gender || "未知"}，设定：${userPersona.personality || userPersona.persona || "楼主"}）。
+
+${worldBookContext ? `【当前生效的世界设定】：\n${worldBookContext.slice(0, 500)}\n` : ""}
+
+执笔名士：【${persona.name}】
+- 角色库设定：${persona.personaDesc || "传讯名士"}
+${persona.docContext ? `${persona.docContext}\n` : ""}
+${persona.recentChat ? `${persona.recentChat}\n` : ""}
+
+【书信撰写要求】：
+1. 必须完全使用【${persona.name}】在角色配置库中的第一人称口吻与性格（傲娇/清冷/深情/温润/豪爽/风趣等）。
+2. 内容请根据角色性格自由抒怀，可以是：
+   - 巧妙呼应近期与【${userPersona.name}】的聊天互动、某句对话或共同经历；
+   - 抒发对楼主的牵挂、思念与真情实感；
+   - 分享在心纸居或居外的闲情雅趣、见闻随笔（如烹茶、赏花、听雨、巡查、偶得好物等）。
+3. 篇幅精炼优美（120~220字左右），段落清晰，自然带有古典书信或便笺的韵致。
+4. 抬头称呼请符合人设（如“楼主”、“兄长”、“某某”或亲昵称谓），落款必须是【${persona.name}】。
+
+请严格仅返回纯 JSON 格式：
+{
+  "title": "【信件雅致标题，如：心纸短笺·夜阑 / 案前梅信 / 烹茶闲话】",
+  "sender": "${persona.name}",
+  "date": "今日 亥时",
+  "text": "信件正文内容..."
+}`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是一位精准沉浸的角色扮演大师，擅长以各个角色的专属性格与口吻书写充满真情实感与聊天呼应的精致信纸飞信。请严格输出纯 JSON 格式。" },
+            { role: "user", content: prompt }
+          ],
+          { temperature: 0.88 },
+          (response) => {
+            try {
+              let cleaned = response.trim();
+              if (cleaned.startsWith("```json")) cleaned = cleaned.replace(/^```json/, "").replace(/```$/, "");
+              else if (cleaned.startsWith("```")) cleaned = cleaned.replace(/^```/, "").replace(/```$/, "");
+              const parsed = JSON.parse(cleaned.trim());
+
+              if (parsed.title && parsed.text) {
+                const newLetter = {
+                  id: `letter_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                  charId: charObj.id,
+                  sender: parsed.sender || persona.name,
+                  title: parsed.title,
+                  date: parsed.date || "今日 此时",
+                  text: parsed.text,
+                  createdAt: Date.now(),
+                  isAIGenerated: true
+                };
+
+                setLettersHistory(prev => {
+                  const updated = [newLetter, ...prev];
+                  saveLettersToIndexedDB(updated);
+                  return updated;
+                });
+                setActiveLetter(newLetter);
+                setIsGeneratingLetter(false);
+                setHasNewLetter(true);
+                return;
+              }
+            } catch (e) {
+              console.warn("解析 AI 研墨信件失败，使用人设兜底:", e);
+            }
+            fallbackLetter(charObj, userPersona);
+          },
+          (err) => {
+            console.warn("AI 研墨写信接口异常，使用人设兜底:", err);
+            fallbackLetter(charObj, userPersona);
+          }
+        );
+      } else {
+        fallbackLetter(charObj, userPersona);
+      }
+    } catch (e) {
+      console.warn("生成信件异常:", e);
+      setIsGeneratingLetter(false);
+    }
+  };
+
+  const fallbackLetter = (charObj, userPersona) => {
+    const name = charObj.name || "名士";
+    const newLetter = {
+      id: `letter_${Date.now()}`,
+      charId: charObj.id,
+      sender: name,
+      title: `【心纸短笺 · ${name}】`,
+      date: "今日 戌时",
+      text: `致${userPersona.name}：\n案前春水初烹，忽闻庭前落花之声，便提笔为你裁下这纸素笺。居中一切安稳，诸位名士皆在。若得空闲，不妨多来心纸居坐坐，我随时都在此候你。\n\n—— ${name} 顿首`,
+      createdAt: Date.now(),
+      isAIGenerated: false
+    };
+
+    setLettersHistory(prev => {
+      const updated = [newLetter, ...prev];
+      saveLettersToIndexedDB(updated);
+      return updated;
+    });
+    setActiveLetter(newLetter);
+    setIsGeneratingLetter(false);
+  };
+
+  // 删除单封历史信件
+  const handleDeleteHistoryLetter = (letterId) => {
+    if (!confirm("确定要销毁这封心纸信笺吗？")) return;
+    setLettersHistory(prev => {
+      const updated = prev.filter(l => l.id !== letterId);
+      saveLettersToIndexedDB(updated);
+      if (activeLetter && activeLetter.id === letterId) {
+        setActiveLetter(updated.length > 0 ? updated[0] : null);
+      }
+      return updated;
+    });
+  };
+
   // 手势按下 (PointerDown)
   const handlePointerDown = (charId, e) => {
     e.preventDefault();
@@ -84350,7 +84553,6 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
       hasMoved: false
     };
 
-    // 如果有多个形态，悬空时可随机换一个生动形态
     const spritesList = customSpritesMap[charId] || [];
     let chosenImg = undefined;
     if (spritesList.length > 1) {
@@ -84447,7 +84649,6 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
     ];
     const reply = (d.personality ? `（${d.personality.slice(0, 10)}）` : "") + defaultReplies[Math.floor(Math.random() * defaultReplies.length)];
 
-    // 戳弄时也可以随机换个形态
     const spritesList = customSpritesMap[charId] || [];
     let chosenImg = charObj.image;
     if (spritesList.length > 1) {
@@ -84510,8 +84711,9 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
 
   // 打开心纸信件
   const handleOpenLetter = () => {
-    const letter = letterPool[Math.floor(Math.random() * letterPool.length)];
-    setActiveLetter(letter);
+    if (lettersHistory.length > 0 && !activeLetter) {
+      setActiveLetter(lettersHistory[0]);
+    }
     setShowLetterModal(true);
     setHasNewLetter(false);
   };
@@ -84540,7 +84742,7 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
       onChange: handleFilesSelected
     }),
 
-    // 顶部轻盈浅色高透玻璃导航栏 (精致对称布局)
+    // 顶部轻盈浅色高透玻璃导航栏
     React.createElement(
       "div",
       {
@@ -84605,7 +84807,7 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
         React.createElement("span", { style: { color: "#d6a86e", fontSize: "11px", marginLeft: "2px" } }, "❖")
       ),
 
-      // 右侧：紧凑双层操作区 (上排: 模式+名士，下排: 信笺+礼物)
+      // 右侧：紧凑双层操作区
       React.createElement(
         "div",
         {
@@ -84620,7 +84822,7 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
         React.createElement(
           "div",
           { style: { display: "flex", alignItems: "center", gap: "5px" } },
-          // 小巧模式切换胶囊
+          // 模式切换胶囊
           React.createElement(
             "div",
             {
@@ -84675,7 +84877,7 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
               "✨自主"
             )
           ),
-          // 选择/调度名士按钮
+          // 调度名士按钮
           React.createElement(
             "button",
             {
@@ -84815,7 +85017,7 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
         }
       }),
 
-      // 角色实体渲染 (1~5 名士分身，支持多形态随机呈现)
+      // 角色实体渲染
       characters.map(char => {
         const zIndex = Math.floor(char.y) + 15;
         const isHeld = char.state === "HELD";
@@ -84873,7 +85075,7 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
             }
           }),
 
-          // Q版立绘图片 / 头像圆形徽章 (多形态无缝过渡)
+          // Q版立绘图片 / 头像圆形徽章
           char.image ? React.createElement("img", {
             src: char.image,
             alt: char.name,
@@ -85144,11 +85346,10 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
                   )
                 ),
 
-                // 右侧：操作按钮群 (形态库管理 + 入驻切换)
+                // 右侧：操作按钮群
                 React.createElement(
                   "div",
                   { style: { display: "flex", alignItems: "center", gap: "5px" } },
-                  // 查看/管理形态库
                   React.createElement(
                     "button",
                     {
@@ -85166,7 +85367,6 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
                     },
                     spritesList.length > 0 ? `🎨 形态(${spritesList.length})` : "🎨 添加形态"
                   ),
-                  // 入驻/歇息按钮
                   React.createElement(
                     "button",
                     {
@@ -85286,7 +85486,6 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
                       { style: { fontSize: "9px", color: "#9c8065", marginTop: "2px" } },
                       `形态 ${sIdx + 1}`
                     ),
-                    // 单个形态删除按钮
                     React.createElement(
                       "button",
                       {
@@ -85411,20 +85610,22 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
       )
     ),
 
-    // 心纸飞信查阅弹窗 (Letter Modal)
+    // ==================== 心纸飞信查阅弹窗 (Letter Modal · 支持AI写信与历史来信) ====================
     showLetterModal && activeLetter && React.createElement(
       "div",
       {
         style: {
           position: "fixed",
           inset: 0,
-          background: "rgba(0,0,0,0.65)",
-          backdropFilter: "blur(8px)",
+          background: "rgba(0,0,0,0.68)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          padding: "20px",
-          zIndex: 1200
+          padding: "16px",
+          zIndex: 1200,
+          animation: "fadeIn 0.25s ease-out"
         },
         onClick: () => setShowLetterModal(false)
       },
@@ -85433,56 +85634,427 @@ ${p2.recentChat ? `${p2.recentChat}\n` : ""}
         {
           style: {
             width: "100%",
-            maxWidth: "360px",
-            background: "linear-gradient(180deg, #fbf7ee 0%, #f3ebd8 100%)",
+            maxWidth: "380px",
+            background: "linear-gradient(180deg, #fdf8ee 0%, #f6ebd8 100%)",
             border: "2px solid #d6a86e",
-            borderRadius: "20px",
-            padding: "24px",
-            boxShadow: "0 12px 40px rgba(0,0,0,0.4)",
+            borderRadius: "22px",
+            padding: "20px 22px",
+            boxShadow: "0 16px 48px rgba(0,0,0,0.45)",
             position: "relative",
-            animation: "bubblePop 0.3s ease-out"
+            animation: "bubblePop 0.3s ease-out",
+            display: "flex",
+            flexDirection: "column",
+            maxHeight: "88vh"
           },
           onClick: (e) => e.stopPropagation()
         },
-        React.createElement("div", { style: { fontSize: "16px", fontWeight: "bold", color: "#6b4a28", marginBottom: "8px", textAlign: "center" } }, activeLetter.title),
-        React.createElement(
-          "div",
-          { style: { display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#a1876c", marginBottom: "14px", borderBottom: "1px dashed #d6b88d", paddingBottom: "6px" } },
-          React.createElement("span", null, "寄信人：" + activeLetter.sender),
-          React.createElement("span", null, activeLetter.date)
-        ),
+        // 信纸顶部导航操作栏 (左上历史来信，右上循环研墨写信 + 关闭)
         React.createElement(
           "div",
           {
             style: {
-              fontSize: "13px",
-              color: "#523b24",
-              lineHeight: "1.8",
-              whiteSpace: "pre-line",
-              marginBottom: "20px",
-              fontFamily: "'Zhi Mang Xing', cursive, sans-serif"
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "12px",
+              paddingBottom: "10px",
+              borderBottom: "1px solid rgba(214, 168, 110, 0.45)"
             }
           },
-          activeLetter.text
+          // 左上角：历史信件图标按钮
+          React.createElement(
+            "button",
+            {
+              onClick: () => setShowHistoryModal(true),
+              title: "查看心纸历史信函集",
+              style: {
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                background: "rgba(255, 255, 255, 0.75)",
+                border: "1px solid #d6b88d",
+                borderRadius: "12px",
+                padding: "3.5px 9px",
+                color: "#6b4a28",
+                fontSize: "11px",
+                fontWeight: "600",
+                cursor: "pointer",
+                boxShadow: "0 1px 4px rgba(100, 60, 20, 0.05)",
+                transition: "all 0.2s"
+              }
+            },
+            React.createElement("span", { style: { fontSize: "12px" } }, "📖"),
+            "历史来信",
+            lettersHistory.length > 0 && React.createElement(
+              "span",
+              { style: { fontSize: "9px", background: "#d6724b", color: "#fff", padding: "0 4px", borderRadius: "8px", fontWeight: "bold" } },
+              lettersHistory.length
+            )
+          ),
+
+          // 中间：雅致微徽章
+          React.createElement(
+            "div",
+            { style: { fontSize: "12px", color: "#a8865f", letterSpacing: "2px", fontWeight: "600" } },
+            "❖ 心纸密笺 ❖"
+          ),
+
+          // 右上角：循环研墨写信按钮 + 关闭按钮
+          React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "6px" } },
+            // 循环AI写信按钮
+            React.createElement(
+              "button",
+              {
+                onClick: generateAILetter,
+                disabled: isGeneratingLetter,
+                title: "让空间内名士以其性格口吻，结合近期聊天与世界书研墨书写新信件",
+                style: {
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  background: isGeneratingLetter ? "#ebd8bf" : "linear-gradient(135deg, #d6724b 0%, #b85832 100%)",
+                  border: "none",
+                  borderRadius: "12px",
+                  padding: "3.5px 9px",
+                  color: "#fff",
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  cursor: isGeneratingLetter ? "not-allowed" : "pointer",
+                  boxShadow: isGeneratingLetter ? "none" : "0 2px 6px rgba(214, 114, 75, 0.35)",
+                  transition: "all 0.2s"
+                }
+              },
+              React.createElement(
+                "span",
+                {
+                  style: {
+                    display: "inline-block",
+                    fontSize: "12px",
+                    animation: isGeneratingLetter ? "spin 1s linear infinite" : "none"
+                  }
+                },
+                "🔄"
+              ),
+              isGeneratingLetter ? "研墨中..." : "研墨飞信"
+            ),
+            // 关闭按钮
+            React.createElement(
+              "button",
+              {
+                onClick: () => setShowLetterModal(false),
+                style: {
+                  background: "rgba(0,0,0,0.06)",
+                  border: "none",
+                  borderRadius: "50%",
+                  width: "24px",
+                  height: "24px",
+                  fontSize: "12px",
+                  color: "#6b4a28",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }
+              },
+              "✕"
+            )
+          )
         ),
+
+        // 信纸核心正文区
+        isGeneratingLetter ? React.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "40px 10px",
+              minHeight: "180px",
+              gap: "12px"
+            }
+          },
+          React.createElement("div", { style: { fontSize: "32px", animation: "spin 2s ease-in-out infinite" } }, "📜"),
+          React.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", color: "#6b4a28" } }, "名士正在案前提笔研墨..."),
+          React.createElement("div", { style: { fontSize: "11px", color: "#9c8065", textAlign: "center", maxWidth: "240px", lineHeight: "1.6" } }, "读取空间名士设定、聊天记忆与世界书设定，挥毫书就真情短笺")
+        ) : React.createElement(
+          "div",
+          { style: { flex: 1, overflowY: "auto", paddingRight: "4px" } },
+          // 标题
+          React.createElement("div", {
+            style: {
+              fontSize: "15px",
+              fontWeight: "bold",
+              color: "#5d442a",
+              marginBottom: "8px",
+              textAlign: "center",
+              letterSpacing: "1px"
+            }
+          }, activeLetter.title),
+          // 寄信人与日期
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                fontSize: "11px",
+                color: "#9c8065",
+                marginBottom: "14px",
+                borderBottom: "1px dashed #d6b88d",
+                paddingBottom: "6px"
+              }
+            },
+            React.createElement("span", { style: { fontWeight: "600" } }, "寄信人：" + activeLetter.sender),
+            React.createElement("span", null, activeLetter.date)
+          ),
+          // 信件内容
+          React.createElement(
+            "div",
+            {
+              style: {
+                fontSize: "13.5px",
+                color: "#4a3520",
+                lineHeight: "1.85",
+                whiteSpace: "pre-line",
+                marginBottom: "16px",
+                fontFamily: "'Zhi Mang Xing', cursive, serif, sans-serif",
+                textIndent: "1.5em",
+                letterSpacing: "0.5px"
+              }
+            },
+            activeLetter.text
+          )
+        ),
+
+        // 底部关闭/收下按钮
         React.createElement(
           "button",
           {
             onClick: () => setShowLetterModal(false),
             style: {
               width: "100%",
-              padding: "10px",
+              padding: "9px",
+              marginTop: "8px",
               borderRadius: "12px",
-              background: "linear-gradient(135deg, #d6724b, #b85832)",
+              background: "linear-gradient(135deg, #d6724b 0%, #b85832 100%)",
               border: "none",
               color: "#fff",
-              fontSize: "13px",
+              fontSize: "12.5px",
               fontWeight: "bold",
               cursor: "pointer",
-              boxShadow: "0 4px 12px rgba(214, 114, 75, 0.3)"
+              boxShadow: "0 4px 12px rgba(214, 114, 75, 0.3)",
+              transition: "all 0.2s"
             }
           },
           "收下心意 · 阖上信笺"
+        )
+      )
+    ),
+
+    // ==================== 心纸来信阁 · 历史信函集抽屉 (History Modal) ====================
+    showHistoryModal && React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.65)",
+          backdropFilter: "blur(10px)",
+          WebkitBackdropFilter: "blur(10px)",
+          display: "flex",
+          flexDirection: "column",
+          justifyContent: "flex-end",
+          zIndex: 1300,
+          animation: "fadeIn 0.25s ease-out"
+        },
+        onClick: () => setShowHistoryModal(false)
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            background: "linear-gradient(180deg, #faf6ee 0%, #f3ebd8 100%)",
+            borderTopLeftRadius: "24px",
+            borderTopRightRadius: "24px",
+            maxHeight: "82vh",
+            display: "flex",
+            flexDirection: "column",
+            borderTop: "2px solid #d6a86e",
+            boxShadow: "0 -10px 40px rgba(0, 0, 0, 0.45)",
+            overflow: "hidden"
+          },
+          onClick: (e) => e.stopPropagation()
+        },
+        // 抽屉头部
+        React.createElement(
+          "div",
+          {
+            style: {
+              padding: "14px 18px",
+              borderBottom: "1px solid #ebd8bf",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }
+          },
+          React.createElement(
+            "div",
+            null,
+            React.createElement(
+              "div",
+              { style: { fontSize: "15px", fontWeight: "bold", color: "#5d442a", display: "flex", alignItems: "center", gap: "6px" } },
+              "📖 心纸来信阁 · 历史信函",
+              React.createElement(
+                "span",
+                { style: { fontSize: "11px", background: "#d6724b", color: "#fff", padding: "1px 7px", borderRadius: "10px", fontWeight: "bold" } },
+                `共 ${lettersHistory.length} 封`
+              )
+            ),
+            React.createElement("div", { style: { fontSize: "11px", color: "#9c8065", marginTop: "2px" } }, "收录名士们亲笔写给楼主的所有真情短笺")
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => setShowHistoryModal(false),
+              style: {
+                background: "rgba(0,0,0,0.06)",
+                border: "none",
+                borderRadius: "50%",
+                width: "28px",
+                height: "28px",
+                fontSize: "14px",
+                color: "#6b4a28",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }
+            },
+            "✕"
+          )
+        ),
+
+        // 历史信函列表
+        React.createElement(
+          "div",
+          {
+            style: {
+              flex: 1,
+              overflowY: "auto",
+              padding: "14px 18px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              maxHeight: "56vh"
+            }
+          },
+          lettersHistory.length === 0 ? React.createElement(
+            "div",
+            { style: { textAlign: "center", padding: "40px 10px", color: "#a89078", fontSize: "12px" } },
+            "阁中暂无历史来信，点击信纸右上角「🔄 研墨飞信」即可邀请名士写信~"
+          ) : lettersHistory.map(letter => {
+            const isCurrent = activeLetter && activeLetter.id === letter.id;
+            return React.createElement(
+              "div",
+              {
+                key: letter.id,
+                style: {
+                  background: isCurrent ? "linear-gradient(135deg, #fff 0%, #fdf8ee 100%)" : "#fff",
+                  border: isCurrent ? "1.5px solid #d6a86e" : "1px solid #ebd8bf",
+                  borderRadius: "14px",
+                  padding: "12px 14px",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  boxShadow: isCurrent ? "0 4px 12px rgba(214, 168, 110, 0.2)" : "0 2px 6px rgba(0,0,0,0.03)",
+                  transition: "all 0.2s",
+                  cursor: "pointer"
+                },
+                onClick: () => {
+                  setActiveLetter(letter);
+                  setShowHistoryModal(false);
+                }
+              },
+              // 信件头部
+              React.createElement(
+                "div",
+                { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                  React.createElement("span", { style: { fontSize: "13px", fontWeight: "bold", color: "#5d442a" } }, letter.title),
+                  isCurrent && React.createElement(
+                    "span",
+                    { style: { fontSize: "9px", background: "#fbeae3", color: "#d6724b", padding: "1px 5px", borderRadius: "6px", fontWeight: "bold" } },
+                    "正在查阅"
+                  )
+                ),
+                React.createElement("span", { style: { fontSize: "10.5px", color: "#9c8065" } }, letter.date)
+              ),
+              // 寄信人与摘要
+              React.createElement(
+                "div",
+                { style: { fontSize: "11px", color: "#7a5f45", lineHeight: "1.5", overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" } },
+                `【${letter.sender}】：${letter.text.replace(/\n/g, ' ')}`
+              ),
+              // 底部操作行
+              React.createElement(
+                "div",
+                { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "4px", paddingTop: "4px", borderTop: "1px dashed #f0e2cf" } },
+                React.createElement(
+                  "span",
+                  { style: { fontSize: "10px", color: "#b89572" } },
+                  letter.isAIGenerated ? "✨ AI 智能研墨写就" : "📜 心纸珍藏信笺"
+                ),
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", gap: "8px" } },
+                  React.createElement(
+                    "button",
+                    {
+                      onClick: (e) => {
+                        e.stopPropagation();
+                        setActiveLetter(letter);
+                        setShowHistoryModal(false);
+                      },
+                      style: {
+                        background: "none",
+                        border: "none",
+                        color: "#d6724b",
+                        fontSize: "11px",
+                        fontWeight: "bold",
+                        cursor: "pointer"
+                      }
+                    },
+                    "展开阅读 ›"
+                  ),
+                  React.createElement(
+                    "button",
+                    {
+                      onClick: (e) => {
+                        e.stopPropagation();
+                        handleDeleteHistoryLetter(letter.id);
+                      },
+                      style: {
+                        background: "none",
+                        border: "none",
+                        color: "#a89078",
+                        fontSize: "11px",
+                        cursor: "pointer"
+                      },
+                      title: "销毁此信"
+                    },
+                    "删除"
+                  )
+                )
+              )
+            );
+          })
         )
       )
     )
