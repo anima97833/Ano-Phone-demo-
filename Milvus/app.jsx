@@ -76011,9 +76011,6 @@ const GroupChatSettingsModal = ({
   const [showMemoryDropdown, setShowMemoryDropdown] = React.useState(false);
   const [showModelParams, setShowModelParams] = React.useState(false);
   const [showModelParamHelp, setShowModelParamHelp] = React.useState(false);
-  const [isGeneratingMoment, setIsGeneratingMoment] = React.useState(false);
-  const [isGeneratingMoment, setIsGeneratingMoment] = React.useState(false);
-  const [showModelParamHelp, setShowModelParamHelp] = React.useState(false);
   React.useEffect(() => {
     try {
       const savedMem = JSON.parse(
