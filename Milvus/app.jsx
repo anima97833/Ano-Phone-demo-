@@ -75986,6 +75986,1954 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
 };
 
 // [修改] 群聊设置组件：增加群公告、昵称、退出群聊
+// ==================== 群聊 · 线下剧情模式全景场景组件 (GroupOfflinePlotScene) ====================
+const GroupOfflinePlotScene = ({
+  isOpen,
+  onClose,
+  chatData,
+  messages = [],
+  onSendMessage,
+  onTriggerAI,
+  isTyping = false,
+  settings = {},
+  onUpdateSettings
+}) => {
+  const { useState, useEffect, useRef, useMemo } = React;
+
+  // 1. 槽位坐标规划（主讲席 + 6 席位），精准下移沉降贴合地面与茶案，加大左右纵向与横向间距
+  const SLOTS_CONFIG = [
+    { id: "stageHost", role: "host", label: "主讲人", top: 61, left: 50, zIndex: 10, scale: 0.88 },
+    { id: "leftTop", role: "member", index: 0, label: "左上一", top: 65, left: 11, zIndex: 20, scale: 0.92 },
+    { id: "rightTop", role: "member", index: 1, label: "右上一", top: 67, left: 86, zIndex: 20, scale: 0.92 },
+    { id: "leftMid", role: "member", index: 2, label: "左中二", top: 70, left: 7, zIndex: 21, scale: 0.98 },
+    { id: "rightMid", role: "member", index: 3, label: "右中二", top: 67, left: 93, zIndex: 21, scale: 0.98 },
+    { id: "leftBottom", role: "member", index: 4, label: "左下三", top: 77, left: 3, zIndex: 22, scale: 1.05 },
+    { id: "rightBottom", role: "member", index: 5, label: "右下三", top: 74, left: 97, zIndex: 22, scale: 1.05 },
+  ];
+
+  // 快捷动作词库
+  const QUICK_ACTIONS = [
+    "（提壶斟茶）",
+    "（轻敲案几）",
+    "（抚琴试音）",
+    "（微敛衣袂）",
+    "（摇扇浅笑）",
+    "（正色肃立）",
+    "（环视四周）",
+    "（颔首致意）",
+    "（执卷沉吟）",
+    "（端起茶盏轻吹浮沫）"
+  ];
+
+  // 状态管理
+  const [inputText, setInputText] = useState("");
+  const [isImmersive, setIsImmersive] = useState(false); // 沉浸模式（隐藏 UI）
+  const [showHistoryDrawer, setShowHistoryDrawer] = useState(false); // 历史记录抽屉
+  const [selectedCharacter, setSelectedCharacter] = useState(null); // 当前点击互动的角色 (用于长按/特定操作)
+  const [activeSpeechMap, setActiveSpeechMap] = useState({}); // 每个槽位当前保存的最新发言
+  const [unreadSpeechSlots, setUnreadSpeechSlots] = useState({}); // 每个槽位是否有未读红点
+  const [activeGalgameDialogue, setActiveGalgameDialogue] = useState(null); // 当前在顶部浅色玻璃卡片展示的发言
+  const [revealedThoughts, setRevealedThoughts] = useState({}); // 展开心声的状态
+  const [memberCustomStyles, setMemberCustomStyles] = useState({}); // 异步加载的成员自定义头像/头像框
+
+  // 立绘系统状态（心纸居互通）
+  const [customSpritesMap, setCustomSpritesMap] = useState({});
+  const [selectedSpritesMap, setSelectedSpritesMap] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("t8_offline_selected_sprites") || "{}");
+    } catch (e) {
+      return {};
+    }
+  });
+  const [spriteConfigTarget, setSpriteConfigTarget] = useState(null); // 当前正在配置立绘的角色对象
+  const fileInputRef = useRef(null);
+
+  const inputRef = useRef(null);
+  const historyListRef = useRef(null);
+
+  // 记录进入线下模式时的初始消息 ID
+  const entryMsgIdRef = useRef(0);
+  useEffect(() => {
+    if (messages && messages.length > 0) {
+      entryMsgIdRef.current = messages[messages.length - 1].id || 0;
+    } else {
+      entryMsgIdRef.current = 0;
+    }
+    setActiveSpeechMap({});
+    setUnreadSpeechSlots({});
+    setActiveGalgameDialogue(null);
+  }, [chatData?.id]);
+
+  // 用户信息
+  const userAvatar = useMemo(() => {
+    try {
+      return localStorage.getItem("t8_user_avatar") || localStorage.getItem("user_avatar") || chatData?.profile?.userAvatar || "graph/player-1.png";
+    } catch (e) {
+      return "graph/player-1.png";
+    }
+  }, [chatData]);
+
+  const userNickname = useMemo(() => {
+    return chatData?.profile?.userNickname || localStorage.getItem("t8_user_nickname") || "我";
+  }, [chatData]);
+
+  const userAvatarFrame = useMemo(() => {
+    try {
+      return localStorage.getItem("t8_user_avatar_frame") || "";
+    } catch (e) {
+      return "";
+    }
+  }, []);
+
+  // 群成员列表
+  const groupMembers = useMemo(() => {
+    const raw = chatData?.profile?.members || [];
+    return raw.filter(m => m && m.name && m.name !== userNickname && m.name !== "我");
+  }, [chatData, userNickname]);
+
+  // 获取所有角色的丰富信息
+  const [charDetailsMap, setCharDetailsMap] = useState({});
+  useEffect(() => {
+    try {
+      const savedChars = JSON.parse(localStorage.getItem("messaging_characters") || "[]");
+      const map = {};
+      savedChars.forEach(c => {
+        if (c && c.name) map[c.name] = c;
+      });
+      setCharDetailsMap(map);
+    } catch (e) {}
+  }, []);
+
+  // 读取心纸居立绘库 (IndexedDB 与 localStorage 深度互通)
+  const loadSprites = async () => {
+    try {
+      if (typeof openDB === "function") {
+        const db = await openDB();
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get("mansion_character_sprites");
+        req.onsuccess = () => {
+          const val = req.result?.value;
+          if (val && typeof val === "object") {
+            setCustomSpritesMap(val);
+            return;
+          }
+          readFallbackLocalStorage();
+        };
+        req.onerror = () => readFallbackLocalStorage();
+      } else {
+        readFallbackLocalStorage();
+      }
+    } catch (e) {
+      readFallbackLocalStorage();
+    }
+  };
+
+  const readFallbackLocalStorage = () => {
+    try {
+      const local = JSON.parse(localStorage.getItem("t8_mansion_custom_avatars") || "{}");
+      const normalized = {};
+      for (const k in local) {
+        if (Array.isArray(local[k])) normalized[k] = local[k];
+        else if (typeof local[k] === "string") normalized[k] = [local[k]];
+      }
+      setCustomSpritesMap(normalized);
+    } catch (e) {}
+  };
+
+  const saveSprites = async (newMap) => {
+    setCustomSpritesMap(newMap);
+    try {
+      if (typeof openDB === "function") {
+        const db = await openDB();
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        store.put({ key: "mansion_character_sprites", value: newMap });
+      }
+    } catch (e) {
+      console.warn("保存立绘库至 IndexedDB 失败:", e);
+    }
+    try {
+      localStorage.setItem("t8_mansion_custom_avatars", JSON.stringify(newMap));
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    loadSprites();
+  }, []);
+
+  // 异步加载群成员在单聊中的独立自定义头像与头像框 (STORES.USER_SETTINGS)
+  useEffect(() => {
+    if (!groupMembers || groupMembers.length === 0) return;
+    let isMounted = true;
+    const loadMemberStyles = async () => {
+      try {
+        if (typeof openDB !== "function") return;
+        const db = await openDB();
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const st = tx.objectStore(STORES.USER_SETTINGS);
+        const styles = {};
+        for (const member of groupMembers) {
+          if (!member) continue;
+          const memberId = member.id;
+          if (!memberId) continue;
+          const avatarKey = `role_avatar_${memberId}`;
+          const frameKey = `role_avatar_frame_${memberId}`;
+          const getVal = (k) => new Promise(res => {
+            const req = st.get(k);
+            req.onsuccess = () => res(req.result?.value);
+            req.onerror = () => res(null);
+          });
+          const av = await getVal(avatarKey);
+          const fr = await getVal(frameKey);
+          styles[member.name] = {
+            avatar: av || null,
+            frame: fr || null
+          };
+        }
+        if (isMounted) {
+          setMemberCustomStyles(styles);
+        }
+      } catch (e) {}
+    };
+    loadMemberStyles();
+    return () => { isMounted = false; };
+  }, [groupMembers]);
+
+  // 监听最新消息：收到新发言时，在对应角色头上冒出红点与微标
+  useEffect(() => {
+    if (!messages || messages.length === 0) return;
+
+    // 过滤出进入线下模式后的新消息，并排除掉纯系统通知
+    const offlineNewMsgs = messages.filter(m => {
+      if (entryMsgIdRef.current && m.id && m.id <= entryMsgIdRef.current) return false;
+      const text = m.text || "";
+      if (text.includes("加入了群聊") || text.includes("移出了群聊") || text.includes("修改群名为") || text.includes("修改你的昵称为") || m.type === "system") {
+        return false;
+      }
+      return true;
+    });
+
+    if (offlineNewMsgs.length === 0) return;
+
+    const newSpeechMap = { ...activeSpeechMap };
+    const newUnreadMap = { ...unreadSpeechSlots };
+
+    // 遍历新发言，标记对应角色的发言数据与未读红点
+    offlineNewMsgs.forEach(msg => {
+      if (msg.isMe) {
+        newSpeechMap["stageHost"] = msg;
+        newUnreadMap["stageHost"] = false;
+      } else {
+        groupMembers.forEach((member, idx) => {
+          const slot = SLOTS_CONFIG.find(s => s.role === "member" && s.index === idx);
+          if (!slot) return;
+          const senderName = msg.sender || "";
+          if (senderName && (senderName === member.name || member.name.includes(senderName) || senderName.includes(member.name))) {
+            newSpeechMap[slot.id] = msg;
+            newUnreadMap[slot.id] = true; // 亮起头顶红点
+          } else if (!senderName && idx === 0) {
+            newSpeechMap[slot.id] = msg;
+            newUnreadMap[slot.id] = true;
+          }
+        });
+      }
+    });
+
+    setActiveSpeechMap(newSpeechMap);
+    setUnreadSpeechSlots(newUnreadMap);
+
+    // 自动定位到最新一条发言的角色进行顶部浅色拟态玻璃对话框预览
+    const latest = offlineNewMsgs[offlineNewMsgs.length - 1];
+    if (latest) {
+      const isHostLatest = latest.isMe;
+      let latestMember = null;
+      let matchedSlotId = isHostLatest ? "stageHost" : null;
+
+      if (!isHostLatest) {
+        groupMembers.forEach((member, idx) => {
+          const slot = SLOTS_CONFIG.find(s => s.role === "member" && s.index === idx);
+          if (!slot) return;
+          const sName = latest.sender || "";
+          if (sName && (sName === member.name || member.name.includes(sName) || sName.includes(member.name))) {
+            latestMember = member;
+            matchedSlotId = slot.id;
+          }
+        });
+      }
+
+      if (matchedSlotId) {
+        setActiveGalgameDialogue({
+          slotId: matchedSlotId,
+          isHost: isHostLatest,
+          char: latestMember,
+          speakerName: isHostLatest ? userNickname : (latest.sender || latestMember?.name || "群成员"),
+          speech: latest
+        });
+        setUnreadSpeechSlots(prev => ({ ...prev, [matchedSlotId]: false }));
+      }
+    }
+  }, [messages, groupMembers]);
+
+  // 滚动历史抽屉至底部
+  useEffect(() => {
+    if (showHistoryDrawer && historyListRef.current) {
+      historyListRef.current.scrollTop = historyListRef.current.scrollHeight;
+    }
+  }, [showHistoryDrawer, messages]);
+
+  // 点击角色或微标：在页面上部展示该角色的浅色拟态玻璃对话框
+  const handleOpenSlotDialogue = (slotId, isHost, member) => {
+    const speech = activeSpeechMap[slotId];
+    if (speech) {
+      setActiveGalgameDialogue({
+        slotId,
+        isHost,
+        char: member,
+        speakerName: isHost ? userNickname : (speech.sender || member?.name || "群成员"),
+        speech
+      });
+      // 清除该槽位的未读红点
+      setUnreadSpeechSlots(prev => ({ ...prev, [slotId]: false }));
+    } else {
+      // 暂无发言时，打开互动菜单
+      if (isHost) {
+        setSelectedCharacter({ role: "host", name: userNickname });
+      } else if (member) {
+        setSelectedCharacter({ role: "member", name: member.name, char: member });
+      }
+    }
+  };
+
+  // 发送消息或触发 AI 回应（与普通传讯逻辑一致：有文字则发自己话不触发AI，可多条连发；输入空时点探讨触发AI）
+  const handleSendOrTrigger = () => {
+    const text = inputText.trim();
+    if (text) {
+      // 1. 发送自己的发言，不触发 AI 回应（支持多条连发）
+      if (onSendMessage) {
+        onSendMessage(text);
+      }
+      setInputText("");
+      const hostMsg = {
+        id: Date.now(),
+        text,
+        isMe: true,
+        time: (new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+      };
+      setActiveSpeechMap(prev => ({ ...prev, stageHost: hostMsg }));
+      setActiveGalgameDialogue({
+        slotId: "stageHost",
+        isHost: true,
+        speakerName: userNickname,
+        speech: hostMsg
+      });
+      if (inputRef.current) inputRef.current.focus();
+    } else {
+      // 2. 输入框为空时点击：触发名士们的回应与探讨
+      if (isTyping) return;
+      if (onTriggerAI) {
+        onTriggerAI();
+      }
+    }
+  };
+
+  // 插入快捷动作
+  const handleInsertAction = (act) => {
+    setInputText(prev => prev ? `${prev} ${act}` : act);
+    if (inputRef.current) inputRef.current.focus();
+  };
+
+  // 角色快捷动作
+  const handleCharacterAction = (type, char) => {
+    if (!char) return;
+    setSelectedCharacter(null);
+
+    if (type === "tea") {
+      handleInsertAction(`（给 ${char.name} 斟上一盏清茶）`);
+    } else if (type === "gaze") {
+      handleInsertAction(`（侧目望向 ${char.name}，神色若有所思）`);
+    } else if (type === "ask") {
+      setInputText(`@${char.name} `);
+      if (inputRef.current) inputRef.current.focus();
+    } else if (type === "thought") {
+      const slot = SLOTS_CONFIG.find(s => s.role === "member" && groupMembers[s.index]?.name === char.name);
+      if (slot && activeSpeechMap[slot.id]?.thought) {
+        setRevealedThoughts(prev => ({
+          ...prev,
+          [slot.id]: !prev[slot.id]
+        }));
+      } else {
+        alert(`${char.name} 此刻神色平静，并未察觉到异样心声。`);
+      }
+    } else if (type === "sprite") {
+      setSpriteConfigTarget(char);
+    }
+  };
+
+  // 主讲人快捷动作
+  const handleHostAction = (type) => {
+    setSelectedCharacter(null);
+    if (type === "wood") {
+      handleInsertAction("（轻敲案几醒木）诸位请静一静，且听我一言。");
+    } else if (type === "tea") {
+      handleInsertAction("（端起白瓷茶盏，轻吹浮沫，细细品味）");
+    } else if (type === "speech") {
+      handleInsertAction("（展开案前书卷，环视满堂众人）");
+    } else if (type === "sprite") {
+      setSpriteConfigTarget({ id: "user_host", name: userNickname, isUser: true });
+    }
+  };
+
+  // 立绘管理：选择特定立绘
+  const handleSelectSprite = (targetId, spriteUrl) => {
+    const newSelected = { ...selectedSpritesMap, [targetId]: spriteUrl };
+    setSelectedSpritesMap(newSelected);
+    try {
+      localStorage.setItem("t8_offline_selected_sprites", JSON.stringify(newSelected));
+    } catch (e) {}
+  };
+
+  // 立绘管理：上传新立绘图片
+  const handleUploadSprite = (e) => {
+    const files = e.target.files;
+    if (!files || files.length === 0 || !spriteConfigTarget) return;
+
+    const targetKey = spriteConfigTarget.id || spriteConfigTarget.name;
+    const file = files[0];
+    const reader = new FileReader();
+    reader.onload = (event) => {
+      const dataUrl = event.target.result;
+      if (typeof dataUrl === "string") {
+        const currentList = customSpritesMap[targetKey] || [];
+        const updatedList = [dataUrl, ...currentList.filter(u => u !== dataUrl)];
+        const newMap = { ...customSpritesMap, [targetKey]: updatedList };
+        saveSprites(newMap);
+        handleSelectSprite(targetKey, dataUrl);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  // 立绘管理：删除立绘
+  const handleDeleteSprite = (targetKey, idx) => {
+    const currentList = customSpritesMap[targetKey] || [];
+    const updatedList = currentList.filter((_, i) => i !== idx);
+    const newMap = { ...customSpritesMap, [targetKey]: updatedList };
+    saveSprites(newMap);
+    if (selectedSpritesMap[targetKey] === currentList[idx]) {
+      handleSelectSprite(targetKey, updatedList[0] || "");
+    }
+  };
+
+  // 获取所有其他有未读发言的角色槽位
+  const otherUnreadSlots = useMemo(() => {
+    return SLOTS_CONFIG.filter(s => {
+      if (activeGalgameDialogue && s.id === activeGalgameDialogue.slotId) return false;
+      return unreadSpeechSlots[s.id] && activeSpeechMap[s.id];
+    });
+  }, [unreadSpeechSlots, activeSpeechMap, activeGalgameDialogue]);
+
+  // ⬇ 所有 hooks 调用完毕后，才可以 early return
+  if (!isOpen) return null;
+
+  return React.createElement(
+    "div",
+    {
+      className: "group-offline-scene-container",
+      style: {
+        position: "absolute",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        zIndex: 900,
+        backgroundImage: "url('graph/线下模式布景.jfif')",
+        backgroundSize: "cover",
+        backgroundPosition: "center center",
+        overflow: "hidden",
+        display: "flex",
+        flexDirection: "column",
+        userSelect: "none"
+      }
+    },
+    // 隐藏的立绘文件上传输入控件
+    React.createElement("input", {
+      type: "file",
+      ref: fileInputRef,
+      accept: "image/*",
+      style: { display: "none" },
+      onChange: handleUploadSprite
+    }),
+
+    // 1. 顶部古风导航栏
+    !isImmersive && React.createElement(
+      "div",
+      {
+        className: "offline-top-nav",
+        style: {
+          position: "relative",
+          height: "54px",
+          padding: "0 16px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          background: "linear-gradient(180deg, rgba(30, 24, 20, 0.85) 0%, rgba(30, 24, 20, 0) 100%)",
+          zIndex: 200,
+          backdropFilter: "blur(2px)",
+          flexShrink: 0,
+          pointerEvents: "auto"
+        }
+      },
+      // 左侧返回群聊
+      React.createElement(
+        "button",
+        {
+          onClick: onClose,
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            background: "rgba(255, 255, 255, 0.15)",
+            border: "1px solid rgba(255, 245, 230, 0.3)",
+            borderRadius: "20px",
+            padding: "5px 12px",
+            color: "#fbf6ea",
+            fontSize: "12px",
+            cursor: "pointer",
+            backdropFilter: "blur(4px)",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.3)"
+          }
+        },
+        React.createElement("span", { style: { fontSize: "14px" } }, "←"),
+        React.createElement("span", null, "返回群聊")
+      ),
+      // 中间群聊标题与模式标记
+      React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            color: "#f7edd8",
+            textShadow: "0 2px 4px rgba(0,0,0,0.8)"
+          }
+        },
+        React.createElement(
+          "div",
+          { style: { fontSize: "14px", fontWeight: "bold", letterSpacing: "0.5px" } },
+          chatData?.name || "堂前茶会"
+        ),
+        React.createElement(
+          "div",
+          { style: { fontSize: "10px", color: "#dfc69a", display: "flex", alignItems: "center", gap: "4px" } },
+          React.createElement("span", { style: { display: "inline-block", width: "6px", height: "6px", borderRadius: "50%", background: "#48bb78" } }),
+          "线下剧情模式 · 堂前雅集"
+        )
+      ),
+      // 右侧功能按钮组
+      React.createElement(
+        "div",
+        { style: { display: "flex", alignItems: "center", gap: "8px", zIndex: 220 } },
+        React.createElement(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              setIsImmersive(true);
+            },
+            title: "清屏/沉浸全景",
+            style: {
+              background: "rgba(0, 0, 0, 0.45)",
+              border: "1px solid rgba(245, 222, 179, 0.35)",
+              borderRadius: "50%",
+              width: "32px",
+              height: "32px",
+              color: "#f5deb3",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              fontSize: "13px",
+              zIndex: 230,
+              pointerEvents: "auto"
+            }
+          },
+          "👁️"
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              setShowHistoryDrawer(true);
+            },
+            title: "案卷记录",
+            style: {
+              background: "rgba(0, 0, 0, 0.45)",
+              border: "1px solid rgba(245, 222, 179, 0.35)",
+              borderRadius: "50%",
+              width: "32px",
+              height: "32px",
+              color: "#f5deb3",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              fontSize: "13px",
+              zIndex: 230,
+              pointerEvents: "auto"
+            }
+          },
+          "📜"
+        )
+      )
+    ),
+
+    // 2. 页面上部 · 浅色拟态玻璃轻质感对话框 (Top Light Glass Dialogue Card)
+    !isImmersive && activeGalgameDialogue && React.createElement(
+      "div",
+      {
+        className: "offline-top-glass-dialogue",
+        style: {
+          position: "absolute",
+          top: "58px",
+          left: "12px",
+          right: "12px",
+          zIndex: 150,
+          background: "linear-gradient(135deg, rgba(255, 253, 247, 0.95) 0%, rgba(248, 242, 230, 0.9) 100%)",
+          backdropFilter: "blur(14px) saturate(180%)",
+          WebkitBackdropFilter: "blur(14px) saturate(180%)",
+          border: "1px solid rgba(255, 255, 255, 0.95)",
+          outline: "1px solid rgba(212, 175, 55, 0.3)",
+          borderRadius: "16px",
+          boxShadow: "0 8px 30px rgba(50, 30, 15, 0.16), 0 1px 0 rgba(255, 255, 255, 0.9) inset",
+          padding: "10px 14px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "6px",
+          animation: "slideDown 0.25s ease-out",
+          maxHeight: "125px"
+        }
+      },
+      // 顶栏：说话人姓名 + 探听心声 + 快捷操作
+      React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center"
+          }
+        },
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "6px" } },
+          React.createElement(
+            "div",
+            {
+              style: {
+                padding: "2px 10px",
+                borderRadius: "10px",
+                background: activeGalgameDialogue.isHost
+                  ? "linear-gradient(90deg, #d4af37 0%, #aa7c11 100%)"
+                  : "linear-gradient(90deg, #ece2cc 0%, #dbcbab 100%)",
+                border: activeGalgameDialogue.isHost ? "1px solid #ffeb99" : "1px solid #bba375",
+                color: activeGalgameDialogue.isHost ? "#241505" : "#3c2918",
+                fontSize: "11.5px",
+                fontWeight: "bold",
+                letterSpacing: "0.4px",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.1)"
+              }
+            },
+            activeGalgameDialogue.isHost ? `👑 【主讲】${activeGalgameDialogue.speakerName}` : `🍵 【名士】${activeGalgameDialogue.speakerName}`
+          ),
+          // 如果有心声
+          activeGalgameDialogue.speech?.thought && React.createElement(
+            "button",
+            {
+              onClick: () => setRevealedThoughts(prev => ({
+                ...prev,
+                [activeGalgameDialogue.slotId]: !prev[activeGalgameDialogue.slotId]
+              })),
+              style: {
+                padding: "2px 8px",
+                borderRadius: "10px",
+                background: "rgba(128, 90, 213, 0.12)",
+                border: "1px solid #805ad5",
+                color: "#6b46c1",
+                fontSize: "10.5px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px"
+              }
+            },
+            "💜 探听心声"
+          )
+        ),
+        // 右侧操作
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "6px" } },
+          React.createElement(
+            "button",
+            {
+              onClick: () => {
+                if (!activeGalgameDialogue.isHost) {
+                  setInputText(`@${activeGalgameDialogue.speakerName} `);
+                }
+                if (inputRef.current) inputRef.current.focus();
+              },
+              style: {
+                padding: "2px 8px",
+                borderRadius: "10px",
+                background: "rgba(180, 130, 50, 0.12)",
+                border: "1px solid rgba(180, 130, 50, 0.4)",
+                color: "#68481b",
+                fontSize: "11px",
+                cursor: "pointer"
+              }
+            },
+            "💬 回复"
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => setActiveGalgameDialogue(null),
+              title: "关闭对话卡片",
+              style: {
+                background: "transparent",
+                border: "none",
+                color: "#8c7258",
+                fontSize: "13px",
+                cursor: "pointer",
+                padding: "0 4px"
+              }
+            },
+            "✕"
+          )
+        )
+      ),
+
+      // 对白正文内容（动作神态描写 + 语言对白）
+      React.createElement(
+        "div",
+        {
+          style: {
+            color: "#2c221e",
+            fontSize: "12.5px",
+            lineHeight: "1.5",
+            letterSpacing: "0.3px",
+            overflowY: "auto",
+            padding: "1px 2px",
+            wordBreak: "break-word"
+          }
+        },
+        activeGalgameDialogue.speech?.type === "narration" ? React.createElement(
+          "div",
+          { style: { fontStyle: "italic", color: "#7a5734" } },
+          activeGalgameDialogue.speech.text
+        ) : React.createElement(
+          "div",
+          null,
+          activeGalgameDialogue.speech?.text
+        ),
+        // 展开心声内容
+        activeGalgameDialogue.speech?.thought && revealedThoughts[activeGalgameDialogue.slotId] && React.createElement(
+          "div",
+          {
+            style: {
+              marginTop: "4px",
+              padding: "4px 8px",
+              borderRadius: "6px",
+              background: "rgba(147, 105, 226, 0.12)",
+              border: "1px dashed #9f7aea",
+              color: "#5521b5",
+              fontSize: "11.5px",
+              fontStyle: "italic"
+            }
+          },
+          `💜 心声独白：${activeGalgameDialogue.speech.thought}`
+        )
+      ),
+
+      // 底栏：快捷切换其他有未读发言的名士
+      otherUnreadSlots.length > 0 && React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "5px",
+            overflowX: "auto",
+            paddingTop: "2px",
+            borderTop: "1px solid rgba(212, 175, 55, 0.2)"
+          }
+        },
+        React.createElement("span", { style: { fontSize: "10.5px", color: "#8c7258", flexShrink: 0 } }, "其他未读："),
+        otherUnreadSlots.map(s => {
+          const sp = activeSpeechMap[s.id];
+          const sName = s.role === "host" ? userNickname : (sp?.sender || groupMembers[s.index]?.name || "名士");
+          return React.createElement(
+            "button",
+            {
+              key: s.id,
+              onClick: () => handleOpenSlotDialogue(s.id, s.role === "host", groupMembers[s.index]),
+              style: {
+                flexShrink: 0,
+                padding: "2px 7px",
+                borderRadius: "8px",
+                background: "rgba(229, 62, 62, 0.12)",
+                border: "1px solid rgba(229, 62, 62, 0.4)",
+                color: "#c53030",
+                fontSize: "10.5px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "3px"
+              }
+            },
+            React.createElement("span", { style: { width: "5px", height: "5px", borderRadius: "50%", background: "#e53e3e" } }),
+            `听听 ${sName}`
+          );
+        })
+      )
+    ),
+
+    // 3. 沉浸模式下的唤醒提示
+    isImmersive && React.createElement(
+      "div",
+      {
+        onClick: () => setIsImmersive(false),
+        style: {
+          position: "absolute",
+          top: "16px",
+          right: "16px",
+          padding: "6px 12px",
+          borderRadius: "16px",
+          background: "rgba(0, 0, 0, 0.6)",
+          border: "1px solid rgba(255, 255, 255, 0.2)",
+          color: "#eee",
+          fontSize: "12px",
+          zIndex: 100,
+          cursor: "pointer",
+          backdropFilter: "blur(4px)"
+        }
+      },
+      "点击任意处恢复界面 ✕"
+    ),
+
+    // 4. 中央空间与 7 槽位渲染画布
+    React.createElement(
+      "div",
+      {
+        className: "offline-slots-stage",
+        style: {
+          position: "relative",
+          width: "100%",
+          flex: 1,
+          minHeight: 0,
+          pointerEvents: "auto",
+          overflow: "hidden"
+        },
+        onClick: (e) => {
+          if (e.target === e.currentTarget) {
+            setSelectedCharacter(null);
+          }
+        }
+      },
+
+      // 中央茶几袅袅茶香特效
+      React.createElement(
+        "div",
+        {
+          className: "offline-tea-steam-source",
+          style: {
+            position: "absolute",
+            top: "84%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            width: "30px",
+            height: "30px",
+            pointerEvents: "none",
+            zIndex: 15
+          }
+        },
+        React.createElement("div", { className: "tea-steam-particle steam-1" }),
+        React.createElement("div", { className: "tea-steam-particle steam-2" })
+      ),
+
+      // 渲染 7 个槽位
+      SLOTS_CONFIG.map(slot => {
+        const isHost = slot.role === "host";
+        const member = !isHost ? groupMembers[slot.index] : null;
+        const speech = activeSpeechMap[slot.id];
+        const isUnread = unreadSpeechSlots[slot.id];
+        const isSpeakingInGalgame = activeGalgameDialogue && activeGalgameDialogue.slotId === slot.id;
+
+        const targetKey = isHost ? "user_host" : (member ? (member.id || member.name) : "");
+        const chosenSprite = selectedSpritesMap[targetKey] || (customSpritesMap[targetKey] && customSpritesMap[targetKey][0]) || (member ? (selectedSpritesMap[member.name] || (customSpritesMap[member.name] && customSpritesMap[member.name][0])) : null);
+
+        let charAvatarId = "";
+        let charName = "";
+        let charFrame = "";
+        let charColor = "#8c6039";
+
+        if (isHost) {
+          charAvatarId = chosenSprite || userAvatar;
+          charName = userNickname;
+          charFrame = userAvatarFrame;
+          charColor = "#c8a364";
+        } else if (member) {
+          const detail = charDetailsMap[member.name];
+          const custom = memberCustomStyles[member.name];
+          charAvatarId = chosenSprite || custom?.avatar || detail?.avatar || member.avatar || member.id;
+          charName = member.name;
+          charFrame = custom?.frame || detail?.avatarFrame || "";
+          charColor = member.avatarColor || "#718096";
+        }
+
+        const isOccupied = isHost || !!member;
+        const hasCustomStandingSprite = !!chosenSprite;
+
+        return React.createElement(
+          "div",
+          {
+            key: slot.id,
+            className: `offline-slot-anchor ${isHost ? "slot-host" : "slot-member"}`,
+            style: {
+              position: "absolute",
+              top: `${slot.top}%`,
+              left: `${slot.left}%`,
+              transform: `translate(-50%, -50%) scale(${slot.scale})`,
+              zIndex: isSpeakingInGalgame ? 45 : slot.zIndex,
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              minWidth: "70px",
+              minHeight: "90px",
+              padding: "4px 8px",
+              cursor: isOccupied ? "pointer" : "default"
+            },
+            onClick: (e) => {
+              e.stopPropagation();
+              if (isOccupied) {
+                handleOpenSlotDialogue(slot.id, isHost, member);
+              }
+            }
+          },
+
+          // 1. 头顶灵动微标 / 红点提示
+          speech && React.createElement(
+            "div",
+            {
+              className: `offline-speech-dot-badge ${isUnread ? "unread-glow" : ""}`,
+              style: {
+                position: "absolute",
+                bottom: "100%",
+                marginBottom: isHost ? "4px" : "8px",
+                background: isSpeakingInGalgame
+                  ? "linear-gradient(135deg, #d4af37 0%, #aa7c11 100%)"
+                  : "linear-gradient(135deg, rgba(254, 248, 235, 0.95), rgba(240, 230, 215, 0.9))",
+                border: isSpeakingInGalgame ? "2px solid #fff" : "1px solid rgba(212, 175, 55, 0.6)",
+                borderRadius: "14px",
+                padding: "3px 8px",
+                boxShadow: isSpeakingInGalgame ? "0 0 15px rgba(212, 175, 55, 0.8)" : "0 3px 8px rgba(0, 0, 0, 0.35)",
+                color: isSpeakingInGalgame ? "#241505" : "#3c2e28",
+                fontSize: "11px",
+                fontWeight: "bold",
+                display: "flex",
+                alignItems: "center",
+                gap: "4px",
+                cursor: "pointer",
+                animation: isUnread ? "badgeBreatheShake 2.4s ease-in-out infinite" : "none",
+                whiteSpace: "nowrap",
+                zIndex: 50
+              }
+            },
+            React.createElement("span", { style: { fontSize: "12px" } }, isSpeakingInGalgame ? "📢" : "💬"),
+            React.createElement("span", null, isSpeakingInGalgame ? "发言中" : (charName || "发言")),
+            // 未读闪烁小红点
+            isUnread && React.createElement("div", {
+              className: "speech-red-dot",
+              style: {
+                width: "8px",
+                height: "8px",
+                borderRadius: "50%",
+                background: "#e53e3e",
+                border: "1.5px solid #fff",
+                boxShadow: "0 0 6px #e53e3e"
+              }
+            })
+          ),
+
+          // 2. 槽位实体（就座立绘/角色卡片 或 空置蒲团，无底部名称杂质）
+          isOccupied ? React.createElement(
+            "div",
+            {
+              className: `offline-character-card ${isHost ? "card-host" : "card-member"}`,
+              style: {
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                position: "relative",
+                transition: "transform 0.2s ease"
+              }
+            },
+            hasCustomStandingSprite ? React.createElement(
+              "div",
+              {
+                style: {
+                  position: "relative",
+                  height: isHost ? "92px" : "102px",
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  justifyContent: "flex-end",
+                  animation: "seatBreathingFloat 3.5s ease-in-out infinite"
+                }
+              },
+              React.createElement("img", {
+                src: chosenSprite,
+                alt: charName,
+                style: {
+                  maxHeight: isHost ? "88px" : "96px",
+                  maxWidth: "110px",
+                  objectFit: "contain",
+                  filter: isSpeakingInGalgame
+                    ? "drop-shadow(0 0 10px rgba(212, 175, 55, 0.75))"
+                    : "drop-shadow(0 6px 12px rgba(0,0,0,0.5))",
+                  display: "block"
+                },
+                onError: () => handleSelectSprite(targetKey, "")
+              }),
+              React.createElement("div", {
+                style: {
+                  width: "42px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  background: "radial-gradient(ellipse at center, rgba(0,0,0,0.45) 0%, rgba(0,0,0,0) 70%)",
+                  marginTop: "-4px"
+                }
+              })
+            ) : (
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    position: "relative",
+                    width: isHost ? "58px" : "64px",
+                    height: isHost ? "58px" : "64px",
+                    borderRadius: "50%",
+                    padding: "2px",
+                    background: isSpeakingInGalgame
+                      ? "radial-gradient(circle, #ffe082 0%, #ffb300 100%)"
+                      : isHost
+                        ? "radial-gradient(circle, #fcebc2 0%, #d4af37 100%)"
+                        : "radial-gradient(circle, #e2ebf0 0%, #a1b0be 100%)",
+                    boxShadow: isSpeakingInGalgame
+                      ? "0 0 15px rgba(255, 179, 0, 0.7)"
+                      : "0 4px 12px rgba(0, 0, 0, 0.4)",
+                    animation: "seatBreathingFloat 3.5s ease-in-out infinite"
+                  }
+                },
+                React.createElement(
+                  "div",
+                  {
+                    style: {
+                      width: "100%",
+                      height: "100%",
+                      borderRadius: "50%",
+                      overflow: "hidden",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center"
+                    }
+                  },
+                  typeof UniversalAvatarLoader !== "undefined" || typeof T8AvatarLoader !== "undefined" ? React.createElement(
+                    typeof T8AvatarLoader !== "undefined" ? T8AvatarLoader : UniversalAvatarLoader,
+                    {
+                      avatarId: charAvatarId,
+                      name: charName,
+                      fallbackColor: charColor,
+                      style: {
+                        width: "100%",
+                        height: "100%",
+                        borderRadius: "50%",
+                        objectFit: "cover"
+                      }
+                    }
+                  ) : React.createElement(
+                    "div",
+                    {
+                      style: {
+                        width: "100%",
+                        height: "100%",
+                        background: charColor,
+                        color: "#fff",
+                        fontWeight: "bold",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center"
+                      }
+                    },
+                    charName ? charName.charAt(0) : "密"
+                  )
+                ),
+                charFrame && React.createElement("div", {
+                  className: "custom-avatar-frame",
+                  style: {
+                    position: "absolute",
+                    inset: "-6px",
+                    pointerEvents: "none"
+                  },
+                  dangerouslySetInnerHTML: { __html: charFrame }
+                })
+              )
+            )
+          ) : React.createElement(
+            "div",
+            {
+              className: "offline-empty-cushion",
+              style: {
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                opacity: 0.65
+              }
+            },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  width: "48px",
+                  height: "24px",
+                  borderRadius: "50%",
+                  background: "radial-gradient(ellipse at center, rgba(230,200,160,0.7) 0%, rgba(160,120,80,0.5) 100%)",
+                  border: "1px dashed rgba(245,222,179,0.5)",
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.3)"
+                }
+              }
+            ),
+            React.createElement(
+              "span",
+              { style: { fontSize: "10px", color: "rgba(255,255,255,0.7)", marginTop: "2px" } },
+              "虚位以待"
+            )
+          )
+        );
+      }),
+
+      // 5. 点击角色更多操作菜单弹层 (Popover)
+      selectedCharacter && React.createElement(
+        "div",
+        {
+          className: "character-action-popover",
+          style: {
+            position: "absolute",
+            top: "50%",
+            left: "50%",
+            transform: "translate(-50%, -50%)",
+            background: "rgba(28, 22, 18, 0.96)",
+            border: "1px solid #d4af37",
+            borderRadius: "16px",
+            padding: "16px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.8)",
+            zIndex: 300,
+            minWidth: "220px",
+            backdropFilter: "blur(10px)",
+            animation: "elasticScale 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28)"
+          }
+        },
+        React.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "12px",
+              borderBottom: "1px solid rgba(212,175,55,0.3)",
+              paddingBottom: "6px"
+            }
+          },
+          React.createElement(
+            "span",
+            { style: { color: "#f7edd8", fontWeight: "bold", fontSize: "14px" } },
+            selectedCharacter.role === "host" ? "👑 主讲台主持操作" : `🍵 堂前互动 · ${selectedCharacter.name}`
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => setSelectedCharacter(null),
+              style: {
+                background: "transparent",
+                border: "none",
+                color: "#dfc69a",
+                cursor: "pointer",
+                fontSize: "14px"
+              }
+            },
+            "✕"
+          )
+        ),
+        selectedCharacter.role === "host" ? React.createElement(
+          "div",
+          { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+          React.createElement(
+            "button",
+            {
+              className: "action-pop-btn",
+              onClick: () => handleHostAction("wood"),
+              style: actionBtnStyle
+            },
+            "🔔 拍案醒木（诸位且静一静）"
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "action-pop-btn",
+              onClick: () => handleHostAction("tea"),
+              style: actionBtnStyle
+            },
+            "🍵 独自品茗（轻啜香茗）"
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "action-pop-btn",
+              onClick: () => handleHostAction("speech"),
+              style: actionBtnStyle
+            },
+            "📜 展卷宣讲（展开案前书卷）"
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "action-pop-btn",
+              onClick: () => handleHostAction("sprite"),
+              style: { ...actionBtnStyle, background: "rgba(212, 175, 55, 0.18)", border: "1px solid #d4af37" }
+            },
+            "🖼️ 更换/配置主讲人立绘"
+          )
+        ) : React.createElement(
+          "div",
+          { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+          React.createElement(
+            "button",
+            {
+              className: "action-pop-btn",
+              onClick: () => handleCharacterAction("tea", selectedCharacter.char),
+              style: actionBtnStyle
+            },
+            `🍵 奉上一盏热茶`
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "action-pop-btn",
+              onClick: () => handleCharacterAction("gaze", selectedCharacter.char),
+              style: actionBtnStyle
+            },
+            `👀 侧目注视`
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "action-pop-btn",
+              onClick: () => handleCharacterAction("ask", selectedCharacter.char),
+              style: actionBtnStyle
+            },
+            `❓ 堂前指名提问 (@${selectedCharacter.name})`
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "action-pop-btn",
+              onClick: () => handleCharacterAction("thought", selectedCharacter.char),
+              style: actionBtnStyle
+            },
+            `💜 探听此刻心声`
+          ),
+          React.createElement(
+            "button",
+            {
+              className: "action-pop-btn",
+              onClick: () => handleCharacterAction("sprite", selectedCharacter.char),
+              style: { ...actionBtnStyle, background: "rgba(212, 175, 55, 0.18)", border: "1px solid #d4af37" }
+            },
+            `🖼️ 更换/上传专属立绘图`
+          )
+        )
+      ),
+
+      // 6. 立绘管理与上传模态框 (SpriteManagerModal)
+      spriteConfigTarget && React.createElement(
+        "div",
+        {
+          className: "sprite-manager-modal-overlay",
+          style: {
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0, 0, 0, 0.7)",
+            zIndex: 350,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            backdropFilter: "blur(4px)"
+          },
+          onClick: () => setSpriteConfigTarget(null)
+        },
+        React.createElement(
+          "div",
+          {
+            className: "sprite-manager-modal-content",
+            onClick: (e) => e.stopPropagation(),
+            style: {
+              background: "#241d18",
+              border: "1px solid #d4af37",
+              borderRadius: "20px",
+              padding: "20px",
+              width: "100%",
+              maxWidth: "340px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "14px",
+              boxShadow: "0 10px 35px rgba(0,0,0,0.8)",
+              color: "#fbf6ea"
+            }
+          },
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderBottom: "1px solid rgba(212,175,55,0.3)",
+                paddingBottom: "8px"
+              }
+            },
+            React.createElement(
+              "span",
+              { style: { fontSize: "15px", fontWeight: "bold", color: "#d4af37" } },
+              `🖼️ 配置立绘 · ${spriteConfigTarget.name}`
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => setSpriteConfigTarget(null),
+                style: {
+                  background: "transparent",
+                  border: "none",
+                  color: "#aaa",
+                  cursor: "pointer",
+                  fontSize: "14px"
+                }
+              },
+              "✕"
+            )
+          ),
+          React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                padding: "10px",
+                background: "rgba(0,0,0,0.3)",
+                borderRadius: "12px",
+                border: "1px dashed rgba(212,175,55,0.3)"
+              }
+            },
+            React.createElement("div", { style: { fontSize: "11px", color: "#dfc69a", marginBottom: "8px" } }, "当前生效形态预览"),
+            (() => {
+              const tKey = spriteConfigTarget.id || spriteConfigTarget.name;
+              const currentActive = selectedSpritesMap[tKey] || (customSpritesMap[tKey] && customSpritesMap[tKey][0]);
+              return currentActive ? React.createElement("img", {
+                src: currentActive,
+                alt: "立绘预览",
+                style: { maxHeight: "100px", maxWidth: "100%", objectFit: "contain" }
+              }) : React.createElement("div", { style: { color: "#888", fontSize: "12px", padding: "20px 0" } }, "当前为默认圆形头像");
+            })()
+          ),
+          React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "8px" } },
+            React.createElement(
+              "div",
+              { style: { fontSize: "12px", fontWeight: "bold", color: "#f7edd8" } },
+              "已保存的专属形态（与心纸居互通）："
+            ),
+            (() => {
+              const tKey = spriteConfigTarget.id || spriteConfigTarget.name;
+              const list = customSpritesMap[tKey] || [];
+              if (list.length === 0) {
+                return React.createElement("div", { style: { fontSize: "11px", color: "#888" } }, "暂无上传的专属立绘，点击下方按钮上传。");
+              }
+              return React.createElement(
+                "div",
+                {
+                  style: {
+                    display: "flex",
+                    gap: "8px",
+                    overflowX: "auto",
+                    paddingBottom: "6px"
+                  }
+                },
+                list.map((spriteUrl, idx) => {
+                  const isSelected = selectedSpritesMap[tKey] === spriteUrl || (!selectedSpritesMap[tKey] && idx === 0);
+                  return React.createElement(
+                    "div",
+                    {
+                      key: idx,
+                      onClick: () => handleSelectSprite(tKey, spriteUrl),
+                      style: {
+                        position: "relative",
+                        flexShrink: 0,
+                        width: "60px",
+                        height: "75px",
+                        borderRadius: "8px",
+                        border: isSelected ? "2px solid #d4af37" : "1px solid #555",
+                        background: "rgba(0,0,0,0.5)",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        overflow: "hidden"
+                      }
+                    },
+                    React.createElement("img", {
+                      src: spriteUrl,
+                      style: { width: "100%", height: "100%", objectFit: "contain" }
+                    }),
+                    React.createElement(
+                      "button",
+                      {
+                        onClick: (e) => {
+                          e.stopPropagation();
+                          handleDeleteSprite(tKey, idx);
+                        },
+                        title: "删除此立绘",
+                        style: {
+                          position: "absolute",
+                          top: "2px",
+                          right: "2px",
+                          width: "16px",
+                          height: "16px",
+                          borderRadius: "50%",
+                          background: "rgba(200,0,0,0.8)",
+                          color: "white",
+                          border: "none",
+                          fontSize: "10px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }
+                      },
+                      "✕"
+                    )
+                  );
+                })
+              );
+            })()
+          ),
+          React.createElement(
+            "div",
+            { style: { display: "flex", gap: "10px", marginTop: "4px" } },
+            React.createElement(
+              "button",
+              {
+                onClick: () => {
+                  if (fileInputRef.current) fileInputRef.current.click();
+                },
+                style: {
+                  flex: 1,
+                  padding: "9px",
+                  borderRadius: "10px",
+                  border: "1px solid #d4af37",
+                  background: "linear-gradient(135deg, #d4af37 0%, #aa7c11 100%)",
+                  color: "#241505",
+                  fontWeight: "bold",
+                  fontSize: "12px",
+                  cursor: "pointer"
+                }
+              },
+              "➕ 上传新立绘"
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => {
+                  const tKey = spriteConfigTarget.id || spriteConfigTarget.name;
+                  handleSelectSprite(tKey, "");
+                },
+                style: {
+                  padding: "9px 12px",
+                  borderRadius: "10px",
+                  border: "1px solid rgba(255,255,255,0.2)",
+                  background: "rgba(255,255,255,0.08)",
+                  color: "#ccc",
+                  fontSize: "12px",
+                  cursor: "pointer"
+                }
+              },
+              "恢复默认头像"
+            )
+          )
+        )
+      )
+    ),
+
+    // 7. 底部常驻古风控制台与输入框（浅色拟态玻璃轻质感）
+    !isImmersive && React.createElement(
+      "div",
+      {
+        className: "offline-bottom-console",
+        style: {
+          position: "relative",
+          zIndex: 100,
+          flexShrink: 0,
+          background: "linear-gradient(0deg, rgba(255, 253, 248, 0.96) 0%, rgba(250, 244, 234, 0.92) 75%, rgba(250, 244, 234, 0.8) 100%)",
+          backdropFilter: "blur(14px) saturate(180%)",
+          WebkitBackdropFilter: "blur(14px) saturate(180%)",
+          borderTop: "1px solid rgba(255, 255, 255, 0.95)",
+          outline: "1px solid rgba(212, 175, 55, 0.25)",
+          boxShadow: "0 -8px 28px rgba(60, 40, 20, 0.12), inset 0 1px 0 rgba(255, 255, 255, 0.9)",
+          padding: "8px 14px 14px 14px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "7px"
+        }
+      },
+      // 快捷神态动作标签滚动条（浅色质感）
+      React.createElement(
+        "div",
+        {
+          className: "quick-actions-bar",
+          style: {
+            display: "flex",
+            gap: "7px",
+            overflowX: "auto",
+            paddingBottom: "3px",
+            scrollbarWidth: "none"
+          }
+        },
+        QUICK_ACTIONS.map(act => React.createElement(
+          "button",
+          {
+            key: act,
+            onClick: () => handleInsertAction(act),
+            style: {
+              flexShrink: 0,
+              padding: "4px 10px",
+              borderRadius: "14px",
+              background: "rgba(240, 230, 212, 0.85)",
+              border: "1px solid rgba(212, 175, 55, 0.35)",
+              color: "#4a3219",
+              fontSize: "11px",
+              fontWeight: "500",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+              boxShadow: "0 1px 3px rgba(0,0,0,0.05)"
+            }
+          },
+          act
+        ))
+      ),
+      // 输入框与发送/探讨区
+      React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "8px"
+          }
+        },
+        React.createElement(
+          "div",
+          {
+            style: {
+              flex: 1,
+              position: "relative",
+              display: "flex",
+              alignItems: "center"
+            }
+          },
+          React.createElement(
+            "input",
+            {
+              ref: inputRef,
+              type: "text",
+              value: inputText,
+              onChange: (e) => setInputText(e.target.value),
+              onKeyDown: (e) => {
+                if (e.key === "Enter" && !e.shiftKey) {
+                  e.preventDefault();
+                  handleSendOrTrigger();
+                }
+              },
+              placeholder: isTyping ? "堂前诸人正在探讨发言..." : (inputText ? "输入中..." : "输入动作描写（如（端起茶盏）...）或发言"),
+              disabled: isTyping,
+              style: {
+                width: "100%",
+                padding: "9px 14px",
+                borderRadius: "22px",
+                border: "1px solid rgba(200, 160, 100, 0.5)",
+                background: "rgba(255, 255, 255, 0.94)",
+                color: "#2c221e",
+                fontSize: "13px",
+                outline: "none",
+                boxShadow: "inset 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(255, 255, 255, 0.8)"
+              }
+            }
+          )
+        ),
+        // 发送 / 探讨 智能双模按钮
+        React.createElement(
+          "button",
+          {
+            onClick: handleSendOrTrigger,
+            disabled: isTyping,
+            title: inputText.trim() ? "发送我的发言（不触发AI，可多条连发）" : "触发名士们堂前探讨与回应",
+            style: {
+              padding: "9px 16px",
+              borderRadius: "22px",
+              border: inputText.trim() ? "1px solid #ffeb99" : "1px solid #d4af37",
+              background: isTyping
+                ? "rgba(220, 210, 195, 0.6)"
+                : inputText.trim()
+                  ? "linear-gradient(135deg, #d4af37 0%, #aa7c11 100%)"
+                  : "linear-gradient(135deg, #f5ebd2 0%, #e2ce9f 100%)",
+              color: isTyping ? "#888" : (inputText.trim() ? "#241505" : "#4a3219"),
+              fontWeight: "bold",
+              fontSize: "13px",
+              cursor: isTyping ? "not-allowed" : "pointer",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+              transition: "all 0.2s ease",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px"
+            }
+          },
+          isTyping ? "思考中..." : (inputText.trim() ? "发送 📨" : "探讨 ✨")
+        )
+      )
+    ),
+
+    // 8. 案卷历史记录 —— 透明玻璃纸张 · 你一句我一句剧本对白纪要
+    React.createElement(
+      "div",
+      {
+        className: "history-drawer-overlay" + (showHistoryDrawer ? " open" : ""),
+        style: {
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          background: "rgba(18, 14, 10, 0.45)",
+          zIndex: 999,
+          display: showHistoryDrawer ? "flex" : "none",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "16px",
+          backdropFilter: "blur(4px)",
+          pointerEvents: "auto"
+        },
+        onClick: () => {
+          console.log("[DEBUG] 关闭历史记录弹层");
+          setShowHistoryDrawer(false);
+        }
+      },
+      // 内部纸张，当 showHistoryDrawer 为真时才渲染，避免隐藏时执行额外的 map 逻辑
+      showHistoryDrawer && React.createElement(
+        "div",
+        {
+          className: "history-glass-parchment-content",
+          onClick: (e) => e.stopPropagation(),
+          style: {
+            width: "100%",
+            maxWidth: "430px",
+            height: "85%",
+            background: "linear-gradient(180deg, rgba(255, 253, 247, 0.94) 0%, rgba(249, 243, 232, 0.88) 100%)",
+            backdropFilter: "blur(18px) saturate(180%)",
+            WebkitBackdropFilter: "blur(18px) saturate(180%)",
+            border: "1px solid rgba(255, 255, 255, 0.95)",
+            outline: "1px solid rgba(212, 175, 55, 0.35)",
+            borderRadius: "20px",
+            boxShadow: "0 16px 50px rgba(35, 20, 10, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.95)",
+            display: "flex",
+            flexDirection: "column",
+            overflow: "hidden"
+          }
+        },
+        // 顶部雅集案卷题头
+        React.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              padding: "14px 18px",
+              borderBottom: "1px solid rgba(212, 175, 55, 0.25)",
+              background: "linear-gradient(180deg, rgba(255, 255, 255, 0.6) 0%, rgba(245, 238, 225, 0.2) 100%)"
+            }
+          },
+          React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "8px" } },
+            React.createElement("span", { style: { fontSize: "16px" } }, "📜"),
+            React.createElement(
+              "span",
+              { style: { fontSize: "14.5px", fontWeight: "bold", color: "#3a2818", letterSpacing: "0.5px" } },
+              "堂前雅集 · 案卷纪要"
+            ),
+            React.createElement(
+              "span",
+              {
+                style: {
+                  fontSize: "11px",
+                  padding: "1px 7px",
+                  borderRadius: "10px",
+                  background: "rgba(212, 175, 55, 0.15)",
+                  color: "#8c6039",
+                  fontWeight: "bold"
+                }
+              },
+              `共 ${messages.length} 则对白`
+            )
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => setShowHistoryDrawer(false),
+              style: {
+                background: "rgba(0,0,0,0.06)",
+                border: "1px solid rgba(0,0,0,0.08)",
+                borderRadius: "50%",
+                width: "28px",
+                height: "28px",
+                color: "#6b5443",
+                fontSize: "13px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center"
+              }
+            },
+            "✕"
+          )
+        ),
+        // 玻璃宣纸对白流（你一句我一句）
+        React.createElement(
+          "div",
+          {
+            ref: historyListRef,
+            style: {
+              flex: 1,
+              overflowY: "auto",
+              padding: "14px 16px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px"
+            }
+          },
+          messages.length === 0 ? React.createElement(
+            "div",
+            { style: { textAlign: "center", color: "#9c8672", padding: "40px 0", fontSize: "13px" } },
+            "📜 堂前尚无议事对白，诸位正静候开场..."
+          ) : messages.map((m, idx) => {
+            const isMe = m.isMe;
+            const text = m.text || "";
+            const isSystemNotice = m.type === "system" || text.includes("加入了群聊") || text.includes("移出了群聊") || text.includes("修改群名为");
+
+            if (isSystemNotice) {
+              return React.createElement(
+                "div",
+                {
+                  key: m.id || idx,
+                  style: {
+                    alignSelf: "center",
+                    padding: "3px 10px",
+                    borderRadius: "12px",
+                    background: "rgba(0, 0, 0, 0.05)",
+                    border: "1px dashed rgba(180, 140, 90, 0.3)",
+                    color: "#8c7258",
+                    fontSize: "11px",
+                    margin: "2px 0"
+                  }
+                },
+                `📜 ${text}`
+              );
+            }
+
+            const senderName = isMe ? userNickname : (m.sender || "群成员");
+
+            return React.createElement(
+              "div",
+              {
+                key: m.id || idx,
+                style: {
+                  display: "flex",
+                  flexDirection: isMe ? "row-reverse" : "row",
+                  alignItems: "flex-start",
+                  gap: "9px",
+                  width: "100%"
+                }
+              },
+              // 头像小徽标
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                    background: isMe
+                      ? "radial-gradient(circle, #fcebc2 0%, #d4af37 100%)"
+                      : "radial-gradient(circle, #e2ebf0 0%, #a1b0be 100%)",
+                    border: isMe ? "1.5px solid #d4af37" : "1.5px solid #a0aec0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: isMe ? "#2b1808" : "#2d3748",
+                    fontWeight: "bold",
+                    fontSize: "12px",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+                    overflow: "hidden"
+                  }
+                },
+                senderName.charAt(0)
+              ),
+              // 对白泡泡（透明玻璃纸张质感）
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    maxWidth: "78%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: isMe ? "flex-end" : "flex-start"
+                  }
+                },
+                // 顶栏：发言人 + 时间
+                React.createElement(
+                  "div",
+                  {
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      marginBottom: "3px",
+                      fontSize: "10.5px",
+                      color: isMe ? "#8c5826" : "#6c533c"
+                    }
+                  },
+                  React.createElement("span", { style: { fontWeight: "bold" } }, isMe ? `👑 【主讲】${userNickname}` : `🍵 ${senderName}`),
+                  React.createElement("span", { style: { color: "#a89481", fontSize: "10px" } }, m.time || "")
+                ),
+                // 气泡卡片主体
+                React.createElement(
+                  "div",
+                  {
+                    style: {
+                      padding: "8px 12px",
+                      borderRadius: isMe ? "14px 4px 14px 14px" : "4px 14px 14px 14px",
+                      background: isMe
+                        ? "linear-gradient(135deg, rgba(254, 244, 214, 0.94) 0%, rgba(248, 233, 192, 0.88) 100%)"
+                        : "linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 242, 232, 0.9) 100%)",
+                      border: isMe ? "1px solid rgba(212, 175, 55, 0.55)" : "1px solid rgba(210, 195, 175, 0.6)",
+                      boxShadow: isMe ? "0 3px 12px rgba(180, 140, 60, 0.15)" : "0 3px 12px rgba(60, 40, 20, 0.08)",
+                      fontSize: "12.5px",
+                      lineHeight: "1.55",
+                      color: "#2c221e",
+                      wordBreak: "break-word"
+                    }
+                  },
+                  // 动作神态（括号内）与台词正文分离渲染
+                  (() => {
+                    const parts = [];
+                    const regex = /（[^）]+）/g;
+                    let lastIdx = 0;
+                    let match;
+                    while ((match = regex.exec(text)) !== null) {
+                      if (match.index > lastIdx) {
+                        parts.push({ type: "dialogue", text: text.slice(lastIdx, match.index) });
+                      }
+                      parts.push({ type: "action", text: match[0] });
+                      lastIdx = regex.lastIndex;
+                    }
+                    if (lastIdx < text.length) {
+                      parts.push({ type: "dialogue", text: text.slice(lastIdx) });
+                    }
+                    if (parts.length === 0) {
+                      return React.createElement("span", null, text);
+                    }
+                    return parts.map((p, i) => {
+                      if (p.type === "action") {
+                        return React.createElement(
+                          "span",
+                          { key: i, style: { color: isMe ? "#965b27" : "#7d5632", fontStyle: "italic", fontWeight: "500" } },
+                          p.text
+                        );
+                      }
+                      return React.createElement("span", { key: i, style: { color: "#2c221e" } }, p.text);
+                    });
+                  })(),
+                  // 心声独白
+                  m.thought && React.createElement(
+                    "div",
+                    {
+                      style: {
+                        marginTop: "5px",
+                        padding: "4px 8px",
+                        borderRadius: "6px",
+                        background: "rgba(147, 105, 226, 0.12)",
+                        border: "1px dashed #9f7aea",
+                        color: "#5b21b6",
+                        fontSize: "11px",
+                        fontStyle: "italic"
+                      }
+                    },
+                    `💜 心声：${m.thought}`
+                  )
+                )
+              )
+            );
+          })
+        )
+      )
+    )
+  );
+};
+
+const actionBtnStyle = {
+  width: "100%",
+  padding: "8px 12px",
+  borderRadius: "8px",
+  background: "rgba(255, 245, 230, 0.1)",
+  border: "1px solid rgba(212, 175, 55, 0.3)",
+  color: "#f5e2c4",
+  fontSize: "12px",
+  cursor: "pointer",
+  textAlign: "left"
+};
+
+
 const GroupChatSettingsModal = ({
   settings,
   onChange,
@@ -75997,6 +77945,7 @@ const GroupChatSettingsModal = ({
   setVoiceId,
   onUpdateChat, // 新增：用于更新群聊信息
   onLeaveGroup, // 新增：用于退出群聊
+  onEnterOfflineScene,
 }) => {
   const [isGeneratingAnnounce, setIsGeneratingAnnounce] = React.useState(false);
   const [tempAnnouncement, setTempAnnouncement] = React.useState(
@@ -76040,10 +77989,15 @@ const GroupChatSettingsModal = ({
         plotMode: settings.plotMode === "online" ? "normal" : "online",
       });
     } else if (mode === "offline") {
+      const nextMode = settings.plotMode === "offline" ? "normal" : "offline";
       onChange({
         ...settings,
-        plotMode: settings.plotMode === "offline" ? "normal" : "offline",
+        plotMode: nextMode,
       });
+      if (nextMode === "offline" && onEnterOfflineScene) {
+        onClose();
+        onEnterOfflineScene();
+      }
     }
   };
 
@@ -76263,6 +78217,51 @@ const GroupChatSettingsModal = ({
             <span className="toggle-slider"></span>
           </label>
         </div>
+
+        <div className="cs-row">
+          <div>
+            <div className="cs-label">线下剧情模式</div>
+            <div className="cs-desc">模拟面对面古风堂前茶会，描写动作、神态与环境</div>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              className="toggle-input"
+              checked={settings.plotMode === "offline"}
+              onChange={() => handleModeToggle("offline")}
+            />
+            <span className="toggle-slider"></span>
+          </label>
+        </div>
+        {settings.plotMode === "offline" && (
+          <div style={{ margin: "8px 0 14px 0" }}>
+            <button
+              onClick={() => {
+                onClose();
+                if (onEnterOfflineScene) onEnterOfflineScene();
+              }}
+              style={{
+                width: "100%",
+                padding: "10px",
+                borderRadius: "12px",
+                border: "1px solid #d4af37",
+                background: "linear-gradient(135deg, #fbf7ee 0%, #f3ebd9 100%)",
+                color: "#8c6039",
+                fontWeight: "bold",
+                fontSize: "13px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                boxShadow: "0 2px 6px rgba(140, 96, 57, 0.15)",
+              }}
+            >
+              <span>🏛️</span>
+              <span>立即进入堂前茶会全景场景</span>
+            </button>
+          </div>
+        )}
 
         <div className="cs-row">
           <div>
@@ -77800,7 +79799,7 @@ const ChatSettingsModal = ({
       }
     } catch (e) { }
 
-    const currentHistory = customHistory || messages;
+    const currentHistory = customHistory || (showGroupOfflineScene ? [...messages, ...offlineSessionMessages] : messages);
     let historyForPrompt = [...currentHistory];
     if (lastUserMsg) historyForPrompt.push(lastUserMsg);
 
@@ -78001,6 +80000,20 @@ const ChatSettingsModal = ({
       { role: "system", content: systemInstruction },
       // [修改] 强引导支持多模态图片识别与通话记录结构化
       ...historyForPrompt.map((m) => {
+                if (m.type === "group_offline_record") {
+          const dlg = m.dialogue || [];
+          if (dlg.length > 0) {
+            const dialogueContent = dlg.map((d) => `  - ${d.isMe ? "用户" : (d.sender || "群成员")}：“${d.text}”`).join("\n");
+            return {
+              role: "user",
+              content: `【系统事件与堂前线下雅集纪要同步：你与诸位名士于 ${m.time || "此前"} 在堂前线下会面探讨，共 ${dlg.length} 则对白。以下为当时完整的现场对白与动作纪要】：\n${dialogueContent}\n【堂前线下雅集已结束，当前重回线上群聊传讯。你与所有群成员必须完全记住上述线下雅集中的所有讨论、承诺、动作与细节，在后续群聊传讯中保持自然的记忆连贯】`
+            };
+          }
+          return {
+            role: "user",
+            content: `【系统事件：${m.time || ""} 曾进行堂前线下雅集探讨（已结束）】`
+          };
+        }
         if (m.type === "voice_call_record") {
           const dlg = m.dialogue || m.content?.messages || m.content?.dialogue || [];
           if (dlg.length > 0) {
@@ -78967,6 +80980,17 @@ const ChatSettingsModal = ({
       )}
 
       {/* ================= 全屏弹窗与独立页面层 ================= */}
+      <GroupOfflinePlotScene
+        isOpen={showGroupOfflineScene && (String(chatData?.id).startsWith("group_chat") || chatData?.type === "group")}
+        onClose={() => setShowGroupOfflineScene(false)}
+        chatData={chatData}
+        messages={messages}
+        onSendMessage={handleSendOfflineMessage}
+        isTyping={isTyping}
+        settings={settings}
+        onUpdateSettings={setSettings}
+      />
+
       {showSettings &&
         (chatData?.type === "group" ? (
           <GroupChatSettingsModal
@@ -78980,6 +81004,7 @@ const ChatSettingsModal = ({
             setVoiceId={setVoiceId}
             onUpdateChat={onUpdateChat}
             onLeaveGroup={onLeaveGroup}
+            onEnterOfflineScene={() => setShowGroupOfflineScene(true)}
           />
         ) : (
           <ChatSettingsModal
@@ -79069,7 +81094,205 @@ const ChatSettingsModal = ({
       )}
 
       {/* 语音通话详情记录弹窗 */}
-      {viewingCallRecord && (
+      {    viewingOfflineRecord && /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          background: "rgba(18, 14, 10, 0.55)",
+          zIndex: 3500,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          backdropFilter: "blur(5px)",
+          padding: "16px",
+          boxSizing: "border-box"
+        },
+        onClick: () => setViewingOfflineRecord(null)
+      },
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
+            background: "linear-gradient(180deg, rgba(255, 253, 247, 0.98) 0%, rgba(249, 243, 232, 0.94) 100%)",
+            borderRadius: "24px",
+            width: "100%",
+            maxWidth: "420px",
+            maxHeight: "85vh",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: "0 16px 50px rgba(35, 20, 10, 0.25)",
+            border: "1px solid rgba(255,255,255,0.9)",
+            outline: "1px solid rgba(212, 175, 55, 0.35)",
+            overflow: "hidden",
+            animation: "popIn 0.25s cubic-bezier(0.16, 1, 0.3, 1)"
+          },
+          onClick: (e) => e.stopPropagation()
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              padding: "14px 18px",
+              borderBottom: "1px solid rgba(212, 175, 55, 0.25)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              background: "linear-gradient(180deg, rgba(255, 255, 255, 0.7) 0%, rgba(245, 238, 225, 0.3) 100%)"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "8px" } },
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "17px" } }, "📜"),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              null,
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "14.5px", fontWeight: "bold", color: "#3a2818" } }, viewingOfflineRecord.title || "堂前雅集 · 案卷纪要"),
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11px", color: "#8c6039", marginTop: "1px" } }, `对白共 ${viewingOfflineRecord.dialogue?.length || 0} 则 · ${viewingOfflineRecord.time || ""}`)
+            )
+          ),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => setViewingOfflineRecord(null),
+              style: {
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                border: "1px solid rgba(0,0,0,0.08)",
+                background: "rgba(0,0,0,0.06)",
+                color: "#6b5443",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "13px"
+              }
+            },
+            "✕"
+          )
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              flex: 1,
+              padding: "14px 16px",
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+              background: "rgba(255, 255, 255, 0.4)"
+            }
+          },
+          viewingOfflineRecord.dialogue && viewingOfflineRecord.dialogue.length > 0 ? viewingOfflineRecord.dialogue.map((item, idx) => {
+            const isMe = item.isMe;
+            const text = item.text || "";
+            const senderName = isMe ? (chatData?.profile?.userNickname || localStorage.getItem("t8_user_nickname") || "我") : (item.sender || "群成员");
+            return /* @__PURE__ */ React.createElement(
+              "div",
+              {
+                key: idx,
+                style: {
+                  display: "flex",
+                  flexDirection: isMe ? "row-reverse" : "row",
+                  alignItems: "flex-start",
+                  gap: "9px",
+                  width: "100%"
+                }
+              },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                {
+                  style: {
+                    width: "30px",
+                    height: "30px",
+                    borderRadius: "50%",
+                    flexShrink: 0,
+                    background: isMe ? "radial-gradient(circle, #fcebc2 0%, #d4af37 100%)" : "radial-gradient(circle, #e2ebf0 0%, #a1b0be 100%)",
+                    border: isMe ? "1.5px solid #d4af37" : "1.5px solid #a0aec0",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    color: isMe ? "#2b1808" : "#2d3748",
+                    fontWeight: "bold",
+                    fontSize: "12px"
+                  }
+                },
+                senderName.charAt(0)
+              ),
+              /* @__PURE__ */ React.createElement(
+                "div",
+                {
+                  style: {
+                    maxWidth: "78%",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: isMe ? "flex-end" : "flex-start"
+                  }
+                },
+                /* @__PURE__ */ React.createElement(
+                  "div",
+                  { style: { fontSize: "11px", color: "#8c7258", marginBottom: "3px" } },
+                  isMe ? `👑 【主讲】${senderName}` : `🍵 ${senderName}`
+                ),
+                /* @__PURE__ */ React.createElement(
+                  "div",
+                  {
+                    style: {
+                      padding: "8px 12px",
+                      borderRadius: isMe ? "14px 2px 14px 14px" : "2px 14px 14px 14px",
+                      background: isMe ? "linear-gradient(135deg, rgba(254, 243, 205, 0.9) 0%, rgba(246, 227, 169, 0.8) 100%)" : "rgba(255, 255, 255, 0.9)",
+                      border: isMe ? "1px solid rgba(212, 175, 55, 0.4)" : "1px solid rgba(200, 180, 150, 0.35)",
+                      color: "#2c221e",
+                      fontSize: "13px",
+                      lineHeight: "1.5",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.05)"
+                    }
+                  },
+                  text
+                )
+              )
+            );
+          }) : /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", color: "#9ca3af", fontSize: "13px", padding: "20px 0" } }, "暂无对白记录")
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              padding: "10px 16px",
+              borderTop: "1px solid rgba(212, 175, 55, 0.2)",
+              display: "flex",
+              justifyContent: "flex-end",
+              background: "linear-gradient(180deg, rgba(255, 255, 255, 0.8) 0%, rgba(250, 245, 235, 0.8) 100%)"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => setViewingOfflineRecord(null),
+              style: {
+                padding: "6px 18px",
+                borderRadius: "16px",
+                border: "1px solid rgba(212, 175, 55, 0.5)",
+                background: "linear-gradient(135deg, #d4af37 0%, #aa7c11 100%)",
+                color: "#241505",
+                fontSize: "12px",
+                fontWeight: "bold",
+                cursor: "pointer"
+              }
+            },
+            "关 闭"
+          )
+        )
+      )
+    ),
+    viewingCallRecord && (
         <div
           style={{
             position: "fixed",
@@ -80951,7 +83174,94 @@ const ChatSettingsModal = ({
                         style={{ position: "relative", maxWidth: "100%" }}
                       >
                         {/* 原本包裹的卡片、图片内容均维持不变 */}
-                        {msg.type === "voice_call_record" ? (
+                        {msg.type === "group_offline_record" ? /* @__PURE__ */ React.createElement(
+                  "div",
+                  {
+                    onClick: (e) => {
+                      e.stopPropagation();
+                      if (msg.dialogue && msg.dialogue.length > 0) {
+                        setViewingOfflineRecord(msg);
+                      }
+                    },
+                    style: {
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "12px",
+                      padding: "12px 16px",
+                      background: "linear-gradient(135deg, #fdfbf7 0%, #f7f1e3 100%)",
+                      borderRadius: "16px",
+                      border: "1px solid rgba(212, 175, 55, 0.45)",
+                      boxShadow: "0 3px 10px rgba(60, 40, 20, 0.08)",
+                      cursor: msg.dialogue && msg.dialogue.length > 0 ? "pointer" : "default",
+                      minWidth: "180px",
+                      maxWidth: "270px",
+                      transition: "all 0.15s ease"
+                    },
+                    title: msg.dialogue && msg.dialogue.length > 0 ? "\u70B9\u51FB\u67E5\u9605\u5802\u524D\u7EBF\u4E0B\u6848\u5377\u7EAA\u8981" : ""
+                  },
+                  /* @__PURE__ */ React.createElement(
+                    "div",
+                    {
+                      style: {
+                        width: "36px",
+                        height: "36px",
+                        borderRadius: "50%",
+                        background: "radial-gradient(circle, #fcebc2 0%, #d4af37 100%)",
+                        border: "1.5px solid #d4af37",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "18px",
+                        boxShadow: "0 2px 6px rgba(180, 140, 60, 0.3)",
+                        flexShrink: 0
+                      }
+                    },
+                    "📜"
+                  ),
+                  /* @__PURE__ */ React.createElement(
+                    "div",
+                    { style: { flex: 1, minWidth: 0 } },
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          fontSize: "13.5px",
+                          fontWeight: "bold",
+                          color: "#3a2614",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "space-between"
+                        }
+                      },
+                      /* @__PURE__ */ React.createElement("span", null, msg.title || "\u5802\u524D\u96C5\u96C6 \xB7 \u7EBF\u4E0B\u5BF9\u767D"),
+                      msg.dialogue && msg.dialogue.length > 0 && /* @__PURE__ */ React.createElement(
+                        "span",
+                        {
+                          style: {
+                            fontSize: "10px",
+                            color: "#8c6039",
+                            background: "rgba(212, 175, 55, 0.2)",
+                            padding: "1px 6px",
+                            borderRadius: "4px",
+                            fontWeight: "bold"
+                          }
+                        },
+                        "\u6848\u5377"
+                      )
+                    ),
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          fontSize: "11px",
+                          color: "#7c6853",
+                          marginTop: "3px"
+                        }
+                      },
+                      `\u5171 ${msg.dialogue?.length || 0} \u5219\u5BF9\u767D \xB7 ${msg.time || ""}`
+                    )
+                  )
+                ) : msg.type === "voice_call_record" ? (
                           <div
                             onClick={(e) => {
                               e.stopPropagation();
@@ -107477,6 +109787,13 @@ const BackupRestorePage = ({ onClose }) => {
     avatarsCount: 0,
     worldBookCount: 0,
     backpackCount: 0,
+    memoriesCount: 0,
+    characterDocsCount: 0,
+    themeMode: "莫兰迪浅色",
+    hasCustomWallpaper: false,
+    hasCustomLockscreen: false,
+    hasCustomFoldcard: false,
+    personasCount: 0,
     localStorageCount: 0,
   });
   const [isExporting, setIsExporting] = React.useState(false);
@@ -107489,7 +109806,7 @@ const BackupRestorePage = ({ onClose }) => {
   React.useEffect(() => {
     const loadStats = async () => {
       try {
-        let chars = 0, msgs = 0, avs = 0, wbs = 0, bps = 0;
+        let chars = 0, msgs = 0, avs = 0, wbs = 0, bps = 0, docs = 0;
         if (window.openDB) {
           const db = await window.openDB();
           const getStoreCount = (storeName) => {
@@ -107509,19 +109826,77 @@ const BackupRestorePage = ({ onClose }) => {
               }
             });
           };
-
           chars = await getStoreCount("chat_characters");
           msgs = await getStoreCount("chat_history");
           avs = await getStoreCount("avatars");
           wbs = await getStoreCount("world_book");
           bps = await getStoreCount("backpack");
+
+          if (db.objectStoreNames.contains("user_settings")) {
+            const userSettings = await new Promise((resolve) => {
+              const tx = db.transaction("user_settings", "readonly");
+              const store = tx.objectStore("user_settings");
+              const req = store.getAll();
+              req.onsuccess = () => resolve(req.result || []);
+              req.onerror = () => resolve([]);
+            });
+            docs = userSettings.filter(
+              (item) =>
+                item &&
+                typeof item.key === "string" &&
+                item.key.startsWith("character_doc_")
+            ).length;
+          }
         }
+
+        let memories = 0;
+        try {
+          const mem = JSON.parse(localStorage.getItem("t8_memory_config") || "{}");
+          memories = Array.isArray(mem.memories) ? mem.memories.length : 0;
+        } catch (e) {}
+
+        let personas = 0;
+        try {
+          const p = JSON.parse(localStorage.getItem("user_personas") || "[]");
+          personas = Array.isArray(p) ? p.length : 0;
+        } catch (e) {}
+
+        let hasBg = false, hasLock = false, hasFold = false, theme = "莫兰迪浅色";
+        if (window.dbManager) {
+          try {
+            const bg = await window.dbManager.get("home_bg_image");
+            if (bg) hasBg = true;
+            const lockBg = await window.dbManager.get("lockscreen_bg_image");
+            if (lockBg) hasLock = true;
+            const foldBg = await window.dbManager.get("foldcard_bg_image");
+            if (foldBg) hasFold = true;
+            const th = await window.dbManager.get("app_theme_mode");
+            if (th)
+              theme =
+                th === "dark"
+                  ? "深色暗夜"
+                  : th === "morandi"
+                  ? "莫兰迪浅色"
+                  : th;
+          } catch (e) {}
+        }
+        if (localStorage.getItem("t8_lockscreen_config")) hasLock = true;
+        if (localStorage.getItem("t8_foldcard_config")) hasFold = true;
+        if (localStorage.getItem("page_background")) hasBg = true;
+
         setStats({
           charactersCount: chars,
           chatHistoryCount: msgs,
           avatarsCount: avs,
           worldBookCount: wbs,
           backpackCount: bps,
+          memoriesCount: memories,
+          characterDocsCount: docs,
+          themeMode: theme,
+          hasCustomWallpaper: hasBg,
+          hasCustomLockscreen: hasLock,
+          hasCustomFoldcard: hasFold,
+          personasCount: personas,
           localStorageCount: localStorage.length,
         });
       } catch (e) {
@@ -107531,7 +109906,7 @@ const BackupRestorePage = ({ onClose }) => {
     loadStats();
   }, []);
 
-  // 执行导出
+  // 触发导出
   const handleExport = async () => {
     if (isExporting) return;
     setIsExporting(true);
@@ -107543,9 +109918,14 @@ const BackupRestorePage = ({ onClose }) => {
       const jsonStr = JSON.stringify(data, null, 2);
       const blob = new Blob([jsonStr], { type: "application/json" });
       const now = new Date();
-      const timeStr = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(now.getSeconds()).padStart(2, "0")}`;
+      const timeStr = `${now.getFullYear()}${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}${String(now.getDate()).padStart(2, "0")}_${String(
+        now.getHours()
+      ).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}${String(
+        now.getSeconds()
+      ).padStart(2, "0")}`;
       const fileName = `MilvusPhone_Backup_${timeStr}.json`;
-
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -107554,8 +109934,9 @@ const BackupRestorePage = ({ onClose }) => {
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-
-      alert(`备份文件导出成功！\n已保存为：${fileName}`);
+      alert(
+        `备份文件导出成功！\n包含：聊天记录、长期记忆、长篇人设文档、主题与桌面壁纸、锁屏与折叠卡片、世界书与背包全量数据。\n已保存为：${fileName}`
+      );
     } catch (err) {
       console.error("导出失败:", err);
       alert(`导出备份失败：${err.message || err}`);
@@ -107564,11 +109945,10 @@ const BackupRestorePage = ({ onClose }) => {
     }
   };
 
-  // 选择文件
+  // 触发文件选择与预读解析
   const handleFileChange = (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     const reader = new FileReader();
     reader.onload = (event) => {
       try {
@@ -107577,7 +109957,7 @@ const BackupRestorePage = ({ onClose }) => {
         if (
           !parsed ||
           typeof parsed !== "object" ||
-          (!parsed.indexedDB && !parsed.localStorage)
+          (!parsed.indexedDB && !parsed.localStorage && !parsed.appStorage)
         ) {
           alert("无效的备份文件：未识别到有效的数据内容！");
           return;
@@ -107593,7 +109973,7 @@ const BackupRestorePage = ({ onClose }) => {
     reader.readAsText(file);
   };
 
-  // 执行恢复
+  // 确认导入还原
   const handleConfirmRestore = async () => {
     if (!importPreview) return;
     setIsImporting(true);
@@ -107602,7 +109982,9 @@ const BackupRestorePage = ({ onClose }) => {
         throw new Error("导入功能未就绪");
       }
       await window.importAllDatabaseData(importPreview, restoreMode);
-      alert("🎉 备份数据还原成功！即将自动刷新页面以应用新数据...");
+      alert(
+        "🎉 备份数据还原成功！已恢复全量主题壁纸、折叠卡片、锁屏设置与长期记忆，即将自动刷新页面以应用新数据..."
+      );
       setTimeout(() => {
         window.location.reload();
       }, 1200);
@@ -107627,7 +110009,7 @@ const BackupRestorePage = ({ onClose }) => {
         flexDirection: "column",
       }}
     >
-      {/* 隐藏的文件输入 */}
+      {/* 隐藏的 File Input */}
       <input
         type="file"
         ref={fileInputRef}
@@ -107682,7 +110064,7 @@ const BackupRestorePage = ({ onClose }) => {
         <div style={{ width: 24 }}></div>
       </div>
 
-      {/* 页面内容 */}
+      {/* 主体滚动区 */}
       <div
         className="no-scrollbar"
         style={{
@@ -107691,7 +110073,7 @@ const BackupRestorePage = ({ onClose }) => {
           overflowY: "auto",
         }}
       >
-        {/* 数据统计卡片 */}
+        {/* 1. 当前数据概览卡片 */}
         <div
           style={{
             background: "#FFFFFF",
@@ -107716,7 +110098,7 @@ const BackupRestorePage = ({ onClose }) => {
               className="ph-fill ph-chart-pie-slice"
               style={{ color: "#5A8F6D" }}
             ></i>
-            当前本地数据概览
+            当前本地数据全景概览
           </div>
           <div
             style={{
@@ -107725,6 +110107,7 @@ const BackupRestorePage = ({ onClose }) => {
               gap: "10px",
             }}
           >
+            {/* 1. 聊天角色 */}
             <div
               style={{
                 background: "#F5F8F6",
@@ -107732,14 +110115,13 @@ const BackupRestorePage = ({ onClose }) => {
                 borderRadius: "12px",
               }}
             >
-              <div style={{ fontSize: "11px", color: "#8c917b" }}>
-                聊天角色
-              </div>
+              <div style={{ fontSize: "11px", color: "#8c917b" }}>💬 聊天角色</div>
               <div
                 style={{
-                  fontSize: "18px",
+                  fontSize: "17px",
                   fontWeight: "bold",
                   color: "#5A8F6D",
+                  marginTop: "2px",
                 }}
               >
                 {stats.charactersCount}{" "}
@@ -107748,6 +110130,8 @@ const BackupRestorePage = ({ onClose }) => {
                 </span>
               </div>
             </div>
+
+            {/* 2. 历史消息 */}
             <div
               style={{
                 background: "#FDF0E6",
@@ -107755,14 +110139,13 @@ const BackupRestorePage = ({ onClose }) => {
                 borderRadius: "12px",
               }}
             >
-              <div style={{ fontSize: "11px", color: "#8c917b" }}>
-                历史消息
-              </div>
+              <div style={{ fontSize: "11px", color: "#8c917b" }}>📜 历史对话</div>
               <div
                 style={{
-                  fontSize: "18px",
+                  fontSize: "17px",
                   fontWeight: "bold",
                   color: "#D6724B",
+                  marginTop: "2px",
                 }}
               >
                 {stats.chatHistoryCount}{" "}
@@ -107771,6 +110154,79 @@ const BackupRestorePage = ({ onClose }) => {
                 </span>
               </div>
             </div>
+
+            {/* 3. 长期记忆与长篇人设文档 */}
+            <div
+              style={{
+                background: "#F7F3FA",
+                padding: "10px 12px",
+                borderRadius: "12px",
+              }}
+            >
+              <div style={{ fontSize: "11px", color: "#8c917b" }}>🧠 长期记忆与文档</div>
+              <div
+                style={{
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  color: "#7E57C2",
+                  marginTop: "3px",
+                }}
+              >
+                {stats.memoriesCount}
+                <span style={{ fontSize: "11px", fontWeight: "normal" }}> 记忆 / </span>
+                {stats.characterDocsCount}
+                <span style={{ fontSize: "11px", fontWeight: "normal" }}> 篇文档</span>
+              </div>
+            </div>
+
+            {/* 4. 主题与桌面壁纸 */}
+            <div
+              style={{
+                background: "#F2F7FA",
+                padding: "10px 12px",
+                borderRadius: "12px",
+              }}
+            >
+              <div style={{ fontSize: "11px", color: "#8c917b" }}>🎨 主题与桌面壁纸</div>
+              <div
+                style={{
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  color: "#3B82F6",
+                  marginTop: "3px",
+                  whiteSpace: "nowrap",
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                }}
+              >
+                {stats.hasCustomWallpaper ? "已设自定义壁纸" : stats.themeMode}
+              </div>
+            </div>
+
+            {/* 5. 锁屏与折叠卡片 */}
+            <div
+              style={{
+                background: "#FFFBF0",
+                padding: "10px 12px",
+                borderRadius: "12px",
+              }}
+            >
+              <div style={{ fontSize: "11px", color: "#8c917b" }}>🔒 锁屏与折叠卡片</div>
+              <div
+                style={{
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  color: "#D97706",
+                  marginTop: "3px",
+                }}
+              >
+                {stats.hasCustomLockscreen || stats.hasCustomFoldcard
+                  ? "已自定义装扮"
+                  : "默认预设"}
+              </div>
+            </div>
+
+            {/* 6. 自定义头像 */}
             <div
               style={{
                 background: "#F5F8F6",
@@ -107778,14 +110234,13 @@ const BackupRestorePage = ({ onClose }) => {
                 borderRadius: "12px",
               }}
             >
-              <div style={{ fontSize: "11px", color: "#8c917b" }}>
-                自定义头像
-              </div>
+              <div style={{ fontSize: "11px", color: "#8c917b" }}>🖼️ 自定义头像</div>
               <div
                 style={{
-                  fontSize: "18px",
+                  fontSize: "17px",
                   fontWeight: "bold",
                   color: "#5A8F6D",
+                  marginTop: "2px",
                 }}
               >
                 {stats.avatarsCount}{" "}
@@ -107794,6 +110249,8 @@ const BackupRestorePage = ({ onClose }) => {
                 </span>
               </div>
             </div>
+
+            {/* 7. 世界书与玩家人设 */}
             <div
               style={{
                 background: "#FDF0E6",
@@ -107801,26 +110258,49 @@ const BackupRestorePage = ({ onClose }) => {
                 borderRadius: "12px",
               }}
             >
-              <div style={{ fontSize: "11px", color: "#8c917b" }}>
-                世界书条目
-              </div>
+              <div style={{ fontSize: "11px", color: "#8c917b" }}>📖 世界书与人设</div>
               <div
                 style={{
-                  fontSize: "18px",
+                  fontSize: "14px",
                   fontWeight: "bold",
                   color: "#D6724B",
+                  marginTop: "3px",
                 }}
               >
-                {stats.worldBookCount}{" "}
+                {stats.worldBookCount}
+                <span style={{ fontSize: "11px", fontWeight: "normal" }}> 条书 / </span>
+                {stats.personasCount}
+                <span style={{ fontSize: "11px", fontWeight: "normal" }}> 人设</span>
+              </div>
+            </div>
+
+            {/* 8. 随身背包物品 */}
+            <div
+              style={{
+                background: "#F0F9F5",
+                padding: "10px 12px",
+                borderRadius: "12px",
+              }}
+            >
+              <div style={{ fontSize: "11px", color: "#8c917b" }}>🎒 随身背包</div>
+              <div
+                style={{
+                  fontSize: "17px",
+                  fontWeight: "bold",
+                  color: "#2E7D32",
+                  marginTop: "2px",
+                }}
+              >
+                {stats.backpackCount}{" "}
                 <span style={{ fontSize: "12px", fontWeight: "normal" }}>
-                  条
+                  件
                 </span>
               </div>
             </div>
           </div>
         </div>
 
-        {/* 导出全量备份卡片 */}
+        {/* 2. 导出数据模块 */}
         <div
           style={{
             background: "#FFFFFF",
@@ -107855,7 +110335,7 @@ const BackupRestorePage = ({ onClose }) => {
               lineHeight: "1.5",
             }}
           >
-            一键将当前所有的聊天历史、角色人设、世界书、人际关系、背包、共同记账与本地设置打包导出为 JSON 文件，安全下载到您的本地设备。
+            一键将当前的聊天历史、长期记忆、长篇人设文档、主题桌面壁纸、锁屏与折叠卡片装扮、世界书、人际关系、背包与系统配置打包导出为完整备份，安全下载到您的本地设备。
           </div>
           <button
             onClick={handleExport}
@@ -107890,11 +110370,13 @@ const BackupRestorePage = ({ onClose }) => {
               }
               style={{ fontSize: "16px" }}
             ></i>
-            {isExporting ? "正在打包导出中..." : "立即导出全量备份 (.json)"}
+            {isExporting
+              ? "正在打包导出全量备份中..."
+              : "立即导出全量备份 (.json)"}
           </button>
         </div>
 
-        {/* 导入恢复备份卡片 */}
+        {/* 3. 导入数据模块 */}
         <div
           style={{
             background: "#FFFFFF",
@@ -107929,7 +110411,7 @@ const BackupRestorePage = ({ onClose }) => {
               lineHeight: "1.5",
             }}
           >
-            选择您先前导出的备份 JSON 文件，一键迁移并还原到当前浏览器中。
+            选择您先前导出的备份 JSON 文件，一键迁移并完整还原主题壁纸、锁屏卡片、长期记忆与聊天记录到当前设备。
           </div>
           <button
             onClick={() => fileInputRef.current?.click()}
@@ -107950,12 +110432,15 @@ const BackupRestorePage = ({ onClose }) => {
             }}
             className="active-press"
           >
-            <i className="ph ph-folder-open" style={{ fontSize: "16px" }}></i>
+            <i
+              className="ph ph-folder-open"
+              style={{ fontSize: "16px" }}
+            ></i>
             选择本地备份文件 (.json)
           </button>
         </div>
 
-        {/* 备份提示 */}
+        {/* 4. 安全说明 */}
         <div
           style={{
             padding: "12px 14px",
@@ -107966,20 +110451,22 @@ const BackupRestorePage = ({ onClose }) => {
             lineHeight: "1.6",
           }}
         >
-          💡 <strong>温馨提示：</strong>
-          <br />• 导出的备份文件存储在您本地电脑上，不会上传至任何远程服务器。
-          <br />• 建议在更换浏览器或清理系统垃圾前先进行备份，避免重要对话与设定丢失。
+          💡 <strong>全量备份说明：</strong>
+          <br />
+          • 全量备份已包含：所有角色与对话、长期记忆词条、角色长篇设定文档、桌面/锁屏/折叠卡片壁纸、主题模式、世界书、随身背包与系统设置。
+          <br />
+          • 导出的备份文件仅保存在您本地设备中，绝不上传至任何远程服务器，请妥善保管。
         </div>
       </div>
 
-      {/* 导入确认浮层 */}
+      {/* 导入确认模态框 */}
       {importPreview && (
         <>
           <div
             className="t9-companion-mask"
             style={{ zIndex: 1020 }}
             onClick={() => !isImporting && setImportPreview(null)}
-          ></div>
+          />
           <div
             className="t9-companion-modal no-scrollbar"
             style={{
@@ -108039,39 +110526,93 @@ const BackupRestorePage = ({ onClose }) => {
               )}
             </div>
 
-            {/* 文件元数据信息 */}
+            {/* 备份文件信息摘要 */}
             <div
               style={{
                 background: "#F9F7F5",
                 borderRadius: "14px",
-                padding: "12px 14px",
+                padding: "14px 16px",
                 marginBottom: "16px",
                 fontSize: "12px",
                 color: "#666",
+                lineHeight: "1.7",
               }}
             >
               <div style={{ marginBottom: "4px" }}>
-                <strong>导出时间：</strong>
+                <strong>📅 导出时间：</strong>
                 {importPreview.meta?.exportTime
                   ? new Date(importPreview.meta.exportTime).toLocaleString()
                   : "未知"}
               </div>
               <div style={{ marginBottom: "4px" }}>
-                <strong>包含角色：</strong>
-                {(importPreview.indexedDB?.chat_characters || []).length} 个
+                <strong>💬 包含角色与消息：</strong>
+                {(importPreview.indexedDB?.chat_characters || []).length} 个角色
+                · {(importPreview.indexedDB?.chat_history || []).length}{" "}
+                条对话记录
               </div>
               <div style={{ marginBottom: "4px" }}>
-                <strong>聊天历史：</strong>
-                {(importPreview.indexedDB?.chat_history || []).length} 条消息
+                <strong>🧠 长期记忆与文档：</strong>
+                {(() => {
+                  let mCount = importPreview.meta?.summary?.memoriesCount;
+                  if (
+                    mCount === undefined &&
+                    importPreview.localStorage?.t8_memory_config
+                  ) {
+                    try {
+                      mCount = (
+                        JSON.parse(
+                          importPreview.localStorage.t8_memory_config
+                        ).memories || []
+                      ).length;
+                    } catch (e) {}
+                  }
+                  let docCount =
+                    importPreview.meta?.summary?.characterDocsCount;
+                  if (
+                    docCount === undefined &&
+                    importPreview.indexedDB?.user_settings
+                  ) {
+                    docCount = importPreview.indexedDB.user_settings.filter(
+                      (i) =>
+                        i &&
+                        typeof i.key === "string" &&
+                        i.key.startsWith("character_doc_")
+                    ).length;
+                  }
+                  return `${mCount || 0} 条长期记忆 · ${
+                    docCount || 0
+                  } 篇长篇人设文档`;
+                })()}
+              </div>
+              <div style={{ marginBottom: "4px" }}>
+                <strong>🎨 主题、锁屏与卡片：</strong>
+                {(() => {
+                  const hasAppSt =
+                    importPreview.appStorage &&
+                    Object.keys(importPreview.appStorage).length > 0;
+                  const hasTheme =
+                    importPreview.meta?.summary?.hasThemeSettings ||
+                    hasAppSt ||
+                    importPreview.localStorage?.t8_lockscreen_config ||
+                    importPreview.localStorage?.t8_foldcard_config;
+                  return hasTheme
+                    ? "已包含桌面壁纸、锁屏与折叠卡片完整装扮配置"
+                    : "默认基础装扮";
+                })()}
+              </div>
+              <div style={{ marginBottom: "4px" }}>
+                <strong>📖 世界书与背包：</strong>
+                {(importPreview.indexedDB?.world_book || []).length} 条世界书 ·{" "}
+                {(importPreview.indexedDB?.backpack || []).length} 件随身物品
               </div>
               <div>
-                <strong>配置与世界书：</strong>
-                {Object.keys(importPreview.localStorage || {}).length} 项配置 /{" "}
-                {(importPreview.indexedDB?.world_book || []).length} 条世界书
+                <strong>⚙️ 系统与全量参数：</strong>
+                {Object.keys(importPreview.localStorage || {}).length}{" "}
+                项本地配置
               </div>
             </div>
 
-            {/* 恢复模式选择 */}
+            {/* 模式选择 */}
             <div style={{ marginBottom: "18px" }}>
               <div
                 style={{
@@ -108084,7 +110625,11 @@ const BackupRestorePage = ({ onClose }) => {
                 恢复模式选择：
               </div>
               <div
-                style={{ display: "flex", flexDirection: "column", gap: "8px" }}
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
               >
                 <label
                   style={{
@@ -108126,7 +110671,7 @@ const BackupRestorePage = ({ onClose }) => {
                         marginTop: "2px",
                       }}
                     >
-                      清空当前浏览器现有数据，并完全写入备份中的全部数据，确保100%纯净一致。
+                      清空当前浏览器现有数据，并完全写入备份中的全部数据与装扮，确保100%纯净一致。
                     </div>
                   </div>
                 </label>
@@ -108141,7 +110686,8 @@ const BackupRestorePage = ({ onClose }) => {
                     border: "1px solid",
                     borderColor:
                       restoreMode === "merge" ? "#5A8F6D" : "#e8e5dc",
-                    background: restoreMode === "merge" ? "#F5F8F6" : "#fff",
+                    background:
+                      restoreMode === "merge" ? "#F5F8F6" : "#fff",
                     cursor: "pointer",
                   }}
                 >
@@ -108170,14 +110716,14 @@ const BackupRestorePage = ({ onClose }) => {
                         marginTop: "2px",
                       }}
                     >
-                      保留当前现有数据，仅插入或覆盖同名记录。
+                      保留当前现有数据，仅插入或覆盖同名记录与新配置。
                     </div>
                   </div>
                 </label>
               </div>
             </div>
 
-            {/* 操作按钮 */}
+            {/* 底部按钮 */}
             <div style={{ display: "flex", gap: "10px" }}>
               <button
                 onClick={() => setImportPreview(null)}
@@ -108238,10 +110784,6 @@ const BackupRestorePage = ({ onClose }) => {
     </div>
   );
 };
-
-
-// ==================== [新增] 隐私与安全二级页面组件 ====================
-// ==================== [新增] 隐私与安全二级页面组件 ====================
 const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage }) => {
   const [activeSubPage, setActiveSubPage] = React.useState(null);
 

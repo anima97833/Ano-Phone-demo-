@@ -1910,14 +1910,14 @@ async function migrateBookData() {
   }
 }
 
-// 全量导出备份数据 (IndexedDB + localStorage)
+// 全量导出备份数据 (IndexedDB t8_chat_db + IndexedDB AppStorage + localStorage)
 async function exportAllDatabaseData() {
   try {
     const db = await openDB();
     const storeNames = Array.from(db.objectStoreNames);
     const indexedDBData = {};
 
-    // 1. 导出 IndexedDB 所有 Store 数据
+    // 1. 导出 IndexedDB (t8_chat_db) 所有 Store 数据
     for (const storeName of storeNames) {
       try {
         const records = await new Promise((resolve) => {
@@ -1934,7 +1934,35 @@ async function exportAllDatabaseData() {
       }
     }
 
-    // 2. 导出 localStorage 全量键值
+    // 2. 导出 IndexedDB (AppStorage) settings store (包含桌面壁纸、锁屏壁纸、折叠卡片壁纸、主题模式、自定义图标、微善堂、统计数据等)
+    const appStorageData = {};
+    try {
+      if (typeof indexedDB !== "undefined") {
+        const appDb = await new Promise((resolve) => {
+          const req = indexedDB.open("AppStorage", 1);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        });
+        if (appDb && appDb.objectStoreNames.contains("settings")) {
+          const records = await new Promise((resolve) => {
+            const tx = appDb.transaction("settings", "readonly");
+            const store = tx.objectStore("settings");
+            const req = store.getAll();
+            req.onsuccess = () => resolve(req.result || []);
+            req.onerror = () => resolve([]);
+          });
+          records.forEach((item) => {
+            if (item && item.id) {
+              appStorageData[item.id] = item.value;
+            }
+          });
+        }
+      }
+    } catch (e) {
+      console.warn("导出 AppStorage 异常:", e);
+    }
+
+    // 3. 导出 localStorage 全量键值 (包含长期记忆 t8_memory_config、折叠卡片 t8_foldcard_config、锁屏 t8_lockscreen_config、人设、字体、API配置等)
     const localStorageData = {};
     for (let i = 0; i < localStorage.length; i++) {
       const key = localStorage.key(i);
@@ -1943,11 +1971,24 @@ async function exportAllDatabaseData() {
       }
     }
 
-    // 3. 打包元数据
+    // 4. 解析关键统计信息 (长期记忆、设定文档、主题壁纸、锁屏卡片)
+    let memoriesCount = 0;
+    try {
+      const memConfig = JSON.parse(localStorageData["t8_memory_config"] || "{}");
+      memoriesCount = Array.isArray(memConfig.memories) ? memConfig.memories.length : 0;
+    } catch (e) {}
+
+    const userSettingsList = indexedDBData[STORES.USER_SETTINGS] || [];
+    const characterDocsCount = userSettingsList.filter((item) => item && typeof item.key === "string" && item.key.startsWith("character_doc_")).length;
+    const hasThemeSettings = !!(appStorageData["home_bg_image"] || appStorageData["app_theme_mode"] || localStorageData["custom_font_url"] || localStorageData["page_background"]);
+    const hasLockscreenSettings = !!(appStorageData["lockscreen_bg_image"] || localStorageData["t8_lockscreen_config"]);
+    const hasFoldcardSettings = !!(appStorageData["foldcard_bg_image"] || localStorageData["t8_foldcard_config"]);
+
+    // 5. 打包全量元数据
     const backupPayload = {
       meta: {
         appName: "Milvus-Phone",
-        version: "1.0",
+        version: "2.0",
         dbVersion: DB_VERSION,
         exportTime: new Date().toISOString(),
         timestamp: Date.now(),
@@ -1957,11 +1998,18 @@ async function exportAllDatabaseData() {
           avatarsCount: (indexedDBData[STORES.AVATARS] || []).length,
           worldBookCount: (indexedDBData[STORES.WORLD_BOOK] || []).length,
           backpackCount: (indexedDBData[STORES.BACKPACK] || []).length,
+          memoriesCount,
+          characterDocsCount,
+          hasThemeSettings,
+          hasLockscreenSettings,
+          hasFoldcardSettings,
           localStorageKeysCount: Object.keys(localStorageData).length,
+          appStorageKeysCount: Object.keys(appStorageData).length,
         },
       },
       localStorage: localStorageData,
       indexedDB: indexedDBData,
+      appStorage: appStorageData,
     };
 
     return backupPayload;
@@ -1983,24 +2031,27 @@ async function importAllDatabaseData(backupPayload, mode = "overwrite") {
     const hasLocalStorage =
       backupPayload.localStorage &&
       typeof backupPayload.localStorage === "object";
+    const hasAppStorage =
+      backupPayload.appStorage &&
+      typeof backupPayload.appStorage === "object";
 
-    if (!hasIndexedDB && !hasLocalStorage) {
+    if (!hasIndexedDB && !hasLocalStorage && !hasAppStorage) {
       throw new Error("备份文件中未包含有效的数据内容！");
     }
 
-    // 1. 还原 localStorage
+    // 1. 还原 localStorage (包含长期记忆、折叠卡片配置、锁屏配置、人设、字体、API配置等)
     if (hasLocalStorage) {
       if (mode === "overwrite") {
         localStorage.clear();
       }
       for (const [key, value] of Object.entries(backupPayload.localStorage)) {
         if (value !== null && value !== undefined) {
-          localStorage.setItem(key, value);
+          localStorage.setItem(key, typeof value === "string" ? value : JSON.stringify(value));
         }
       }
     }
 
-    // 2. 还原 IndexedDB
+    // 2. 还原 IndexedDB (t8_chat_db)
     if (hasIndexedDB) {
       const db = await openDB();
       for (const [storeName, records] of Object.entries(
@@ -2038,6 +2089,39 @@ async function importAllDatabaseData(backupPayload, mode = "overwrite") {
       }
     }
 
+    // 3. 还原 IndexedDB (AppStorage) (包含桌面壁纸、锁屏壁纸、折叠卡片壁纸、主题模式、图标等)
+    if (hasAppStorage && typeof indexedDB !== "undefined") {
+      try {
+        const appDb = await new Promise((resolve) => {
+          const req = indexedDB.open("AppStorage", 1);
+          req.onupgradeneeded = (ev) => {
+            const db = ev.target.result;
+            if (!db.objectStoreNames.contains("settings")) {
+              db.createObjectStore("settings", { keyPath: "id" });
+            }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => resolve(null);
+        });
+        if (appDb && appDb.objectStoreNames.contains("settings")) {
+          await new Promise((resolve) => {
+            const tx = appDb.transaction("settings", "readwrite");
+            const store = tx.objectStore("settings");
+            if (mode === "overwrite") {
+              store.clear();
+            }
+            for (const [key, value] of Object.entries(backupPayload.appStorage)) {
+              store.put({ id: key, value });
+            }
+            tx.oncomplete = () => resolve();
+            tx.onerror = () => resolve();
+          });
+        }
+      } catch (e) {
+        console.warn("恢复 AppStorage 异常:", e);
+      }
+    }
+
     return {
       success: true,
       restoredStores: hasIndexedDB
@@ -2045,6 +2129,9 @@ async function importAllDatabaseData(backupPayload, mode = "overwrite") {
         : 0,
       restoredLocalStorageKeys: hasLocalStorage
         ? Object.keys(backupPayload.localStorage).length
+        : 0,
+      restoredAppStorageKeys: hasAppStorage
+        ? Object.keys(backupPayload.appStorage).length
         : 0,
     };
   } catch (error) {
