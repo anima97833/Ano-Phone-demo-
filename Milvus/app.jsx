@@ -83650,7 +83650,7 @@ ${commentsContext}
 };
 
 
-// ==================== 心纸居（放置小人互动空间）主组件 · 拖拽投喂与AI专属奇珍重构版 ====================
+// ==================== 心纸居（放置小人互动空间）主组件 · 批量生成5-8礼物与拖拽缩回抽屉版 ====================
 const HeartPaperMansion = ({ onClose, chats = [] }) => {
   const { useState, useEffect, useRef } = React;
 
@@ -83668,7 +83668,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
   const [rosterSearch, setRosterSearch] = useState('');
 
   // 礼物系统状态
-  const [giftMode, setGiftMode] = useState('classic'); // 'classic' (经典食匣) | 'special' (专属奇珍 AI)
+  const [giftMode, setGiftMode] = useState('classic'); // 'classic' | 'special'
   const [specialGifts, setSpecialGifts] = useState([]);
   const [isGeneratingGift, setIsGeneratingGift] = useState(false);
   const [selectedGiftDetail, setSelectedGiftDetail] = useState(null);
@@ -83920,7 +83920,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     }
   };
 
-  // 初始化进入动画与加载持久化数据
+  // 初始化
   useEffect(() => {
     const timer = setTimeout(() => setAnimState('active'), 450);
 
@@ -83949,7 +83949,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     return () => clearTimeout(timer);
   }, [chats]);
 
-  // 解析并缓存所有名士的真实头像 Base64 / URL
+  // 解析并缓存头像
   useEffect(() => {
     let isMounted = true;
     const resolveAllAvatars = async () => {
@@ -83978,7 +83978,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     return () => { isMounted = false; };
   }, [chats]);
 
-  // 根据 activeCharIds、customSpritesMap、resolvedAvatars 构建小人实体
+  // 构建小人实体
   useEffect(() => {
     const slotPositions = [
       { x: 30, y: 48, facing: 1 },
@@ -84056,7 +84056,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     }, 1000);
   };
 
-  // 切换名士入驻状态 (上限 5 人)
+  // 切换名士入驻状态
   const toggleCharacterActive = (charId) => {
     if (activeCharIds.includes(charId)) {
       if (activeCharIds.length <= 1) {
@@ -84141,7 +84141,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     });
   };
 
-  // 自动漫游定时器 (FSM Wander Loop)
+  // 自动漫游定时器
   useEffect(() => {
     const wanderInterval = setInterval(() => {
       setCharacters(prevChars => {
@@ -84194,7 +84194,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     return () => clearInterval(wanderInterval);
   }, [customSpritesMap]);
 
-  // 物理移动与多名士碰撞检测 Tick
+  // 移动与碰撞检测
   useEffect(() => {
     const moveInterval = setInterval(() => {
       setCharacters(prevChars => {
@@ -84327,7 +84327,7 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     };
   };
 
-  // AI 偶遇对白生成
+  // AI 偶遇对话
   const triggerAIEncounter = async (c1, c2, allChars) => {
     aiBusyRef.current = true;
 
@@ -84382,7 +84382,7 @@ ${p2.docContext ? `${p2.docContext}\n` : ""}
 ${p2.recentChat ? `${p2.recentChat}\n` : ""}
 
 【交互生成要求】：
-1. 必须完全使用各自在角色配置库中的口吻与说话风格！严格体现各自傲娇/清冷/忠勇/温润等鲜明性格。
+1. 必须完全使用各自在角色配置库中的口吻与说话风格！
 2. 角色彼此能知道对方是谁。
 3. 请以极精炼的 2 句对话返回（角色一先说一句，角色二回应一句，每句 18 字以内）。
 
@@ -84517,7 +84517,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
 
 【书信撰写要求】：
 1. 必须完全使用【${persona.name}】在角色配置库中的第一人称口吻与性格。
-2. 篇幅精炼优美（120~220字左右），段落清晰，自然带有古典书信或便笺的韵致。
+2. 篇幅精炼优美（120~220字左右），段落清晰。
 3. 抬头称呼请符合人设，落款必须是【${persona.name}】。
 
 请严格仅返回纯 JSON 格式：
@@ -84603,7 +84603,6 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
     setIsGeneratingLetter(false);
   };
 
-  // 删除单封历史信件
   const handleDeleteHistoryLetter = (letterId) => {
     if (!confirm("确定要销毁这封心纸信笺吗？")) return;
     setLettersHistory(prev => {
@@ -84616,7 +84615,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
     });
   };
 
-  // ==================== AI 智能研制专属礼物 (特殊模式) ====================
+  // ==================== AI 智能批量研制专属礼物 (每次生成 5-8 个) ====================
   const generateAIGift = async () => {
     if (isGeneratingGift) return;
     setIsGeneratingGift(true);
@@ -84655,8 +84654,8 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
 
       const persona = await buildComprehensiveCharacterPersona(charObj);
 
-      const prompt = `【心纸居名士专属奇珍礼物研制生成】
-场景说明：当前在府邸空间【心纸居】中，请为名士【${persona.name}】或楼主【${userPersona.name}】量身研制一件独特的专属奇珍异宝、时令风味或珍藏信物。
+      const prompt = `【心纸居名士专属奇珍礼物研制批量生成】
+场景说明：当前在府邸空间【心纸居】中，请为名士【${persona.name}】或楼主【${userPersona.name}】量身研制 6 到 8 件互不相同的专属奇珍异宝、时令风味、珍稀点心或寄情信物。
 
 收信人/主人（用户身份）：【${userPersona.name}】（${userPersona.gender || "未知"}，设定：${userPersona.personality || userPersona.persona || "楼主"}）。
 
@@ -84668,24 +84667,28 @@ ${persona.docContext ? `${persona.docContext}\n` : ""}
 ${persona.recentChat ? `${persona.recentChat}\n` : ""}
 
 【研制要求】：
-1. 必须深刻契合【${persona.name}】的性格喜好、身世背景，或巧妙呼应近期与【${userPersona.name}】的聊天回忆。
-2. 单字 Emoji 图标（如：🍇, 🍵, 🥟, 🗡️, 🪶, 🍶, 🪷, 🏮, 📜, 🍬 等）。
-3. 详细风味/来历描述需雅致优美（60字左右）。
-4. 提供该名士收到此礼物时的专属第一人称回应台词（customReply，30字以内）。
+1. 必须一次性生成 6 到 8 个不同的礼物对象构成的 JSON 数组。
+2. 每件礼物深刻契合【${persona.name}】的性格喜好、身世背景，或呼应近期与【${userPersona.name}】的聊天回忆（如提过的家乡小吃、喜爱器物、共赏景物、信物等）。
+3. 必须提供生动的单字 Emoji 图标（如：🍇, 🍵, 🥟, 🗡️, 🪶, 🍶, 🪷, 🏮, 📜, 🍬, 🍡, 🎏, 🪮, 🪞 等）。
+4. 详细风味/来历描述需雅致优美（40~70字）。
+5. 提供该名士收到此礼物时的专属第一人称回应台词（customReply，25字以内）。
 
-请严格仅返回纯 JSON 格式：
-{
-  "name": "礼物名称（如：雪山白梅酿 / 塞上青稞酥 / 墨玉平安扣）",
-  "icon": "🍶",
-  "val": 30,
-  "desc": "详细风味或来历描述...",
-  "customReply": "名士收到时的专属回应台词..."
-}`;
+请严格仅返回纯 JSON 数组格式（包含 6~8 项）：
+[
+  {
+    "name": "礼物名称（如：雪山白梅酿）",
+    "icon": "🍶",
+    "val": 28,
+    "desc": "详细风味或来历描述...",
+    "customReply": "名士收到时的专属回应台词..."
+  },
+  ...
+]`;
 
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是一位精通国风雅致风物与角色扮演的奇珍大师，请严格按JSON输出定制礼物。" },
+            { role: "system", content: "你是一位精通国风雅致风物与角色扮演的奇珍大师，请严格按JSON数组输出6~8个定制礼物。" },
             { role: "user", content: prompt }
           ],
           { temperature: 0.88 },
@@ -84696,67 +84699,80 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
               else if (cleaned.startsWith("```")) cleaned = cleaned.replace(/^```/, "").replace(/```$/, "");
               const parsed = JSON.parse(cleaned.trim());
 
-              if (parsed.name && parsed.icon) {
-                const newGift = {
-                  id: `gift_ai_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-                  name: parsed.name,
-                  icon: parsed.icon || "🎁",
-                  val: parsed.val || 25,
-                  desc: parsed.desc || "名士精心研制之物，满载深情厚谊。",
-                  customReply: parsed.customReply || "多谢楼主心意，甚合我心。",
+              const itemsList = Array.isArray(parsed) ? parsed : (parsed.items || parsed.gifts || [parsed]);
+
+              if (itemsList.length > 0) {
+                const newGifts = itemsList.map((p, idx) => ({
+                  id: `gift_ai_${Date.now()}_${idx}_${Math.random().toString(36).slice(2, 6)}`,
+                  name: p.name || `奇珍·${idx + 1}`,
+                  icon: p.icon || "🎁",
+                  val: p.val || 25,
+                  desc: p.desc || "名士精心研制之物，满载深情厚谊。",
+                  customReply: p.customReply || "多谢楼主心意，甚合我心。",
                   targetCharName: persona.name,
                   sourceType: "ai"
-                };
+                }));
 
                 setSpecialGifts(prev => {
-                  const updated = [newGift, ...prev];
+                  const updated = [...newGifts, ...prev];
                   saveSpecialGiftsToDB(updated);
                   return updated;
                 });
                 setIsGeneratingGift(false);
-                setModeTip(`✨ 已研制出【${newGift.name}】！可直接拖拽投喂名士`);
+                setModeTip(`✨ 已研制出 ${newGifts.length} 款【${persona.name}】专属奇珍！可直接拖拽投喂`);
                 setTimeout(() => setModeTip(''), 3500);
                 return;
               }
             } catch (e) {
-              console.warn("解析 AI 研制礼物失败:", e);
+              console.warn("解析 AI 批量研制礼物失败:", e);
             }
-            fallbackAIGift(charObj);
+            fallbackAIBatchGifts(charObj);
           },
           (err) => {
-            fallbackAIGift(charObj);
+            fallbackAIBatchGifts(charObj);
           }
         );
       } else {
-        fallbackAIGift(charObj);
+        fallbackAIBatchGifts(charObj);
       }
     } catch (e) {
       setIsGeneratingGift(false);
     }
   };
 
-  const fallbackAIGift = (charObj) => {
+  const fallbackAIBatchGifts = (charObj) => {
     const name = charObj.name || "名士";
-    const newGift = {
-      id: `gift_ai_${Date.now()}`,
-      name: `${name}的特调清露`,
-      icon: "🍵",
-      val: 25,
-      desc: `${name}特意为你寻得的时令甘露，入口微甘清冽，能扫除一身劳顿。`,
-      customReply: `（眉宇舒展）楼主特意送来此物，我便欣然收下了。`,
+    const fallbackTemplates = [
+      { name: `${name}的特调清露`, icon: "🍵", val: 25, desc: `${name}特意为你寻得的时令甘露，入口微甘清冽，能扫除一身劳顿。`, customReply: `（眉宇舒展）楼主特意送来此物，我便欣然收下了。` },
+      { name: `秘制鲜笋酥`, icon: "🥟", val: 22, desc: "采清晨带露鲜笋切丁，外皮金黄酥脆，咸鲜怡人。", customReply: "（尝了一口，笑意渐深）松脆可口，正合我口味。" },
+      { name: `冰糖青梅烙`, icon: "🫒", val: 20, desc: "初夏青梅以老冰糖久渍熬制，酸甜生津，开胃爽神。", customReply: "酸甜正好，与楼主同享方显滋味。" },
+      { name: `案前解语花`, icon: "🌸", val: 30, desc: "静置案头的初绽鲜花，幽香盈袖，寄托着无声牵挂。", customReply: "花香清雅，得此心意，今日便无烦忧。" },
+      { name: `紫玉同心符`, icon: "🏮", val: 35, desc: "精雕细琢的护身玉符，温润细腻，庇佑一路平安。", customReply: "（仔细佩于腰间）楼主赠我的信物，自当随身携带。" },
+      { name: `云雾龙井糕`, icon: "🍡", val: 26, desc: "以明前龙井研磨入糕，茶香浓郁，甜而不腻。", customReply: "清茶雅点，楼主果然懂我。" }
+    ];
+
+    const newGifts = fallbackTemplates.map((p, idx) => ({
+      id: `gift_ai_${Date.now()}_${idx}`,
+      name: p.name,
+      icon: p.icon,
+      val: p.val,
+      desc: p.desc,
+      customReply: p.customReply,
       targetCharName: name,
       sourceType: "ai"
-    };
+    }));
 
     setSpecialGifts(prev => {
-      const updated = [newGift, ...prev];
+      const updated = [...newGifts, ...prev];
       saveSpecialGiftsToDB(updated);
       return updated;
     });
     setIsGeneratingGift(false);
+    setModeTip(`✨ 已研制出 ${newGifts.length} 款专属奇珍！可直接拖拽投喂`);
+    setTimeout(() => setModeTip(''), 3500);
   };
 
-  // 手势按下小人 (PointerDown on Character)
+  // 手势按下小人
   const handlePointerDown = (charId, e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -84790,7 +84806,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
     }));
   };
 
-  // 手势按下礼物开始拖拽 (PointerDown on Gift Icon)
+  // 手势按下礼物开始拖拽 (自动触发抽屉平滑缩回)
   const handleGiftDragStart = (item, e) => {
     e.preventDefault();
     e.stopPropagation();
@@ -84807,7 +84823,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
     });
   };
 
-  // 全局手势滑动 (PointerMove - 兼顾角色拖拽与礼物拖拽投喂)
+  // 全局手势滑动
   const handlePointerMove = (e) => {
     const clientX = e.clientX || (e.touches && e.touches[0]?.clientX) || 0;
     const clientY = e.clientY || (e.touches && e.touches[0]?.clientY) || 0;
@@ -84863,7 +84879,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
     }));
   };
 
-  // 全局手势松开 (PointerUp - 礼物投喂结算 / 小人着陆)
+  // 全局手势松开
   const handlePointerUp = (e) => {
     // 1. 处理礼物拖拽松手投喂
     if (draggingGift) {
@@ -84967,7 +84983,6 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
       });
     }
 
-    // 根据礼物定制或默认台词
     const speechText = item.customReply || `享用了【${item.name}】！心意满满~ ❤️`;
 
     setCharacters(prev => prev.map(c => {
@@ -84999,7 +85014,6 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
     setHasNewLetter(false);
   };
 
-  // 过滤传讯名士列表
   const filteredChats = (chats || []).filter(c => {
     if (!rosterSearch) return true;
     return (c.name && c.name.toLowerCase().includes(rosterSearch.toLowerCase())) ||
@@ -85014,7 +85028,6 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
     return { id, name: `名士${id}` };
   });
 
-  // 当前显示的礼物列表 (经典或特殊)
   const currentGiftList = giftMode === 'classic' ? classicGifts : specialGifts;
 
   return React.createElement(
@@ -85042,10 +85055,10 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
           position: "fixed",
           left: `${draggingGift.x}px`,
           top: `${draggingGift.y}px`,
-          transform: "translate(-50%, -50%) scale(1.2)",
+          transform: "translate(-50%, -50%) scale(1.25)",
           zIndex: 99999,
           pointerEvents: "none",
-          background: "radial-gradient(circle, rgba(255,255,255,0.95) 0%, rgba(253,248,238,0.85) 100%)",
+          background: "radial-gradient(circle, rgba(255,255,255,0.98) 0%, rgba(253,248,238,0.9) 100%)",
           border: "2px solid #d6724b",
           borderRadius: "50%",
           width: "58px",
@@ -85053,11 +85066,11 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          boxShadow: "0 8px 24px rgba(214, 114, 75, 0.45)",
+          boxShadow: "0 8px 24px rgba(214, 114, 75, 0.55)",
           animation: "bubblePop 0.2s ease-out"
         }
       },
-      React.createElement("span", { style: { fontSize: "28px" } }, draggingGift.item.icon)
+      React.createElement("span", { style: { fontSize: "30px" } }, draggingGift.item.icon)
     ),
 
     // 顶部轻盈浅色高透玻璃导航栏
@@ -85358,7 +85371,6 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
             },
             onPointerDown: (e) => handlePointerDown(char.id, e)
           },
-          // 角色头顶气泡或投喂期待气泡
           (char.speech || isHoveredByGift) && React.createElement(
             "div",
             {
@@ -85825,20 +85837,24 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
       )
     ),
 
-    // ==================== 心意百宝囊抽屉 (Gift Drawer · 纯净卡片 + 经典/特殊双模式 + 拖拽投喂) ====================
+    // ==================== 心意百宝囊抽屉 (拖拽时整体平滑缩回，绝不遮挡房间与小人) ====================
     showDrawer && React.createElement(
       "div",
       {
         style: {
           position: "fixed",
           inset: 0,
-          background: "rgba(0,0,0,0.55)",
-          backdropFilter: "blur(6px)",
-          WebkitBackdropFilter: "blur(6px)",
+          background: draggingGift ? "transparent" : "rgba(0,0,0,0.55)",
+          backdropFilter: draggingGift ? "none" : "blur(6px)",
+          WebkitBackdropFilter: draggingGift ? "none" : "blur(6px)",
           display: "flex",
           flexDirection: "column",
           justifyContent: "flex-end",
           zIndex: 1050,
+          pointerEvents: draggingGift ? "none" : "auto",
+          transition: "background 0.25s, opacity 0.25s, transform 0.25s",
+          opacity: draggingGift ? 0 : 1,
+          transform: draggingGift ? "translateY(100%)" : "translateY(0)",
           animation: "fadeIn 0.25s ease-out"
         },
         onClick: () => {
@@ -85863,7 +85879,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
           },
           onClick: (e) => e.stopPropagation()
         },
-        // 顶部操作栏 (左侧标题，中间经典/特殊切换，右侧🔄研制+✕关闭)
+        // 顶部操作栏
         React.createElement(
           "div",
           {
@@ -85881,10 +85897,10 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
             "div",
             { style: { fontSize: "14.5px", fontWeight: "bold", color: "#5d442a", display: "flex", alignItems: "center", gap: "4px" } },
             "🎁 心意百宝匣",
-            React.createElement("span", { style: { fontSize: "10px", color: "#a8865f", fontWeight: "normal" } }, "(可直接按住图标拖拽投喂)")
+            React.createElement("span", { style: { fontSize: "10px", color: "#a8865f", fontWeight: "normal" } }, "(按住图标拖拽投喂)")
           ),
 
-          // 中间：经典食匣 / 专属奇珍 切换模式胶囊
+          // 经典食匣 / 专属奇珍 切换模式胶囊
           React.createElement(
             "div",
             {
@@ -85937,7 +85953,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
             )
           ),
 
-          // 右侧：🔄 AI研制按钮 (仅特殊模式显示) + ✕ 关闭
+          // 右侧：🔄 AI批量研制按钮 (每次5-8个) + ✕ 关闭
           React.createElement(
             "div",
             { style: { display: "flex", alignItems: "center", gap: "6px" } },
@@ -85946,7 +85962,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
               {
                 onClick: generateAIGift,
                 disabled: isGeneratingGift,
-                title: "让大模型根据空间名士与聊天历史研制新奇珍",
+                title: "让大模型根据空间名士与聊天历史批量研制5-8款新奇珍",
                 style: {
                   width: "28px",
                   height: "28px",
@@ -86000,7 +86016,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
           )
         ),
 
-        // 礼物网格列表 (4列精简卡片，纯净无冗杂字样)
+        // 礼物网格列表 (4列精简卡片)
         React.createElement(
           "div",
           {
@@ -86037,7 +86053,6 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
                 onClick: () => setSelectedGiftDetail(isSelected ? null : item),
                 title: "点击查看描述，按住图标可拖拽投喂"
               },
-              // 顶部心意值加成角标
               React.createElement(
                 "span",
                 {
@@ -86056,7 +86071,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
                 `+${item.val}`
               ),
 
-              // 可拖拽的图标区域
+              // 可拖拽图标区域
               React.createElement(
                 "div",
                 {
@@ -86091,7 +86106,6 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
                 item.name
               ),
 
-              // 底部轻量拖拽/查看提示
               React.createElement(
                 "div",
                 { style: { fontSize: "8.5px", color: "#b89572", marginTop: "2px" } },
@@ -86101,7 +86115,7 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
           })
         ),
 
-        // 点击展开的礼物详情赏味笺 (Detail Panel)
+        // 点击展开的礼物详情赏味笺
         selectedGiftDetail && React.createElement(
           "div",
           {
@@ -86118,7 +86132,6 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
               gap: "8px"
             }
           },
-          // 详情头部
           React.createElement(
             "div",
             { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
@@ -86143,7 +86156,6 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
             )
           ),
 
-          // 详情描述
           React.createElement(
             "div",
             {
@@ -86160,7 +86172,6 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
             selectedGiftDetail.desc
           ),
 
-          // 快速相赠按钮行 (可选直接点击投喂)
           React.createElement(
             "div",
             { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "2px" } },
