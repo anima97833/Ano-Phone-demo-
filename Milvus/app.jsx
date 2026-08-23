@@ -111572,9 +111572,632 @@ const BackupRestorePage = ({ onClose }) => {
     </div>
   );
 };
-const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage }) => {
+// ==================== [新增] MCP 扩展工具箱设置页面组件 ====================
+
+const MCPToolsSettingsPage = ({ onClose }) => {
+  const { useState, useEffect } = React;
+
+  const [masterEnabled, setMasterEnabled] = useState(true);
+  const [builtInTools, setBuiltInTools] = useState([]);
+  const [externalServers, setExternalServers] = useState([]);
+  const [activeTab, setActiveTab] = useState("builtin"); // 'builtin' | 'external' | 'guide'
+
+  // 添加外部节点表单
+  const [serverName, setServerName] = useState("");
+  const [serverUrl, setServerUrl] = useState("");
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectError, setConnectError] = useState(null);
+  const [connectSuccess, setConnectSuccess] = useState(null);
+
+  // 刷新状态
+  const refreshHubState = () => {
+    if (window.mcpHub) {
+      setMasterEnabled(window.mcpHub.isMasterEnabled());
+      setBuiltInTools([...window.mcpHub.builtInTools]);
+      setExternalServers([...window.mcpHub.externalServers]);
+    }
+  };
+
+  useEffect(() => {
+    refreshHubState();
+  }, []);
+
+  const handleToggleMaster = (val) => {
+    if (window.mcpHub) {
+      window.mcpHub.setMasterEnabled(val);
+      setMasterEnabled(val);
+    }
+  };
+
+  const handleToggleTool = (toolName, val) => {
+    if (window.mcpHub) {
+      window.mcpHub.toggleTool(toolName, val);
+      refreshHubState();
+    }
+  };
+
+  const handleAddExternal = async () => {
+    if (!serverUrl.trim()) {
+      setConnectError("请输入有效的 MCP 服务地址");
+      return;
+    }
+    setIsConnecting(true);
+    setConnectError(null);
+    setConnectSuccess(null);
+    try {
+      const added = await window.mcpHub.addExternalServer(serverName, serverUrl);
+      setConnectSuccess(`成功连接到节点【${added.name}】，发现 ${added.toolsCount} 个外部工具！`);
+      setServerName("");
+      setServerUrl("");
+      refreshHubState();
+    } catch (err) {
+      setConnectError(`连接失败: ${err.message}`);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleRemoveExternal = (id) => {
+    if (confirm("确定要移除该外部 MCP 节点吗？")) {
+      if (window.mcpHub) {
+        window.mcpHub.removeExternalServer(id);
+        refreshHubState();
+      }
+    }
+  };
+
+  const handleToggleExternal = (id, val) => {
+    if (window.mcpHub) {
+      window.mcpHub.toggleExternalServer(id, val);
+      refreshHubState();
+    }
+  };
+
+  return (
+    <div
+      className="no-scrollbar"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "#F5F3EF",
+        zIndex: 300,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden"
+      }}
+    >
+      {/* 顶部标题栏 */}
+      <div
+        style={{
+          height: "56px",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #E5DFD5",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 16px",
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.04)",
+          flexShrink: 0
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div
+            onClick={onClose}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#5A5F4D"
+            }}
+          >
+            <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+          </div>
+          <div>
+            <div style={{ fontSize: "16px", fontWeight: "700", color: "#3B4033" }}>
+              🧩 MCP 扩展工具箱 (Agent Tools)
+            </div>
+            <div style={{ fontSize: "11px", color: "#8E9482" }}>
+              让名士自主调用世界书、备忘录、商城记账与外部万物
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 滚动内容区 */}
+      <div
+        className="no-scrollbar"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "14px"
+        }}
+      >
+        {/* 全局主控卡片 */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #FAF7F2 0%, #F3EEE6 100%)",
+            borderRadius: "20px",
+            padding: "18px",
+            border: "1px solid #E5DFD3",
+            boxShadow: "0 4px 14px rgba(0, 0, 0, 0.03)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "14px",
+                background: masterEnabled ? "#4E7E8E" : "#A6ABA0",
+                color: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "22px",
+                transition: "background 0.3s"
+              }}
+            >
+              <i className="ph ph-cpu"></i>
+            </div>
+            <div>
+              <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4235" }}>
+                AI 自主工具调用 (MCP)
+              </div>
+              <div style={{ fontSize: "12px", color: "#7B8072", marginTop: "2px" }}>
+                {masterEnabled ? "已启用 · 名士可在对话中按需自主调用工具" : "已关闭 · 回退至常规无工具文本对话"}
+              </div>
+            </div>
+          </div>
+
+          <label style={{ position: "relative", display: "inline-block", width: "48px", height: "26px", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={masterEnabled}
+              onChange={(e) => handleToggleMaster(e.target.checked)}
+              style={{ opacity: 0, width: 0, height: 0 }}
+            />
+            <span
+              style={{
+                position: "absolute",
+                top: 0, left: 0, right: 0, bottom: 0,
+                background: masterEnabled ? "#4E7E8E" : "#D0CCC4",
+                borderRadius: "26px",
+                transition: "0.3s"
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  height: "20px",
+                  width: "20px",
+                  left: masterEnabled ? "24px" : "4px",
+                  bottom: "3px",
+                  background: "#FFFFFF",
+                  borderRadius: "50%",
+                  transition: "0.3s",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+                }}
+              />
+            </span>
+          </label>
+        </div>
+
+        {/* Tab 选项卡 */}
+        <div style={{ display: "flex", gap: "8px", background: "#EAE7DF", padding: "4px", borderRadius: "14px" }}>
+          {[
+            { key: "builtin", label: `内置 Web 工具 (${builtInTools.filter(t => t.enabled).length}/${builtInTools.length})`, icon: "ph-puzzle-piece" },
+            { key: "external", label: `外部 MCP 节点 (${externalServers.length})`, icon: "ph-broadcast" },
+            { key: "guide", label: "新手指南", icon: "ph-lightbulb" }
+          ].map(tab => {
+            const isAct = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  flex: 1,
+                  padding: "9px 0",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontSize: "12.5px",
+                  fontWeight: isAct ? "700" : "500",
+                  background: isAct ? "#FFFFFF" : "transparent",
+                  color: isAct ? "#3B4235" : "#7B8072",
+                  cursor: "pointer",
+                  boxShadow: isAct ? "0 2px 6px rgba(0,0,0,0.06)" : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "4px",
+                  transition: "all 0.2s"
+                }}
+              >
+                <i className={`ph ${tab.icon}`}></i>
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 1. 内置 Web-MCP 工具列表 */}
+        {activeTab === "builtin" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ fontSize: "12px", color: "#8E9485", padding: "0 4px" }}>
+              💡 内置工具无需任何外部环境，在手机和电脑浏览器中即开即用：
+            </div>
+
+            {builtInTools.map(tool => (
+              <div
+                key={tool.name}
+                style={{
+                  background: "#FFFFFF",
+                  borderRadius: "16px",
+                  padding: "14px 16px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                  border: "1px solid #EBE7DE",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "10px",
+                        background: tool.enabled ? "rgba(78, 126, 142, 0.12)" : "#F0EFEB",
+                        color: tool.enabled ? "#4E7E8E" : "#999",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "18px"
+                      }}
+                    >
+                      <i className={`ph ${tool.icon}`}></i>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>
+                        {tool.displayName}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#8E9485" }}>
+                        标识符: <code style={{ background: "#F5F3ED", padding: "1px 4px", borderRadius: "4px" }}>{tool.name}</code> · {tool.category}
+                      </div>
+                    </div>
+                  </div>
+
+                  <label style={{ position: "relative", display: "inline-block", width: "40px", height: "22px", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={tool.enabled}
+                      onChange={(e) => handleToggleTool(tool.name, e.target.checked)}
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        background: tool.enabled ? "#4E7E8E" : "#D0CCC4",
+                        borderRadius: "22px",
+                        transition: "0.2s"
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          height: "16px",
+                          width: "16px",
+                          left: tool.enabled ? "20px" : "3px",
+                          bottom: "3px",
+                          background: "#FFFFFF",
+                          borderRadius: "50%",
+                          transition: "0.2s"
+                        }}
+                      />
+                    </span>
+                  </label>
+                </div>
+
+                <div style={{ fontSize: "12.5px", color: "#5F6557", lineHeight: "1.5", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" }}>
+                  {tool.description}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 2. 外部 MCP 服务节点 */}
+        {activeTab === "external" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* 添加新服务表单 */}
+            <div
+              style={{
+                background: "#FFFFFF",
+                borderRadius: "18px",
+                padding: "16px",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+                border: "1px solid #EBE7DE",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px"
+              }}
+            >
+              <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235", display: "flex", alignItems: "center", gap: "6px" }}>
+                <i className="ph ph-plus-circle" style={{ color: "#4E7E8E", fontSize: "18px" }}></i>
+                <span>连接外部标准 MCP 服务</span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12px", color: "#7B8072" }}>节点名称 (可选)</label>
+                <input
+                  type="text"
+                  placeholder="例如: 本地文件助手 / 联网搜索"
+                  value={serverName}
+                  onChange={(e) => setServerName(e.target.value)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid #D5D0C5",
+                    fontSize: "13px",
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12px", color: "#7B8072" }}>MCP 服务端点 URL (支持 HTTP / SSE / JSON-RPC)</label>
+                <input
+                  type="text"
+                  placeholder="http://localhost:3000/sse 或 http://127.0.0.1:8000/mcp"
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid #D5D0C5",
+                    fontSize: "13px",
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              {connectError && (
+                <div style={{ fontSize: "12px", color: "#C2185B", background: "#FCE4EC", padding: "8px 12px", borderRadius: "8px" }}>
+                  {connectError}
+                </div>
+              )}
+              {connectSuccess && (
+                <div style={{ fontSize: "12px", color: "#2E7D32", background: "#E8F5E9", padding: "8px 12px", borderRadius: "8px" }}>
+                  {connectSuccess}
+                </div>
+              )}
+
+              <button
+                onClick={handleAddExternal}
+                disabled={isConnecting}
+                style={{
+                  marginTop: "4px",
+                  padding: "10px 0",
+                  borderRadius: "12px",
+                  border: "none",
+                  background: isConnecting ? "#A0AFB5" : "linear-gradient(135deg, #4E7E8E 0%, #3D6A78 100%)",
+                  color: "#FFFFFF",
+                  fontWeight: "700",
+                  fontSize: "13.5px",
+                  cursor: isConnecting ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  boxShadow: "0 2px 8px rgba(78, 126, 142, 0.3)"
+                }}
+              >
+                {isConnecting ? <i className="ph ph-spinner animate-spin"></i> : <i className="ph ph-plug"></i>}
+                <span>{isConnecting ? "正在握手探测工具列表..." : "测试并保存连接"}</span>
+              </button>
+            </div>
+
+            {/* 已连接的外部服务列表 */}
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "#3B4235" }}>
+              已保存的外部节点 ({externalServers.length})
+            </div>
+
+            {externalServers.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "30px 16px", color: "#8E9485", background: "#FFFFFF", borderRadius: "16px", border: "1px dashed #D5D0C5" }}>
+                <i className="ph ph-broadcast text-3xl mb-2" style={{ color: "#B8C0B0" }}></i>
+                <div style={{ fontSize: "13px" }}>暂未添加外部 MCP 节点</div>
+                <div style={{ fontSize: "11px", marginTop: "4px" }}>您可填入本地跑起来的 MCP 服务或远程网关地址</div>
+              </div>
+            ) : (
+              externalServers.map(srv => (
+                <div
+                  key={srv.id}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: "16px",
+                    padding: "14px 16px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                    border: "1px solid #EBE7DE",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "18px" }}>🌐</span>
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>{srv.name}</div>
+                        <div style={{ fontSize: "11px", color: "#8E9485" }}>{srv.url}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <label style={{ position: "relative", display: "inline-block", width: "36px", height: "20px", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={srv.enabled}
+                          onChange={(e) => handleToggleExternal(srv.id, e.target.checked)}
+                          style={{ opacity: 0, width: 0, height: 0 }}
+                        />
+                        <span
+                          style={{
+                            position: "absolute",
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            background: srv.enabled ? "#4E7E8E" : "#D0CCC4",
+                            borderRadius: "20px",
+                            transition: "0.2s"
+                          }}
+                        >
+                          <span
+                            style={{
+                              position: "absolute",
+                              height: "14px",
+                              width: "14px",
+                              left: srv.enabled ? "18px" : "3px",
+                              bottom: "3px",
+                              background: "#FFFFFF",
+                              borderRadius: "50%",
+                              transition: "0.2s"
+                            }}
+                          />
+                        </span>
+                      </label>
+
+                      <button
+                        onClick={() => handleRemoveExternal(srv.id)}
+                        style={{
+                          background: "#FCE4EC",
+                          border: "none",
+                          color: "#C2185B",
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }}
+                      >
+                        <i className="ph ph-trash" style={{ fontSize: "14px" }}></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: "11.5px", background: "#F7F6F2", padding: "6px 10px", borderRadius: "8px", color: "#547A8A" }}>
+                    包含 <b>{srv.toolsCount || srv.tools?.length || 0}</b> 个工具 · 上次连接: {srv.updatedAt || "刚刚"}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* 3. 新手指南与 FAQ */}
+        {activeTab === "guide" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ background: "#FFFFFF", borderRadius: "16px", padding: "16px", border: "1px solid #EBE7DE", lineHeight: "1.6", fontSize: "13px", color: "#4A4F44" }}>
+              <div style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235", marginBottom: "8px" }}>
+                💡 什么是 MCP（模型上下文协议）？
+              </div>
+              <p style={{ margin: "0 0 8px 0" }}>
+                MCP 是由 Anthropic 提出的全球开源统一扩展协议。它就像给 AI 装上了一个“万能 Type-C 插座”，让 AI 从原本“只会文字打字”进化为“能主动调用外部工具、查档案、翻账本、做计算”的超级智能体。
+              </p>
+            </div>
+
+            <div style={{ background: "#FFFFFF", borderRadius: "16px", padding: "16px", border: "1px solid #EBE7DE", lineHeight: "1.6", fontSize: "13px", color: "#4A4F44" }}>
+              <div style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235", marginBottom: "8px" }}>
+                🚀 我需要配置什么才能使用？
+              </div>
+              <p style={{ margin: "0 0 8px 0" }}>
+                <b>零门槛直接使用</b>：只要上方的主开关开启，小手机已内置的 6 大 Web 工具（如世界书查阅、备忘录写入、太疾驰记账等）就会自动生效！
+              </p>
+              <p style={{ margin: 0 }}>
+                <b>极客进阶</b>：如果您在本地电脑运行了官方提供的开源 MCP Server（如 <code>npx @modelcontextprotocol/server-filesystem</code> 或 Brave 搜索），可在“外部 MCP 节点”填入对应 URL，小手机便可操控本地万物！
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage, onOpenMcp }) => {
   const [activeSubPage, setActiveSubPage] = React.useState(null);
 
+  const [minimaxEnabled, setMinimaxEnabled] = React.useState(() => {
+    try {
+      const s = localStorage.getItem("minimax_api_config");
+      return s ? JSON.parse(s).enabled !== false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const [aiImageEnabled, setAiImageEnabled] = React.useState(() => {
+    try {
+      const s = localStorage.getItem("image_generation_api_config");
+      return s ? JSON.parse(s).enabled !== false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const [mcpEnabled, setMcpEnabled] = React.useState(() => {
+    return window.mcpHub ? window.mcpHub.isMasterEnabled() : true;
+  });
+
+  const handleToggleMinimax = (e) => {
+    e.stopPropagation();
+    const nextVal = e.target.checked;
+    setMinimaxEnabled(nextVal);
+    try {
+      const s = localStorage.getItem("minimax_api_config");
+      const parsed = s ? JSON.parse(s) : {};
+      parsed.enabled = nextVal;
+      localStorage.setItem("minimax_api_config", JSON.stringify(parsed));
+    } catch (err) {}
+  };
+
+  const handleToggleAiImage = (e) => {
+    e.stopPropagation();
+    const nextVal = e.target.checked;
+    setAiImageEnabled(nextVal);
+    try {
+      const s = localStorage.getItem("image_generation_api_config");
+      const parsed = s ? JSON.parse(s) : {};
+      parsed.enabled = nextVal;
+      localStorage.setItem("image_generation_api_config", JSON.stringify(parsed));
+    } catch (err) {}
+  };
+
+  const handleToggleMcp = (e) => {
+    e.stopPropagation();
+    const nextVal = e.target.checked;
+    setMcpEnabled(nextVal);
+    if (window.mcpHub) {
+      window.mcpHub.setMasterEnabled(nextVal);
+    }
+  };
+
+  if (activeSubPage === "mcp_tools") {
+    return <MCPToolsSettingsPage onClose={() => setActiveSubPage(null)} />;
+  }
   if (activeSubPage === "wallet") {
     return <WalletPage onClose={() => setActiveSubPage(null)} />;
   }
@@ -111761,25 +112384,30 @@ const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage }) => {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "12px 0",
+            padding: "14px 0",
             borderBottom: "1px solid #f5f5f5",
             cursor: "pointer",
           }}
         >
-          <div>
-            <div
-              style={{ fontSize: "14px", fontWeight: "500", color: "#3B82F6" }}
-            >
-              MiniMax 语音配置 (TTS)
+          <div style={{ flex: 1, paddingRight: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "14px", fontWeight: "600", color: "#3B82F6" }}>
+                🔊 MiniMax 语音配置 (TTS)
+              </span>
+              <span style={{ fontSize: "11px", padding: "1px 6px", borderRadius: "10px", background: minimaxEnabled ? "#EBF7F0" : "#F3F4F6", color: minimaxEnabled ? "#2E7D32" : "#888" }}>
+                {minimaxEnabled ? "已开启" : "已停用"}
+              </span>
             </div>
-            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
-              自主配置 API Key、Group ID 与语音模型（与大模型聊天独立）
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "3px" }}>
+              自主配置 API Key 与语音模型，点击进入详细设置
             </div>
           </div>
-          <i
-            data-lucide="volume-2"
-            style={{ color: "#3B82F6", width: 18, height: 18 }}
-          ></i>
+          <label onClick={(e) => e.stopPropagation()} style={{ position: "relative", display: "inline-block", width: "44px", height: "24px", margin: 0, cursor: "pointer", flexShrink: 0 }}>
+            <input type="checkbox" checked={minimaxEnabled} onChange={handleToggleMinimax} style={{ opacity: 0, width: 0, height: 0 }} />
+            <span style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: minimaxEnabled ? "#3B82F6" : "#D1D5DB", borderRadius: "24px", transition: "0.25s" }}>
+              <span style={{ position: "absolute", height: "18px", width: "18px", left: minimaxEnabled ? "23px" : "3px", bottom: "3px", backgroundColor: "#FFF", borderRadius: "50%", transition: "0.25s", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" }} />
+            </span>
+          </label>
         </div>
 
         {/* AI 文生图服务配置 */}
@@ -111789,31 +112417,69 @@ const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage }) => {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "12px 0",
+            padding: "14px 0",
+            borderBottom: "1px solid #f5f5f5",
             cursor: "pointer",
           }}
         >
-          <div>
-            <div
-              style={{ fontSize: "14px", fontWeight: "500", color: "#8B5CF6" }}
-            >
-              🎨 AI 文生图配置 (Text-to-Image)
+          <div style={{ flex: 1, paddingRight: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "14px", fontWeight: "600", color: "#8B5CF6" }}>
+                🎨 AI 文生图配置 (Text-to-Image)
+              </span>
+              <span style={{ fontSize: "11px", padding: "1px 6px", borderRadius: "10px", background: aiImageEnabled ? "#F3E8FF" : "#F3F4F6", color: aiImageEnabled ? "#7E22CE" : "#888" }}>
+                {aiImageEnabled ? "已开启" : "已停用"}
+              </span>
             </div>
-            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
-              支持硅基流动 Flux / OpenAI DALL·E 3 / 智谱 CogView / 本地代理（与传讯独立）
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "3px" }}>
+              支持 Flux / DALL·E 3 / CogView 角色作画，点击进入详细设置
             </div>
           </div>
-          <i
-            data-lucide="image"
-            style={{ color: "#8B5CF6", width: 18, height: 18 }}
-          ></i>
+          <label onClick={(e) => e.stopPropagation()} style={{ position: "relative", display: "inline-block", width: "44px", height: "24px", margin: 0, cursor: "pointer", flexShrink: 0 }}>
+            <input type="checkbox" checked={aiImageEnabled} onChange={handleToggleAiImage} style={{ opacity: 0, width: 0, height: 0 }} />
+            <span style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: aiImageEnabled ? "#8B5CF6" : "#D1D5DB", borderRadius: "24px", transition: "0.25s" }}>
+              <span style={{ position: "absolute", height: "18px", width: "18px", left: aiImageEnabled ? "23px" : "3px", bottom: "3px", backgroundColor: "#FFF", borderRadius: "50%", transition: "0.25s", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" }} />
+            </span>
+          </label>
+        </div>
+
+        {/* MCP 扩展工具箱配置 */}
+        <div
+          onClick={() => (onOpenMcp ? onOpenMcp() : setActiveSubPage("mcp_tools"))}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "14px 0",
+            cursor: "pointer",
+          }}
+        >
+          <div style={{ flex: 1, paddingRight: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "14px", fontWeight: "600", color: "#4E7E8E" }}>
+                🧩 MCP 扩展工具箱 (Agent Tools)
+              </span>
+              <span style={{ fontSize: "11px", padding: "1px 6px", borderRadius: "10px", background: mcpEnabled ? "#E0F2FE" : "#F3F4F6", color: mcpEnabled ? "#0369A1" : "#888" }}>
+                {mcpEnabled ? "已开启" : "已停用"}
+              </span>
+            </div>
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "3px" }}>
+              开启 AI 自主调用世界书、备忘录、商城记账与外部万物工具
+            </div>
+          </div>
+          <label onClick={(e) => e.stopPropagation()} style={{ position: "relative", display: "inline-block", width: "44px", height: "24px", margin: 0, cursor: "pointer", flexShrink: 0 }}>
+            <input type="checkbox" checked={mcpEnabled} onChange={handleToggleMcp} style={{ opacity: 0, width: 0, height: 0 }} />
+            <span style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: mcpEnabled ? "#4E7E8E" : "#D1D5DB", borderRadius: "24px", transition: "0.25s" }}>
+              <span style={{ position: "absolute", height: "18px", width: "18px", left: mcpEnabled ? "23px" : "3px", bottom: "3px", backgroundColor: "#FFF", borderRadius: "50%", transition: "0.25s", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" }} />
+            </span>
+          </label>
         </div>
       </div>
     </div>
   );
 };
 
-const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax, onOpenAiImage }) => {
+const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax, onOpenAiImage, onOpenMcp }) => {
   if (!isOpen) return null;
   return (
     <div className="settings-overlay open" style={{ zIndex: 1005 }}>
@@ -111835,11 +112501,19 @@ const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax, onOpenAiImage 
         </div>
         <div className="title">隐私与安全</div>
       </div>
-      <PrivacySecurityPage onOpenMinimax={onOpenMinimax} onOpenAiImage={onOpenAiImage} />
+      <PrivacySecurityPage onOpenMinimax={onOpenMinimax} onOpenAiImage={onOpenAiImage} onOpenMcp={onOpenMcp} />
     </div>
   );
 };
 
+const MCPToolsOverlay = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="settings-overlay open" style={{ zIndex: 1006 }}>
+      <MCPToolsSettingsPage onClose={onClose} />
+    </div>
+  );
+};
 // ==================== [修改] 列星页面组件 (AI 命轨推演版) ====================
 const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
   const { character, chatId } = session;
@@ -113898,6 +114572,7 @@ const MasterApp = () => {
 
   // [新增] 隐私与安全二级页面状态
   const [isPrivacySecurityOpen, setIsPrivacySecurityOpen] = useState(false);
+  const [isMCPToolsOpen, setIsMCPToolsOpen] = useState(false);
 
   // [ADD] 新增用户配置状态
   const [isProfileOpen, setIsProfileOpen] = useState(false);
