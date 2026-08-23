@@ -1569,15 +1569,23 @@ const relationshipStore = {
   },
 };
 
+let _lastSavedCalendarTasksJson = "";
+
 // 日历任务存储操作
 const calendarStore = {
   // 保存日历任务
-  saveTasks: async (tasks) => {
+  saveTasks: async (tasks, fromCalendarUI = false) => {
     try {
-      localStorage.setItem("cached_calendar_tasks", JSON.stringify(tasks));
-      window.dispatchEvent(
-        new CustomEvent("calendar_tasks_updated", { detail: tasks }),
-      );
+      const taskStr = JSON.stringify(tasks || {});
+      localStorage.setItem("cached_calendar_tasks", taskStr);
+      if (!fromCalendarUI && taskStr !== _lastSavedCalendarTasksJson) {
+        _lastSavedCalendarTasksJson = taskStr;
+        window.dispatchEvent(
+          new CustomEvent("calendar_tasks_updated", {
+            detail: { ...(tasks || {}), _source: "db_store" }
+          }),
+        );
+      }
     } catch (e) { }
 
     const db = await openDB();

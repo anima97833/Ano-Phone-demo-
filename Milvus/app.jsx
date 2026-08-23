@@ -427,11 +427,14 @@ window.sendToLLM = async (messages, customConfigOrChunk, onFinish, onError) => {
   let minimaxConfig = null;
   const savedMinimaxConfig = localStorage.getItem("minimax_api_config");
   if (savedMinimaxConfig) {
-    minimaxConfig = JSON.parse(savedMinimaxConfig);
-    if (minimaxConfig.apiKey && minimaxConfig.groupId) {
-      isMinimaxModel = true;
-    }
+    try {
+      minimaxConfig = JSON.parse(savedMinimaxConfig);
+      if (minimaxConfig.apiKey && minimaxConfig.groupId) {
+        isMinimaxModel = true;
+      }
+    } catch (e) {}
   }
+
   if (isMinimaxModel) {
     console.log("使用 MiniMax API");
     const endpoint = "https://api.minimax.chat/v1/text/chatcompletions";
@@ -445,7 +448,7 @@ window.sendToLLM = async (messages, customConfigOrChunk, onFinish, onError) => {
         },
         body: JSON.stringify({
           model: minimaxConfig.model || "abab6.5s-chat",
-          messages: messages,
+          messages,
           stream: false,
           temperature: temp,
           top_p: topP
@@ -457,7 +460,7 @@ window.sendToLLM = async (messages, customConfigOrChunk, onFinish, onError) => {
         throw new Error(`MiniMax API Error: ${response.status} - ${errText}`);
       }
       const data = await response.json();
-      const reply = data.choices[0].message.content;
+      const reply = data.choices?.[0]?.message?.content || "";
       console.log("MiniMax AI 回复:", reply);
       if (actualFinish) actualFinish(reply);
     } catch (error) {
@@ -480,37 +483,195 @@ window.sendToLLM = async (messages, customConfigOrChunk, onFinish, onError) => {
       if (actualError) actualError("API 配置不完整");
       return;
     }
-    let endpoint = config.url;
+    let endpoint = config.url.trim();
     if (!endpoint.endsWith("/")) endpoint += "/";
     if (config.type === "official") endpoint += "v1/chat/completions";
     else endpoint += "api/chat/completions";
-    try {
-      const reqBody = {
-        model: config.model || "gpt-3.5-turbo",
-        messages: messages,
-        stream: false,
-        temperature: temp,
-        top_p: topP,
-        presence_penalty: presencePenalty,
-        frequency_penalty: frequencyPenalty
-      };
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.apiKey}`
-        },
-        body: JSON.stringify(reqBody)
-      });
-      if (!response.ok) {
-        const errText = await response.text();
-        console.error("API错误:", errText);
-        throw new Error(`API Error: ${response.status} - ${errText}`);
+
+    // MCP Tools 挂载判断
+    const mcpEnabled = window.mcpHub && window.mcpHub.isMasterEnabled() && !customConfig?.disableMCP;
+    const activeTools = mcpEnabled ? window.mcpHub.getActiveTools() : [];
+
+    let currentMessages = [...messages];
+
+    // 强化工具调用感知提示词注入（确保大模型充分感知到可调用工具）
+    if (activeTools.length > 0) {
+      const mcpInstruction = `\n\n【MCP工具扩展系统已挂载就绪】
+你拥有以下可调用的原生工具能力：
+1. record_character_memo：当主公在对话中要求记备忘、交代要务、商定行程或提醒（如接应线人、备酒、出行、提醒添衣等），请务必调用此工具将日程备忘录入手机并写注到【我的日历】。
+2. search_world_book：调阅世界书档案库中的势力、人物、地点秘辛。
+3. cast_chenwei_hexagram：占卜谶纬天机卦象。
+4. simulate_sandplay：沙盘军略兵推推演。
+5. create_shop_order：太疾驰商城采买记账。
+6. get_current_time_and_lunar：现世时序节气感知。
+【铁律】：当对话语境涉及上述场景时，请【优先主动发起 tool_calls 工具调用】！工具执行完毕后，基于工具执行结果以自然角色口吻向主公对白回复。`;
+
+      let sysMsg = currentMessages.find(m => m.role === "system");
+      if (sysMsg) {
+        if (!sysMsg.content.includes("【MCP工具扩展系统已挂载就绪】")) {
+          sysMsg.content += mcpInstruction;
+        }
+      } else {
+        currentMessages.unshift({
+          role: "system",
+          content: mcpInstruction
+        });
       }
-      const data = await response.json();
-      const reply = data.choices[0].message.content;
-      console.log("AI回复:", reply);
-      if (actualFinish) actualFinish(reply);
+    }
+
+    let maxLoop = 5;
+
+    try {
+      while (maxLoop > 0) {
+        maxLoop--;
+        const reqBody = {
+          model: config.model || "gpt-3.5-turbo",
+          messages: currentMessages,
+          stream: false,
+          temperature: temp,
+          top_p: topP,
+          presence_penalty: presencePenalty,
+          frequency_penalty: frequencyPenalty
+        };
+
+        if (activeTools.length > 0) {
+          reqBody.tools = activeTools;
+          reqBody.tool_choice = "auto";
+        }
+
+        const response = await fetch(endpoint, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${config.apiKey}`
+          },
+          body: JSON.stringify(reqBody)
+        });
+
+        if (!response.ok) {
+          const errText = await response.text();
+          console.error("API错误:", errText);
+          if (activeTools.length > 0 && (errText.includes("tools") || errText.includes("function") || response.status === 400)) {
+            console.warn("[MCP] 模型可能不支持 tools 参数，自动降级为无工具模式重试...");
+            delete reqBody.tools;
+            delete reqBody.tool_choice;
+            const retryRes = await fetch(endpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${config.apiKey}`
+              },
+              body: JSON.stringify(reqBody)
+            });
+            if (retryRes.ok) {
+              const retryData = await retryRes.json();
+              const reply = retryData.choices?.[0]?.message?.content || "";
+              if (actualFinish) actualFinish(reply);
+              return;
+            }
+          }
+          throw new Error(`API Error: ${response.status} - ${errText}`);
+        }
+
+        const data = await response.json();
+        const choiceMsg = data.choices?.[0]?.message;
+        if (!choiceMsg) throw new Error("API 返回的数据格式无效");
+
+        if (choiceMsg.tool_calls && Array.isArray(choiceMsg.tool_calls) && choiceMsg.tool_calls.length > 0) {
+          console.log("[MCP] 模型发起 tool_calls:", choiceMsg.tool_calls);
+          currentMessages.push({
+            role: "assistant",
+            content: choiceMsg.content || null,
+            tool_calls: choiceMsg.tool_calls
+          });
+
+          for (const toolCall of choiceMsg.tool_calls) {
+            const funcName = toolCall.function?.name;
+            let funcArgs = {};
+            try {
+              funcArgs = JSON.parse(toolCall.function?.arguments || "{}");
+            } catch (e) {
+              funcArgs = {};
+            }
+
+            const toolMeta = window.mcpHub?.builtInTools?.find(t => t.name === funcName);
+            const displayName = toolMeta ? toolMeta.displayName : (
+              funcName === "search_world_book" ? "世界书深度调阅" :
+              funcName === "record_character_memo" ? "随身备忘录写入" :
+              funcName === "create_shop_order" ? "太疾驰商城记账" :
+              funcName === "cast_chenwei_hexagram" ? "谶纬天机占卜" :
+              funcName === "simulate_sandplay" ? "沙盘军略兵推" :
+              funcName === "get_current_time_and_lunar" ? "现世时序节气感知" : funcName
+            );
+
+            // 触发原生置顶浮动气泡与事件广播
+            if (window.showMcpIndicator) {
+              window.showMcpIndicator(funcName, displayName, "calling");
+            }
+            window.dispatchEvent(new CustomEvent("mcp_tool_calling", {
+              detail: {
+                toolName: funcName,
+                displayName: displayName,
+                icon: toolMeta?.icon || "ph-cpu",
+                status: "calling",
+                args: funcArgs,
+                timestamp: Date.now()
+              }
+            }));
+
+            console.log(`[MCP] 执行工具: ${funcName}`, funcArgs);
+            const toolResult = await window.mcpHub.executeTool(funcName, funcArgs, {
+              character: customConfig?.character || customConfig?.characterName,
+              characterId: customConfig?.characterId
+            });
+
+            // 派发完成调用事件通知与置顶气泡
+            if (window.showMcpIndicator) {
+              window.showMcpIndicator(funcName, displayName, "done");
+            }
+            window.dispatchEvent(new CustomEvent("mcp_tool_calling", {
+              detail: {
+                toolName: funcName,
+                displayName: displayName,
+                icon: toolMeta?.icon || "ph-cpu",
+                status: "done",
+                timestamp: Date.now()
+              }
+            }));
+
+            currentMessages.push({
+              role: "tool",
+              tool_call_id: toolCall.id,
+              name: funcName,
+              content: typeof toolResult === "string" ? toolResult : JSON.stringify(toolResult)
+            });
+          }
+          // 进入下一轮循环，模型会基于 tool 结果返回最终对话台词
+        } else {
+          const rawReply = (choiceMsg.content || "").trim();
+          if (!rawReply && maxLoop > 1) {
+            console.warn("[MCP/LLM] 模型返回了空内容，自动追问要求生成台词回复...");
+            currentMessages.push({
+              role: "user",
+              content: "请根据上述记录或当前对话，以你的角色口吻说出你的正式回复，切勿留空。"
+            });
+            continue;
+          }
+
+          // 最终文本回复已生成，清空置顶指示器
+          if (window.showMcpIndicator) {
+            window.showMcpIndicator(null, null, "idle");
+          }
+          window.dispatchEvent(new CustomEvent("mcp_tool_calling", {
+            detail: { status: "idle", timestamp: Date.now() }
+          }));
+          const reply = rawReply || "（已为你办妥此事，请主公放心。）";
+          console.log("AI回复:", reply);
+          if (actualFinish) actualFinish(reply);
+          return;
+        }
+      }
+      if (actualFinish) actualFinish("【名士已完成多轮推演与工具查勘，然局势纷繁，未及尽言。】");
     } catch (error) {
       console.error("LLM Request Failed:", error);
       if (actualError) actualError(error.message);
@@ -2362,21 +2523,25 @@ const CalendarPage = () => {
     return grid;
   };
 
-  // 保存任务数据到IndexedDB，并广播更新事件
+  const lastSavedTasksJsonRef = React.useRef("");
+
+  // 保存任务数据到IndexedDB，并避免死锁循环
   React.useEffect(() => {
+    const taskStr = JSON.stringify(tasks);
+    if (!taskStr || taskStr === "{}" || taskStr === lastSavedTasksJsonRef.current) {
+      return;
+    }
+    lastSavedTasksJsonRef.current = taskStr;
     const saveTasks = async () => {
       try {
         try {
-          localStorage.setItem("cached_calendar_tasks", JSON.stringify(tasks));
-          window.dispatchEvent(
-            new CustomEvent("calendar_tasks_updated", { detail: tasks }),
-          );
+          localStorage.setItem("cached_calendar_tasks", taskStr);
         } catch (e) { }
 
         const calendarStore = window.calendarStore;
         if (calendarStore) {
           try {
-            await calendarStore.saveTasks(tasks);
+            await calendarStore.saveTasks(tasks, true);
             console.log("日历任务保存到IndexedDB成功");
           } catch (e) {
             console.error("保存日历任务到IndexedDB失败:", e);
@@ -80809,7 +80974,9 @@ ${docContext}
       temperature: typeof settings.temperature === "number" ? settings.temperature : 0.8,
       top_p: typeof settings.top_p === "number" ? settings.top_p : 0.95,
       presence_penalty: typeof settings.presence_penalty === "number" ? settings.presence_penalty : 0.4,
-      frequency_penalty: typeof settings.frequency_penalty === "number" ? settings.frequency_penalty : 0.2
+      frequency_penalty: typeof settings.frequency_penalty === "number" ? settings.frequency_penalty : 0.2,
+      character: chatData?.name,
+      characterId: chatData?.id
     };
     console.log("handleAITrigger 发送对话，角色参数:", modelOptions);
     window.sendToLLM(
