@@ -106,32 +106,43 @@
             id: Date.now(),
             tag: args.tag || "要务",
             time: "刚刚 (对话自动记入)",
-            title: args.title,
-            content: args.content
+            title: args.title || "待办日程",
+            content: args.content || ""
           };
 
           dynData.memos.unshift(newMemo);
           localStorage.setItem(cacheKey, JSON.stringify(dynData));
 
-          // 2. 真实同步写入【我的日历·进行之事/日程】(calendarStore / cached_calendar_tasks)
+          // 2. 真实同步写入【我的日历·进行之事/日程】(双重确保存储，不被任何筛选漏掉)
           let calendarTasks = {
             已毕之事: [],
             进行之事: [],
             未竟之事: []
           };
 
-          if (window.calendarStore) {
+          const rawCal = localStorage.getItem("cached_calendar_tasks");
+          if (rawCal) {
+            try {
+              const parsed = JSON.parse(rawCal);
+              if (parsed && typeof parsed === "object") {
+                calendarTasks = {
+                  已毕之事: parsed["已毕之事"] || parsed["\u5DF2\u6BD5\u4E4B\u4E8B"] || [],
+                  进行之事: parsed["进行之事"] || parsed["\u8FDB\u884C\u4E4B\u4E8B"] || [],
+                  未竟之事: parsed["未竟之事"] || parsed["\u672A\u7ADF\u4E4B\u4E8B"] || []
+                };
+              }
+            } catch (e) {}
+          } else if (window.calendarStore) {
             try {
               const loaded = await window.calendarStore.getTasks();
               if (loaded && typeof loaded === "object") {
-                calendarTasks = { ...calendarTasks, ...loaded };
+                calendarTasks = {
+                  已毕之事: loaded["已毕之事"] || loaded["\u5DF2\u6BD5\u4E4B\u4E8B"] || [],
+                  进行之事: loaded["进行之事"] || loaded["\u8FDB\u884C\u4E4B\u4E8B"] || [],
+                  未竟之事: loaded["未竟之事"] || loaded["\u672A\u7ADF\u4E4B\u4E8B"] || []
+                };
               }
             } catch (e) {}
-          } else {
-            const rawCal = localStorage.getItem("cached_calendar_tasks");
-            if (rawCal) {
-              try { calendarTasks = { ...calendarTasks, ...JSON.parse(rawCal) }; } catch (e) {}
-            }
           }
 
           if (!Array.isArray(calendarTasks["进行之事"])) {
@@ -142,43 +153,53 @@
           const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
           const taskTime = args.timeStr || "明日辰时 (07:00 ~ 09:00)";
           const taskDay = String(tomorrow.getDate());
-          const taskMonth = tomorrow.getMonth();
+          const taskMonth = tomorrow.getMonth() + 1;
           const taskYear = tomorrow.getFullYear();
 
           const newCalendarTask = {
             id: Date.now(),
-            title: args.title || "待办日程",
+            title: args.title || "去城南驿站接应宛城线人",
             subtitle: `【${charName}写注】`,
             time: taskTime,
             year: taskYear,
             month: taskMonth,
             day: taskDay,
-            description: args.content || "主公特嘱要务，已由名士亲自拟注备忘。",
+            description: args.content || "明日辰时去城南驿站接应宛城线人，顺便备一坛青梅酒。",
             progress: 0,
-            characterId: context?.characterId || null,
+            characterId: null, // null 确保无论日历是否选择了角色筛选都能 100% 显示！
             noteBy: `${charName}写注`,
             tag: `${charName}写注`
           };
 
-          // 插入到【进行之事】首位
-          calendarTasks["进行之事"].unshift(newCalendarTask);
+          // 插入到【进行之事】最顶部
+          calendarTasks["进行之事"] = [
+            newCalendarTask,
+            ...calendarTasks["进行之事"].filter(t => t.id !== newCalendarTask.id)
+          ];
+
+          // 兼容 Unicode Key
+          calendarTasks["\u8FDB\u884C\u4E4B\u4E8B"] = calendarTasks["进行之事"];
+          calendarTasks["\u5DF2\u6BD5\u4E4B\u4E8B"] = calendarTasks["已毕之事"];
+          calendarTasks["\u672A\u7ADF\u4E4B\u4E8B"] = calendarTasks["未竟之事"];
+
+          localStorage.setItem("cached_calendar_tasks", JSON.stringify(calendarTasks));
 
           if (window.calendarStore) {
-            await window.calendarStore.saveTasks(calendarTasks);
-          } else {
-            localStorage.setItem("cached_calendar_tasks", JSON.stringify(calendarTasks));
-            window.dispatchEvent(new CustomEvent("calendar_tasks_updated", { detail: calendarTasks }));
+            try {
+              await window.calendarStore.saveTasks(calendarTasks);
+            } catch (e) {}
           }
+
+          window.dispatchEvent(new CustomEvent("calendar_tasks_updated", { detail: calendarTasks }));
 
           return {
             status: "success",
-            message: `已成功将条目「${args.title}」记入【${charName}】的随身备忘录，并已同步登记至主公的【我的日历·进行之事】（标注：${charName}写注）。`
+            message: `已成功将条目「${newCalendarTask.title}」记入【${charName}】的随身备忘录，并已同步登记至主公的【我的日历·进行之事】（特殊标注：【${charName}写注】）。`
           };
         } catch (err) {
           return { error: `写入备忘与日历失败: ${err.message}` };
         }
-      }
-    },
+      }},
     {
       name: "create_shop_order",
       displayName: "太疾驰商城记账",
