@@ -175,10 +175,11 @@ const emojiStore = {
   },
   save: async (emoji) => {
     const db = await openDB();
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
       const tx = db.transaction(STORES.EMOJIS, "readwrite");
       const request = tx.objectStore(STORES.EMOJIS).put(emoji);
       request.onsuccess = () => resolve(true);
+      request.onerror = () => reject(request.error || new Error("表情保存失败"));
     });
   },
   delete: async (id) => {
