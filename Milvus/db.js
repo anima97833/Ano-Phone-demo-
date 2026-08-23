@@ -135,53 +135,141 @@ function initAllStores(db) {
   }
 }
 
-// 打开数据库连接 (支持自动升版与版本兼容自愈)
-function openDB() {
-  return new Promise((resolve, reject) => {
-    let request;
+// 全局单例连接与并发 Promise 管理
+let _cachedDbInstance = null;
+let _openDbPromise = null;
+
+function resetDbCache() {
+  if (_cachedDbInstance) {
     try {
-      request = indexedDB.open(DB_NAME, DB_VERSION);
-    } catch (e) {
-      request = indexedDB.open(DB_NAME);
-    }
+      _cachedDbInstance.close();
+    } catch (e) {}
+  }
+  _cachedDbInstance = null;
+  _openDbPromise = null;
+}
 
-    request.onupgradeneeded = (event) => {
-      console.log(`[IndexedDB 升级] 从旧版本升级至版本 ${DB_VERSION}`);
-      const db = event.target.result;
-      initAllStores(db);
-    };
-
-    request.onsuccess = (event) => {
-      resolve(event.target.result);
-    };
-
-    request.onerror = (event) => {
-      console.warn("[DB] 指定版本号打开失败，自动以现有最新版本回退打开:", event.target?.error);
-      try {
-        const fallbackReq = indexedDB.open(DB_NAME);
-        fallbackReq.onsuccess = (ev) => resolve(ev.target.result);
-        fallbackReq.onerror = (errEv) => reject("数据库打开失败: " + errEv.target.error);
-      } catch (fbErr) {
-        reject("数据库打开失败: " + event.target.error);
+// 打开数据库连接 (支持单例复用、并发合并、自动升版与缺失表自愈)
+function openDB() {
+  if (_cachedDbInstance) {
+    try {
+      if (_cachedDbInstance.objectStoreNames) {
+        return Promise.resolve(_cachedDbInstance);
       }
+    } catch (e) {
+      _cachedDbInstance = null;
+    }
+  }
+
+  if (_openDbPromise) {
+    return _openDbPromise;
+  }
+
+  _openDbPromise = new Promise(async (resolve, reject) => {
+    // 内部通用打开辅助
+    const performOpen = (ver) => {
+      return new Promise((res, rej) => {
+        let req;
+        try {
+          req = ver ? indexedDB.open(DB_NAME, ver) : indexedDB.open(DB_NAME);
+        } catch (err) {
+          return rej(err);
+        }
+
+        req.onupgradeneeded = (event) => {
+          const db = event.target.result;
+          console.log(`[IndexedDB 升级] 版本已升至 ${db.version}`);
+          initAllStores(db);
+        };
+
+        req.onblocked = () => {
+          console.warn("[IndexedDB] 打开请求被未关闭的旧连接阻塞，正在尝试调度...");
+        };
+
+        req.onsuccess = (event) => {
+          const db = event.target.result;
+          db.onversionchange = () => {
+            console.warn("[IndexedDB] 侦测到外部升级信号，主动断开当前实例");
+            try {
+              db.close();
+            } catch (e) {}
+            resetDbCache();
+          };
+          db.onclose = () => {
+            resetDbCache();
+          };
+          res(db);
+        };
+
+        req.onerror = (event) => {
+          if (event.preventDefault) event.preventDefault();
+          rej(event.target?.error || new Error("打开数据库失败"));
+        };
+      });
     };
+
+    try {
+      let db = null;
+      try {
+        db = await performOpen(DB_VERSION);
+      } catch (err) {
+        console.warn(`[DB] 尝试版本 ${DB_VERSION} 打开失败，自动无缝回退当前最新版本:`, err);
+        db = await performOpen(null);
+      }
+
+      // 检查是否有缺失表
+      const missingStores = Object.values(STORES).filter(
+        (s) => !db.objectStoreNames.contains(s)
+      );
+
+      if (missingStores.length > 0) {
+        console.log(`[IndexedDB 自愈] 发现缺失表: [${missingStores.join(", ")}]，执行动态补全升级...`);
+        const nextVer = db.version + 1;
+        try {
+          db.close();
+        } catch (e) {}
+        resetDbCache();
+        db = await performOpen(nextVer);
+      }
+
+      _cachedDbInstance = db;
+      resolve(db);
+    } catch (finalErr) {
+      console.error("[IndexedDB 核心连接异常]", finalErr);
+      resetDbCache();
+      reject(finalErr);
+    } finally {
+      _openDbPromise = null;
+    }
   });
+
+  return _openDbPromise;
 }
 window.openDB = openDB;
 
 // 手动或代码调用的主动升级数据库函数
-window.upgradeIndexedDB = async function(targetVer) {
+window.upgradeIndexedDB = async function (targetVer) {
+  resetDbCache();
   const currentDb = await openDB();
   const nextVer = targetVer || Math.max(currentDb.version + 1, DB_VERSION);
-  currentDb.close();
+  try {
+    currentDb.close();
+  } catch (e) {}
+  resetDbCache();
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB_NAME, nextVer);
     req.onupgradeneeded = (e) => {
       initAllStores(e.target.result);
       console.log(`[IndexedDB 手动升级成功] 当前版本为: ${nextVer}`);
     };
-    req.onsuccess = (e) => resolve(e.target.result);
-    req.onerror = (e) => reject(e.target.error);
+    req.onsuccess = (e) => {
+      _cachedDbInstance = e.target.result;
+      resolve(e.target.result);
+    };
+    req.onerror = (e) => {
+      if (e.preventDefault) e.preventDefault();
+      reject(e.target.error);
+    };
   });
 };
 
@@ -337,52 +425,10 @@ const lockScreenStore = {
 };
 window.lockScreenStore = lockScreenStore;
 
-// 检查并创建必要的存储（兼容旧版本）
+// 检查并创建必要的存储（兼容旧版本，自动委托给 openDB 自愈）
 async function ensureStoresExist() {
   try {
     const db = await openDB();
-    const storeNames = db.objectStoreNames;
-
-    // 检查是否缺少必要的存储
-    const missingStores = [];
-    for (const key in STORES) {
-      if (!storeNames.contains(STORES[key])) {
-        missingStores.push(STORES[key]);
-      }
-    }
-
-    // 如果缺少存储，需要升级数据库
-    if (missingStores.length > 0) {
-      // 关闭当前连接
-      db.close();
-      // 增加版本号并重新打开数据库
-      const newVersion = db.version + 1;
-      return new Promise((resolve, reject) => {
-        const upgradeRequest = indexedDB.open(DB_NAME, newVersion);
-        upgradeRequest.onupgradeneeded = (event) => {
-          const upgradeDb = event.target.result;
-          // 创建缺少的存储
-          missingStores.forEach((storeName) => {
-            if (!upgradeDb.objectStoreNames.contains(storeName)) {
-              let keyPath = "id";
-              if (storeName === STORES.USER_SETTINGS) keyPath = "key";
-              else if (storeName === STORES.CHAT_HISTORY) keyPath = ["characterId", "id"];
-              
-              const store = upgradeDb.createObjectStore(storeName, { keyPath });
-              if (storeName === STORES.CHAT_HISTORY) {
-                store.createIndex("by_character", "characterId", { unique: false });
-              }
-            }
-          });
-        };
-        upgradeRequest.onsuccess = (event) => {
-          resolve(event.target.result);
-        };
-        upgradeRequest.onerror = (event) => {
-          reject("数据库升级失败: " + event.target.error);
-        };
-      });
-    }
 
     // 自动初始化背包种子数据
     if (!localStorage.getItem("backpack_seed_initialized")) {

@@ -16,12 +16,20 @@
   };
 
   let dbInstance = null;
+  let openDbPromise = null;
 
   function openDB() {
-    return new Promise((resolve, reject) => {
-      if (dbInstance) return resolve(dbInstance);
+    if (dbInstance) return Promise.resolve(dbInstance);
+    if (openDbPromise) return openDbPromise;
 
-      const request = indexedDB.open(DB_NAME, DB_VERSION);
+    openDbPromise = new Promise((resolve) => {
+      let request;
+      try {
+        request = indexedDB.open(DB_NAME, DB_VERSION);
+      } catch (err) {
+        console.error("[DB] 打开 IndexedDB 异常:", err);
+        return resolve(null);
+      }
 
       request.onupgradeneeded = (e) => {
         const db = e.target.result;
@@ -34,14 +42,28 @@
 
       request.onsuccess = (e) => {
         dbInstance = e.target.result;
+        dbInstance.onversionchange = () => {
+          try { dbInstance.close(); } catch (err) {}
+          dbInstance = null;
+          openDbPromise = null;
+        };
+        dbInstance.onclose = () => {
+          dbInstance = null;
+          openDbPromise = null;
+        };
         resolve(dbInstance);
       };
 
       request.onerror = (e) => {
         console.error("[DB] 打开 IndexedDB 失败，降级到 localStorage:", e);
+        dbInstance = null;
         resolve(null);
       };
+    }).finally(() => {
+      openDbPromise = null;
     });
+
+    return openDbPromise;
   }
 
   // 通用键值存储封装
