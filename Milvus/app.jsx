@@ -76030,9 +76030,9 @@ const GroupOfflinePlotScene = ({
   const [isImmersive, setIsImmersive] = useState(false); // 沉浸模式（隐藏 UI）
   const [showHistoryDrawer, setShowHistoryDrawer] = useState(false); // 历史记录抽屉
   const [selectedCharacter, setSelectedCharacter] = useState(null); // 当前点击互动的角色 (用于长按/特定操作)
-  const [activeSpeechMap, setActiveSpeechMap] = useState({}); // 每个槽位当前保存的最新发言
-  const [unreadSpeechSlots, setUnreadSpeechSlots] = useState({}); // 每个槽位是否有未读红点
-  const [activeGalgameDialogue, setActiveGalgameDialogue] = useState(null); // 当前在顶部浅色玻璃卡片展示的发言
+  const [dialogueIndex, setDialogueIndex] = useState(0); // 当前逐句播放推进的索引
+  const [isAutoPlaying, setIsAutoPlaying] = useState(false); // 自动播放状态
+  const [isCardDismissed, setIsCardDismissed] = useState(false); // 用户是否手动关闭了顶部对白卡片
   const [revealedThoughts, setRevealedThoughts] = useState({}); // 展开心声的状态
   const [memberCustomStyles, setMemberCustomStyles] = useState({}); // 异步加载的成员自定义头像/头像框
 
@@ -76050,19 +76050,7 @@ const GroupOfflinePlotScene = ({
 
   const inputRef = useRef(null);
   const historyListRef = useRef(null);
-
-  // 记录进入线下模式时的初始消息 ID
-  const entryMsgIdRef = useRef(0);
-  useEffect(() => {
-    if (messages && messages.length > 0) {
-      entryMsgIdRef.current = messages[messages.length - 1].id || 0;
-    } else {
-      entryMsgIdRef.current = 0;
-    }
-    setActiveSpeechMap({});
-    setUnreadSpeechSlots({});
-    setActiveGalgameDialogue(null);
-  }, [chatData?.id]);
+  const prevCountRef = useRef(0);
 
   // 用户信息
   const userAvatar = useMemo(() => {
@@ -76090,6 +76078,126 @@ const GroupOfflinePlotScene = ({
     const raw = chatData?.profile?.members || [];
     return raw.filter(m => m && m.name && m.name !== userNickname && m.name !== "我");
   }, [chatData, userNickname]);
+
+  // 过滤出本场线下的所有有效对白消息
+  const offlineNewMsgs = useMemo(() => {
+    if (!messages || messages.length === 0) return [];
+    return messages.filter(m => {
+      const text = m.text || "";
+      if (text.includes("加入了群聊") || text.includes("移出了群聊") || text.includes("修改群名为") || text.includes("修改你的昵称为") || m.type === "system") {
+        return false;
+      }
+      return true;
+    });
+  }, [messages]);
+
+  // 当切换会话或重新打开时重置状态
+  useEffect(() => {
+    setDialogueIndex(0);
+    prevCountRef.current = 0;
+    setIsCardDismissed(false);
+    setIsAutoPlaying(false);
+  }, [chatData?.id, isOpen]);
+
+  // 当有新消息批次进入时（AI 一人多句或多人接话），从新批次的第一句开始顺序播放
+  useEffect(() => {
+    const count = offlineNewMsgs.length;
+    if (count === 0) {
+      setDialogueIndex(0);
+      prevCountRef.current = 0;
+      return;
+    }
+    if (count > prevCountRef.current) {
+      const added = count - prevCountRef.current;
+      // 如果是一次性新增了多条消息（AI多句或多人回话），从该批次起始句（prevCountRef.current）开始播放！
+      if (added > 1) {
+        setDialogueIndex(prevCountRef.current);
+      } else {
+        setDialogueIndex(count - 1);
+      }
+      setIsCardDismissed(false);
+      prevCountRef.current = count;
+    }
+  }, [offlineNewMsgs]);
+
+  // 自动播放计时器 (每 3.8 秒自动跳到下一句)
+  useEffect(() => {
+    let timer = null;
+    if (isAutoPlaying && offlineNewMsgs.length > 0) {
+      if (dialogueIndex < offlineNewMsgs.length - 1) {
+        timer = setTimeout(() => {
+          setDialogueIndex(prev => prev + 1);
+        }, 3800);
+      } else {
+        setIsAutoPlaying(false);
+      }
+    }
+    return () => { if (timer) clearTimeout(timer); };
+  }, [isAutoPlaying, dialogueIndex, offlineNewMsgs.length]);
+
+  // 获取当前正在展示的发言与角色槽位
+  const currentMsg = (offlineNewMsgs && offlineNewMsgs.length > 0)
+    ? (offlineNewMsgs[Math.min(dialogueIndex, offlineNewMsgs.length - 1)] || null)
+    : null;
+
+  const activeGalgameDialogue = useMemo(() => {
+    if (!currentMsg) return null;
+    const isHost = currentMsg.isMe;
+    let matchedSlotId = isHost ? "stageHost" : null;
+    let latestMember = null;
+
+    if (!isHost) {
+      groupMembers.forEach((member, idx) => {
+        const slot = SLOTS_CONFIG.find(s => s.role === "member" && s.index === idx);
+        if (!slot) return;
+        const sName = currentMsg.sender || "";
+        if (sName && (sName === member.name || member.name.includes(sName) || sName.includes(member.name))) {
+          latestMember = member;
+          matchedSlotId = slot.id;
+        }
+      });
+      if (!matchedSlotId && groupMembers.length > 0) {
+        const slot = SLOTS_CONFIG.find(s => s.role === "member" && s.index === 0);
+        matchedSlotId = slot ? slot.id : "leftTop";
+        latestMember = groupMembers[0];
+      }
+    }
+
+    return {
+      slotId: matchedSlotId,
+      isHost,
+      char: latestMember,
+      speakerName: isHost ? userNickname : (currentMsg.sender || latestMember?.name || "群成员"),
+      speech: currentMsg,
+      index: dialogueIndex,
+      total: offlineNewMsgs.length
+    };
+  }, [currentMsg, dialogueIndex, offlineNewMsgs.length, groupMembers, userNickname]);
+
+  // 计算每个槽位截至当前 dialogueIndex 的最新发言
+  const slotSpeeches = useMemo(() => {
+    const map = {};
+    if (!offlineNewMsgs || offlineNewMsgs.length === 0) return map;
+    for (let i = 0; i <= dialogueIndex && i < offlineNewMsgs.length; i++) {
+      const m = offlineNewMsgs[i];
+      if (!m) continue;
+      if (m.isMe) {
+        map["stageHost"] = m;
+      } else {
+        groupMembers.forEach((member, idx) => {
+          const slot = SLOTS_CONFIG.find(s => s.role === "member" && s.index === idx);
+          if (!slot) return;
+          const sName = m.sender || "";
+          if (sName && (sName === member.name || member.name.includes(sName) || sName.includes(member.name))) {
+            map[slot.id] = m;
+          } else if (!sName && idx === 0) {
+            map[slot.id] = m;
+          }
+        });
+      }
+    }
+    return map;
+  }, [offlineNewMsgs, dialogueIndex, groupMembers]);
 
   // 获取所有角色的丰富信息
   const [charDetailsMap, setCharDetailsMap] = useState({});
@@ -76200,81 +76308,6 @@ const GroupOfflinePlotScene = ({
     return () => { isMounted = false; };
   }, [groupMembers]);
 
-  // 监听最新消息：收到新发言时，在对应角色头上冒出红点与微标
-  useEffect(() => {
-    if (!messages || messages.length === 0) return;
-
-    // 过滤出进入线下模式后的新消息，并排除掉纯系统通知
-    const offlineNewMsgs = messages.filter(m => {
-      if (entryMsgIdRef.current && m.id && m.id <= entryMsgIdRef.current) return false;
-      const text = m.text || "";
-      if (text.includes("加入了群聊") || text.includes("移出了群聊") || text.includes("修改群名为") || text.includes("修改你的昵称为") || m.type === "system") {
-        return false;
-      }
-      return true;
-    });
-
-    if (offlineNewMsgs.length === 0) return;
-
-    const newSpeechMap = { ...activeSpeechMap };
-    const newUnreadMap = { ...unreadSpeechSlots };
-
-    // 遍历新发言，标记对应角色的发言数据与未读红点
-    offlineNewMsgs.forEach(msg => {
-      if (msg.isMe) {
-        newSpeechMap["stageHost"] = msg;
-        newUnreadMap["stageHost"] = false;
-      } else {
-        groupMembers.forEach((member, idx) => {
-          const slot = SLOTS_CONFIG.find(s => s.role === "member" && s.index === idx);
-          if (!slot) return;
-          const senderName = msg.sender || "";
-          if (senderName && (senderName === member.name || member.name.includes(senderName) || senderName.includes(member.name))) {
-            newSpeechMap[slot.id] = msg;
-            newUnreadMap[slot.id] = true; // 亮起头顶红点
-          } else if (!senderName && idx === 0) {
-            newSpeechMap[slot.id] = msg;
-            newUnreadMap[slot.id] = true;
-          }
-        });
-      }
-    });
-
-    setActiveSpeechMap(newSpeechMap);
-    setUnreadSpeechSlots(newUnreadMap);
-
-    // 自动定位到最新一条发言的角色进行顶部浅色拟态玻璃对话框预览
-    const latest = offlineNewMsgs[offlineNewMsgs.length - 1];
-    if (latest) {
-      const isHostLatest = latest.isMe;
-      let latestMember = null;
-      let matchedSlotId = isHostLatest ? "stageHost" : null;
-
-      if (!isHostLatest) {
-        groupMembers.forEach((member, idx) => {
-          const slot = SLOTS_CONFIG.find(s => s.role === "member" && s.index === idx);
-          if (!slot) return;
-          const sName = latest.sender || "";
-          if (sName && (sName === member.name || member.name.includes(sName) || sName.includes(member.name))) {
-            latestMember = member;
-            matchedSlotId = slot.id;
-          }
-        });
-      }
-
-      if (matchedSlotId) {
-        setActiveGalgameDialogue({
-          slotId: matchedSlotId,
-          isHost: isHostLatest,
-          char: latestMember,
-          speakerName: isHostLatest ? userNickname : (latest.sender || latestMember?.name || "群成员"),
-          speech: latest
-        });
-        setUnreadSpeechSlots(prev => ({ ...prev, [matchedSlotId]: false }));
-      }
-    }
-  }, [messages, groupMembers]);
-
   // 滚动历史抽屉至底部
   useEffect(() => {
     if (showHistoryDrawer && historyListRef.current) {
@@ -76282,19 +76315,47 @@ const GroupOfflinePlotScene = ({
     }
   }, [showHistoryDrawer, messages]);
 
-  // 点击角色或微标：在页面上部展示该角色的浅色拟态玻璃对话框
-  const handleOpenSlotDialogue = (slotId, isHost, member) => {
-    const speech = activeSpeechMap[slotId];
-    if (speech) {
-      setActiveGalgameDialogue({
-        slotId,
-        isHost,
-        char: member,
-        speakerName: isHost ? userNickname : (speech.sender || member?.name || "群成员"),
-        speech
-      });
-      // 清除该槽位的未读红点
-      setUnreadSpeechSlots(prev => ({ ...prev, [slotId]: false }));
+  // 上一句 / 下一句
+  const handlePrevDialogue = (e) => {
+    if (e) e.stopPropagation();
+    setIsCardDismissed(false);
+    setDialogueIndex(i => Math.max(0, i - 1));
+  };
+
+  const handleNextDialogue = (e) => {
+    if (e) e.stopPropagation();
+    setIsCardDismissed(false);
+    if (dialogueIndex < offlineNewMsgs.length - 1) {
+      setDialogueIndex(i => i + 1);
+    }
+  };
+
+  // 点击角色槽位：如果该角色在本场有发言，跳到该角色的发言循环；否则打开互动菜单
+  const handleSlotClick = (slotId, isHost, member) => {
+    setIsCardDismissed(false);
+    // 寻找该角色的所有发言索引
+    const indices = [];
+    offlineNewMsgs.forEach((m, idx) => {
+      if (isHost && m.isMe) {
+        indices.push(idx);
+      } else if (!isHost && member) {
+        const sName = m.sender || "";
+        if (sName && (sName === member.name || member.name.includes(sName) || sName.includes(member.name))) {
+          indices.push(idx);
+        }
+      }
+    });
+
+    if (indices.length > 0) {
+      // 如果当前刚好在其中某一句，循环跳到该角色的下一句，否则跳到该角色的最后一句
+      const currentPos = indices.indexOf(dialogueIndex);
+      if (currentPos !== -1 && currentPos < indices.length - 1) {
+        setDialogueIndex(indices[currentPos + 1]);
+      } else if (currentPos === indices.length - 1) {
+        setDialogueIndex(indices[0]); // 循环回第一句
+      } else {
+        setDialogueIndex(indices[indices.length - 1]);
+      }
     } else {
       // 暂无发言时，打开互动菜单
       if (isHost) {
@@ -76305,31 +76366,16 @@ const GroupOfflinePlotScene = ({
     }
   };
 
-  // 发送消息或触发 AI 回应（与普通传讯逻辑一致：有文字则发自己话不触发AI，可多条连发；输入空时点探讨触发AI）
+  // 发送消息或触发 AI 回应
   const handleSendOrTrigger = () => {
     const text = inputText.trim();
     if (text) {
-      // 1. 发送自己的发言，不触发 AI 回应（支持多条连发）
       if (onSendMessage) {
         onSendMessage(text);
       }
       setInputText("");
-      const hostMsg = {
-        id: Date.now(),
-        text,
-        isMe: true,
-        time: (new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
-      };
-      setActiveSpeechMap(prev => ({ ...prev, stageHost: hostMsg }));
-      setActiveGalgameDialogue({
-        slotId: "stageHost",
-        isHost: true,
-        speakerName: userNickname,
-        speech: hostMsg
-      });
       if (inputRef.current) inputRef.current.focus();
     } else {
-      // 2. 输入框为空时点击：触发名士们的回应与探讨
       if (isTyping) return;
       if (onTriggerAI) {
         onTriggerAI();
@@ -76357,7 +76403,7 @@ const GroupOfflinePlotScene = ({
       if (inputRef.current) inputRef.current.focus();
     } else if (type === "thought") {
       const slot = SLOTS_CONFIG.find(s => s.role === "member" && groupMembers[s.index]?.name === char.name);
-      if (slot && activeSpeechMap[slot.id]?.thought) {
+      if (slot && slotSpeeches[slot.id]?.thought) {
         setRevealedThoughts(prev => ({
           ...prev,
           [slot.id]: !prev[slot.id]
@@ -76426,15 +76472,20 @@ const GroupOfflinePlotScene = ({
     }
   };
 
-  // 获取所有其他有未读发言的角色槽位
-  const otherUnreadSlots = useMemo(() => {
-    return SLOTS_CONFIG.filter(s => {
-      if (activeGalgameDialogue && s.id === activeGalgameDialogue.slotId) return false;
-      return unreadSpeechSlots[s.id] && activeSpeechMap[s.id];
-    });
-  }, [unreadSpeechSlots, activeSpeechMap, activeGalgameDialogue]);
+  const actionBtnStyle = {
+    padding: "9px 12px",
+    borderRadius: "10px",
+    background: "rgba(255, 255, 255, 0.08)",
+    border: "1px solid rgba(212, 175, 55, 0.3)",
+    color: "#fbf6ea",
+    fontSize: "12px",
+    cursor: "pointer",
+    textAlign: "left",
+    display: "flex",
+    alignItems: "center",
+    gap: "6px"
+  };
 
-  // ⬇ 所有 hooks 调用完毕后，才可以 early return
   if (!isOpen) return null;
 
   return React.createElement(
@@ -76592,21 +76643,22 @@ const GroupOfflinePlotScene = ({
     ),
 
     // 2. 页面上部 · 浅色拟态玻璃轻质感对话框 (Top Light Glass Dialogue Card)
-    !isImmersive && activeGalgameDialogue && React.createElement(
+    !isImmersive && !isCardDismissed && activeGalgameDialogue && React.createElement(
       "div",
       {
         className: "offline-top-glass-dialogue",
+        onClick: handleNextDialogue, // 点击对话框推进到下一句
         style: {
           position: "absolute",
           top: "58px",
           left: "12px",
           right: "12px",
           zIndex: 150,
-          background: "linear-gradient(135deg, rgba(255, 253, 247, 0.95) 0%, rgba(248, 242, 230, 0.9) 100%)",
+          background: "linear-gradient(135deg, rgba(255, 253, 247, 0.96) 0%, rgba(248, 242, 230, 0.92) 100%)",
           backdropFilter: "blur(14px) saturate(180%)",
           WebkitBackdropFilter: "blur(14px) saturate(180%)",
           border: "1px solid rgba(255, 255, 255, 0.95)",
-          outline: "1px solid rgba(212, 175, 55, 0.3)",
+          outline: "1px solid rgba(212, 175, 55, 0.35)",
           borderRadius: "16px",
           boxShadow: "0 8px 30px rgba(50, 30, 15, 0.16), 0 1px 0 rgba(255, 255, 255, 0.9) inset",
           padding: "10px 14px",
@@ -76614,10 +76666,11 @@ const GroupOfflinePlotScene = ({
           flexDirection: "column",
           gap: "6px",
           animation: "slideDown 0.25s ease-out",
-          maxHeight: "125px"
+          maxHeight: "145px",
+          cursor: "pointer"
         }
       },
-      // 顶栏：说话人姓名 + 探听心声 + 快捷操作
+      // 顶栏：说话人姓名 + 对白进度 + 探听心声 + 快捷操作
       React.createElement(
         "div",
         {
@@ -76649,14 +76702,32 @@ const GroupOfflinePlotScene = ({
             },
             activeGalgameDialogue.isHost ? `👑 【主讲】${activeGalgameDialogue.speakerName}` : `🍵 【名士】${activeGalgameDialogue.speakerName}`
           ),
+          // 句子序号进度徽标
+          offlineNewMsgs.length > 1 && React.createElement(
+            "span",
+            {
+              style: {
+                fontSize: "10.5px",
+                padding: "1px 6px",
+                borderRadius: "8px",
+                background: "rgba(212, 175, 55, 0.15)",
+                color: "#7a5734",
+                fontWeight: "bold"
+              }
+            },
+            `${dialogueIndex + 1} / ${offlineNewMsgs.length}`
+          ),
           // 如果有心声
           activeGalgameDialogue.speech?.thought && React.createElement(
             "button",
             {
-              onClick: () => setRevealedThoughts(prev => ({
-                ...prev,
-                [activeGalgameDialogue.slotId]: !prev[activeGalgameDialogue.slotId]
-              })),
+              onClick: (e) => {
+                e.stopPropagation();
+                setRevealedThoughts(prev => ({
+                  ...prev,
+                  [activeGalgameDialogue.slotId]: !prev[activeGalgameDialogue.slotId]
+                }));
+              },
               style: {
                 padding: "2px 8px",
                 borderRadius: "10px",
@@ -76674,14 +76745,37 @@ const GroupOfflinePlotScene = ({
             "💜 探听心声"
           )
         ),
-        // 右侧操作
+        // 右侧操作按钮组
         React.createElement(
           "div",
           { style: { display: "flex", alignItems: "center", gap: "6px" } },
+          // 自动播放开关
           React.createElement(
             "button",
             {
-              onClick: () => {
+              onClick: (e) => {
+                e.stopPropagation();
+                setIsAutoPlaying(prev => !prev);
+              },
+              title: isAutoPlaying ? "暂停自动播放" : "开启自动逐句播放",
+              style: {
+                padding: "2px 8px",
+                borderRadius: "10px",
+                background: isAutoPlaying ? "rgba(72, 187, 120, 0.18)" : "rgba(180, 130, 50, 0.1)",
+                border: isAutoPlaying ? "1px solid #48bb78" : "1px solid rgba(180, 130, 50, 0.3)",
+                color: isAutoPlaying ? "#276749" : "#68481b",
+                fontSize: "10.5px",
+                fontWeight: "bold",
+                cursor: "pointer"
+              }
+            },
+            isAutoPlaying ? "⏸ 自动中" : "▶ 自动"
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: (e) => {
+                e.stopPropagation();
                 if (!activeGalgameDialogue.isHost) {
                   setInputText(`@${activeGalgameDialogue.speakerName} `);
                 }
@@ -76702,7 +76796,10 @@ const GroupOfflinePlotScene = ({
           React.createElement(
             "button",
             {
-              onClick: () => setActiveGalgameDialogue(null),
+              onClick: (e) => {
+                e.stopPropagation();
+                setIsCardDismissed(true);
+              },
               title: "关闭对话卡片",
               style: {
                 background: "transparent",
@@ -76760,46 +76857,59 @@ const GroupOfflinePlotScene = ({
         )
       ),
 
-      // 底栏：快捷切换其他有未读发言的名士
-      otherUnreadSlots.length > 0 && React.createElement(
+      // 底栏：上一句 / 下一句 快捷推进条
+      offlineNewMsgs.length > 1 && React.createElement(
         "div",
         {
           style: {
             display: "flex",
             alignItems: "center",
-            gap: "5px",
-            overflowX: "auto",
-            paddingTop: "2px",
+            justifyContent: "space-between",
+            paddingTop: "4px",
             borderTop: "1px solid rgba(212, 175, 55, 0.2)"
           }
         },
-        React.createElement("span", { style: { fontSize: "10.5px", color: "#8c7258", flexShrink: 0 } }, "其他未读："),
-        otherUnreadSlots.map(s => {
-          const sp = activeSpeechMap[s.id];
-          const sName = s.role === "host" ? userNickname : (sp?.sender || groupMembers[s.index]?.name || "名士");
-          return React.createElement(
-            "button",
-            {
-              key: s.id,
-              onClick: () => handleOpenSlotDialogue(s.id, s.role === "host", groupMembers[s.index]),
-              style: {
-                flexShrink: 0,
-                padding: "2px 7px",
-                borderRadius: "8px",
-                background: "rgba(229, 62, 62, 0.12)",
-                border: "1px solid rgba(229, 62, 62, 0.4)",
-                color: "#c53030",
-                fontSize: "10.5px",
-                cursor: "pointer",
-                display: "flex",
-                alignItems: "center",
-                gap: "3px"
-              }
-            },
-            React.createElement("span", { style: { width: "5px", height: "5px", borderRadius: "50%", background: "#e53e3e" } }),
-            `听听 ${sName}`
-          );
-        })
+        React.createElement(
+          "button",
+          {
+            onClick: handlePrevDialogue,
+            disabled: dialogueIndex === 0,
+            style: {
+              padding: "2px 10px",
+              borderRadius: "8px",
+              background: dialogueIndex === 0 ? "rgba(0,0,0,0.04)" : "rgba(212, 175, 55, 0.15)",
+              border: "1px solid rgba(212, 175, 55, 0.3)",
+              color: dialogueIndex === 0 ? "#aaa" : "#5d3c1a",
+              fontSize: "11px",
+              fontWeight: "bold",
+              cursor: dialogueIndex === 0 ? "not-allowed" : "pointer"
+            }
+          },
+          "◀ 上一句"
+        ),
+        React.createElement(
+          "span",
+          { style: { fontSize: "10.5px", color: "#8c7258" } },
+          dialogueIndex < offlineNewMsgs.length - 1 ? "点击卡片或下一句继续 ➔" : "（已至当前最新对白）"
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: handleNextDialogue,
+            disabled: dialogueIndex >= offlineNewMsgs.length - 1,
+            style: {
+              padding: "2px 10px",
+              borderRadius: "8px",
+              background: dialogueIndex >= offlineNewMsgs.length - 1 ? "rgba(0,0,0,0.04)" : "linear-gradient(135deg, #d4af37 0%, #aa7c11 100%)",
+              border: "1px solid rgba(212, 175, 55, 0.4)",
+              color: dialogueIndex >= offlineNewMsgs.length - 1 ? "#aaa" : "#241505",
+              fontSize: "11px",
+              fontWeight: "bold",
+              cursor: dialogueIndex >= offlineNewMsgs.length - 1 ? "default" : "pointer"
+            }
+          },
+          dialogueIndex >= offlineNewMsgs.length - 1 ? "已是最新 ✔" : "下一句 ▶"
+        )
       )
     ),
 
@@ -76853,7 +76963,7 @@ const GroupOfflinePlotScene = ({
           className: "offline-tea-steam-source",
           style: {
             position: "absolute",
-            top: "84%",
+            top: "69%",
             left: "50%",
             transform: "translate(-50%, -50%)",
             width: "30px",
@@ -76862,42 +76972,45 @@ const GroupOfflinePlotScene = ({
             zIndex: 15
           }
         },
-        React.createElement("div", { className: "tea-steam-particle steam-1" }),
-        React.createElement("div", { className: "tea-steam-particle steam-2" })
+        React.createElement("div", { className: "steam-1" }),
+        React.createElement("div", { className: "steam-2" })
       ),
 
-      // 渲染 7 个槽位
+      // 渲染 7 槽位（主讲席 + 6 席位）
       SLOTS_CONFIG.map(slot => {
         const isHost = slot.role === "host";
-        const member = !isHost ? groupMembers[slot.index] : null;
-        const speech = activeSpeechMap[slot.id];
-        const isUnread = unreadSpeechSlots[slot.id];
-        const isSpeakingInGalgame = activeGalgameDialogue && activeGalgameDialogue.slotId === slot.id;
+        const member = isHost ? null : groupMembers[slot.index];
+        const isOccupied = isHost || Boolean(member);
 
-        const targetKey = isHost ? "user_host" : (member ? (member.id || member.name) : "");
-        const chosenSprite = selectedSpritesMap[targetKey] || (customSpritesMap[targetKey] && customSpritesMap[targetKey][0]) || (member ? (selectedSpritesMap[member.name] || (customSpritesMap[member.name] && customSpritesMap[member.name][0])) : null);
-
-        let charAvatarId = "";
+        // 获取槽位对应角色的配置
         let charName = "";
+        let charColor = "#888";
+        let charAvatarId = "";
         let charFrame = "";
-        let charColor = "#8c6039";
+        let targetKey = "";
 
         if (isHost) {
-          charAvatarId = chosenSprite || userAvatar;
           charName = userNickname;
+          charAvatarId = userAvatar;
           charFrame = userAvatarFrame;
-          charColor = "#c8a364";
+          targetKey = "user_host";
         } else if (member) {
-          const detail = charDetailsMap[member.name];
-          const custom = memberCustomStyles[member.name];
-          charAvatarId = chosenSprite || custom?.avatar || detail?.avatar || member.avatar || member.id;
-          charName = member.name;
-          charFrame = custom?.frame || detail?.avatarFrame || "";
-          charColor = member.avatarColor || "#718096";
+          charName = member.name || "";
+          targetKey = member.id || member.name;
+          const fullChar = charDetailsMap[member.name] || member;
+          charColor = fullChar.color || "#888";
+          charAvatarId = memberCustomStyles[member.name]?.avatar || member.avatar || fullChar.avatar || fullChar.avatarId || "";
+          charFrame = memberCustomStyles[member.name]?.frame || fullChar.avatarFrame || "";
         }
 
-        const isOccupied = isHost || !!member;
-        const hasCustomStandingSprite = !!chosenSprite;
+        // 立绘形态判断（心纸居互通）
+        const chosenSprite = selectedSpritesMap[targetKey] || (customSpritesMap[targetKey] && customSpritesMap[targetKey][0]);
+        const hasCustomStandingSprite = Boolean(chosenSprite);
+
+        // 该槽位当前的发言数据
+        const speech = slotSpeeches[slot.id];
+        // 是否正是当前 activeGalgameDialogue 正在说话的人
+        const isSpeakingNow = activeGalgameDialogue?.slotId === slot.id;
 
         return React.createElement(
           "div",
@@ -76909,7 +77022,7 @@ const GroupOfflinePlotScene = ({
               top: `${slot.top}%`,
               left: `${slot.left}%`,
               transform: `translate(-50%, -50%) scale(${slot.scale})`,
-              zIndex: isSpeakingInGalgame ? 45 : slot.zIndex,
+              zIndex: isSpeakingNow ? 45 : slot.zIndex,
               display: "flex",
               flexDirection: "column",
               alignItems: "center",
@@ -76922,53 +77035,41 @@ const GroupOfflinePlotScene = ({
             onClick: (e) => {
               e.stopPropagation();
               if (isOccupied) {
-                handleOpenSlotDialogue(slot.id, isHost, member);
+                handleSlotClick(slot.id, isHost, member);
               }
             }
           },
 
-          // 1. 头顶灵动微标 / 红点提示
+          // 1. 头顶灵动微标 / 发言中高亮提示
           speech && React.createElement(
             "div",
             {
-              className: `offline-speech-dot-badge ${isUnread ? "unread-glow" : ""}`,
+              className: `offline-speech-dot-badge ${isSpeakingNow ? "unread-glow" : ""}`,
               style: {
                 position: "absolute",
                 bottom: "100%",
                 marginBottom: isHost ? "4px" : "8px",
-                background: isSpeakingInGalgame
+                background: isSpeakingNow
                   ? "linear-gradient(135deg, #d4af37 0%, #aa7c11 100%)"
                   : "linear-gradient(135deg, rgba(254, 248, 235, 0.95), rgba(240, 230, 215, 0.9))",
-                border: isSpeakingInGalgame ? "2px solid #fff" : "1px solid rgba(212, 175, 55, 0.6)",
+                border: isSpeakingNow ? "2px solid #fff" : "1px solid rgba(212, 175, 55, 0.6)",
                 borderRadius: "14px",
                 padding: "3px 8px",
-                boxShadow: isSpeakingInGalgame ? "0 0 15px rgba(212, 175, 55, 0.8)" : "0 3px 8px rgba(0, 0, 0, 0.35)",
-                color: isSpeakingInGalgame ? "#241505" : "#3c2e28",
+                boxShadow: isSpeakingNow ? "0 0 15px rgba(212, 175, 55, 0.8)" : "0 3px 8px rgba(0, 0, 0, 0.35)",
+                color: isSpeakingNow ? "#241505" : "#3c2e28",
                 fontSize: "11px",
                 fontWeight: "bold",
                 display: "flex",
                 alignItems: "center",
                 gap: "4px",
                 cursor: "pointer",
-                animation: isUnread ? "badgeBreatheShake 2.4s ease-in-out infinite" : "none",
+                animation: isSpeakingNow ? "badgeBreatheShake 2.4s ease-in-out infinite" : "none",
                 whiteSpace: "nowrap",
                 zIndex: 50
               }
             },
-            React.createElement("span", { style: { fontSize: "12px" } }, isSpeakingInGalgame ? "📢" : "💬"),
-            React.createElement("span", null, isSpeakingInGalgame ? "发言中" : (charName || "发言")),
-            // 未读闪烁小红点
-            isUnread && React.createElement("div", {
-              className: "speech-red-dot",
-              style: {
-                width: "8px",
-                height: "8px",
-                borderRadius: "50%",
-                background: "#e53e3e",
-                border: "1.5px solid #fff",
-                boxShadow: "0 0 6px #e53e3e"
-              }
-            })
+            React.createElement("span", { style: { fontSize: "12px" } }, isSpeakingNow ? "📢" : "💬"),
+            React.createElement("span", null, isSpeakingNow ? "发言中" : (charName || "发言"))
           ),
 
           // 2. 槽位实体（就座立绘/角色卡片 或 空置蒲团，无底部名称杂质）
@@ -77004,8 +77105,8 @@ const GroupOfflinePlotScene = ({
                   maxHeight: isHost ? "88px" : "96px",
                   maxWidth: "110px",
                   objectFit: "contain",
-                  filter: isSpeakingInGalgame
-                    ? "drop-shadow(0 0 10px rgba(212, 175, 55, 0.75))"
+                  filter: isSpeakingNow
+                    ? "drop-shadow(0 0 12px rgba(212, 175, 55, 0.85))"
                     : "drop-shadow(0 6px 12px rgba(0,0,0,0.5))",
                   display: "block"
                 },
@@ -77030,12 +77131,12 @@ const GroupOfflinePlotScene = ({
                     height: isHost ? "58px" : "64px",
                     borderRadius: "50%",
                     padding: "2px",
-                    background: isSpeakingInGalgame
+                    background: isSpeakingNow
                       ? "radial-gradient(circle, #ffe082 0%, #ffb300 100%)"
                       : isHost
                         ? "radial-gradient(circle, #fcebc2 0%, #d4af37 100%)"
                         : "radial-gradient(circle, #e2ebf0 0%, #a1b0be 100%)",
-                    boxShadow: isSpeakingInGalgame
+                    boxShadow: isSpeakingNow
                       ? "0 0 15px rgba(255, 179, 0, 0.7)"
                       : "0 4px 12px rgba(0, 0, 0, 0.4)",
                     animation: "seatBreathingFloat 3.5s ease-in-out infinite"
@@ -77653,11 +77754,9 @@ const GroupOfflinePlotScene = ({
           pointerEvents: "auto"
         },
         onClick: () => {
-          console.log("[DEBUG] 关闭历史记录弹层");
           setShowHistoryDrawer(false);
         }
       },
-      // 内部纸张，当 showHistoryDrawer 为真时才渲染，避免隐藏时执行额外的 map 逻辑
       showHistoryDrawer && React.createElement(
         "div",
         {
@@ -77713,7 +77812,7 @@ const GroupOfflinePlotScene = ({
                   fontWeight: "bold"
                 }
               },
-              `共 ${messages.length} 则对白`
+              `共 ${offlineNewMsgs.length} 则对白`
             )
           ),
           React.createElement(
@@ -77737,7 +77836,7 @@ const GroupOfflinePlotScene = ({
             "✕"
           )
         ),
-        // 玻璃宣纸对白流（你一句我一句）
+        // 玻璃宣纸对白流（支持点击某一条直接定位并播放）
         React.createElement(
           "div",
           {
@@ -77751,167 +77850,98 @@ const GroupOfflinePlotScene = ({
               gap: "12px"
             }
           },
-          messages.length === 0 ? React.createElement(
+          offlineNewMsgs.length === 0 ? React.createElement(
             "div",
-            { style: { textAlign: "center", color: "#9c8672", padding: "40px 0", fontSize: "13px" } },
-            "📜 堂前尚无议事对白，诸位正静候开场..."
-          ) : messages.map((m, idx) => {
+            { style: { textAlign: "center", color: "#9c8269", fontSize: "13px", marginTop: "40px" } },
+            "堂前尚无新对白，请点击下方「探讨」或输入发言..."
+          ) : offlineNewMsgs.map((m, idx) => {
             const isMe = m.isMe;
-            const text = m.text || "";
-            const isSystemNotice = m.type === "system" || text.includes("加入了群聊") || text.includes("移出了群聊") || text.includes("修改群名为");
-
-            if (isSystemNotice) {
-              return React.createElement(
-                "div",
-                {
-                  key: m.id || idx,
-                  style: {
-                    alignSelf: "center",
-                    padding: "3px 10px",
-                    borderRadius: "12px",
-                    background: "rgba(0, 0, 0, 0.05)",
-                    border: "1px dashed rgba(180, 140, 90, 0.3)",
-                    color: "#8c7258",
-                    fontSize: "11px",
-                    margin: "2px 0"
-                  }
-                },
-                `📜 ${text}`
-              );
-            }
-
-            const senderName = isMe ? userNickname : (m.sender || "群成员");
+            const speakerName = isMe ? userNickname : (m.sender || "群成员");
+            const isPlayingThis = idx === dialogueIndex;
 
             return React.createElement(
               "div",
               {
                 key: m.id || idx,
+                onClick: () => {
+                  setDialogueIndex(idx);
+                  setIsCardDismissed(false);
+                  setShowHistoryDrawer(false);
+                },
                 style: {
                   display: "flex",
-                  flexDirection: isMe ? "row-reverse" : "row",
-                  alignItems: "flex-start",
-                  gap: "9px",
-                  width: "100%"
+                  flexDirection: "column",
+                  gap: "3px",
+                  padding: "8px 12px",
+                  borderRadius: "12px",
+                  background: isPlayingThis ? "rgba(212, 175, 55, 0.2)" : (isMe ? "rgba(212, 175, 55, 0.08)" : "rgba(255, 255, 255, 0.6)"),
+                  border: isPlayingThis ? "1.5px solid #d4af37" : (isMe ? "1px solid rgba(212, 175, 55, 0.25)" : "1px solid rgba(200, 185, 160, 0.4)"),
+                  boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
+                  cursor: "pointer",
+                  transition: "all 0.2s ease"
                 }
               },
-              // 头像小徽标
+              // 说话人与时间
               React.createElement(
                 "div",
                 {
                   style: {
-                    width: "32px",
-                    height: "32px",
-                    borderRadius: "50%",
-                    flexShrink: 0,
-                    background: isMe
-                      ? "radial-gradient(circle, #fcebc2 0%, #d4af37 100%)"
-                      : "radial-gradient(circle, #e2ebf0 0%, #a1b0be 100%)",
-                    border: isMe ? "1.5px solid #d4af37" : "1.5px solid #a0aec0",
                     display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: isMe ? "#2b1808" : "#2d3748",
-                    fontWeight: "bold",
-                    fontSize: "12px",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
-                    overflow: "hidden"
+                    justifyContent: "space-between",
+                    alignItems: "center"
                   }
                 },
-                senderName.charAt(0)
-              ),
-              // 对白泡泡（透明玻璃纸张质感）
-              React.createElement(
-                "div",
-                {
-                  style: {
-                    maxWidth: "78%",
-                    display: "flex",
-                    flexDirection: "column",
-                    alignItems: isMe ? "flex-end" : "flex-start"
-                  }
-                },
-                // 顶栏：发言人 + 时间
                 React.createElement(
-                  "div",
+                  "span",
                   {
                     style: {
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      color: isMe ? "#8c6039" : "#3c2e28",
                       display: "flex",
                       alignItems: "center",
-                      gap: "6px",
-                      marginBottom: "3px",
-                      fontSize: "10.5px",
-                      color: isMe ? "#8c5826" : "#6c533c"
+                      gap: "4px"
                     }
                   },
-                  React.createElement("span", { style: { fontWeight: "bold" } }, isMe ? `👑 【主讲】${userNickname}` : `🍵 ${senderName}`),
-                  React.createElement("span", { style: { color: "#a89481", fontSize: "10px" } }, m.time || "")
+                  React.createElement("span", { style: { fontSize: "10px", color: "#aaa" } }, `#${idx + 1}`),
+                  isMe ? `👑 ${speakerName}` : `🍵 ${speakerName}`,
+                  isPlayingThis && React.createElement("span", { style: { fontSize: "10px", color: "#b7791f", fontWeight: "bold" } }, "【当前播放】")
                 ),
-                // 气泡卡片主体
                 React.createElement(
-                  "div",
-                  {
-                    style: {
-                      padding: "8px 12px",
-                      borderRadius: isMe ? "14px 4px 14px 14px" : "4px 14px 14px 14px",
-                      background: isMe
-                        ? "linear-gradient(135deg, rgba(254, 244, 214, 0.94) 0%, rgba(248, 233, 192, 0.88) 100%)"
-                        : "linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 242, 232, 0.9) 100%)",
-                      border: isMe ? "1px solid rgba(212, 175, 55, 0.55)" : "1px solid rgba(210, 195, 175, 0.6)",
-                      boxShadow: isMe ? "0 3px 12px rgba(180, 140, 60, 0.15)" : "0 3px 12px rgba(60, 40, 20, 0.08)",
-                      fontSize: "12.5px",
-                      lineHeight: "1.55",
-                      color: "#2c221e",
-                      wordBreak: "break-word"
-                    }
-                  },
-                  // 动作神态（括号内）与台词正文分离渲染
-                  (() => {
-                    const parts = [];
-                    const regex = /（[^）]+）/g;
-                    let lastIdx = 0;
-                    let match;
-                    while ((match = regex.exec(text)) !== null) {
-                      if (match.index > lastIdx) {
-                        parts.push({ type: "dialogue", text: text.slice(lastIdx, match.index) });
-                      }
-                      parts.push({ type: "action", text: match[0] });
-                      lastIdx = regex.lastIndex;
-                    }
-                    if (lastIdx < text.length) {
-                      parts.push({ type: "dialogue", text: text.slice(lastIdx) });
-                    }
-                    if (parts.length === 0) {
-                      return React.createElement("span", null, text);
-                    }
-                    return parts.map((p, i) => {
-                      if (p.type === "action") {
-                        return React.createElement(
-                          "span",
-                          { key: i, style: { color: isMe ? "#965b27" : "#7d5632", fontStyle: "italic", fontWeight: "500" } },
-                          p.text
-                        );
-                      }
-                      return React.createElement("span", { key: i, style: { color: "#2c221e" } }, p.text);
-                    });
-                  })(),
-                  // 心声独白
-                  m.thought && React.createElement(
-                    "div",
-                    {
-                      style: {
-                        marginTop: "5px",
-                        padding: "4px 8px",
-                        borderRadius: "6px",
-                        background: "rgba(147, 105, 226, 0.12)",
-                        border: "1px dashed #9f7aea",
-                        color: "#5b21b6",
-                        fontSize: "11px",
-                        fontStyle: "italic"
-                      }
-                    },
-                    `💜 心声：${m.thought}`
-                  )
+                  "span",
+                  { style: { fontSize: "10px", color: "#9c8269" } },
+                  m.time || ""
                 )
+              ),
+              // 正文内容
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    fontSize: "12.5px",
+                    color: "#2c221e",
+                    lineHeight: "1.5",
+                    marginTop: "2px",
+                    whiteSpace: "pre-wrap"
+                  }
+                },
+                m.text
+              ),
+              // 如果有心声
+              m.thought && React.createElement(
+                "div",
+                {
+                  style: {
+                    fontSize: "11px",
+                    color: "#6b46c1",
+                    fontStyle: "italic",
+                    marginTop: "3px",
+                    padding: "3px 8px",
+                    background: "rgba(128, 90, 213, 0.08)",
+                    borderRadius: "6px"
+                  }
+                },
+                `💜 心声：${m.thought}`
               )
             );
           })
@@ -77919,18 +77949,6 @@ const GroupOfflinePlotScene = ({
       )
     )
   );
-};
-
-const actionBtnStyle = {
-  width: "100%",
-  padding: "8px 12px",
-  borderRadius: "8px",
-  background: "rgba(255, 245, 230, 0.1)",
-  border: "1px solid rgba(212, 175, 55, 0.3)",
-  color: "#f5e2c4",
-  fontSize: "12px",
-  cursor: "pointer",
-  textAlign: "left"
 };
 
 
@@ -79771,142 +79789,125 @@ const ChatSettingsModal = ({
     }
     console.log("设置isTyping为true");
     setIsTyping(true);
-
-    // [新增] 读取长期记忆配置并过滤已挂载记忆
     let memorySettings = {
-      globalMemoryDays: 30, // 默认记忆30天
-      summary: "",
+      globalMemoryDays: 30,
+      summary: ""
     };
     try {
       const savedMem = JSON.parse(
-        localStorage.getItem("t8_memory_config") || "{}",
+        localStorage.getItem("t8_memory_config") || "{}"
       );
       if (savedMem.globalMemoryDays)
         memorySettings.globalMemoryDays = savedMem.globalMemoryDays;
-
       if (savedMem.memories && savedMem.memories.length > 0) {
-        // 过滤出当前聊天对象挂载的记忆 (如果是空数组则什么都不带)
         const mountedIds = settings.mountedMemories || [];
-        const mountedMemories = savedMem.memories.filter((m) =>
-          mountedIds.includes(m.id),
+        const mountedMemories = savedMem.memories.filter(
+          (m) => mountedIds.includes(m.id)
         );
-
         if (mountedMemories.length > 0) {
-          memorySettings.summary = mountedMemories
-            .map((m) => `【${m.title}】：${m.content}`)
-            .join("\n");
+          memorySettings.summary = mountedMemories.map((m) => `【${m.title}】：${m.content}`).join("\n");
         }
       }
-    } catch (e) { }
-
+    } catch (e) {
+    }
     const currentHistory = customHistory || (showGroupOfflineScene ? [...messages, ...offlineSessionMessages] : messages);
     let historyForPrompt = [...currentHistory];
     if (lastUserMsg) historyForPrompt.push(lastUserMsg);
-
-    // 基于全局记忆天数过滤历史消息
-    const cutoffTime =
-      Date.now() - memorySettings.globalMemoryDays * 24 * 60 * 60 * 1000;
+    const cutoffTime = Date.now() - memorySettings.globalMemoryDays * 24 * 60 * 60 * 1e3;
     historyForPrompt = historyForPrompt.filter((m) => {
-      // 如果ID是时间戳格式，过滤超出天数的消息；否则保留
-      if (m.id > 1000000000000) {
+      if (m.id > 1e12) {
         return m.id >= cutoffTime;
       }
       return true;
     });
-
+    const effectiveLimit = (typeof settings.contextLimit === 'number' && settings.contextLimit > 0) ? settings.contextLimit : (memorySettings.contextLimit || 15);
+    if (historyForPrompt.length > effectiveLimit) {
+      historyForPrompt = historyForPrompt.slice(-effectiveLimit);
+    }
     let systemInstruction = "";
-
-    // ==== 如果是群聊模式，执行特殊构建逻辑 ====
-    if (
-      String(chatData.id).startsWith("group_chat") &&
-      chatData.profile?.members
-    ) {
-      const worldContext = window.getWorldBookContext
-        ? window.getWorldBookContext()
-        : "";
+    const isGroupChat = (String(chatData.id).startsWith("group_chat") || chatData?.type === "group") && chatData.profile?.members;
+    if (isGroupChat) {
+      const worldContext = window.getWorldBookContext ? window.getWorldBookContext() : "";
       let userContext = "";
       try {
         const savedPersonas = JSON.parse(
-          localStorage.getItem("user_personas") || "[]",
+          localStorage.getItem("user_personas") || "[]"
         );
         const activeId = localStorage.getItem("active_persona_id");
         if (savedPersonas.length > 0 && activeId) {
           const activeUser = savedPersonas.find((p) => p.id == activeId);
           if (activeUser) {
-            // 读取该群专属昵称
-            const groupNickname =
-              chatData.profile?.userNickname || activeUser.name;
+            const groupNickname = chatData.profile?.userNickname || activeUser.name;
             userContext = `【玩家设定】原名：${activeUser.name}，目前在本群的昵称为：【${groupNickname}】。性格：${activeUser.personality || "未知"}`;
           }
         }
-      } catch (e) { }
+      } catch (e) {
+      }
+      const membersInfo = chatData.profile.members.map(
+        (m) => `【${m.name}】${m.profile?.personality ? `性格：${m.profile.personality}，` : ""}${m.profile?.background ? `背景：${m.profile.background}，` : ""}${m.profile?.style ? `说话风格：${m.profile.style}` : ""}`
+      ).join("\n");
+      const groupAnnounceContext = chatData.profile?.announcement ? `
+【当前群公告内容】：${chatData.profile.announcement}
+(所有角色都知道此公告)
+` : "";
+      const groupNameContext = `
+【当前群聊名称】：${chatData.name || "未命名群聊"}
+`;
+      systemInstruction = `${worldContext}
+${userContext}${groupAnnounceContext}${groupNameContext}
+【群内角色详细设定】
+${membersInfo}
 
-      const membersInfo = chatData.profile.members
-        .map(
-          (m) =>
-            `【${m.name}】${m.profile?.personality ? `性格：${m.profile.personality}，` : ""}${m.profile?.background ? `背景：${m.profile.background}，` : ""}${m.profile?.style ? `说话风格：${m.profile.style}` : ""}`,
-        )
-        .join("\n");
-
-      const groupAnnounceContext = chatData.profile?.announcement
-        ? `\n【当前群公告内容】：${chatData.profile.announcement}\n(所有角色都知道此公告)\n`
-        : "";
-
-      // === [新增] 将群名称传递给 AI ===
-      const groupNameContext = `\n【当前群聊名称】：${chatData.name || "未命名群聊"}\n`;
-
-      systemInstruction = `${worldContext}\n${userContext}${groupAnnounceContext}${groupNameContext}\n【群内角色详细设定】\n${membersInfo}\n
-
-                                                                       【核心群聊响应逻辑与绝对铁律】
-                                                                       1. 你正在模拟一个多角色微信群聊，你必须控制上述设定的多个角色进行发言。
-                                                                       2. 【严格格式】：每一行发言必须、绝对要以 "[角色名]: 回复内容" 的格式输出！绝对不允许出现没有名字的句子！
-                                                                       3. 【群聊互动】：角色之间不能只自顾自说话，必须互相接茬、吐槽、拆台，频繁使用"@角色名"来互动！
-                                                                       4. 一次回复中，必须让至少2-3个不同的角色接连发言，形成群聊的刷屏感。
-                                                                       5. 【自由对话】：角色之间可以自由对话，不一定非要回应用户！角色能看到彼此的消息，可以自己聊起来或吵起来。
-                                                                       6. 【互动回应】：当角色被@或被吐槽时，应根据自身性格做出回应！一般情况下都要回应，可以是反唇相讥、嘲讽回去或回怼。
-                                                                       7. 【权限赋予1】角色可以通过在回复中输出 "[修改昵称:新昵称]" 来强行修改用户在本群的昵称！
-                                                                       8. 【权限赋予2】角色可以通过在回复中输出 "[修改群名:新名字]" 来强行修改群聊名称！
-                                                                       9. 【旁观模式绝对铁律】：如果用户没有发言，群内角色【绝对不要】主动去@用户或询问用户，必须顺着刚才的话题角色们自己接着聊！
-                                                                       10. 【接龙互动铁律】：如果对话中出现 "#接龙"，所有群成员必须敏锐察觉！
-                                                                           - 根据自身性格，决定是积极参与、敷衍了事、提问抬杠还是直接无视/抗拒。
-                                                                           - 如果决定接龙，必须**严格按照要求的格式，完整复制最近一次的整个接龙文本块（包括#接龙、主题、时间、以及前面所有人已接龙的名单），然后在末尾换行追加你自己的序号和内容！**输出接龙内容。
-                                                                           - 你们也可以主动发起新的接龙。
-                                                                             - 【千万注意】：严禁只发送你自己的一句话！必须完整复读整串接龙名单！如果别人发了错的格式，你可以发一串正确的名单并@他嘲讽。
-                                                                           - 所有人都能看到截止日期。如果有角色在截止时间前未接龙或格式错误，性格毒舌/严厉的角色可以@那个人进行谴责或催促。
-                                                                       【示例标准】：
-                                                                       [袁基]: @广陵王 殿下今日可安好？
-                                                                       [傅融]: @袁基 你别在这里套近乎了，这个月的账本看了吗？
-                                                                       [袁基]: @傅融 账本自然会看，倒是你，每日精打细算不累吗？
-                                                                       [傅融]: @袁基 管好你自己吧，少在这里说风凉话！
-                                                                       [孙策]: 哈哈哈哈你们两个真有意思！@袁基 @傅融 别吵了，出来跑马！
-                                                                       [袁基]: @孙策 你懂什么，这是文臣之间的交流！
-                                                                       [傅融]: @孙策 就是，耽误正事！`;
-    }
-    // ==== 单聊模式依然沿用以前的 ====
-    else {
+【核心群聊响应逻辑与绝对铁律】
+1. 你正在模拟一个多角色微信群聊/面对面雅集，你必须控制上述设定的多位名士进行发言。
+2. 【严格格式】：每一行发言必须以 "[角色名]: （动作/神态描写）回复内容" 的格式输出！每一行开头都必须包含角色名，严禁出现不带名字的句子！
+3. 【群聊互动与一人多句】：
+   - 允许且强烈鼓励【一人多句连发】：同一角色可以连续发出 2~3 句包含连续动作推进、神态变化与深度阐述的发言（每句独立成行并严格以前缀 [角色名]: 开头）！
+   - 角色之间积极互相接茬、吐槽、拆台、回应，频繁使用 "@角色名" 互相互动！
+   - 一次回复总计输出 4~8 句丰富生动的多角色连续剧情对白，绝不要草草一两句就结束！
+4. 【自由对话与多角色互动】：角色之间可以自由对话，不一定非要回应用户！角色能看到彼此的消息，可以自己深入探讨、争论或配合。
+5. 【互动回应】：当角色被@或被吐槽时，应根据自身性格做出真实生动的回应！
+6. 【权限赋予1】角色可以通过在回复中输出 "[修改昵称:新昵称]" 来强行修改用户在本群的昵称！
+7. 【权限赋予2】角色可以通过在回复中输出 "[修改群名:新名字]" 来强行修改群聊名称！
+8. 【旁观模式绝对铁律】：如果用户没有发言（处于隐身/倾听状态），群内角色【绝对不要】主动去@用户或询问用户，必须顺着刚才的话题角色们自己热烈探讨！
+9. 【接龙互动铁律】：如果对话中出现 "#接龙"，所有群成员必须敏锐察觉并严格接龙！
+【示例标准】：
+[袁基]: （微敛衣袂，含笑颔首）@广陵王 殿下今日可安好？
+[袁基]: （端起白瓷茶盏，轻吹浮沫）听闻近日府中新进了一批明前龙井，香气清幽。
+[傅融]: （将手中账册轻轻放于案几上，揉了揉眉心）@袁基 你别在这里套近乎了，这个月的账本看了吗？
+[傅融]: （冷哼一声，指向账页赤字）每日这般铺张，库房可支撑不住。
+[孙策]: （抚案大笑，双目神采奕奕）哈哈！难得相聚，@傅融 别总提账目扫兴！出来跑马！
+[袁基]: （摇扇浅笑）@孙策 跑马虽好，亦不可失了雅兴。`;
+    } else {
       systemInstruction = window.buildSystemPrompt(
-        chatData.profile || { name: chatData.name },
+        chatData.profile || { name: chatData.name }
       );
     }
-
-    // [新增] 将长期记忆摘要注入 Prompt
     if (memorySettings.summary) {
-      systemInstruction += `\n【核心长期记忆】\n${memorySettings.summary}\n`;
+      systemInstruction += `
+【核心长期记忆】
+${memorySettings.summary}
+`;
     }
-
-    // [新增] 读取并注入该角色专属长篇设定档案与生平记忆 (来自 IndexedDB)
+    if (settings.enableCustomPrompt && settings.customPrompt && settings.customPrompt.trim()) {
+      systemInstruction += `
+【用户专属定制指令（最高优先级，绝对遵从）】
+${settings.customPrompt.trim()}
+`;
+    }
     if (window.characterDocStore && chatData?.id) {
       try {
         const docContext = await window.characterDocStore.getEnabledDocContext(chatData.id);
         if (docContext) {
-          systemInstruction += `\n\n${docContext}\n`;
+          systemInstruction += `
+
+${docContext}
+`;
         }
       } catch (e) {
         console.error("读取角色专属长篇设定文档失败:", e);
       }
     }
-
-    // [新增] 文生图与图片搜索能力说明
     const savedImgGenCfg = localStorage.getItem("image_generation_api_config");
     let imgGenCfg = null;
     try {
@@ -79914,19 +79915,45 @@ const ChatSettingsModal = ({
     } catch (e) {}
 
     if (imgGenCfg && imgGenCfg.apiKey && imgGenCfg.enableChatDraw !== false) {
-      systemInstruction += `\n【AI 绘画与发送图片功能】\n你具备 AI 绘画与发送自拍/照片/画作的能力！当用户要求你看照片、画画、生成图片，或者在聊天中你想向用户展示画作、自拍、当前场景风景、随手拍摄或送出的礼物时，请在回复中包含标签：[生成图片: 画面详细英文提示词]\n例如：[生成图片: a cute little piglet in a lush green spring meadow, masterpiece, highly detailed, photorealistic]\n系统会自动调用独立生图 API 将你画的图片生成并直接渲染在聊天中。\n`;
+      systemInstruction += `
+【AI 绘画与发送图片功能】
+你具备 AI 绘画与发送自拍/照片/画作的能力！当用户要求你看照片、画画、生成图片，或者在聊天中你想向用户展示画作、自拍、当前场景风景、随手拍摄或送出的礼物时，请在回复中包含标签：[生成图片: 画面详细英文提示词]
+例如：[生成图片: a cute little piglet in a lush green spring meadow, masterpiece, highly detailed, photorealistic]
+系统会自动调用独立生图 API 将你画的图片生成并直接渲染在聊天中【绝不会混淆】。
+`;
     } else {
-      systemInstruction += `\n【图片搜索功能（极其克制）】\n仅当用户明确要求看图片、照片，或者剧情到达非常有必要展示画面（万不得已）时，你才可以使用 [搜索图片:英文关键词] 格式发送图片。\n其他99%的日常聊天中【绝不】使用该功能！宁可少触发，绝不多触发！例如：[搜索图片:cute cat]\n`;
+      systemInstruction += `
+【图片搜索功能（极其克制）】
+仅当用户明确要求看图片、照片，或者剧情到达非常有必要展示画面（万不得已）时，你才可以使用 [搜索图片:英文关键词] 格式发送图片。
+其他99%的日常聊天中【绝不】使用该功能！宁可少触发，绝不多触发！例如：[搜索图片:cute cat]
+`;
     }
-
-    // [关键修改] 增强线下模式的 Prompt 要求
     if (settings.plotMode === "online")
-      systemInstruction +=
-        "\n【强制模式：线上聊天】请模拟网络聊天风格，多使用表情，用语简练。\n";
-    else if (settings.plotMode === "offline")
-      systemInstruction +=
-        "\n【强制模式：线下见面】\n1. 请进行**细致入微**的动作、神态和环境描写。\n2. **所有描写部分【绝对必须】、【无条件】、【不容违反】地用（全角括号）包裹**。\n3. 人物对话部分不要加括号。\n4. **格式要求是最高优先级，必须严格遵守**。\n5. 示例：\n正确格式：（她微微歪头，手指轻轻敲了敲桌面）你今天看起来心情不错啊？\n错误格式：她微微歪头，手指轻轻敲了敲桌面 你今天看起来心情不错啊？\n错误格式：[她微微歪头，手指轻轻敲了敲桌面] 你今天看起来心情不错啊？\n";
-
+      systemInstruction += "\n【强制模式：线上聊天】请模拟网络聊天风格，多使用表情，用语简练。\n";
+    else if (settings.plotMode === "offline") {
+      const isGroup = String(chatData?.id).startsWith("group_chat") || chatData?.type === "group";
+      if (isGroup) {
+        systemInstruction += `
+\n【强制模式：线下当面堂前茶会/剧情模式（最高优先级）】
+1. 当前场景为【线下当面议事/堂前雅集茶会】，所有群成员都身处同一雅堂内面对面围坐交流！
+2. 【动作与神态描写铁律】：
+   - 每个角色的每句发言【绝对必须】包含细致生动的动作、神态、肢体交互或场景互动描写！
+   - 所有动作与神态描写【绝对必须】用（全角中文括号）包裹！
+   - 示例格式：
+     [角色名]: （端起白瓷茶盏，微敛衣袂，含笑颔首）诸位今日堂前相聚，不知所议何事？
+     [角色名]: （将手中账册轻轻放于案几上，揉了揉眉心）@某某 还能有何事，自然是查验本月开销。
+     [角色名]: （抚案大笑，双目神采奕奕）哈哈！难得雅集，何必总提账目扫兴！
+3. 【群聊多角色互动与一人多句】：
+   - 允许且强烈鼓励【一人多句连发】：同一名士可以连续发出 2~3 句包含连续动作推进、神态变化与深度阐述的台词（每句均以前缀 [角色名]: 开头并独立成行）！
+   - 多位名士依次交流探讨、互相接话、互相吐槽互动，带上各自性格神态！
+   - 每次生成总共输出 4~8 句丰富生动的雅集剧本级对白，绝不草草结束！
+4. 【严格格式】：每一行发言必须以 "[角色名]: （动作神态）对白" 的格式输出，严禁遗漏角色名字！
+5. 其他所有规则（@提醒、修改群名/群昵称、读心术心声、时间感知等）与线上一模一样！
+`;
+      } else {
+        systemInstruction += "\n【强制模式：线下见面】\n1. 请进行**细致入微**的动作、神态和环境描写。\n2. **所有描写部分【绝对必须】用（全角括号）包裹**。\n3. 人物对话部分不要加括号，且【每句对话之间必须独立换行】，动作与台词交替输出。\n4. 允许并鼓励一人连续多句发言与动作描写。\n5. 示例：\n（她微微歪头，手指轻轻敲了敲桌面）\n你今天看起来心情不错啊？\n（笑着递过来一杯茶）\n坐下聊聊？\n";
+      }
+    }
     if (settings.showThoughts) {
       systemInstruction += `
 【读心术与内心独白指令（最高强制优先级）】
@@ -79939,10 +79966,8 @@ const ChatSettingsModal = ({
 (((心声：方才险些被你看穿，好险……)))
 `;
     }
-
-    // [新增] 时间感知功能 (强化版时空认知)
     if (settings.timeAware) {
-      const now = new Date();
+      const now = /* @__PURE__ */ new Date();
       const hour = now.getHours();
       const minute = now.getMinutes();
       const dayOfWeek = [
@@ -79952,11 +79977,10 @@ const ChatSettingsModal = ({
         "星期三",
         "星期四",
         "星期五",
-        "星期六",
+        "星期六"
       ][now.getDay()];
       const month = now.getMonth() + 1;
       const day = now.getDate();
-
       let timePeriod = "早晨";
       if (hour >= 12 && hour < 18) {
         timePeriod = "下午";
@@ -79965,8 +79989,6 @@ const ChatSettingsModal = ({
       } else if (hour >= 22 || hour < 6) {
         timePeriod = "深夜";
       }
-
-      // 计算古代时辰
       const timeNames = [
         "子时",
         "丑时",
@@ -79979,28 +80001,37 @@ const ChatSettingsModal = ({
         "申时",
         "酉时",
         "戌时",
-        "亥时",
+        "亥时"
       ];
       const timeIndex = Math.floor((hour + 1) / 2) % 12;
       const ancientTime = timeNames[timeIndex];
-
-      systemInstruction += `\n【时间感知（绝对优先级）】\n请注意，当前外界真实时间是：${hour}:${minute.toString().padStart(2, "0")}，折合东汉时辰为【${ancientTime}】(${timePeriod})。今天是 ${month}月${day}日。\n无论你们聊什么，你【必须】结合当前的时辰天色作出合理反应！如果深夜请表达困倦或提醒休息，如果早晨请带入晨间的日常起居，正午可以谈论用膳。绝不能忽略当前时辰！\n`;
+      systemInstruction += `
+【时间感知（绝对优先级）】
+请注意，当前外界真实时间是：${hour}:${minute.toString().padStart(2, "0")}，折合东汉时辰为【${ancientTime}】(${timePeriod})。今天是 ${month}月${day}日。
+无论你们聊什么，你【必须】结合当前的时辰天色作出合理反应！如果深夜请表达困倦或提醒休息，如果早晨请带入晨间的日常起居，正午可以谈论用膳。绝不能忽略当前时辰！
+`;
     }
-
-    // [新增] 主动回复功能
     if (settings.proactiveReply) {
-      systemInstruction += `\n【主动回复】\n你可以在适当的时候主动发起对话，不需要用户先提问。\n请根据对话历史和角色性格，自然地发起相关话题。\n`;
+      systemInstruction += `
+【主动回复】
+你可以在适当的时候主动发起对话，不需要用户先提问。
+请根据对话历史和角色性格，自然地发起相关话题。
+`;
     }
+    systemInstruction += `
+【语音通话机制】
 
-    // [修改] 语音通话机制
-    systemInstruction += `\n【语音通话机制】\n
-       1. 如果用户向你发起了语音通话请求（即收到消息"（发起了语音通话请求）"），你必须在回复中明确表态：\n    - 若同意接听，请在回复中包含标签 [接受通话]，并附上接通后的第一句话（如："喂？"）。\n    - 若不想接听或在生气，请包含标签 [拒绝通话]，并附上你不接的理由或嘲讽。\n 2. 如果你想主动给用户打电话，请在回复中包含标签 [发起通话]。系统会向用户弹出来电界面。\n 3. 如果用户拒绝了你的来电（收到消息"（你拒绝了xxx的心纸君传讯）"），你可以根据性格选择连续拨打（再次输出 [发起通话]），或者在文本中表达愤怒、委屈等。\n`;
-
+       1. 如果用户向你发起了语音通话请求（即收到消息"（发起了语音通话请求）"），你必须在回复中明确表态：
+    - 若同意接听，请在回复中包含标签 [接受通话]，并附上接通后的第一句话（如："喂？"）。
+    - 若不想接听或在生气，请包含标签 [拒绝通话]，并附上你不接的理由或嘲讽。
+ 2. 如果你想主动给用户打电话，请在回复中包含标签 [发起通话]。系统会向用户弹出来电界面。
+ 3. 如果用户拒绝了你的来电（收到消息"（你拒绝了xxx的心纸君传讯）"），你可以根据性格选择连续拨打（再次输出 [发起通话]），或者在文本中表达愤怒、委屈等。
+`;
+    const userNickname = chatData?.profile?.userNickname || localStorage.getItem("t8_user_nickname") || "我";
     const apiMessages = [
       { role: "system", content: systemInstruction },
-      // [修改] 强引导支持多模态图片识别与通话记录结构化
       ...historyForPrompt.map((m) => {
-                if (m.type === "group_offline_record") {
+        if (m.type === "group_offline_record") {
           const dlg = m.dialogue || [];
           if (dlg.length > 0) {
             const dialogueContent = dlg.map((d) => `  - ${d.isMe ? "用户" : (d.sender || "群成员")}：“${d.text}”`).join("\n");
@@ -80017,118 +80048,105 @@ const ChatSettingsModal = ({
         if (m.type === "voice_call_record") {
           const dlg = m.dialogue || m.content?.messages || m.content?.dialogue || [];
           if (dlg.length > 0) {
-            const dialogueContent = dlg
-              .map((d) => `  - ${d.isMe ? "用户" : (chatData?.name || "你")}：“${d.text}”`)
-              .join("\n");
+            const dialogueContent = dlg.map((d) => `  - ${d.isMe ? "用户" : chatData?.name || "你"}：“${d.text}”`).join("\n");
             return {
               role: "user",
-              content: `【系统事件与通话记忆同步：你与用户于 ${m.time || "刚才"} 进行了一次实时语音通话，通话时长 ${m.durationText || m.durationStr || m.content?.durationStr || "00:00"}。以下为当时的完整通话对话记录】：\n${dialogueContent}\n【语音通话已结束。你必须完全记住上述通话中双方所聊的所有内容、承诺与对话细节，在后续传讯回复时保持自然的记忆连贯】`,
+              content: `【系统事件与通话记忆同步：你与用户于 ${m.time || "刚才"} 进行了一次实时语音通话，通话时长 ${m.durationText || m.durationStr || m.content?.durationStr || "00:00"}。以下为当时的完整通话对话记录】：\n${dialogueContent}\n【语音通话已结束。你必须完全记住上述通话中双方所聊的所有内容、承诺与对话细节，在后续传讯回复时保持自然的记忆连贯】`
             };
           } else if (m.status === "rejected" || m.status === "rejected_by_user") {
             return {
               role: "user",
-              content: `【系统事件：${m.time || ""} 曾发起语音通话，未接通（已拒绝）】`,
+              content: `【系统事件：${m.time || ""} 曾发起语音通话，未接通（已拒绝）】`
             };
           } else if (m.status === "canceled") {
             return {
               role: "user",
-              content: `【系统事件：${m.time || ""} 曾发起语音通话，未接通（已取消）】`,
+              content: `【系统事件：${m.time || ""} 曾发起语音通话，未接通（已取消）】`
             };
           }
           return {
             role: "user",
-            content: `【系统事件：${m.time || ""} 曾发起语音通话，通话时长 ${m.durationText || m.durationStr || m.content?.durationStr || "00:00"}（通话已结束）`,
+            content: `【系统事件：${m.time || ""} 曾发起语音通话，通话时长 ${m.durationText || m.durationStr || m.content?.durationStr || "00:00"}（通话已结束）`
           };
         }
         if (m.type === "red_packet") {
           return {
             role: m.isMe ? "user" : "assistant",
-            content: `【系统事件】我向你发送了一份五铢钱红包，金额为【${m.content?.amountStr || `${m.content?.amount} 铢`}】，附言为：“${m.content?.blessing || '一点心意'}”。金额已入账你的荷包。请根据你的角色性格、与我的关系做出真实生动、贴合人设的回应与感谢。`,
+            content: `【系统事件】我向你发送了一份五铢钱红包，金额为【${m.content?.amountStr || `${m.content?.amount} 铢`}】，附言为：“${m.content?.blessing || "一点心意"}”。金额已入账你的荷包。请根据你的角色性格、与我的关系做出真实生动、贴合人设的回应与感谢。`
           };
         }
         if (m.type === "gift_card") {
           return {
             role: m.isMe ? "user" : "assistant",
-            content: `【系统事件】我向你赠送了一份心意礼物：【${m.content?.itemName}】（来源：${m.content?.merchant || '私藏'}），附言为：“${m.content?.blessing || '特赠此物'}”。实物已送至你的府邸。请根据你的喜好、性格与跟我的关系用你的角色语气做出真实生动的回复与评价。`,
+            content: `【系统事件】我向你赠送了一份心意礼物：【${m.content?.itemName}】（来源：${m.content?.merchant || "私藏"}），附言为：“${m.content?.blessing || "特赠此物"}”。实物已送至你的府邸。请根据你的喜好、性格与跟我的关系用你的角色语气做出真实生动的回复与评价。`
           };
         }
-        // 判断如果消息类型是图片，且拥有合法的URL或Base64数据，使用符合 OpenAI/Gemini Vision 标准的数组格式
         if (m.type === "image") {
           console.log("发现图片消息:", {
             type: m.type,
             text: m.text,
-            content: m.content
-              ? m.content.length > 100
-                ? m.content.substring(0, 100) + "..."
-                : m.content
-              : null,
+            content: m.content ? m.content.length > 100 ? m.content.substring(0, 100) + "..." : m.content : null
           });
-          if (
-            m.content &&
-            (m.content.startsWith("http") || m.content.startsWith("data:image"))
-          ) {
+          if (m.content && (m.content.startsWith("http") || m.content.startsWith("data:image"))) {
             console.log("图片格式有效，转换为多模态格式");
-            // ======= 【修改处3：重排数组项与补充核心提示】 =======
-            // 将图像前置，补充非常详细的引导语，解决模型忽视图片或表情包语义的问题
             return {
               role: m.isMe ? "user" : "assistant",
               content: [
                 { type: "image_url", image_url: { url: m.content } },
                 {
                   type: "text",
-                  text: `【这是一张${m.isMe ? "我" : "你"}发送的图片/表情包，请仔细观察画面内容并直接对该画面的动作、文字或情绪进行代入感极强的回复。不要回答"收到了一张图片"等废话】：${m.text || "[图片/表情包]"}`,
-                },
-              ],
+                  text: `【这是一张${m.isMe ? "我" : "你"}发送的图片/表情包，请仔细观察画面内容并直接对该画面的动作、文字或情绪进行代入感极强的回复。不要回答"收到了一张图片"等废话】：${m.text || "[图片/表情包]"}`
+                }
+              ]
             };
-          } else {
-            console.log("图片内容无效或格式不正确:", m.content);
           }
         }
-        // 否则如果是普通文字或旁白等，保持原样字符串格式
+        const isGroupItem = String(chatData?.id).startsWith("group_chat") || chatData?.type === "group";
+        let contentStr = m.text || "";
+        if (isGroupItem) {
+          if (m.isMe) {
+            contentStr = `[${userNickname}]: ${m.text || ""}`;
+          } else if (m.sender) {
+            contentStr = `[${m.sender}]: ${m.text || ""}`;
+          }
+        }
         return {
           role: m.isMe ? "user" : "assistant",
-          content: m.text,
+          content: contentStr
         };
-      }),
+      })
     ];
     console.log("最终发送给AI的消息:", JSON.stringify(apiMessages, null, 2));
-
-    // === [新增] 群聊旁观者模式触发逻辑 ===
-    // 判断：如果是群聊，且用户并没有刚发出新消息，且历史最后一条是AI（角色）发出的
-    const isGroupChat =
-      String(chatData.id).startsWith("group_chat") && chatData.profile?.members;
-    const isUserBystander =
-      !lastUserMsg &&
-      historyForPrompt.length > 0 &&
-      !historyForPrompt[historyForPrompt.length - 1].isMe;
-
+    const isUserBystander = !lastUserMsg && historyForPrompt.length > 0 && !historyForPrompt[historyForPrompt.length - 1].isMe;
     if (isGroupChat && isUserBystander) {
+      const isOfflineMode = settings.plotMode === "offline";
       apiMessages.push({
         role: "user",
-        content:
-          "（系统指令：用户目前没有发言，正处于隐身旁观状态。请让群内的角色们顺着之前的对话记录继续往下聊，互相接茬、怼人或者讨论。绝对不要@用户，也不要问用户意见，把用户当做不在场，表现出真实群聊里几个人自己聊嗨了的状态。）",
+        content: isOfflineMode
+          ? "（系统指令：堂前茶会/雅集继续推进。用户目前未发言，请在场的名士们顺着刚才的议题深入探讨交流，支持名士一人连续多句深入发言（每句都必须以 [名士名字]: 开头），多位名士依次接话互动，带上细腻动作神态描写，输出4~8句丰富生动的雅集对白，绝不要@用户，绝不冷场。）"
+          : "（系统指令：用户目前没有发言，正处于隐身旁观状态。请让群内的角色们顺着之前的对话记录继续往下聊，支持一人多句连发，互相接茬、怼人或者讨论。绝对不要@用户，也不要问用户意见，把用户当做不在场，表现出真实群聊里几个人自己聊嗨了的状态。）"
       });
     }
-
-    // 禁用系统自动图片搜索，只保留AI图片搜索请求处理
-    // 所有图片搜索请求由AI决定是否触发
     let imageSearchResults = [];
-
+    const modelOptions = {
+      temperature: typeof settings.temperature === "number" ? settings.temperature : 0.8,
+      top_p: typeof settings.top_p === "number" ? settings.top_p : 0.95,
+      presence_penalty: typeof settings.presence_penalty === "number" ? settings.presence_penalty : 0.4,
+      frequency_penalty: typeof settings.frequency_penalty === "number" ? settings.frequency_penalty : 0.2
+    };
+    console.log("handleAITrigger 发送对话，角色参数:", modelOptions);
     window.sendToLLM(
       apiMessages,
-      null,
+      modelOptions,
       async (reply) => {
         console.log("收到AI回复:", reply);
         console.log("设置isTyping为false");
         setIsTyping(false);
-
         let thoughtContent = null;
         let cleanReply = reply;
-
-        // [修改] 解析三种语音通话相关标签
-        let roleInitiateCall = false; // 角色主动发起通话
-        let roleAcceptCall = false; // 角色同意接听
-        let roleRejectCall = false; // 角色拒绝接听
+        let roleInitiateCall = false;
+        let roleAcceptCall = false;
+        let roleRejectCall = false;
 
         if (cleanReply.includes("[发起通话]")) {
           roleInitiateCall = true;
@@ -80143,9 +80161,7 @@ const ChatSettingsModal = ({
           cleanReply = cleanReply.replace(/\[拒绝通话\]/g, "").trim();
         }
 
-        // === 剥离修改昵称/群名标签 ===
         let pendingMsgs = [];
-
         const nicknameMatch = cleanReply.match(/\[修改昵称:(.*?)\]/);
         if (nicknameMatch && nicknameMatch[1]) {
           const newNick = nicknameMatch[1].trim();
@@ -80153,16 +80169,15 @@ const ChatSettingsModal = ({
           if (onUpdateChat) {
             const updatedProfile = {
               ...chatData.profile,
-              userNickname: newNick,
+              userNickname: newNick
             };
             onUpdateChat(chatData.id, { profile: updatedProfile });
           }
           pendingMsgs.push({
             text: `某位群成员修改你的昵称为"${newNick}"`,
-            type: "narration",
+            type: "narration"
           });
         }
-
         const groupNameMatch = cleanReply.match(/\[修改群名:(.*?)\]/);
         if (groupNameMatch && groupNameMatch[1]) {
           const newGroupName = groupNameMatch[1].trim();
@@ -80172,14 +80187,12 @@ const ChatSettingsModal = ({
           }
           pendingMsgs.push({
             text: `某位群成员修改群名为"${newGroupName}"`,
-            type: "narration",
+            type: "narration"
           });
         }
 
-        // === 剥离生图与搜图标签，提前捕获 Prompt，避免在气泡中作为纯文本显示 ===
         let imagePromptToProcess = null;
         let isAiImageRequest = false;
-
         const aiImageGenerateMatch = cleanReply.match(/\[(?:生成图片|画图|生图|photo|image)[:：]([\s\S]*?)\]/i);
         const imageSearchMatch = cleanReply.match(/\[搜索图片[:：]([\s\S]*?)\]/i);
 
@@ -80189,12 +80202,10 @@ const ChatSettingsModal = ({
           cleanReply = cleanReply.replace(aiImageGenerateMatch[0], "").trim();
         } else if (imageSearchMatch) {
           imagePromptToProcess = imageSearchMatch[1].trim();
-          // 如果用户配置了 AI 文生图，将 [搜索图片:xxx] 优先当作 AI 绘画
           isAiImageRequest = !!(localStorage.getItem("image_generation_api_config"));
           cleanReply = cleanReply.replace(imageSearchMatch[0], "").trim();
         }
 
-        // 辅助函数：判断是否是刚发起的语音通话请求（仅检查最新一条，绝不检索全量历史）
         const isLastMsgCallRequest = (historyList) => {
           if (!historyList || historyList.length === 0) return false;
           const last = historyList[historyList.length - 1];
@@ -80202,50 +80213,34 @@ const ChatSettingsModal = ({
             last &&
             last.isMe &&
             (last.text === "（发起了语音通话请求）" ||
-              last.text === "\uFF08\u53D1\u8D77\u4E86\u8BED\u97F3\u901A\u8BDD\u8BF7\u6C42\uFF09")
+              last.text === "（发起了语音通话请求）")
           );
         };
 
-        // 如果cleanReply为空且是对通话请求的回应，不添加空消息
-        if (
-          !cleanReply.trim() &&
-          (roleInitiateCall || roleAcceptCall || roleRejectCall)
-        ) {
-          const isResponseToCallRequest =
-            showVoiceCallPage.show ||
-            isLastMsgCallRequest(messages) ||
-            isLastMsgCallRequest(customHistory);
+        if (!cleanReply.trim() && (roleInitiateCall || roleAcceptCall || roleRejectCall)) {
+          const isResponseToCallRequest = showVoiceCallPage.show || isLastMsgCallRequest(messages) || isLastMsgCallRequest(customHistory);
           if (isResponseToCallRequest) {
             return;
           }
         }
 
         const thoughtMatch =
-          reply.match(/[（\(]{1,3}心声[:：]([\s\S]*?)[）\)]{1,3}/) ||
-          reply.match(/[【\[]心声[:：]([\s\S]*?)[】\]]/) ||
-          reply.match(/[（\(]{1,3}内心(?:独白)?[:：]([\s\S]*?)[）\)]{1,3}/) ||
-          reply.match(/[【\[]内心(?:独白)?[:：]([\s\S]*?)[】\]]/);
-
+          reply.match(/[（\(\[【]{1,3}(?:心声|内心独白|内心)[:：\s]([\s\S]*?)[）\)\]】]{1,3}/) ||
+          reply.match(/\(\(\(([\s\S]*?)\)\)\)/) ||
+          reply.match(/（（（([\s\S]*?)）））/) ||
+          reply.match(/(?:\n|^)(?:心声|内心独白|内心)[:：\s]([\s\S]*?)$/);
         if (thoughtMatch) {
-          thoughtContent = thoughtMatch[1];
+          thoughtContent = thoughtMatch[1].replace(/^(?:心声|内心独白|内心)[:：\s]*/, "").trim();
           cleanReply = reply.replace(thoughtMatch[0], "").trim();
           if (aiImageGenerateMatch) cleanReply = cleanReply.replace(aiImageGenerateMatch[0], "").trim();
           if (imageSearchMatch) cleanReply = cleanReply.replace(imageSearchMatch[0], "").trim();
         }
-
-        if (
-          !cleanReply.trim() &&
-          !thoughtContent &&
-          !imagePromptToProcess &&
-          imageSearchResults.length === 0
-        ) {
+        console.log("【AI心声解析结果】:", thoughtContent ? `✅ 成功提取心声: "${thoughtContent}"` : "❌ 本次回复未包含心声标签", { rawReply: reply });
+        if (!cleanReply.trim() && !thoughtContent && !imagePromptToProcess && imageSearchResults.length === 0) {
           setIsTyping(false);
           return;
         }
-
         const newAiMsgs = [];
-
-        // 添加待处理的系统消息（修改昵称/群名）
         if (pendingMsgs.length > 0) {
           pendingMsgs.forEach((msg, idx) => {
             newAiMsgs.push({
@@ -80254,15 +80249,13 @@ const ChatSettingsModal = ({
               type: msg.type,
               isMe: false,
               tap: true,
-              time: new Date().toLocaleTimeString([], {
+              time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
                 hour: "2-digit",
-                minute: "2-digit",
-              }),
+                minute: "2-digit"
+              })
             });
           });
         }
-
-        // 添加预先存在的图片搜索结果
         if (imageSearchResults.length > 0) {
           imageSearchResults.forEach((image, index) => {
             newAiMsgs.push({
@@ -80271,20 +80264,17 @@ const ChatSettingsModal = ({
               content: image.url,
               type: "image",
               isMe: false,
-              time: new Date().toLocaleTimeString([], {
+              time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
                 hour: "2-digit",
-                minute: "2-digit",
+                minute: "2-digit"
               }),
-              thought: null,
+              thought: null
             });
           });
         }
-
-        // 处理AI的生图/搜图请求与文本分句
         const processImageSearchRequests = async () => {
           let msgIdCounter = Date.now();
 
-          // 1. 处理文生图或搜索图片
           if (imagePromptToProcess) {
             let imgSuccess = false;
             if (isAiImageRequest && typeof window.generateAIImage === "function") {
@@ -80301,9 +80291,9 @@ const ChatSettingsModal = ({
                     isMe: false,
                     time: new Date().toLocaleTimeString([], {
                       hour: "2-digit",
-                      minute: "2-digit",
+                      minute: "2-digit"
                     }),
-                    thought: null,
+                    thought: null
                   });
                   imgSuccess = true;
                 }
@@ -80326,9 +80316,9 @@ const ChatSettingsModal = ({
                       isMe: false,
                       time: new Date().toLocaleTimeString([], {
                         hour: "2-digit",
-                        minute: "2-digit",
+                        minute: "2-digit"
                       }),
-                      thought: null,
+                      thought: null
                     });
                   });
                 }
@@ -80338,82 +80328,109 @@ const ChatSettingsModal = ({
             }
           }
 
-          // 2. 处理普通文本
           if (cleanReply.trim()) {
-            if (String(chatData.id).startsWith("group_chat")) {
-              const lines = cleanReply.split("\n").filter((l) => l.trim());
-              let lastKnownSpeaker = "系统";
+            const isGroup = String(chatData.id).startsWith("group_chat") || chatData?.type === "group";
+            if (isGroup) {
+              const lines = cleanReply.split("\n").map((l) => l.trim()).filter(Boolean);
+              const validMemberNames = (chatData.profile?.members || []).map((m) => m?.name).filter(Boolean);
+              const defaultSpeaker = validMemberNames[0] || "名士";
+              let currentSpeaker = defaultSpeaker;
               const jielongTags = ["主题", "截止时间", "格式要求", "接龙"];
               let jielongBuffer = [];
               let jielongSpeaker = null;
 
               lines.forEach((line, idx) => {
-                const match = line.match(/^\[?(.*?)\]?[:：]\s*(.*)$/);
-                const currentThought = idx === lines.length - 1 ? thoughtContent : null;
-                const isJielongLine = line.trim().startsWith("#接龙");
+                const isCurrentLast = idx === lines.length - 1;
+                const currentThought = isCurrentLast ? thoughtContent : null;
+                const isJielongLine = line.startsWith("#接龙");
 
                 if (isJielongLine) {
-                  if (!jielongSpeaker) jielongSpeaker = lastKnownSpeaker !== "系统" ? lastKnownSpeaker : "群成员";
-                  jielongBuffer.push(line.trim());
-                } else if (match) {
+                  if (!jielongSpeaker) jielongSpeaker = currentSpeaker;
+                  jielongBuffer.push(line);
+                  return;
+                }
+
+                // Match [角色名]: 台词 or 角色名: 台词 or 【角色名】: 台词
+                const match = line.match(/^[\s\[【(（]?([^\s\]】)）:：]{1,20})[\s\]】)）]?[:：]\s*([\s\S]*)$/);
+                if (match) {
                   const potentialSpeaker = match[1].trim();
                   const isJielongTag = jielongTags.some((tag) => potentialSpeaker.includes(tag));
                   if (isJielongTag) {
-                    if (!jielongSpeaker) jielongSpeaker = lastKnownSpeaker !== "系统" ? lastKnownSpeaker : "群成员";
-                    jielongBuffer.push(line.trim());
-                  } else {
-                    if (jielongBuffer.length > 0) {
-                      msgIdCounter++;
-                      newAiMsgs.push({
-                        id: msgIdCounter,
-                        text: jielongBuffer.join("\n"),
-                        sender: jielongSpeaker,
-                        type: "text",
-                        isMe: false,
-                        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                        thought: null,
-                      });
-                      jielongBuffer = [];
-                      jielongSpeaker = null;
-                    }
-                    lastKnownSpeaker = potentialSpeaker;
+                    if (!jielongSpeaker) jielongSpeaker = currentSpeaker;
+                    jielongBuffer.push(line);
+                    return;
+                  }
+
+                  // Flush jielong buffer if any
+                  if (jielongBuffer.length > 0) {
                     msgIdCounter++;
                     newAiMsgs.push({
                       id: msgIdCounter,
-                      text: match[2].trim(),
-                      sender: lastKnownSpeaker,
+                      text: jielongBuffer.join("\n"),
+                      sender: jielongSpeaker || currentSpeaker,
                       type: "text",
                       isMe: false,
-                      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                      thought: currentThought,
+                      time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      }),
+                      thought: null
+                    });
+                    jielongBuffer = [];
+                    jielongSpeaker = null;
+                  }
+
+                  let matchedMember = validMemberNames.find((n) => n === potentialSpeaker || n.includes(potentialSpeaker) || potentialSpeaker.includes(n));
+                  currentSpeaker = matchedMember || potentialSpeaker;
+                  const speechText = match[2].trim();
+                  if (speechText) {
+                    msgIdCounter++;
+                    newAiMsgs.push({
+                      id: msgIdCounter,
+                      text: speechText,
+                      sender: currentSpeaker,
+                      type: "text",
+                      isMe: false,
+                      time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      }),
+                      thought: currentThought
                     });
                   }
                 } else {
                   if (jielongBuffer.length > 0) {
-                    jielongBuffer.push(line.trim());
+                    jielongBuffer.push(line);
                   } else {
                     msgIdCounter++;
                     newAiMsgs.push({
                       id: msgIdCounter,
-                      text: line.trim(),
-                      sender: lastKnownSpeaker !== "系统" ? lastKnownSpeaker : "群成员",
+                      text: line,
+                      sender: currentSpeaker,
                       type: "text",
                       isMe: false,
-                      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                      thought: currentThought,
+                      time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      }),
+                      thought: currentThought
                     });
                   }
                 }
-                if (idx === lines.length - 1 && jielongBuffer.length > 0) {
+
+                if (isCurrentLast && jielongBuffer.length > 0) {
                   msgIdCounter++;
                   newAiMsgs.push({
                     id: msgIdCounter,
                     text: jielongBuffer.join("\n"),
-                    sender: jielongSpeaker || "群成员",
+                    sender: jielongSpeaker || currentSpeaker,
                     type: "text",
                     isMe: false,
-                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                    thought: currentThought,
+                    time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    }),
+                    thought: currentThought
                   });
                 }
               });
@@ -80438,15 +80455,18 @@ const ChatSettingsModal = ({
                   }
                 });
                 finalSegments.forEach((seg, idx) => {
-                  const currentThought = idx === finalSegments.length - 1 ? thoughtContent : null;
+                  const currentThought = thoughtContent || null;
                   msgIdCounter++;
                   newAiMsgs.push({
                     id: msgIdCounter,
                     text: seg.text,
                     type: seg.type,
                     isMe: false,
-                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                    thought: currentThought,
+                    time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    }),
+                    thought: currentThought
                   });
                 });
               } else {
@@ -80459,25 +80479,19 @@ const ChatSettingsModal = ({
                     text: line.trim(),
                     type: "text",
                     isMe: false,
-                    time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
-                    thought: currentThought,
+                    time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit"
+                    }),
+                    thought: currentThought
                   });
                 });
               }
             }
           }
         };
-
         await processImageSearchRequests();
-
-        // 检查是否处于通话呼叫/等待/接听上下文（绝不误判历史通话记录）
-        const isCallingContext =
-          showVoiceCallPage.show ||
-          showInCallUI ||
-          isLastMsgCallRequest(customHistory) ||
-          isLastMsgCallRequest(messages);
-
-        // 触发通话界面的副作用
+        const isCallingContext = showVoiceCallPage.show || showInCallUI || isLastMsgCallRequest(customHistory) || isLastMsgCallRequest(messages);
         if (roleRejectCall && isCallingContext) {
           setShowVoiceCallPage({ show: false, callType: "role" });
           const rejectRecord = {
@@ -80489,50 +80503,39 @@ const ChatSettingsModal = ({
             text: "语音通话 对方已拒绝",
             dialogue: [],
             isMe: true,
-            time: new Date().toLocaleTimeString([], {
+            time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
               hour: "2-digit",
-              minute: "2-digit",
-            }),
+              minute: "2-digit"
+            })
           };
-          const updatedMessages = [...messages, rejectRecord];
-          setMessages(updatedMessages);
+          const updatedMessages2 = [...messages, rejectRecord];
+          setMessages(updatedMessages2);
           if (chatData?.id && window.chatHistoryStore) {
-            window.chatHistoryStore
-              .saveMessages(targetChatId, updatedMessages)
-              .then(() => console.log("✅ 拒接记录已同步至DB"))
-              .catch((error) => console.error("❌ 保存失败:", error));
+            window.chatHistoryStore.saveMessages(chatData.id, updatedMessages2).then(() => console.log("✅ 拒接记录已同步至DB")).catch((error) => console.error("❌ 保存失败:", error));
           }
           setIsTyping(false);
           return;
-        } else if (roleAcceptCall || (isCallingContext && !roleInitiateCall)) {
+        } else if (roleAcceptCall || isCallingContext && !roleInitiateCall) {
           setShowVoiceCallPage({ show: false, callType: "role" });
           setTimeout(() => setShowInCallUI(true), 300);
-
-          const textMsgs = newAiMsgs
-            .filter((m) => m.type === "text" || m.type === "narration")
-            .map((m) => ({
-              text: m.text,
+          const textMsgs = newAiMsgs.filter((m) => m.type === "text" || m.type === "narration").map((m) => ({
+            text: m.text,
+            isMe: false,
+            time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit"
+            })
+          }));
+          const openingMsgs = textMsgs.length > 0 ? textMsgs : [
+            {
+              text: "喂？",
               isMe: false,
-              time: new Date().toLocaleTimeString([], {
+              time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
                 hour: "2-digit",
-                minute: "2-digit",
-              }),
-            }));
-
-          const openingMsgs =
-            textMsgs.length > 0
-              ? textMsgs
-              : [
-                  {
-                    text: "喂？",
-                    isMe: false,
-                    time: new Date().toLocaleTimeString([], {
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    }),
-                  },
-                ];
-
+                minute: "2-digit"
+              })
+            }
+          ];
           setTimeout(() => {
             setInCallMessages((prev) => {
               return prev.length > 0 ? [...prev, ...openingMsgs] : openingMsgs;
@@ -80542,55 +80545,39 @@ const ChatSettingsModal = ({
               handlePlayTTS(fullText);
             }
           }, 100);
-
           setIsTyping(false);
           return;
         } else if (roleInitiateCall) {
           setTimeout(
             () => setShowVoiceCallPage({ show: true, callType: "role" }),
-            800,
+            800
           );
         }
-
-        // ================= 普通消息更新 =================
         if (newAiMsgs.length === 0) {
           console.warn("❌ newAiMsgs 为空，跳过消息更新");
           setIsTyping(false);
           return;
         }
-
-        // 定义updatedMessages变量
-        // 检查是否是重说调用（customHistory存在时表示重说）
-        const updatedMessages = customHistory
-          ? [...customHistory, ...newAiMsgs] // 重说：覆盖历史记录
-          : [...messages, ...newAiMsgs]; // 正常消息：添加到历史记录
-
-        // 保存到IndexedDB，确保刷新页面时新回复不会丢失
-        if (chatData?.id && window.chatHistoryStore) {
-          window.chatHistoryStore
-            .saveMessages(targetChatId, updatedMessages)
-            .then(() => console.log("✅ 新消息已同步至DB"))
-            .catch((error) => console.error("❌ 保存失败:", error));
+        if (showGroupOfflineScene) {
+          setOfflineSessionMessages((prev) => [...prev, ...newAiMsgs]);
+          setIsTyping(false);
+          return;
         }
-
-        // 更新左侧列表的预览文本
+        const updatedMessages = customHistory ? [...customHistory, ...newAiMsgs] : [...messages, ...newAiMsgs];
+        if (targetChatId && window.chatHistoryStore) {
+          window.chatHistoryStore.saveMessages(targetChatId, updatedMessages).then(() => console.log("✅ 新消息已同步至DB")).catch((error) => console.error("❌ 保存失败:", error));
+        }
         if (onMessageUpdate && newAiMsgs.length > 0) {
           const lastText = newAiMsgs[newAiMsgs.length - 1].text;
           setTimeout(() => onMessageUpdate(lastText), 0);
         }
-
-        // 仅当用户依然停留在当前会话时，才更新屏幕上的 messages state
         if (currentChatIdRef.current === targetChatId) {
           setMessages(updatedMessages);
         }
-        // ================= 核心修复结束 =================
-
-        // 移除每次消息后的AI分析，改为定时分析
       },
       (err) => {
         console.error("AI请求出错:", err);
         setIsTyping(false);
-        // 错误处理也建议使用函数式更新
         setMessages((prev) => [
           ...prev,
           {
@@ -80598,10 +80585,10 @@ const ChatSettingsModal = ({
             text: `[系统错误] ${err}`,
             type: "text",
             isMe: false,
-            time: new Date().toLocaleTimeString(),
-          },
+            time: (/* @__PURE__ */ new Date()).toLocaleTimeString()
+          }
         ]);
-      },
+      }
     );
   };
 
