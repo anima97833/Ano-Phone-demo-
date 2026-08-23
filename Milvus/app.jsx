@@ -434,6 +434,336 @@ const AvatarSourcePicker = ({ open, onClose, onLocalSelect, onUrlConfirm }) => {
   );
 };
 
+const createEmojiImportId = () =>
+  `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const parseImageUrlLines = (text) =>
+  text.split(/\r?\n/).flatMap((line) => {
+    const matches = line.match(/https?:\/\/\S+/gi) || [];
+    if (matches.length === 0) return [];
+
+    const url = matches[matches.length - 1];
+    try {
+      const parsed = new URL(url);
+      if (!/^https?:$/.test(parsed.protocol)) return [];
+    } catch (error) {
+      return [];
+    }
+
+    return [{ name: line.slice(0, line.lastIndexOf(url)).trim(), url }];
+  });
+
+const readEmojiFile = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("图片读取失败"));
+    reader.readAsDataURL(file);
+  });
+
+const importLocalImage = async (file) => {
+  if (file.type && !file.type.startsWith("image/")) {
+    throw new Error(`不支持的文件类型：${file.type}`);
+  }
+  const url = await readEmojiFile(file);
+  await window.emojiStore.save({
+    id: createEmojiImportId(),
+    url,
+    timestamp: Date.now(),
+  });
+};
+
+const importLocalImages = async (files, onProgress) => {
+  let success = 0;
+  let failed = 0;
+  for (let index = 0; index < files.length; index += 1) {
+    onProgress(index + 1, files.length);
+    try {
+      await importLocalImage(files[index]);
+      success += 1;
+    } catch (error) {
+      failed += 1;
+      console.error("导入本地图片失败:", files[index]?.name, error);
+    }
+  }
+  return { success, failed };
+};
+
+const importRemoteImage = async ({ name, url }) => {
+  const parsed = new URL(url);
+  if (!/^https?:$/.test(parsed.protocol)) throw new Error("无效图片链接");
+  await window.emojiStore.save({
+    id: createEmojiImportId(),
+    name,
+    url,
+    timestamp: Date.now(),
+  });
+};
+
+const importRemoteImages = async (items, onProgress) => {
+  let success = 0;
+  let failed = 0;
+  for (let index = 0; index < items.length; index += 1) {
+    onProgress(index + 1, items.length);
+    try {
+      await importRemoteImage(items[index]);
+      success += 1;
+    } catch (error) {
+      failed += 1;
+      console.error("导入网络图片失败:", items[index]?.url, error);
+    }
+  }
+  return { success, failed };
+};
+
+const EmojiBatchImporter = ({ onBack, onImported }) => {
+  const [urlText, setUrlText] = React.useState("");
+  const [isImporting, setIsImporting] = React.useState(false);
+  const [importStatus, setImportStatus] = React.useState("");
+  const fileInputRef = React.useRef(null);
+  const validUrls = parseImageUrlLines(urlText);
+  const h = React.createElement;
+
+  const cardStyle = {
+    background: "#fff",
+    padding: "14px 16px",
+    borderRadius: "12px",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
+  };
+  const actionButtonStyle = (enabled, background) => ({
+    padding: "9px 18px",
+    background: enabled ? background : "#ccc",
+    color: "white",
+    border: "none",
+    borderRadius: "16px",
+    cursor: enabled ? "pointer" : "not-allowed",
+    fontSize: "13px",
+    fontWeight: "bold",
+    flexShrink: 0,
+  });
+
+  const refreshEmojis = async () => {
+    const emojis = await window.emojiStore.getAll();
+    onImported(emojis.sort((a, b) => b.timestamp - a.timestamp));
+  };
+
+  const handleLocalSelect = async (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (files.length === 0 || isImporting) return;
+
+    setIsImporting(true);
+    setImportStatus(`正在导入 0 / ${files.length}`);
+    try {
+      const result = await importLocalImages(files, (current, total) => {
+        setImportStatus(`正在导入 ${current} / ${total}`);
+      });
+      await refreshEmojis();
+      setImportStatus(
+        result.failed
+          ? `成功 ${result.success} 张，失败 ${result.failed} 张`
+          : `成功导入 ${result.success} 张图片`,
+      );
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleRemoteImport = async () => {
+    if (validUrls.length === 0 || isImporting) return;
+
+    setIsImporting(true);
+    setImportStatus(`正在添加 0 / ${validUrls.length}`);
+    try {
+      const result = await importRemoteImages(validUrls, (current, total) => {
+        setImportStatus(`正在添加 ${current} / ${total}`);
+      });
+      await refreshEmojis();
+      if (result.success > 0) setUrlText("");
+      setImportStatus(
+        result.failed
+          ? `成功 ${result.success} 条，失败 ${result.failed} 条`
+          : `成功添加 ${result.success} 个链接`,
+      );
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  return h(
+    "div",
+    {
+      style: {
+        flex: 1,
+        minHeight: 0,
+        padding: "14px 16px 18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+        overflowY: "auto",
+      },
+    },
+    h(
+      "div",
+      { style: { display: "flex", alignItems: "center", gap: "10px" } },
+      h(
+        "button",
+        {
+          type: "button",
+          onClick: onBack,
+          style: {
+            padding: 0,
+            border: "none",
+            background: "transparent",
+            color: "#8c917b",
+            cursor: "pointer",
+            fontWeight: "bold",
+          },
+        },
+        "‹ 返回相册",
+      ),
+      h(
+        "strong",
+        { style: { color: "#5a5f4d", fontSize: "15px" } },
+        "批量导入图片",
+      ),
+    ),
+    importStatus &&
+      h(
+        "div",
+        {
+          role: "status",
+          "aria-live": "polite",
+          style: {
+            padding: "8px 12px",
+            borderRadius: "10px",
+            background: "rgba(168,200,186,0.18)",
+            color: "#5a5f4d",
+            fontSize: "13px",
+          },
+        },
+        importStatus,
+      ),
+    h(
+      "section",
+      { style: cardStyle },
+      h(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+          },
+        },
+        h(
+          "div",
+          { style: { color: "#5a5f4d", fontSize: "14px", fontWeight: "bold" } },
+          "从本地相册导入：",
+        ),
+        h(
+          "button",
+          {
+            type: "button",
+            disabled: isImporting,
+            onClick: () => fileInputRef.current?.click(),
+            style: actionButtonStyle(!isImporting, "#A8C8BA"),
+          },
+          isImporting ? "正在导入…" : "+ 选择图片",
+        ),
+        h("input", {
+          ref: fileInputRef,
+          type: "file",
+          accept: "image/*",
+          multiple: true,
+          disabled: isImporting,
+          onChange: handleLocalSelect,
+          style: { display: "none" },
+        }),
+      ),
+      h(
+        "div",
+        { style: { marginTop: "8px", color: "#8c917b", fontSize: "12px" } },
+        "支持同时选择多张图片，一次批量导入",
+      ),
+    ),
+    h(
+      "section",
+      { style: cardStyle },
+      h(
+        "div",
+        { style: { color: "#5a5f4d", fontSize: "14px", fontWeight: "bold" } },
+        "使用网络图片链接添加：",
+      ),
+      h(
+        "div",
+        {
+          style: {
+            margin: "7px 0 9px",
+            color: "#8c917b",
+            fontSize: "12px",
+            lineHeight: 1.5,
+          },
+        },
+        "每行一条：直接贴链接，或填写“描述 + 空格 + 链接”",
+      ),
+      h("textarea", {
+        value: urlText,
+        disabled: isImporting,
+        onChange: (event) => setUrlText(event.target.value),
+        placeholder:
+          "https://example.com/image.jpg\n一起晒太阳 https://example.com/photo.jpg",
+        rows: 4,
+        style: {
+          width: "100%",
+          minHeight: "88px",
+          padding: "10px 12px",
+          boxSizing: "border-box",
+          border: "1px solid rgba(214,114,75,0.3)",
+          borderRadius: "12px",
+          outline: "none",
+          resize: "vertical",
+          fontSize: "13px",
+          lineHeight: 1.5,
+          background: "#fdfaf8",
+          color: "#5a5f4d",
+          overflowWrap: "anywhere",
+        },
+      }),
+      h(
+        "div",
+        {
+          style: {
+            marginTop: "10px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+            flexWrap: "wrap",
+          },
+        },
+        h(
+          "span",
+          { style: { color: "#8c917b", fontSize: "12px" } },
+          `已识别 ${validUrls.length} 个有效链接`,
+        ),
+        h(
+          "button",
+          {
+            type: "button",
+            disabled: validUrls.length === 0 || isImporting,
+            onClick: handleRemoteImport,
+            style: actionButtonStyle(validUrls.length > 0 && !isImporting, "#d6724b"),
+          },
+          isImporting ? "正在导入…" : `添加 ${validUrls.length} 个链接`,
+        ),
+      ),
+    ),
+  );
+};
+
 // ==================== 钱包与交易全局记录系统 ====================
 window.addTransactionRecord = (type, amount, source) => {
   try {
@@ -85025,179 +85355,10 @@ const ChatSettingsModal = ({
 
                   {/* 添加新表情模式 */}
                   {emojiTab === "add" && (
-                    <div
-                      style={{
-                        flex: 1,
-                        padding: "16px 20px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "20px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          color: "#8c917b",
-                          cursor: "pointer",
-                          width: "fit-content",
-                          fontWeight: "bold",
-                        }}
-                        onClick={() => setEmojiTab("list")}
-                      >
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <polyline points="15 18 9 12 15 6"></polyline>
-                        </svg>
-                        返回相册
-                      </div>
-
-                      {/* 本地上传 */}
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "12px",
-                          alignItems: "center",
-                          background: "#fff",
-                          padding: "12px 16px",
-                          borderRadius: "12px",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "14px",
-                            color: "#5a5f4d",
-                            fontWeight: "bold",
-                            flex: 1,
-                          }}
-                        >
-                          从本地相册导入：
-                        </div>
-                        <button
-                          onClick={() =>
-                            document.getElementById("emoji-file-upload").click()
-                          }
-                          style={{
-                            padding: "8px 20px",
-                            background: "#A8C8BA",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "20px",
-                            cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: "bold",
-                            boxShadow: "0 4px 10px rgba(168,200,186,0.3)",
-                          }}
-                        >
-                          + 选择图片
-                        </button>
-                        <input
-                          id="emoji-file-upload"
-                          type="file"
-                          accept="image/*"
-                          style={{ display: "none" }}
-                          onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = async (event) => {
-                                const newEmoji = {
-                                  id: Date.now().toString(),
-                                  url: event.target.result,
-                                  timestamp: Date.now(),
-                                };
-                                await window.emojiStore.save(newEmoji);
-                                setSavedEmojis((prev) => [newEmoji, ...prev]);
-                                setEmojiTab("list");
-                                alert("表情导入成功！");
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                            e.target.value = "";
-                          }}
-                        />
-                      </div>
-
-                      {/* URL 添加 */}
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "10px",
-                          background: "#fff",
-                          padding: "16px",
-                          borderRadius: "12px",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "14px",
-                            color: "#5a5f4d",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          使用网络图片链接添加：
-                        </div>
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          <input
-                            type="text"
-                            placeholder="请粘贴以 http 开头的图片链接"
-                            value={newEmojiUrl}
-                            onChange={(e) => setNewEmojiUrl(e.target.value)}
-                            style={{
-                              flex: 1,
-                              padding: "10px 14px",
-                              border: "1px solid rgba(214,114,75,0.3)",
-                              borderRadius: "12px",
-                              outline: "none",
-                              fontSize: "13px",
-                              background: "#fdfaf8",
-                            }}
-                          />
-                          <button
-                            onClick={async () => {
-                              if (
-                                !newEmojiUrl.trim() ||
-                                !newEmojiUrl.startsWith("http")
-                              )
-                                return alert("请输入正确的图片链接");
-                              const newEmoji = {
-                                id: Date.now().toString(),
-                                url: newEmojiUrl.trim(),
-                                timestamp: Date.now(),
-                              };
-                              await window.emojiStore.save(newEmoji);
-                              setSavedEmojis((prev) => [newEmoji, ...prev]);
-                              setNewEmojiUrl("");
-                              setEmojiTab("list");
-                              alert("表情获取成功！");
-                            }}
-                            style={{
-                              padding: "10px 20px",
-                              background: "#d6724b",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "12px",
-                              cursor: "pointer",
-                              fontSize: "13px",
-                              fontWeight: "bold",
-                              boxShadow: "0 4px 10px rgba(214,114,75,0.3)",
-                            }}
-                          >
-                            吸纳
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                    <EmojiBatchImporter
+                      onBack={() => setEmojiTab("list")}
+                      onImported={setSavedEmojis}
+                    />
                   )}
                 </div>
               )}
