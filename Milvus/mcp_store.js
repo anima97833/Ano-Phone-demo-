@@ -409,6 +409,293 @@
           note: "名士可感知此现世时序，自然在对白中嘘寒问暖、应景关切。"
         };
       }
+    },
+    {
+      name: "generate_pollinations_image",
+      displayName: "丹青绘卷 (Pollinations.ai 生图)",
+      icon: "ph-paint-brush",
+      category: "丹青与画卷",
+      description: "当主公想看画面/画作/自拍/风景，或名士想要赠予主公手绘卷轴、风景画作、随手信物插画时调用。基于免费 Pollinations.ai 引擎实时生成唯美艺术画作，自动注入画风增强词并呈递至主公鉴赏。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          prompt: {
+            type: "string",
+            description: "画面的核心英文或中文画面描述，例如'A handsome ancient scholar standing under peach blossom tree, hanfu, soft spring rain, misty ancient town, cinematic lighting, masterpiece'"
+          },
+          title: {
+            type: "string",
+            description: "此幅画作或赠图的中文雅致标题，例如'《春日桃夭踏青图》'、'《宛城夜色手绘轴》'"
+          },
+          style: {
+            type: "string",
+            description: "画风预设，可选：'chinese_ink' (水墨古风), 'ancient_anime' (厚涂国风插画), 'photorealistic' (唯美写实摄影), 'chibi' (Q版可爱插画), 'oil_painting' (古典厚涂油画), 'cyberpunk' (国潮赛博)",
+            enum: ["chinese_ink", "ancient_anime", "photorealistic", "chibi", "oil_painting", "cyberpunk"]
+          },
+          aspectRatio: {
+            type: "string",
+            description: "画面比例：'3:4' (竖版立卷推荐), '1:1' (方斗正方), '16:9' (横幅画卷), '9:16' (手机壁纸竖屏)",
+            enum: ["3:4", "1:1", "16:9", "9:16"]
+          }
+        },
+        required: ["prompt", "title"]
+      },
+      defaultEnabled: true,
+      handler: async (args, context) => {
+        const charName = context?.character || "名士";
+        const prompt = (args.prompt || "").trim();
+        if (!prompt) return { error: "提示词不能为空" };
+
+        const title = args.title || "《丹青心意图》";
+        const style = args.style || "chinese_ink";
+        const aspectRatio = args.aspectRatio || "3:4";
+
+        // 1. 宽高计算
+        let width = 768;
+        let height = 1024;
+        if (aspectRatio === "1:1") {
+          width = 1024;
+          height = 1024;
+        } else if (aspectRatio === "16:9") {
+          width = 1024;
+          height = 576;
+        } else if (aspectRatio === "9:16") {
+          width = 576;
+          height = 1024;
+        } else if (aspectRatio === "3:4") {
+          width = 768;
+          height = 1024;
+        }
+
+        // 2. 画风修饰与正向 Prompt 自动增强
+        const styleModifiers = {
+          chinese_ink: "traditional Chinese ink wash painting style, ethereal watercolor, elegant brushstrokes, Xuan paper texture, poetic atmosphere, Guofeng aesthetic, masterpiece, ultra-detailed",
+          ancient_anime: "breathtaking Chinese ancient anime illustration, high fantasy Otome CG game style, exquisitely detailed hanfu clothing, delicate hair strands, soft cinematic rim lighting, 8k resolution",
+          photorealistic: "masterpiece photorealistic portrait, intricate details, natural skin texture, realistic soft lighting, 35mm lens photography, 8k resolution",
+          chibi: "cute adorable chibi character, charming pastel colors, clean vector lines, lovely expression, kawaii sticker style",
+          oil_painting: "classical Renaissance fine art oil painting, rich canvas texture, dramatic chiaroscuro lighting, expressive brushwork, museum masterpiece",
+          cyberpunk: "neo-chinese cyberpunk, neon glow reflections, futuristic ancient tech aesthetics, volumetric smoke, high contrast, 8k"
+        };
+
+        const stylePrefix = styleModifiers[style] || styleModifiers.chinese_ink;
+        const finalPrompt = `${stylePrefix}, ${prompt}, masterpiece, highest quality, aesthetically pleasing`;
+
+        const seed = Math.floor(Math.random() * 1000000);
+        // Pollinations.ai 官方免费图片生成端点 (使用 flux 模型)
+        const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(finalPrompt)}?width=${width}&height=${height}&seed=${seed}&nologo=true&enhance=false&model=flux`;
+
+        // 3. 记录至名士随身画卷与动态资产库 (fangtian_dynamics_${charName})
+        try {
+          const cacheKey = `fangtian_dynamics_${charName}`;
+          let dynData = { memos: [], assets: [], paintings: [] };
+          const raw = localStorage.getItem(cacheKey);
+          if (raw) {
+            try { dynData = JSON.parse(raw); } catch (e) {}
+          }
+          if (!Array.isArray(dynData.paintings)) dynData.paintings = [];
+          if (!Array.isArray(dynData.assets)) dynData.assets = [];
+
+          const newPainting = {
+            id: Date.now(),
+            title: title,
+            imageUrl: imageUrl,
+            prompt: prompt,
+            style: style,
+            time: "刚刚 (丹青绘就)",
+            giver: charName
+          };
+
+          dynData.paintings.unshift(newPainting);
+          // 同时在私人资产中记录一笔
+          dynData.assets.unshift({
+            id: Date.now(),
+            type: "丹青画卷",
+            name: title,
+            desc: `【${charName}】亲笔所绘赠与主公之画作`,
+            time: "刚刚"
+          });
+
+          localStorage.setItem(cacheKey, JSON.stringify(dynData));
+        } catch (e) {
+          console.warn("[MCP] 写入画卷动态异常:", e);
+        }
+
+        // 4. 挂载全局待渲染画卷缓存与事件广播 (保证传讯页面100%即时渲染出图片气泡)
+        try {
+          window.__lastMcpGeneratedImage = {
+            imageUrl: imageUrl,
+            title: title,
+            character: charName,
+            timestamp: Date.now()
+          };
+          window.dispatchEvent(new CustomEvent("mcp_image_generated", {
+            detail: { imageUrl, title, character: charName, timestamp: Date.now() }
+          }));
+        } catch (e) {}
+
+        // 5. 返回标准结构化结果
+        return {
+          status: "success",
+          title: title,
+          imageUrl: imageUrl,
+          prompt: prompt,
+          style: style,
+          note: `画卷已丹青落墨并装裱完毕。请在对白中向主公呈递这幅画作，并附上标签 [图片: ${imageUrl}]，系统会自动将其渲染为精美画卷气泡。`
+        };
+      }
+    },
+    {
+      name: "publish_moment",
+      displayName: "朋友圈动态发布",
+      icon: "ph-broadcast",
+      category: "动态与社交",
+      description: "当主公在对话中要求角色“发朋友圈”、“发动态”、“晒一下”、“发条圈”，或者角色想要主动向朋友圈分享生活日常、美景画作、心境感悟时调用。此工具会自动配图并真实发布至手机【朋友圈】，供主公和圈内好友浏览、点赞与互动评论。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          content: {
+            type: "string",
+            description: "朋友圈动态正文内容（纯正的角色人设口吻，中文，严禁带有生图提示词或格式代码）"
+          },
+          imagePrompt: {
+            type: "string",
+            description: "动态配图的AI生图英文提示词，如 'A tranquil ancient courtyard with cherry blossoms, soft sunlight, anime artstyle, masterpiece, no text, no words'"
+          },
+          image: {
+            type: "string",
+            description: "可选的已有图片URL"
+          },
+          color: {
+            type: "string",
+            description: "可选的主题色HEX码，如 '#EAD6D6'"
+          }
+        },
+        required: ["content"]
+      },
+      defaultEnabled: true,
+      handler: async (args, context) => {
+        const charName = context?.character || "名士";
+        const content = (args.content || "").trim();
+        if (!content) return { error: "动态内容不能为空" };
+
+        console.log(`[MCP] 正在为【${charName}】发布朋友圈动态:`, args);
+
+        // 1. 获取发动态角色的完整信息
+        let charInfo = {
+          id: context?.characterId || Date.now(),
+          name: charName,
+          avatar: null,
+          avatarColor: "#85C9D9",
+          avatarBg: "#85C9D9",
+          iconColor: "#666",
+          themeColor: args.color || "#EAD6D6"
+        };
+
+        try {
+          let allChars = [];
+          if (window.chatCharacterStore) {
+            allChars = await window.chatCharacterStore.getAll();
+          } else {
+            allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+          }
+          const matched = allChars.find(c => (c.name && c.name.trim() === charName.trim()) || (context?.characterId && c.id == context?.characterId));
+          if (matched) {
+            charInfo = {
+              id: matched.id,
+              name: matched.name || charName,
+              avatar: matched.avatar || null,
+              avatarColor: matched.avatarBg || matched.avatarColor || "#85C9D9",
+              avatarBg: matched.avatarBg || matched.avatarColor || "#85C9D9",
+              iconColor: matched.iconColor || "#666",
+              themeColor: args.color || matched.themeColor || "#EAD6D6"
+            };
+          }
+        } catch (e) {
+          console.warn("[MCP] 获取发圈角色资料失败:", e);
+        }
+
+        // 2. 图像生成与绑定
+        let imageUrl = args.image || null;
+        
+        // 如果本轮刚刚生成过画作，优先直接使用该画作
+        if (!imageUrl && window.__lastMcpGeneratedImage && window.__lastMcpGeneratedImage.imageUrl) {
+          imageUrl = window.__lastMcpGeneratedImage.imageUrl;
+        }
+
+        // 若无图片且有生图提示词，调用 AI 生图
+        if (!imageUrl && args.imagePrompt && typeof window.generateAIImage === "function") {
+          try {
+            const cleanPrompt = args.imagePrompt.replace(/[\u4e00-\u9fa5]/g, "").trim();
+            const finalPrompt = cleanPrompt 
+              ? `${cleanPrompt}, masterpiece, high quality, aesthetic scenery, no text, no words, no calligraphy, no watermark`
+              : `aesthetic ancient Chinese scenery, poetic landscape, masterpiece, no text`;
+            imageUrl = await window.generateAIImage(finalPrompt);
+          } catch (err) {
+            console.warn("[MCP] 朋友圈配图生成失败:", err);
+          }
+        }
+
+        // 若依然无图，自动根据动态正文免费生成一张意境配图
+        if (!imageUrl && typeof window.generateAIImage === "function") {
+          try {
+            const fallbackPrompt = `aesthetic poetic ancient scenery, tranquil atmosphere, masterpiece, no text, related to ${content.substring(0, 30)}`;
+            imageUrl = await window.generateAIImage(fallbackPrompt);
+          } catch (e) {}
+        }
+
+        // 3. 构建朋友圈动态条目
+        const now = new Date();
+        const newMoment = {
+          id: Date.now(),
+          char: charInfo,
+          text: content,
+          color: charInfo.themeColor || args.color || "#EAD6D6",
+          image: imageUrl,
+          timestamp: Date.now(),
+          time: now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+          likes: [],
+          comments: []
+        };
+
+        // 4. 双重写入存储：localStorage (t8_moments) & IndexedDB (moments_data)
+        try {
+          let existingMoments = [];
+          const raw = localStorage.getItem("t8_moments");
+          if (raw) {
+            try { existingMoments = JSON.parse(raw); } catch (e) {}
+          }
+          if (!Array.isArray(existingMoments)) existingMoments = [];
+
+          const updatedMoments = [newMoment, ...existingMoments.filter(m => m.id !== newMoment.id)];
+          localStorage.setItem("t8_moments", JSON.stringify(updatedMoments));
+
+          if (window.chatCharacterStore) {
+            const momentsRecord = {
+              id: "moments_data",
+              type: "moments",
+              data: updatedMoments,
+              updatedAt: new Date().toISOString()
+            };
+            await window.chatCharacterStore.save(momentsRecord);
+          }
+
+          // 5. 广播全局动态更新事件
+          window.dispatchEvent(new CustomEvent("momentsUpdated", { detail: { moment: newMoment } }));
+          console.log("[MCP] 朋友圈动态发布成功:", newMoment);
+
+          return {
+            status: "success",
+            momentId: newMoment.id,
+            content: content,
+            hasImage: !!imageUrl,
+            imageUrl: imageUrl,
+            note: `【朋友圈动态已成功发布！】动态「${content.substring(0, 20)}...」已成功登载至手机朋友圈，主公与圈内名士可随时查阅点赞。`
+          };
+        } catch (err) {
+          console.error("[MCP] 朋友圈动态发布失败:", err);
+          return { error: `发布朋友圈失败: ${err.message}` };
+        }
+      }
     }
   ];
 
@@ -713,4 +1000,140 @@
   // 挂载到全局单例
   window.mcpHub = new MCPHub();
   console.log("[MCP] Milvus MCP Hub 初始化就绪，已装载内置工具:", window.mcpHub.builtInTools.length);
+
+  // ==================== 智能生图与传讯页面画卷即时渲染联动引擎 ====================
+
+  // 1. 提供全局 100% 免费免 Key 的 AI 生图兜底服务 (Pollinations Flux 引擎)
+  const origGenerateAIImage = window.generateAIImage;
+  window.generateAIImage = async function (prompt, customOptions = {}) {
+    // 0. 如果传入的已经是图片 URL，直接返回该 URL
+    if (typeof prompt === "string" && (prompt.startsWith("http://") || prompt.startsWith("https://") || prompt.startsWith("data:image/"))) {
+      return prompt;
+    }
+
+    // A. 如果已存在 MCP 本轮生成的画卷，优先直接返回
+    if (window.__lastMcpGeneratedImage && window.__lastMcpGeneratedImage.imageUrl) {
+      const url = window.__lastMcpGeneratedImage.imageUrl;
+      window.__lastMcpGeneratedImage = null; // 消费掉本次画卷
+      return url;
+    }
+
+    // B. 若用户配置并开启了第三方商业 API，尝试优先调用
+    const savedConfig = localStorage.getItem("image_generation_api_config");
+    if (savedConfig && typeof origGenerateAIImage === "function") {
+      try {
+        const parsed = JSON.parse(savedConfig);
+        if (parsed && parsed.apiKey && parsed.url && (parsed.enabled !== false || customOptions.ignoreDisabled)) {
+          return await origGenerateAIImage(prompt, customOptions);
+        }
+      } catch (e) {
+        if (customOptions.ignoreDisabled) throw e;
+      }
+    }
+
+    // C. 默认自动使用 Pollinations.ai 免费极速生图
+    console.log("[MCP] 启动 Pollinations.ai 免费生图引擎, Prompt:", prompt);
+    const cleanPrompt = (prompt || "masterpiece ancient chinese scenic landscape").trim();
+    const seed = Math.floor(Math.random() * 1000000);
+    const enriched = `masterpiece, ultra-detailed, traditional Chinese aesthetic, ethereal lighting, ${cleanPrompt}`;
+    return `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?width=768&height=1024&seed=${seed}&nologo=true&enhance=false&model=flux`;
+  };
+
+  // 2. 拦截与增强 sendToLLM：确保所有画作均能在传讯页面自动生成精美图片消息卡片
+  function setupSendToLLMInterceptor() {
+    if (!window.sendToLLM) return;
+    if (window.sendToLLM.__mcp_intercepted) return;
+
+    const rawSendToLLM = window.sendToLLM;
+    const enhancedSendToLLM = async function (messages, customConfigOrChunk, onFinish, onError) {
+      // 每次发起对话前重置上一轮缓存
+      window.__lastMcpGeneratedImage = null;
+
+      const wrappedOnFinish = async (reply) => {
+        let finalReply = reply || "";
+
+        // ① 如果本轮模型调用了 generate_pollinations_image 工具
+        if (window.__lastMcpGeneratedImage && window.__lastMcpGeneratedImage.imageUrl) {
+          const img = window.__lastMcpGeneratedImage;
+          const hasImageTag = /\[\s*(?:生成图片|画图|生图|图片|图\s*片|photo|image|draw|img)\s*[:：]/i.test(finalReply);
+          if (!hasImageTag) {
+            finalReply = `${finalReply}\n[生成图片: ${img.prompt || img.title || "画卷"}]`;
+          }
+        }
+
+        // ② 如果模型输出了 markdown 图片格式或 Pollinations 原生 URL
+        const mdImgMatch = finalReply.match(/!\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/i);
+        if (mdImgMatch) {
+          window.__lastMcpGeneratedImage = {
+            imageUrl: mdImgMatch[2],
+            title: mdImgMatch[1] || "丹青画卷",
+            timestamp: Date.now()
+          };
+          finalReply = finalReply.replace(mdImgMatch[0], "").trim();
+          if (!/\[(?:生成图片|画图|生图|photo|image)[:：]/i.test(finalReply)) {
+            finalReply = `${finalReply}\n[生成图片: ${mdImgMatch[1] || "丹青画卷"}]`;
+          }
+        }
+
+        const pollUrlMatch = finalReply.match(/(https:\/\/image\.pollinations\.ai\/prompt\/[^\s\n"'\)\]]+)/i);
+        if (pollUrlMatch && !window.__lastMcpGeneratedImage) {
+          window.__lastMcpGeneratedImage = {
+            imageUrl: pollUrlMatch[1],
+            title: "丹青画卷",
+            timestamp: Date.now()
+          };
+          finalReply = finalReply.replace(pollUrlMatch[0], "").trim();
+          if (!/\[(?:生成图片|画图|生图|photo|image)[:：]/i.test(finalReply)) {
+            finalReply = `${finalReply}\n[生成图片: 丹青画卷]`;
+          }
+        }
+
+                // ③ 朋友圈动态标签抓取与自动发布 (双重保险 · 保证 100% 执行)
+        const momentTagMatch = finalReply.match(/\[\s*(?:发布朋友圈|发朋友圈|朋友圈动态|发动态|朋友圈|post_moment)\s*[:：]\s*([\s\S]*?)\]/i);
+        if (momentTagMatch) {
+          const rawMomentBody = momentTagMatch[1].trim();
+          finalReply = finalReply.replace(momentTagMatch[0], "").trim();
+          
+          let momentContent = rawMomentBody;
+          let momentImagePrompt = "";
+          if (rawMomentBody.includes("|")) {
+            const parts = rawMomentBody.split("|");
+            momentContent = parts[0].trim();
+            momentImagePrompt = parts.slice(1).join("|").trim();
+          } else if (/配图[:：]/i.test(rawMomentBody)) {
+            const parts = rawMomentBody.split(/配图[:：]/i);
+            momentContent = parts[0].trim();
+            momentImagePrompt = parts[1].trim();
+          }
+
+          if (window.mcpHub) {
+            window.mcpHub.executeTool("publish_moment", {
+              content: momentContent,
+              imagePrompt: momentImagePrompt
+            }, {
+              character: customConfigOrChunk?.character || customConfigOrChunk?.characterName,
+              characterId: customConfigOrChunk?.characterId
+            }).catch(e => console.warn("[MCP] 标签自动发布朋友圈异常:", e));
+          }
+        }
+
+        if (typeof onFinish === "function") {
+          return onFinish(finalReply);
+        }
+      };
+
+      return rawSendToLLM.call(this, messages, customConfigOrChunk, wrappedOnFinish, onError);
+    };
+
+    enhancedSendToLLM.__mcp_intercepted = true;
+    window.sendToLLM = enhancedSendToLLM;
+    console.log("[MCP] 传讯页面智能画卷渲染拦截器挂载就绪");
+  }
+
+  // 立即尝试挂载，并在页面加载完毕时再次确立
+  setupSendToLLMInterceptor();
+  window.addEventListener("DOMContentLoaded", setupSendToLLMInterceptor);
+  window.addEventListener("load", setupSendToLLMInterceptor);
+  setInterval(setupSendToLLMInterceptor, 1500);
 })();
+

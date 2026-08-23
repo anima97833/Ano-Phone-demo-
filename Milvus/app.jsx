@@ -504,6 +504,7 @@ window.sendToLLM = async (messages, customConfigOrChunk, onFinish, onError) => {
 4. simulate_sandplay：沙盘军略兵推推演。
 5. create_shop_order：太疾驰商城采买记账。
 6. get_current_time_and_lunar：现世时序节气感知。
+7. generate_pollinations_image：当主公想看画面/画作/自拍/风景，或名士想为主公手绘丹青卷轴时调用此工具生成精美画卷。
 【铁律】：当对话语境涉及上述场景时，请【优先主动发起 tool_calls 工具调用】！工具执行完毕后，基于工具执行结果以自然角色口吻向主公对白回复。`;
 
       let sysMsg = currentMessages.find(m => m.role === "system");
@@ -681,24 +682,233 @@ window.sendToLLM = async (messages, customConfigOrChunk, onFinish, onError) => {
 
 // ==================== 3. [新增] AI 文生图核心服务 (Text-to-Image) ====================
 // 【严格独立】：永远严格使用 image_generation_api_config，绝对不与传讯 api_configs 或 MiniMax 语音混淆
-window.generateAIImage = async (prompt, customOptions = {}) => {
-  console.log("开始调用 generateAIImage, 提示词:", prompt);
-  const savedConfig = localStorage.getItem("image_generation_api_config");
-  if (!savedConfig) {
-    throw new Error("请先在【设置 -> 隐私与安全 -> AI 文生图配置】中配置生图 API");
+// ==================== [新增] 太疾驰 IndexedDB 专用持久化仓库 ====================
+// ==================== [新增] 太疾驰智能生图 Prompt 生成器 ====================
+// ==================== [新增] 天下书城智能古风封面 Prompt 生成器 ====================
+window.getBookCoverPrompt = function(book) {
+  var title = book.title || "";
+  var summary = book.summary || "";
+  var category = book.category || "";
+  var fullText = (title + " " + summary + " " + category).toLowerCase();
+
+  var visualTheme = "";
+  if (/兵|战|谋|武|阵|剑|三国|将|策|军/.test(fullText)) {
+    visualTheme = "ancient Chinese epic warrior battle scene, ink wash mountains, misty battlefield, cinematic martial art aesthetics";
+  } else if (/医|草|丹|药|本草|伤寒|针灸/.test(fullText)) {
+    visualTheme = "ancient Chinese traditional botanical herbal illustration, bamboo forest and vintage parchment scroll";
+  } else if (/情|爱|闺|怨|春|月|思|相思|恋|赋/.test(fullText)) {
+    visualTheme = "poetic ancient Chinese romantic courtyard under moonlight, cherry blossoms falling, tranquil water reflection";
+  } else if (/志|异|鬼|神|妖|奇|仙|魔|怪|搜神/.test(fullText)) {
+    visualTheme = "mystical ancient Chinese mythology landscape, floating ethereal clouds, glowing celestial dragons and ancient pagoda";
+  } else if (/诗|词|赋|文|史|经|道|德|易|礼/.test(fullText)) {
+    visualTheme = "traditional Chinese classical landscape painting, majestic misty mountains and winding rivers, scholar pavilion";
+  } else {
+    visualTheme = "exquisite ancient Chinese classic literature book cover art, traditional ink and color wash, elegant oriental aesthetics";
   }
-  let config;
+
+  return "masterpiece, " + visualTheme + ", book cover illustration, breathtaking fine art, 8k resolution, cinematic lighting, no text, no title, no typography, no watermark";
+};
+
+window.getTjcItemPrompt = function(item, category) {
+  var name = item.productName || item.foodName || item.name || "";
+  var intro = item.intro || item.desc || "";
+  var fullText = (name + " " + intro + " " + (category || "")).toLowerCase();
+
+  // 1. 如果大模型提供了英文 imagePrompt，且有效
+  if (item.imagePrompt && typeof item.imagePrompt === "string") {
+    var cleanP = item.imagePrompt.replace(/[\u4e00-\u9fa5]/g, "").trim();
+    if (cleanP.length >= 6) {
+      return "exquisite masterpiece, " + cleanP + ", ultra detailed, 8k, product photography, studio lighting, no text, no watermark";
+    }
+  }
+
+  // 2. 智能分类词根识别
+  var visualSubject = "";
+  if (/肉|猪|牛|羊|鸡|鸭|鹅|脯|干|烤|炙|肠/.test(fullText)) {
+    visualSubject = "delicious cured pork jerky slices, roasted meat gourmet dish, appetizing food photography, rustic wooden platter";
+  } else if (/茶|饮|酒|酪|汤|水|浆|露/.test(fullText)) {
+    visualSubject = "traditional Chinese herbal tea in elegant teacup, ancient gourmet drink, steam rising, atmospheric lighting";
+  } else if (/米|粥|饭|饼|面|糕|粽|馒|馍|点心/.test(fullText)) {
+    visualSubject = "traditional Chinese gourmet food, delicious steamed rice bowl, freshly baked pastry, food photography";
+  } else if (/药|膏|丹|丸|草|灵芝|参|茯苓|散/.test(fullText)) {
+    visualSubject = "traditional Chinese herbal medicine, natural dried herbs and roots on bamboo tray, apothecary aesthetics";
+  } else if (/衣|服|裙|袍|缎|绸|帛|锦|衫|斗篷/.test(fullText)) {
+    visualSubject = "exquisite traditional Chinese silk hanfu robe, luxurious embroidered silk fabric, fashion photography";
+  } else if (/妆|脂|粉|黛|香|梳|簪|钗|铜镜/.test(fullText)) {
+    visualSubject = "ancient Chinese cosmetic rouge in delicate lacquer box, ornamental hairpin and jade comb";
+  } else if (/剑|刀|枪|弓|弩|甲|盾|兵器/.test(fullText)) {
+    visualSubject = "ancient Chinese bronze sword with ornamental scabbard, warrior armor craft, dramatic lighting";
+  } else if (/简|书|卷|笔|墨|砚|琴|棋/.test(fullText)) {
+    visualSubject = "ancient Chinese calligraphy brush, bamboo scroll, inkstone on scholar desk";
+  } else if (/玉|佩|璧|珠|石|环/.test(fullText)) {
+    visualSubject = "delicately carved ancient Chinese white jade pendant, translucent jade ornament, macro photography";
+  } else {
+    visualSubject = "exquisite authentic ancient Chinese handicraft item, traditional artifact, museum quality product photography";
+  }
+
+  return "masterpiece, " + visualSubject + ", hyper-realistic, 8k resolution, cinematic studio lighting, no text, no words, no watermark, no characters";
+};
+
+window.tjcStore = {
+  async get(key) {
+    try {
+      if (window.openDB) {
+        const db = await window.openDB();
+        const tx = db.transaction("user_settings", "readonly");
+        const store = tx.objectStore("user_settings");
+        return await new Promise((resolve) => {
+          const req = store.get("tjc_" + key);
+          req.onsuccess = () => resolve(req.result ? req.result.value : null);
+          req.onerror = () => resolve(null);
+        });
+      }
+    } catch (e) {
+      console.warn("[tjcStore] 读取 IndexedDB 失败, 尝试读取 localStorage 备用源:", e);
+    }
+    try {
+      const val = localStorage.getItem("tjc_cache_" + key);
+      return val ? JSON.parse(val) : null;
+    } catch (e) {
+      return null;
+    }
+  },
+  async set(key, value) {
+    try {
+      if (window.openDB) {
+        const db = await window.openDB();
+        const tx = db.transaction("user_settings", "readwrite");
+        const store = tx.objectStore("user_settings");
+        await new Promise((resolve, reject) => {
+          const req = store.put({ key: "tjc_" + key, value });
+          req.onsuccess = () => resolve(true);
+          req.onerror = (err) => reject(err);
+        });
+      }
+    } catch (e) {
+      console.warn("[tjcStore] 写入 IndexedDB 失败, 降级同步至 localStorage:", e);
+    }
+    try {
+      localStorage.setItem("tjc_cache_" + key, JSON.stringify(value));
+    } catch (e) {}
+  }
+};
+
+window.safeParseJSONArray = function(rawText) {
+  if (!rawText || typeof rawText !== "string") return [];
+  var text = rawText.replace(/```json|```/g, "").trim();
+
+  // 1. Try direct JSON.parse
   try {
-    config = JSON.parse(savedConfig);
-  } catch (e) {
-    throw new Error("生图配置格式解析错误，请重新在隐私与安全中保存");
+    var res = JSON.parse(text);
+    if (Array.isArray(res)) return res;
+    if (res && typeof res === "object") return [res];
+  } catch (e) {}
+
+  // 2. Normalize Chinese / fullwidth punctuation
+  var fixed = text
+    .replace(/：/g, ": ")
+    .replace(/，/g, ", ")
+    .replace(/[“”]/g, '"')
+    .replace(/[\u2018\u2019]/g, "'");
+
+  // 3. Fix unquoted keys: { key: or , key: -> { "key":
+  fixed = fixed.replace(/([{,]\s*)([a-zA-Z0-9_\u4e00-\u9fa5]+)\s*:/g, '$1"$2":');
+
+  // 4. Fix unquoted string values
+  fixed = fixed.replace(/:\s*([^"{\[\d\s\n\r][^,\n\r}\]]*?)\s*([,\n\r}])/g, function(match, val, endChar) {
+    val = val.trim();
+    if (val === "true" || val === "false" || val === "null") return ": " + val + endChar;
+    return ': "' + val.replace(/"/g, '\\"') + '"' + endChar;
+  });
+
+  // 5. Remove trailing commas
+  fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+
+  // 6. Ensure brackets
+  var firstBracket = fixed.indexOf('[');
+  if (firstBracket !== -1) {
+    fixed = fixed.substring(firstBracket);
+    var lastBracket = fixed.lastIndexOf(']');
+    if (lastBracket !== -1) {
+      fixed = fixed.substring(0, lastBracket + 1);
+    } else {
+      var lastBrace = fixed.lastIndexOf('}');
+      if (lastBrace !== -1) {
+        fixed = fixed.substring(0, lastBrace + 1) + ']';
+      }
+    }
   }
-  if (!config.apiKey || !config.url) {
-    throw new Error("生图 API Key 或服务地址未配置完整");
+
+  try {
+    var res2 = JSON.parse(fixed);
+    if (Array.isArray(res2)) return res2;
+  } catch (e) {}
+
+  // 7. Regex fallback object extractor
+  var results = [];
+  var blockRegex = /\{([^{}]+)\}/g;
+  var match;
+  while ((match = blockRegex.exec(text)) !== null) {
+    var block = match[1];
+    var item = {};
+    var lines = block.split(/[,;\n\r]/);
+    for (var i = 0; i < lines.length; i++) {
+      var kv = lines[i].split(/[:：]/);
+      if (kv.length >= 2) {
+        var key = kv[0].replace(/["'\s]/g, "");
+        var val = kv.slice(1).join(":").replace(/^["'\s]+|["'\s]+$/g, "");
+        if (key && val) {
+          item[key] = val;
+        }
+      }
+    }
+    if (Object.keys(item).length > 0 && (item.shopName || item.foodName || item.productName || item.itemName || item.name)) {
+      results.push(item);
+    }
+  }
+  return results;
+};
+
+window.generateAIImage = async (prompt, customOptions = {}) => {
+  console.log("🎨 [MCP·生图调度] 开始调用 generateAIImage, 提示词:", prompt);
+  if (typeof prompt === "string" && (prompt.startsWith("http://") || prompt.startsWith("https://") || prompt.startsWith("data:image/"))) {
+    return prompt;
+  }
+
+  // 1. 如果本轮对话已有画卷缓存，优先返回
+  if (window.__lastMcpGeneratedImage && window.__lastMcpGeneratedImage.imageUrl) {
+    const url = window.__lastMcpGeneratedImage.imageUrl;
+    window.__lastMcpGeneratedImage = null;
+    return url;
+  }
+
+  // 2. 辅助函数：Pollinations 免费免 Key 极速生图引擎 (Flux 模型)
+  const runPollinationsFallback = (p) => {
+    console.log("🎨 [MCP·Pollinations] 启动 Pollinations.ai 免费高速生图引擎, Prompt:", p);
+    const cleanPrompt = (p || "masterpiece ancient chinese scenic landscape").trim();
+    const seed = Math.floor(Math.random() * 1000000);
+    const enriched = `masterpiece, ultra-detailed, traditional Chinese aesthetic, ethereal lighting, ${cleanPrompt}`;
+    const pollinationsUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?width=768&height=1024&seed=${seed}&nologo=true&enhance=false&model=flux`;
+    console.log("🎨 [MCP·Pollinations] 免费生图生成成功, 图片URL:", pollinationsUrl);
+    return pollinationsUrl;
+  };
+
+  // 3. 尝试读取用户商业 API 配置
+  const savedConfig = localStorage.getItem("image_generation_api_config");
+  let config = null;
+  if (savedConfig) {
+    try {
+      config = JSON.parse(savedConfig);
+    } catch (e) {}
+  }
+
+  // 若用户未配置商业 API 或已停用，直接使用 Pollinations 免费引擎
+  if (!config || !config.apiKey || !config.url || (config.enabled === false && !customOptions.ignoreDisabled)) {
+    console.log("🎨 [MCP·生图调度] 未配置商业生图 API 或已停用，自动无缝启用 Pollinations.ai 免费生图");
+    return runPollinationsFallback(prompt);
   }
 
   let endpoint = config.url.trim();
-  // 智能补全 endpoint 端点
   if (config.provider === "zhipu" || endpoint.includes("bigmodel.cn")) {
     if (!endpoint.includes("/images/generations")) {
       if (!endpoint.endsWith("/")) endpoint += "/";
@@ -711,7 +921,7 @@ window.generateAIImage = async (prompt, customOptions = {}) => {
     endpoint += "images/generations";
   }
 
-  console.log("生图 API 请求端点:", endpoint);
+  console.log("🎨 [MCP·商业生图] 请求端点:", endpoint);
 
   const model = customOptions.model || config.model || "black-forest-labs/FLUX.1-schnell";
   const size = customOptions.size || config.size || "1024x1024";
@@ -749,20 +959,12 @@ window.generateAIImage = async (prompt, customOptions = {}) => {
 
     if (!response.ok) {
       const errText = await response.text();
-      let errMsg = `生图 API 错误: ${response.status}`;
-      try {
-        const errJson = JSON.parse(errText);
-        if (errJson.error && errJson.error.message) {
-          errMsg = errJson.error.message;
-        } else if (errJson.message) {
-          errMsg = errJson.message;
-        }
-      } catch (e) {}
-      throw new Error(errMsg);
+      console.warn("商业生图 API 响应错误，自动回退到 Pollinations 免费生图:", errText);
+      return runPollinationsFallback(prompt);
     }
 
     const data = await response.json();
-    console.log("生图 API 返回数据:", data);
+    console.log("商业生图 API 返回数据:", data);
 
     let imageUrl = null;
     if (data.data && data.data.length > 0) {
@@ -782,16 +984,15 @@ window.generateAIImage = async (prompt, customOptions = {}) => {
     }
 
     if (!imageUrl) {
-      throw new Error("生图接口未返回有效的图片 URL 或数据");
+      console.warn("商业生图未解析出图片，回退到 Pollinations 免费生图");
+      return runPollinationsFallback(prompt);
     }
 
     return imageUrl;
   } catch (err) {
     clearTimeout(timeoutId);
-    if (err.name === "AbortError") {
-      throw new Error("生图请求超时，请检查网络或更换更轻量的模型");
-    }
-    throw err;
+    console.warn("商业生图请求异常，自动回退到 Pollinations 免费生图:", err);
+    return runPollinationsFallback(prompt);
   }
 };
 
@@ -15938,7 +16139,7 @@ const T12TicketPage = ({ onTicketLock }) => {
                         【当前客官挑选的演出类型】：${type}
 
                         【任务】
-                        请生成10到15个符合该日期和"${type}"分类的东汉及先秦时期演出票务数据。
+                        请生成6到8个符合该日期和"${type}"分类的东汉及先秦时期演出票务数据。
                         要求：
                         1. 曲目/节目名称必须符合东汉时期及以前的时代特征（如《九歌》、《大武》、《东海黄公》、《盘鼓舞》等）。
                         2. 演出标签(tag)和简介(intro)要极具现代网感（例如"名角 压轴"、"绝绝子不可错过的神仙舞台"、"家人们冲啊"等）。
@@ -15972,8 +16173,7 @@ const T12TicketPage = ({ onTicketLock }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data)) {
                 // 赋予浅色温暖的背景色 (莫兰迪暖色调)
                 const warmColors = [
@@ -16688,7 +16888,7 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
         【当前选中分类】：${category.name}
 
         【任务】
-        请生成10到15个符合"${category.name}"分类的二手拍卖物品数据。
+        请生成6到8个符合"${category.name}"分类的二手拍卖物品数据。
         要求：
         1. 拍卖人可以是名士也可以是随机NPC，混搭。
         2. 物品抽象奇葩幽默接地气，简介浓厚闲鱼吐槽风。
@@ -17636,8 +17836,7 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data)) {
                 const bgColors = [
                   "#FBEBC9",
@@ -17711,10 +17910,20 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
     window.currentT12Data = contextData;
   }, [products, selectedProduct, showReviewsModal, reviews]);
 
-  const fetchProducts = async (category) => {
+  const fetchProducts = async (category, forceRefresh = false) => {
     setIsLoading(true);
-    setProducts([]);
     try {
+      const cacheKey = "products_" + category;
+      if (!forceRefresh && window.tjcStore) {
+        const cached = await window.tjcStore.get(cacheKey);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+          console.log(`📦 [太疾驰·持久化] 从 IndexedDB 快速加载【${category}】商品数据: ${cached.length} 条`);
+          setProducts(cached);
+          setIsLoading(false);
+          return;
+        }
+      }
+      setProducts([]);
       // 1. 获取世界书
       const worldContext = window.getWorldBookContext
         ? await window.getWorldBookContext()
@@ -17730,7 +17939,7 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
                               【当前客官挑选的分类】：${category}
 
                               【任务】
-                              请生成10到15个符合"${category}"分类的东汉电商商品数据。
+                              请生成6到8个符合"${category}"分类的东汉电商商品数据。
                               要求：
                               1. 物品必须是东汉时期真实存在的（不可出现明清才传入的食材如辣椒、玉米、土豆等）。如果分类是"食品"，必须是可以长期保存或驿站运输的商品（如干肉、胡饼、茶团、蜜饯等），绝对不可以是现做的外卖热食！
                               2. 店名和简介要极具现代网感或谐音梗，类似淘宝、拼多多的带货文案（如"三只小猪家卖的 正品保障特效茯苓"、"绝绝子好物"、"家人滴家人们"、"掌柜含泪大甩卖"等）。
@@ -17764,10 +17973,23 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data)) {
-                setProducts(data);
+                console.log("🎨 [MCP·太疾驰购物] 正在为东汉电商好物生成 Pollinations AI 珍品画卷...");
+                const enhancedProducts = data.map((item, pIdx) => {
+                  const prompt = window.getTjcItemPrompt ? window.getTjcItemPrompt(item, category) : "masterpiece, exquisite ancient Chinese commodity, 8k, no text";
+                  const seed = Math.floor(Math.random() * 1000000) + pIdx * 251;
+                  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=512&height=512&seed=${seed}&nologo=true&enhance=false&model=flux`;
+                  return {
+                    ...item,
+                    image: item.image || imageUrl
+                  };
+                });
+                setProducts(enhancedProducts);
+                if (window.tjcStore) {
+                  window.tjcStore.set("products_" + category, enhancedProducts);
+                  console.log(`💾 [太疾驰·持久化] 已将【${category}】商品数据保存至 IndexedDB`);
+                }
               }
             } catch (e) {
               console.error("解析商品数据失败:", e, reply);
@@ -17873,8 +18095,7 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data)) {
                 setReviews(data);
               }
@@ -19390,9 +19611,19 @@ const T12Page = () => {
   };
 
   // 调用大模型生成商家数据
-  const fetchMerchants = async (category) => {
+  const fetchMerchants = async (category, forceRefresh = false) => {
     setIsLoadingMerchants(true);
     try {
+      const cacheKey = "merchants_" + category;
+      if (!forceRefresh && window.tjcStore) {
+        const cached = await window.tjcStore.get(cacheKey);
+        if (cached && Array.isArray(cached) && cached.length > 0) {
+          console.log(`📦 [太疾驰·持久化] 从 IndexedDB 快速加载【${category}】餐饮商家数据: ${cached.length} 条`);
+          setMerchants(cached);
+          setIsLoadingMerchants(false);
+          return;
+        }
+      }
       const worldContext = window.getWorldBookContext
         ? await window.getWorldBookContext()
         : "无特定背景设定";
@@ -19405,7 +19636,7 @@ const T12Page = () => {
                                     【当前客官挑选的分类】：${category}
 
                                     【任务】
-                                    请生成10到15个符合"${category}"分类的东汉外卖商家数据。
+                                    请生成6到8个符合"${category}"分类的东汉外卖商家数据。
                                     要求：
                                     1. 食物必须是东汉时期真实存在的（如：胡饼、肉羹、酪、麦饭、炙肉等，不可出现辣椒、西红柿、玉米、土豆等明清才传入的食材）。
                                     2. 店名要极具现代网感或谐音梗（如"祢雪冰衡"、"张飞精肉"、"孟德甄选"、"广陵王私厨"等）。
@@ -19436,10 +19667,23 @@ const T12Page = () => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data)) {
-                setMerchants(data);
+                console.log("🎨 [MCP·太疾驰餐饮] 正在为东汉美食商家生成 Pollinations AI 美食实拍画卷...");
+                const enhancedMerchants = data.map((item, mIdx) => {
+                  const prompt = window.getTjcItemPrompt ? window.getTjcItemPrompt(item, category) : "delicious authentic Chinese gourmet food dish, food photography, 8k, no text";
+                  const seed = Math.floor(Math.random() * 1000000) + mIdx * 137;
+                  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?width=600&height=400&seed=${seed}&nologo=true&enhance=false&model=flux`;
+                  return {
+                    ...item,
+                    image: item.image || imageUrl
+                  };
+                });
+                setMerchants(enhancedMerchants);
+                if (window.tjcStore) {
+                  window.tjcStore.set("merchants_" + category, enhancedMerchants);
+                  console.log(`💾 [太疾驰·持久化] 已将【${category}】餐饮商家数据保存至 IndexedDB`);
+                }
               }
             } catch (e) {
               console.error("解析商家数据失败:", e, reply);
@@ -19545,8 +19789,7 @@ const T12Page = () => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data)) {
                 setReviews(data);
               }
@@ -38051,8 +38294,7 @@ const T9Page = () => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               setCurrentBreakdown({
                 id: Date.now(),
                 charName: taCharacter.name,
@@ -43033,8 +43275,7 @@ const T13MapPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length > 0) {
                 // 生成更稀疏的坐标分布，确保地点间距更宽
                 const generateSparseCoordinates = (count) => {
@@ -45385,8 +45626,7 @@ const T13EmperorPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length > 0) {
                 setPoliticalNews(data);
                 setCurrentNewsIndex(0);
@@ -55254,8 +55494,7 @@ const T13LearningPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data)) {
                 // 处理头像逻辑，如果是长串Base64或十六进制颜色，直接用；若是纯词则转Dicebear
                 const formattedTeachers = data.map((t) => {
@@ -55425,8 +55664,7 @@ const T13LearningPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
 
               if (data && data.flashcards && data.flashcards.length > 0) {
                 // 成功解析，存入当前课程的对应状态
@@ -55555,8 +55793,7 @@ const T13LearningPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length === 6) {
                 setLeaderboardData(data);
                 setSelectedRankUser(data[0]); // 默认选中第一名
@@ -57153,8 +57390,7 @@ const StarChartPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length > 0) {
                 setTributesList(data);
               } else {
@@ -57243,8 +57479,7 @@ const StarChartPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
 
               setConstellation(newConstellation);
               setStatistics(data.statistics || "");
@@ -57730,8 +57965,7 @@ const ButterflyEffectPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length === 16) {
                 // 将数据通过 id 排序以便匹配
                 data.sort((a, b) => a.id - b.id);
@@ -58368,8 +58602,7 @@ const SandTablePage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length > 0) {
                 setSimulationSteps(data);
                 setCurrentStep(0); // 开始第一步
@@ -58512,8 +58745,7 @@ const SandTablePage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length >= 2) {
                 // 补充唯一ID，防止重复
                 const inventoryData = data.map((item, idx) => ({
@@ -72088,8 +72320,7 @@ const RelativeDeductionPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length > 0) {
                 setContentOptions(data);
                 setShowWheel(true);
@@ -72693,8 +72924,7 @@ const OddFarmPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data)) {
                 const newOrders = data.map((o, idx) => ({
                   ...o,
@@ -72879,8 +73109,7 @@ const OddFarmPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
 
               // 将 AI 输出的 stage 转化为组件可读的 boolean 状态
               const parsedField = data.farm.map((item) => {
@@ -80756,7 +80985,9 @@ ${docContext}
       if (savedImgGenCfg) imgGenCfg = JSON.parse(savedImgGenCfg);
     } catch (e) {}
 
-    if (imgGenCfg && imgGenCfg.apiKey && imgGenCfg.enableChatDraw !== false) {
+    const isImgGenEnabled = imgGenCfg && imgGenCfg.enabled !== false && (imgGenCfg.apiKey || (window.mcpHub && window.mcpHub.isMasterEnabled()));
+
+    if (isImgGenEnabled && imgGenCfg?.enableChatDraw !== false) {
       systemInstruction += `
 【AI 绘画与发送图片功能】
 你具备 AI 绘画与发送自拍/照片/画作的能力！当用户要求你看照片、画画、生成图片，或者在聊天中你想向用户展示画作、自拍、当前场景风景、随手拍摄或送出的礼物时，请在回复中包含标签：[生成图片: 画面详细英文提示词]
@@ -81037,8 +81268,10 @@ ${docContext}
 
         let imagePromptToProcess = null;
         let isAiImageRequest = false;
-        const aiImageGenerateMatch = cleanReply.match(/\[(?:生成图片|画图|生图|photo|image)[:：]([\s\S]*?)\]/i);
-        const imageSearchMatch = cleanReply.match(/\[搜索图片[:：]([\s\S]*?)\]/i);
+        const aiImageGenerateMatch = cleanReply.match(/\[\s*(?:生成图片|画图|生图|图片|图\s*片|photo|image|draw|img)\s*[:：]\s*([\s\S]*?)\]/i);
+        const imageSearchMatch = cleanReply.match(/\[\s*搜索图片\s*[:：]\s*([\s\S]*?)\]/i);
+        const markdownImageMatch = cleanReply.match(/!\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/i);
+        const directImageUrlMatch = cleanReply.match(/(https:\/\/(?:image\.pollinations\.ai\/prompt\/[^\s\n"'\)\]]+|[^\s\n"'\)\]]+\.(?:png|jpg|jpeg|webp|gif)(?:\?[^\s\n"'\)\]]*)?))/i);
 
         if (aiImageGenerateMatch) {
           imagePromptToProcess = aiImageGenerateMatch[1].trim();
@@ -81046,8 +81279,76 @@ ${docContext}
           cleanReply = cleanReply.replace(aiImageGenerateMatch[0], "").trim();
         } else if (imageSearchMatch) {
           imagePromptToProcess = imageSearchMatch[1].trim();
-          isAiImageRequest = !!(localStorage.getItem("image_generation_api_config"));
+          isAiImageRequest = true;
           cleanReply = cleanReply.replace(imageSearchMatch[0], "").trim();
+        } else if (markdownImageMatch) {
+          imagePromptToProcess = markdownImageMatch[2].trim();
+          isAiImageRequest = true;
+          cleanReply = cleanReply.replace(markdownImageMatch[0], "").trim();
+        } else if (directImageUrlMatch) {
+          imagePromptToProcess = directImageUrlMatch[1].trim();
+          isAiImageRequest = true;
+          cleanReply = cleanReply.replace(directImageUrlMatch[0], "").trim();
+          cleanReply = cleanReply.replace(/\[\s*\]/g, "").trim();
+        }
+
+        // 朋友圈动态标签抓取与自动发布 (100% 自动执行)
+        const momentTagMatch = cleanReply.match(/\[\s*(?:发布朋友圈|发朋友圈|朋友圈动态|发动态|朋友圈|post_moment)\s*[:：]\s*([\s\S]*?)\]/i);
+        let hasTriggeredMoment = false;
+
+        if (momentTagMatch && momentTagMatch[1]) {
+          hasTriggeredMoment = true;
+          const rawMomentBody = momentTagMatch[1].trim();
+          cleanReply = cleanReply.replace(momentTagMatch[0], "").trim();
+          
+          let momentContent = rawMomentBody;
+          let momentImagePrompt = "";
+          if (rawMomentBody.includes("|")) {
+            const parts = rawMomentBody.split("|");
+            momentContent = parts[0].trim();
+            momentImagePrompt = parts.slice(1).join("|").trim();
+          } else if (/配图[:：]/i.test(rawMomentBody)) {
+            const parts = rawMomentBody.split(/配图[:：]/i);
+            momentContent = parts[0].trim();
+            momentImagePrompt = parts[1].trim();
+          }
+
+          if (window.mcpHub) {
+            window.mcpHub.executeTool("publish_moment", {
+              content: momentContent,
+              imagePrompt: momentImagePrompt
+            }, {
+              character: chatData?.name || chatData?.profile?.name || "名士",
+              characterId: chatData?.id
+            }).catch(e => console.warn("标签自动发布朋友圈异常:", e));
+          }
+        }
+
+        // 意图兜底嗅探：如果本轮用户明确要求发朋友圈/发动态，但模型没打标签也没调工具，自动兜底抓取发布！
+        const userLastText = lastUserMsg?.text || (messages && messages.length > 0 ? messages[messages.length - 1].text : "");
+        if (!hasTriggeredMoment && userLastText && /(?:发|更新|发条|发个|分享到|晒).*(?:朋友圈|动态|圈子|圈)/i.test(userLastText)) {
+          let extractedMomentText = "";
+          const quoteMatch = cleanReply.match(/“([^”]{4,200})”/) || cleanReply.match(/"([^"]{4,200})"/);
+          if (quoteMatch && quoteMatch[1]) {
+            extractedMomentText = quoteMatch[1].trim();
+          } else {
+            extractedMomentText = cleanReply
+              .replace(/^(?:好[啊呀的嗯]?[，。！\s]*)*(?:我[这就去已经]*(?:发|更新|分享)[了过]*(?:朋友圈|动态|圈子)?[：:，。\s]*)/i, "")
+              .replace(/【.*?】/g, "")
+              .trim();
+          }
+          if (extractedMomentText && extractedMomentText.length >= 2 && extractedMomentText.length <= 300) {
+            console.log("[MCP意图兜底] 嗅探到用户要求发朋友圈，自动抓取正文执行发布:", extractedMomentText);
+            if (window.mcpHub) {
+              window.mcpHub.executeTool("publish_moment", {
+                content: extractedMomentText,
+                imagePrompt: imagePromptToProcess || ""
+              }, {
+                character: chatData?.name || chatData?.profile?.name || "名士",
+                characterId: chatData?.id
+              }).catch(e => console.warn("兜底自动发布朋友圈异常:", e));
+            }
+          }
         }
 
         const isLastMsgCallRequest = (historyList) => {
@@ -86529,8 +86830,7 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
 
               if (data.lines) {
                 const newScriptLines = data.lines.map((line) => ({
@@ -90544,6 +90844,24 @@ ${userMomentsList.length > 0
 
 // ==================== T8 朋友圈复刻页面 (AI 动态生成版) ====================
 const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
+  // 监听全局朋友圈动态更新事件，实现即时无缝刷新
+  React.useEffect(() => {
+    const handleMomentsUpdated = (e) => {
+      try {
+        const raw = localStorage.getItem("t8_moments");
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed)) setMoments(parsed);
+        } else if (e.detail?.moment) {
+          setMoments(prev => [e.detail.moment, ...prev.filter(m => m.id !== e.detail.moment.id)]);
+        }
+      } catch (err) {
+        console.warn("实时刷新朋友圈失败:", err);
+      }
+    };
+    window.addEventListener("momentsUpdated", handleMomentsUpdated);
+    return () => window.removeEventListener("momentsUpdated", handleMomentsUpdated);
+  }, []);
   const { useState, useEffect } = React;
   const [selectedCharForSpace, setSelectedCharForSpace] = useState(null);
   const [moments, setMoments] = useState([]);
@@ -90926,15 +91244,13 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
                 };
                 let imageUrl = null;
 
-                // 如果配置了 AI 文生图，优先使用 AI 文生图
-                const savedImgGenCfg = localStorage.getItem("image_generation_api_config");
-                if (savedImgGenCfg && typeof window.generateAIImage === "function") {
+                // 优先使用 AI 生图 (自动支持商业 API 或免费 Pollinations Flux 引擎)
+                if (typeof window.generateAIImage === "function") {
                   try {
-                    const parsedImgCfg = JSON.parse(savedImgGenCfg);
-                    if (parsedImgCfg && parsedImgCfg.apiKey && parsedImgCfg.url) {
-                      const imgPrompt = item.imageKeyword ? `high quality illustration, aesthetic, ${item.imageKeyword}` : `aesthetic photography, scenery, ${item.text.substring(0, 30)}`;
-                      imageUrl = await window.generateAIImage(imgPrompt);
-                    }
+                    const imgPrompt = item.imageKeyword 
+                      ? `high quality illustration, traditional Chinese aesthetic, scenery, ${item.imageKeyword}, masterpiece, no text` 
+                      : `aesthetic photography, ancient Chinese scenery, landscape, ${item.text.substring(0, 30)}, masterpiece, no text`;
+                    imageUrl = await window.generateAIImage(imgPrompt);
                   } catch (imgGenErr) {
                     console.warn("朋友圈 AI 生图失败，回退至图库搜索:", imgGenErr);
                   }
@@ -106572,7 +106888,8 @@ const ImageGenerationSettingsPage = ({ onClose }) => {
     try {
       const url = await window.generateAIImage(testPrompt.trim(), {
         model: config.model,
-        size: config.size
+        size: config.size,
+        ignoreDisabled: true,
       });
       const costSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
       setTestTime(costSeconds);
@@ -107277,8 +107594,7 @@ ${worldContext}
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (data.details && Array.isArray(data.details)) {
                 setVerifyResult({
                   isCorrupt: isCorrupt,
@@ -107480,8 +107796,7 @@ ${worldContext}
           null,
           async (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length > 0) {
                 setRecommends(data);
                 await dbManager.set("charity_projects", JSON.stringify(data));
@@ -114325,8 +114640,7 @@ const MasterApp = () => {
           null,
           async (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
 
               setMusicAIBubble(data.reply);
 
@@ -114886,8 +115200,7 @@ const MasterApp = () => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data)) {
                 const fallbackColors = [
                   "#8C9DB0",
