@@ -75,15 +75,16 @@
     },
     {
       name: "record_character_memo",
-      displayName: "随身备忘录写入",
+      displayName: "随身备忘录与日历写注",
       icon: "ph-note-pencil",
-      category: "动向与起居",
-      description: "角色在对话中收到主公嘱托、发现了重要情报或有了私密心事时，主动将其写入自己的随身备忘录。",
+      category: "动向与日程",
+      description: "当角色在对话中收到主公嘱托、交代要务、商定行程或发现重要情报时，主动将其记入自己的随身备忘录，并同步在主公的【我的日历】中建立注有【xxx写注】的专属日程待办。",
       inputSchema: {
         type: "object",
         properties: {
-          title: { type: "string", description: "备忘录简明标题，如'提醒主公添衣'、'密查宛城暗桩账册'" },
-          content: { type: "string", description: "备忘录详细内容与所思所虑" },
+          title: { type: "string", description: "备忘与日程简明标题，如'城南驿站接应宛城线人'、'提醒主公添衣'" },
+          content: { type: "string", description: "备忘录与日历日程详细内容、嘱托细节与安排" },
+          timeStr: { type: "string", description: "执行时间或时辰，如'明日辰时'、'三日后申时'、'今晚子夜'，默认为'明日辰时'" },
           tag: { type: "string", description: "备忘分类标签，如'提醒'、'密谋'、'起居'、'要务'等" }
         },
         required: ["title", "content"]
@@ -93,6 +94,7 @@
         const charName = context?.character || "名士";
         const cacheKey = `fangtian_dynamics_${charName}`;
         try {
+          // 1. 写入水镜名士随身备忘录
           let dynData = { memos: [], assets: [] };
           const raw = localStorage.getItem(cacheKey);
           if (raw) {
@@ -102,7 +104,7 @@
 
           const newMemo = {
             id: Date.now(),
-            tag: args.tag || "备忘",
+            tag: args.tag || "要务",
             time: "刚刚 (对话自动记入)",
             title: args.title,
             content: args.content
@@ -110,12 +112,70 @@
 
           dynData.memos.unshift(newMemo);
           localStorage.setItem(cacheKey, JSON.stringify(dynData));
+
+          // 2. 真实同步写入【我的日历·进行之事/日程】(calendarStore / cached_calendar_tasks)
+          let calendarTasks = {
+            已毕之事: [],
+            进行之事: [],
+            未竟之事: []
+          };
+
+          if (window.calendarStore) {
+            try {
+              const loaded = await window.calendarStore.getTasks();
+              if (loaded && typeof loaded === "object") {
+                calendarTasks = { ...calendarTasks, ...loaded };
+              }
+            } catch (e) {}
+          } else {
+            const rawCal = localStorage.getItem("cached_calendar_tasks");
+            if (rawCal) {
+              try { calendarTasks = { ...calendarTasks, ...JSON.parse(rawCal) }; } catch (e) {}
+            }
+          }
+
+          if (!Array.isArray(calendarTasks["进行之事"])) {
+            calendarTasks["进行之事"] = [];
+          }
+
+          const now = new Date();
+          const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+          const taskTime = args.timeStr || "明日辰时 (07:00 ~ 09:00)";
+          const taskDay = String(tomorrow.getDate());
+          const taskMonth = tomorrow.getMonth();
+          const taskYear = tomorrow.getFullYear();
+
+          const newCalendarTask = {
+            id: Date.now(),
+            title: args.title || "待办日程",
+            subtitle: `【${charName}写注】`,
+            time: taskTime,
+            year: taskYear,
+            month: taskMonth,
+            day: taskDay,
+            description: args.content || "主公特嘱要务，已由名士亲自拟注备忘。",
+            progress: 0,
+            characterId: context?.characterId || null,
+            noteBy: `${charName}写注`,
+            tag: `${charName}写注`
+          };
+
+          // 插入到【进行之事】首位
+          calendarTasks["进行之事"].unshift(newCalendarTask);
+
+          if (window.calendarStore) {
+            await window.calendarStore.saveTasks(calendarTasks);
+          } else {
+            localStorage.setItem("cached_calendar_tasks", JSON.stringify(calendarTasks));
+            window.dispatchEvent(new CustomEvent("calendar_tasks_updated", { detail: calendarTasks }));
+          }
+
           return {
             status: "success",
-            message: `已成功将条目「${args.title}」记入【${charName}】的随身备忘录中。`
+            message: `已成功将条目「${args.title}」记入【${charName}】的随身备忘录，并已同步登记至主公的【我的日历·进行之事】（标注：${charName}写注）。`
           };
         } catch (err) {
-          return { error: `写入备忘录失败: ${err.message}` };
+          return { error: `写入备忘与日历失败: ${err.message}` };
         }
       }
     },
