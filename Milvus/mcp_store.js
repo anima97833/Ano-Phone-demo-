@@ -142,6 +142,7 @@
         const charName = context?.character || "名士";
         const cacheKey = `fangtian_orders_${charName}`;
         try {
+          // 1. 同步写入方天水镜购物记录
           let orders = [];
           const raw = localStorage.getItem(cacheKey);
           if (raw) {
@@ -156,19 +157,73 @@
             quantity: args.quantity || "1 件",
             cost: args.cost,
             recipient: args.recipient,
-            status: "已派达·由密探亲手奉上",
+            status: "太疾驰加急快马派送中",
             time: "刚刚 (对话自动采办)",
             reason: args.reason
           };
-
           orders.unshift(newOrder);
           localStorage.setItem(cacheKey, JSON.stringify(orders));
+
+          // 2. 真实同步写入【太疾驰·订单与配送系统】(deliveryOrderStore / tjc_delivery_orders)
+          const now = Date.now();
+          const durationMinutes = 6; // 6分钟内快马送达，留足倒计时与催单时间
+          const deliveryItem = {
+            id: `item_${now}`,
+            name: args.itemName,
+            category: args.category || "名士私赠",
+            priceStr: args.cost,
+            desc: args.reason || `【${charName}】情深意切之赠`,
+            count: 1,
+            giver: charName
+          };
+
+          const orderPayload = {
+            merchantName: `太疾驰·【${charName}】私采专线`,
+            merchantLocation: "洛阳繁华东市",
+            userAddress: "广陵王府·听雨阁",
+            courier: {
+              name: "太疾驰加急快马·戴宗",
+              avatar: "https://api.dicebear.com/7.x/bottts/svg?seed=TaiJiChi",
+              vehicle: "八百里加急快马",
+              rating: 5.0,
+              phone: "传讯灵佩 #8888"
+            },
+            items: [deliveryItem],
+            totalPriceStr: args.cost,
+            totalBase: 0,
+            payMethod: "friend_pay",
+            payerRoleName: charName,
+            durationMinutes: durationMinutes,
+            status: "delivering"
+          };
+
+          if (window.deliveryOrderStore) {
+            await window.deliveryOrderStore.addOrder(orderPayload);
+          } else {
+            const rawDelivery = localStorage.getItem("tjc_delivery_orders");
+            let deliveryOrders = [];
+            if (rawDelivery) {
+              try { deliveryOrders = JSON.parse(rawDelivery); } catch (e) {}
+            }
+            if (!Array.isArray(deliveryOrders)) deliveryOrders = [];
+            deliveryOrders.unshift({
+              id: `TJC_${now}_${Math.random().toString(36).substr(2, 6).toUpperCase()}`,
+              orderTime: now,
+              estimatedDeliveryTime: now + durationMinutes * 60 * 1000,
+              durationMinutes: durationMinutes,
+              rushCount: 0,
+              ...orderPayload
+            });
+            localStorage.setItem("tjc_delivery_orders", JSON.stringify(deliveryOrders));
+            window.dispatchEvent(new CustomEvent("deliveryOrdersUpdated"));
+          }
+
           return {
             status: "success",
-            message: `已成功在太疾驰商城为【${args.recipient}】登记购置「${args.itemName}」，消耗【${args.cost}】。`
+            message: `已成功在太疾驰商城为【${args.recipient}】生成加急快马配送订单「${args.itemName}」，正在火速派送中！`
           };
         } catch (err) {
-          return { error: `记账失败: ${err.message}` };
+          return { error: `太疾驰下单记账失败: ${err.message}` };
         }
       }
     },
