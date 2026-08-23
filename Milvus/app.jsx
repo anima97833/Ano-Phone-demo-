@@ -37928,6 +37928,25 @@ const T9Page = () => {
   const [isGuessGenerating, setIsGuessGenerating] = useState(false);
   const [showScoreBoard, setShowScoreBoard] = useState(false);
 
+  // 8. 旧日食谱功能状态 (Ancient Cuisine & Recipes - 100% 离线免API)
+  const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [currentRecipe, setCurrentRecipe] = useState(null);
+  const [recipeDialogue, setRecipeDialogue] = useState("");
+  const [recipeHistory, setRecipeHistory] = useState([]);
+  const [recipeSearchKw, setRecipeSearchKw] = useState("");
+  const [recipeTab, setRecipeTab] = useState("ask");
+  const [cookNote, setCookNote] = useState("");
+  const [recipeScore, setRecipeScore] = useState(0);
+
+  // 7. 飞花传令功能状态 (Feihualing Poetry Game - 100% 离线免API)
+  const [showFeihuaModal, setShowFeihuaModal] = useState(false);
+  const [feihuaWord, setFeihuaWord] = useState("月");
+  const [feihuaHistory, setFeihuaHistory] = useState([]);
+  const [feihuaInput, setFeihuaInput] = useState("");
+  const [feihuaScore, setFeihuaScore] = useState({ user: 0, ta: 0, rounds: 0 });
+  const [showFeihuaScoreBoard, setShowFeihuaScoreBoard] = useState(false);
+  const [feihuaFeedback, setFeihuaFeedback] = useState("");
+
   // 6. 我画你猜功能状态 (Draw & Guess)
   const [showDrawGuessGame, setShowDrawGuessGame] = useState(false);
   const [drawGuessState, setDrawGuessState] = useState({
@@ -38203,6 +38222,80 @@ const T9Page = () => {
       );
     }
   }, [drawGuessState, taCharacter?.id]);
+
+  // 7. 飞花传令数据隔离重载 (按伴侣 ID)
+  useEffect(() => {
+    if (taCharacter?.id) {
+      const savedFeihua = localStorage.getItem(`t9_feihua_game_${taCharacter.id}`);
+      if (savedFeihua) {
+        try {
+          const parsed = JSON.parse(savedFeihua);
+          setFeihuaWord(parsed.word || "月");
+          setFeihuaHistory(parsed.history || []);
+          setFeihuaScore(parsed.score || { user: 0, ta: 0, rounds: 0 });
+        } catch (e) {
+          setFeihuaWord("月");
+          setFeihuaHistory([]);
+          setFeihuaScore({ user: 0, ta: 0, rounds: 0 });
+        }
+      } else {
+        setFeihuaWord("月");
+        setFeihuaHistory([]);
+        setFeihuaScore({ user: 0, ta: 0, rounds: 0 });
+      }
+    }
+  }, [taCharacter?.id]);
+
+  // 飞花传令数据保存 (按伴侣 ID)
+  useEffect(() => {
+    if (taCharacter?.id && feihuaScore.rounds >= 0) {
+      localStorage.setItem(
+        `t9_feihua_game_${taCharacter.id}`,
+        JSON.stringify({
+          word: feihuaWord,
+          history: feihuaHistory,
+          score: feihuaScore,
+        }),
+      );
+    }
+  }, [feihuaWord, feihuaHistory, feihuaScore, taCharacter?.id]);
+
+  // 8. 旧日食谱数据隔离重载 (按伴侣 ID)
+  useEffect(() => {
+    if (taCharacter?.id) {
+      const savedRecipe = localStorage.getItem(`t9_recipe_book_${taCharacter.id}`);
+      if (savedRecipe) {
+        try {
+          const parsed = JSON.parse(savedRecipe);
+          setRecipeHistory(parsed.history || []);
+          setRecipeScore(parsed.score || 0);
+          if (parsed.current) setCurrentRecipe(parsed.current);
+          if (parsed.dialogue) setRecipeDialogue(parsed.dialogue);
+        } catch (e) {
+          setRecipeHistory([]);
+          setRecipeScore(0);
+        }
+      } else {
+        setRecipeHistory([]);
+        setRecipeScore(0);
+      }
+    }
+  }, [taCharacter?.id]);
+
+  // 旧日食谱数据保存 (按伴侣 ID)
+  useEffect(() => {
+    if (taCharacter?.id) {
+      localStorage.setItem(
+        `t9_recipe_book_${taCharacter.id}`,
+        JSON.stringify({
+          history: recipeHistory,
+          score: recipeScore,
+          current: currentRecipe,
+          dialogue: recipeDialogue,
+        }),
+      );
+    }
+  }, [recipeHistory, recipeScore, currentRecipe, recipeDialogue, taCharacter?.id]);
 
   // 5. 愿望清单数据隔离重载
   useEffect(() => {
@@ -38728,6 +38821,149 @@ ${rpTexts ? rpTexts + '\n' : ''}${giftTexts ? giftTexts + '\n' : ''}
     });
   };
 
+  // ================== 旧日食谱功能逻辑 (100% 离线免API) ==================
+  const handleSearchOnlineRecipe = async (dishName) => {
+    if (!dishName || !window.mcpCookbookEngine) return;
+    const res = await window.mcpCookbookEngine.fetchOnlineRecipe(dishName);
+    if (res) {
+      setCurrentRecipe(res);
+      setRecipeDialogue(`《${res.name}》的万道烹饪秘籍已为您调阅就绪！`);
+      setRecipeTab("ask");
+    }
+  };
+  const handleAskTaWhatToEat = (contextKeyword = "") => {
+    if (!window.mcpCuisineEngine) return;
+    const res = window.mcpCuisineEngine.recommendDish(taCharacter?.name || "名士", contextKeyword);
+    if (res) {
+      setCurrentRecipe(res.dish);
+      setRecipeDialogue(res.dialogue);
+      const newHistoryItem = {
+        id: Date.now(),
+        type: "ta_recommend",
+        dishName: res.dish.name,
+        dialogue: res.dialogue,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+      setRecipeHistory((prev) => [newHistoryItem, ...prev.slice(0, 19)]);
+      setRecipeScore((prev) => prev + 5);
+    }
+  };
+
+  const handleUserCookForTa = (dish) => {
+    if (!dish) return;
+    const note = cookNote.trim() || `为 ${taCharacter?.name || "TA"} 亲手精煨，温服可口。`;
+    const newHistoryItem = {
+      id: Date.now(),
+      type: "user_cook",
+      dishName: dish.name,
+      note: note,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+    setRecipeHistory((prev) => [newHistoryItem, ...prev.slice(0, 19)]);
+    setRecipeScore((prev) => prev + 15);
+    setCookNote("");
+    alert(`已为 ${taCharacter?.name || "名士"} 备好《${dish.name}》！知味默契 +15 分`);
+  };
+
+  // ================== 飞花传令功能逻辑 (100% 离线免API) ==================
+  const handleRandomFeihuaWord = () => {
+    const hotWords = ["月", "花", "风", "酒", "春", "山", "夜", "水", "云", "江", "心", "人", "雪", "秋", "日", "君", "情", "归"];
+    const filtered = hotWords.filter((w) => w !== feihuaWord);
+    const nextWord = filtered[Math.floor(Math.random() * filtered.length)];
+    setFeihuaWord(nextWord);
+    setFeihuaHistory([]);
+    setFeihuaFeedback(`令字已转为【${nextWord}】！请楼主先起句。`);
+  };
+
+  const handleUserSubmitFeihua = () => {
+    const userLine = feihuaInput.trim();
+    if (!userLine) return alert("请先吟出一句诗句！");
+    if (!userLine.includes(feihuaWord)) {
+      alert(`诗句中必须包含令字【${feihuaWord}】！`);
+      return;
+    }
+
+    if (feihuaHistory.some((h) => h.line === userLine)) {
+      alert("此句刚才已经吟诵过啦，请另赋一句新诗！");
+      return;
+    }
+
+    let matchedTitle = "古风诗赋";
+    let matchedAuthor = "楼主雅句";
+    let matchedDynasty = "先秦汉魏";
+    if (window.mcpPoetryEngine) {
+      const searchRes = window.mcpPoetryEngine.searchPoetry(userLine);
+      if (searchRes && searchRes.length > 0) {
+        matchedTitle = `《${searchRes[0].title}》`;
+        matchedAuthor = searchRes[0].author;
+        matchedDynasty = searchRes[0].dynasty;
+      }
+    }
+
+    const newUserItem = {
+      id: Date.now(),
+      sender: "user",
+      line: userLine,
+      title: matchedTitle,
+      author: matchedAuthor,
+      dynasty: matchedDynasty,
+      time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+    };
+
+    const nextHistory = [...feihuaHistory, newUserItem];
+    setFeihuaHistory(nextHistory);
+    setFeihuaInput("");
+
+    const usedLines = nextHistory.map((h) => h.line);
+    const taMatch = window.mcpPoetryEngine ? window.mcpPoetryEngine.matchFeihua(feihuaWord, usedLines) : null;
+
+    if (taMatch) {
+      const taItem = {
+        id: Date.now() + 1,
+        sender: "ta",
+        line: taMatch.line,
+        title: `《${taMatch.title}》`,
+        author: taMatch.author,
+        dynasty: taMatch.dynasty,
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+      };
+
+      const praiseList = [
+        `妙极！楼主这句对得清丽绝尘，且听我接这一联。`,
+        `好一句“${userLine}”！${taCharacter?.name || "名士"}以此句相和。`,
+        `灵犀相通！此令对得甚巧，且试接我这句。`,
+        `不愧是楼主，好诗才！且看这句可能入眼？`,
+      ];
+      const feedback = praiseList[Math.floor(Math.random() * praiseList.length)];
+
+      setTimeout(() => {
+        setFeihuaHistory((prev) => [...prev, taItem]);
+        setFeihuaScore((prev) => ({
+          user: prev.user + 10,
+          ta: prev.ta + 10,
+          rounds: prev.rounds + 1,
+        }));
+        setFeihuaFeedback(feedback);
+      }, 400);
+    } else {
+      setTimeout(() => {
+        setFeihuaScore((prev) => ({
+          user: prev.user + 20,
+          ta: prev.ta,
+          rounds: prev.rounds + 1,
+        }));
+        setFeihuaFeedback(`楼主才高八斗！关于令字【${feihuaWord}】，${taCharacter?.name || "名士"}甘拜下风！`);
+      }, 400);
+    }
+  };
+
+  const handleResetFeihua = () => {
+    if (window.confirm("确定要重开本轮飞花令吗？")) {
+      setFeihuaHistory([]);
+      setFeihuaFeedback("");
+    }
+  };
+
   // ================== 我画你猜功能逻辑 (Draw & Guess) ==================
   // 1. 名士挥毫作画 (TA画，我猜)
   const handleCharStartDraw = async () => {
@@ -39123,8 +39359,8 @@ JSON 格式示例：
     { title: "愿望清单", icon: "star", colorClass: "bg-morandi-4" },
     { title: "我问你猜", icon: "question", colorClass: "bg-morandi-5" },
     { title: "我画你猜", icon: "paint-brush-broad", colorClass: "bg-morandi-3" },
-    { title: "敬请期待", icon: "lock-key", colorClass: "bg-morandi-5" },
-    { title: "敬请期待", icon: "lock-key", colorClass: "bg-morandi-5" },
+    { title: "飞花传令", icon: "flower-lotus", colorClass: "bg-morandi-2" },
+    { title: "旧日食谱", icon: "bowl-food", colorClass: "bg-morandi-4" },
   ];
 
   return (
@@ -39150,18 +39386,17 @@ JSON 格式示例：
             {features.map((item, index) => (
               <div
                 key={index}
-                className={index < 6 ? `active-press ${item.colorClass}` : ""}
+                className={`active-press ${item.colorClass}`}
                 style={{
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
                   gap: "10px",
-                  background: index >= 6 ? "rgba(255,255,255,0.4)" : undefined,
                   padding: "16px 6px",
                   borderRadius: "20px",
                   boxShadow: "0 4px 12px rgba(140, 145, 123, 0.05)",
-                  cursor: index < 6 ? "pointer" : "not-allowed",
-                  opacity: index >= 6 ? 0.6 : 1,
+                  cursor: "pointer",
+                  opacity: 1,
                   border: "1px solid rgba(255,255,255,0.5)",
                 }}
                 onClick={() => {
@@ -39177,8 +39412,17 @@ JSON 格式示例：
                     setShowGuessGame(true);
                   } else if (index === 5) {
                     setShowDrawGuessGame(true);
-                  } else {
-                    alert("模块升级部署中，敬请期待！");
+                  } else if (index === 6) {
+                    setShowFeihuaModal(true);
+                  } else if (index === 7) {
+                    setShowRecipeModal(true);
+                    if (!currentRecipe && window.mcpCuisineEngine) {
+                      const initial = window.mcpCuisineEngine.recommendDish(taCharacter?.name || "名士");
+                      if (initial) {
+                        setCurrentRecipe(initial.dish);
+                        setRecipeDialogue(initial.dialogue);
+                      }
+                    }
                   }
                 }}
               >
@@ -39199,7 +39443,7 @@ JSON 格式示例：
                     className={`ph-fill ph-${item.icon}`}
                     style={{
                       fontSize: "22px",
-                      color: index < 6 ? "#8fa99d" : "#ccc",
+                      color: "#8fa99d",
                     }}
                   ></i>
                 </div>
@@ -41648,6 +41892,808 @@ JSON 格式示例：
                 <span style={{ fontSize: "10px", color: "#8C917B" }}>我</span>
               </div>
             </div>
+          </div>
+        </>
+      )}
+
+      {/* ================== 飞花传令弹窗 (Feihualing - 100% 离线免API) ================== */}
+      {showFeihuaModal && (
+        <>
+          <div
+            className="t9-companion-mask"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.55)",
+              zIndex: 1000,
+              backdropFilter: "blur(3px)",
+            }}
+            onClick={() => setShowFeihuaModal(false)}
+          ></div>
+          <div
+            className="t9-companion-modal no-scrollbar"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              borderTopLeftRadius: "28px",
+              borderTopRightRadius: "28px",
+              padding: "20px 20px 30px",
+              zIndex: 1001,
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.2)",
+              animation: "slideUp 0.3s ease-out",
+              background: "#FDFCF8",
+            }}
+          >
+            {/* 顶栏 */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "17px",
+                  fontWeight: "bold",
+                  color: "#5a5f4d",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <i className="ph-fill ph-flower-lotus" style={{ color: "#7FA393", fontSize: "20px" }}></i>
+                飞花传令 · 雅集对诗
+              </h2>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <button
+                  onClick={() => setShowFeihuaScoreBoard(!showFeihuaScoreBoard)}
+                  style={{
+                    padding: "5px 12px",
+                    background: "#EBF3EF",
+                    color: "#5A8F6D",
+                    border: "1px solid #B8D8C9",
+                    borderRadius: "12px",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                >
+                  雅集谱
+                </button>
+                <button
+                  onClick={() => setShowFeihuaModal(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: "24px",
+                    color: "#999",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* 雅集谱展开区 */}
+            {showFeihuaScoreBoard && (
+              <div
+                style={{
+                  background: "#FFF",
+                  border: "1px solid #EAE6D6",
+                  borderRadius: "16px",
+                  padding: "14px",
+                  marginBottom: "16px",
+                  display: "flex",
+                  justifyContent: "space-around",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.04)",
+                  animation: "fadeIn 0.2s",
+                }}
+              >
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "12px", color: "#8C917B" }}>{taCharacter?.name || "名士"} 诗韵</div>
+                  <div style={{ fontSize: "22px", fontWeight: "bold", color: "#D6724B" }}>{feihuaScore.ta}</div>
+                </div>
+                <div style={{ width: "1px", background: "#EAEAEA" }}></div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "12px", color: "#8C917B" }}>我 ({mePersona?.name || "楼主"}) 诗才</div>
+                  <div style={{ fontSize: "22px", fontWeight: "bold", color: "#5A8F6D" }}>{feihuaScore.user}</div>
+                </div>
+                <div style={{ width: "1px", background: "#EAEAEA" }}></div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "12px", color: "#8C917B" }}>令战回合</div>
+                  <div style={{ fontSize: "22px", fontWeight: "bold", color: "#7FA393" }}>{feihuaScore.rounds}</div>
+                </div>
+              </div>
+            )}
+
+            {/* 令字水墨木刻卡片 */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, #FAF7F2 0%, #F5EFEB 100%)",
+                borderRadius: "18px",
+                padding: "16px",
+                border: "1px solid #E8DFD3",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                <div
+                  style={{
+                    width: "48px",
+                    height: "48px",
+                    borderRadius: "14px",
+                    background: "#FFF",
+                    border: "2px solid #DDBAA8",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "24px",
+                    fontWeight: "bold",
+                    color: "#A26148",
+                    fontFamily: "serif, sans-serif",
+                    boxShadow: "0 2px 6px rgba(162,97,72,0.15)",
+                  }}
+                >
+                  {feihuaWord}
+                </div>
+                <div>
+                  <div style={{ fontSize: "14px", fontWeight: "bold", color: "#5A5F4D" }}>
+                    本轮飞花令字：【{feihuaWord}】
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#8C917B", marginTop: "2px" }}>
+                    吟诵含【{feihuaWord}】字之诗赋，双方轮流唱和
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "8px" }}>
+                <button
+                  onClick={handleRandomFeihuaWord}
+                  style={{
+                    padding: "6px 12px",
+                    borderRadius: "12px",
+                    background: "#FFF",
+                    border: "1px solid #DDBAA8",
+                    color: "#A26148",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.04)",
+                  }}
+                >
+                  换令字
+                </button>
+                {feihuaHistory.length > 0 && (
+                  <button
+                    onClick={handleResetFeihua}
+                    style={{
+                      padding: "6px 10px",
+                      borderRadius: "12px",
+                      background: "#FFF",
+                      border: "1px solid #EAEAEA",
+                      color: "#999",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    重开
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {/* 对诗卷轴流 */}
+            <div
+              style={{
+                background: "#FFF",
+                borderRadius: "18px",
+                padding: "16px",
+                border: "1px solid #EAE6D6",
+                minHeight: "240px",
+                maxHeight: "360px",
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                marginBottom: "16px",
+              }}
+              className="no-scrollbar"
+            >
+              {feihuaHistory.length === 0 ? (
+                <div style={{ textAlign: "center", padding: "40px 10px", color: "#AAA" }}>
+                  <i className="ph-duotone ph-feather" style={{ fontSize: "36px", color: "#7FA393", opacity: 0.6, marginBottom: "8px", display: "block" }}></i>
+                  <span>请楼主在下方输入一句含【{feihuaWord}】的诗句，开启本轮飞花令...</span>
+                </div>
+              ) : (
+                feihuaHistory.map((item, idx) => (
+                  <div
+                    key={item.id || idx}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: item.sender === "user" ? "flex-end" : "flex-start",
+                      animation: "fadeIn 0.2s",
+                    }}
+                  >
+                    <div style={{ fontSize: "11px", color: "#8C917B", marginBottom: "4px" }}>
+                      {item.sender === "user" ? `我 (${mePersona?.name || "楼主"})` : taCharacter?.name || "名士"} · {item.time}
+                    </div>
+                    <div
+                      style={{
+                        maxWidth: "85%",
+                        background: item.sender === "user" ? "#F5FAF7" : "#FAF7F2",
+                        border: item.sender === "user" ? "1px solid #B8D8C9" : "1px solid #E8DFD3",
+                        borderRadius: "14px",
+                        padding: "10px 14px",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
+                      }}
+                    >
+                      <div
+                        style={{
+                          fontSize: "14px",
+                          fontWeight: "500",
+                          color: "#3D3B38",
+                          fontFamily: "serif, sans-serif",
+                          lineHeight: "1.6",
+                        }}
+                      >
+                        {item.line.split(feihuaWord).map((seg, sIdx, arr) => (
+                          <React.Fragment key={sIdx}>
+                            {seg}
+                            {sIdx < arr.length - 1 && (
+                              <span style={{ color: "#A26148", fontWeight: "bold", borderBottom: "2px solid #A26148" }}>
+                                {feihuaWord}
+                              </span>
+                            )}
+                          </React.Fragment>
+                        ))}
+                      </div>
+                      <div
+                        style={{
+                          fontSize: "11px",
+                          color: "#8C917B",
+                          marginTop: "6px",
+                          textAlign: "right",
+                          fontStyle: "italic",
+                        }}
+                      >
+                        —— {item.dynasty ? `${item.dynasty} · ` : ""}{item.author} {item.title}
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            {/* 名士实时评赏 */}
+            {feihuaFeedback && (
+              <div
+                style={{
+                  background: "#FAF6F0",
+                  padding: "10px 14px",
+                  borderRadius: "14px",
+                  border: "1px dashed #DDBAA8",
+                  fontSize: "13px",
+                  color: "#6E5B4B",
+                  marginBottom: "14px",
+                  animation: "popIn 0.2s",
+                }}
+              >
+                【{taCharacter?.name || "名士"} 吟赏】: {feihuaFeedback}
+              </div>
+            )}
+
+            {/* 底部输入框与呈递 */}
+            <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+              <input
+                type="text"
+                value={feihuaInput}
+                onChange={(e) => setFeihuaInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter") handleUserSubmitFeihua(); }}
+                placeholder={`吟诵一句含【${feihuaWord}】的诗句（如：明明如${feihuaWord}...）`}
+                style={{
+                  flex: 1,
+                  padding: "12px 16px",
+                  borderRadius: "16px",
+                  border: "1px solid #EAEAEA",
+                  outline: "none",
+                  fontSize: "14px",
+                  color: "#5A5F4D",
+                  background: "#FFF",
+                }}
+              />
+              <button
+                onClick={handleUserSubmitFeihua}
+                disabled={!feihuaInput.trim()}
+                className="active-press"
+                style={{
+                  padding: "12px 20px",
+                  borderRadius: "16px",
+                  background: !feihuaInput.trim() ? "#E0E0E0" : "linear-gradient(135deg, #7FA393 0%, #5A8F6D 100%)",
+                  color: "#FFF",
+                  border: "none",
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                  cursor: !feihuaInput.trim() ? "not-allowed" : "pointer",
+                  boxShadow: "0 4px 10px rgba(90,143,109,0.25)",
+                }}
+              >
+                接令
+              </button>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ================== 旧日食谱弹窗 (Ancient Cuisine - 100% 离线免API) ================== */}
+      {showRecipeModal && (
+        <>
+          <div
+            className="t9-companion-mask"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.55)",
+              zIndex: 1000,
+              backdropFilter: "blur(3px)",
+            }}
+            onClick={() => setShowRecipeModal(false)}
+          ></div>
+          <div
+            className="t9-companion-modal no-scrollbar"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "92vh",
+              overflowY: "auto",
+              borderTopLeftRadius: "28px",
+              borderTopRightRadius: "28px",
+              padding: "20px 20px 30px",
+              zIndex: 1001,
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.2)",
+              animation: "slideUp 0.3s ease-out",
+              background: "#FDFCF8",
+            }}
+          >
+            {/* 顶栏 */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "14px",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "17px",
+                  fontWeight: "bold",
+                  color: "#5a5f4d",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <i className="ph-fill ph-bowl-food" style={{ color: "#D6724B", fontSize: "20px" }}></i>
+                旧日食谱 · 问膳与珍馐
+              </h2>
+              <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                <div
+                  style={{
+                    fontSize: "11px",
+                    color: "#A26148",
+                    background: "#F5EFEB",
+                    padding: "4px 10px",
+                    borderRadius: "12px",
+                    border: "1px solid #DDBAA8",
+                    fontWeight: "bold",
+                  }}
+                >
+                  知味值 {recipeScore}
+                </div>
+                <button
+                  onClick={() => setShowRecipeModal(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: "24px",
+                    color: "#999",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* 切换 Tab */}
+            <div
+              style={{
+                display: "flex",
+                background: "#EAE6D6",
+                borderRadius: "14px",
+                padding: "3px",
+                marginBottom: "16px",
+              }}
+            >
+              <button
+                onClick={() => setRecipeTab("ask")}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: "12px",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  border: "none",
+                  background: recipeTab === "ask" ? "#FFF" : "transparent",
+                  color: recipeTab === "ask" ? "#5A5F4D" : "#8C917B",
+                  cursor: "pointer",
+                  boxShadow: recipeTab === "ask" ? "0 2px 6px rgba(0,0,0,0.06)" : "none",
+                }}
+              >
+                问 TA 想吃什么
+              </button>
+              <button
+                onClick={() => setRecipeTab("all")}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: "12px",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  border: "none",
+                  background: recipeTab === "all" ? "#FFF" : "transparent",
+                  color: recipeTab === "all" ? "#5A5F4D" : "#8C917B",
+                  cursor: "pointer",
+                  boxShadow: recipeTab === "all" ? "0 2px 6px rgba(0,0,0,0.06)" : "none",
+                }}
+              >
+                御膳百味库
+              </button>
+              <button
+                onClick={() => setRecipeTab("history")}
+                style={{
+                  flex: 1,
+                  padding: "8px 0",
+                  borderRadius: "12px",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  border: "none",
+                  background: recipeTab === "history" ? "#FFF" : "transparent",
+                  color: recipeTab === "history" ? "#5A5F4D" : "#8C917B",
+                  cursor: "pointer",
+                  boxShadow: recipeTab === "history" ? "0 2px 6px rgba(0,0,0,0.06)" : "none",
+                }}
+              >
+                美食手账 ({recipeHistory.length})
+              </button>
+            </div>
+
+            {/* TAB 1: 问 TA 想吃什么 */}
+            {recipeTab === "ask" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {/* 快捷问询情境胶囊 */}
+                <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", alignItems: "center" }}>
+                  <span style={{ fontSize: "12px", color: "#8C917B" }}>问膳情境：</span>
+                  {[
+                    { label: "今日何所膳", kw: "" },
+                    { label: "微乏求安神", kw: "安神" },
+                    { label: "夜凉驱寒", kw: "寒" },
+                    { label: "午后品甜", kw: "甜" },
+                    { label: "酌酒微醺", kw: "酒" },
+                  ].map((btn, bIdx) => (
+                    <button
+                      key={bIdx}
+                      onClick={() => handleAskTaWhatToEat(btn.kw)}
+                      className="active-press"
+                      style={{
+                        padding: "4px 10px",
+                        borderRadius: "10px",
+                        fontSize: "11px",
+                        background: "#FAF7F2",
+                        border: "1px solid #DDBAA8",
+                        color: "#A26148",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* 名士心语气泡 */}
+                {recipeDialogue && (
+                  <div
+                    style={{
+                      background: "#FAF6F0",
+                      padding: "12px 14px",
+                      borderRadius: "16px",
+                      border: "1px dashed #DDBAA8",
+                      display: "flex",
+                      gap: "10px",
+                      alignItems: "center",
+                      animation: "popIn 0.2s",
+                    }}
+                  >
+                    <WaterMirrorAvatar avatar={taCharacter?.avatar} name={taCharacter?.name} size={36} />
+                    <div style={{ flex: 1, fontSize: "13px", color: "#6E5B4B", lineHeight: "1.5" }}>
+                      <strong>{taCharacter?.name || "名士"}</strong>: “{recipeDialogue}”
+                    </div>
+                  </div>
+                )}
+
+                {/* 推荐的食单卡片 */}
+                {currentRecipe && (
+                  <div
+                    style={{
+                      background: "#FFF",
+                      borderRadius: "18px",
+                      border: "1px solid #E8DFD3",
+                      padding: "16px",
+                      boxShadow: "0 4px 14px rgba(0,0,0,0.04)",
+                      animation: "fadeIn 0.25s",
+                    }}
+                  >
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: "8px" }}>
+                      <div>
+                        <div style={{ fontSize: "16px", fontWeight: "bold", color: "#3D3B38", display: "flex", alignItems: "center", gap: "6px" }}>
+                          <span>《{currentRecipe.name}》</span>
+                          <span style={{ fontSize: "11px", padding: "2px 8px", borderRadius: "8px", background: "#E8F1ED", color: "#5A8F6D", fontWeight: "bold" }}>
+                            {currentRecipe.category || "经典美味"}
+                          </span>
+                          {currentRecipe.cuisine && (
+                            <span style={{ fontSize: "11px", padding: "2px 6px", borderRadius: "6px", background: "#FDF0EC", color: "#D6724B" }}>
+                              {currentRecipe.cuisine}
+                            </span>
+                          )}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#8C917B", marginTop: "3px" }}>
+                          {currentRecipe.difficulty ? `难度：${currentRecipe.difficulty}` : ""} {currentRecipe.timeCost ? `· 耗时：${currentRecipe.timeCost}` : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: "12px", color: "#6E5B4B", background: "#FAF7F2", padding: "8px 12px", borderRadius: "10px", marginBottom: "12px", lineHeight: "1.5" }}>
+                      <strong>📝 风味要领：</strong>{currentRecipe.summary}
+                    </div>
+
+                    {/* 配料清单（精确克重） */}
+                    <div style={{ marginBottom: "12px", background: "#F9F8F5", padding: "10px 12px", borderRadius: "12px" }}>
+                      <div style={{ fontSize: "12px", fontWeight: "bold", color: "#5A5F4D", marginBottom: "4px" }}>🧂 用料清单（精准克重）：</div>
+                      <div style={{ fontSize: "12px", color: "#555", lineHeight: "1.6" }}>
+                        <strong>主料：</strong>{currentRecipe.ingredients?.main?.join("、") || "见步骤"}<br />
+                        {currentRecipe.ingredients?.sub && <><strong>辅料：</strong>{currentRecipe.ingredients.sub.join("、")}<br /></>}
+                        {currentRecipe.ingredients?.seasoning && <><strong>调味配比：</strong>{currentRecipe.ingredients.seasoning.join("、")}</>}
+                      </div>
+                    </div>
+
+                    {/* 防翻车小贴士 */}
+                    {currentRecipe.tips && (
+                      <div style={{ fontSize: "11px", color: "#A26148", background: "#FFF8F2", padding: "6px 10px", borderRadius: "8px", border: "1px dashed #E0C2B2", marginBottom: "12px", lineHeight: "1.4" }}>
+                        💡 <strong>防翻车要诀：</strong>{currentRecipe.tips}
+                      </div>
+                    )}
+
+                    {/* 烹饪步骤 */}
+                    <div style={{ marginBottom: "14px" }}>
+                      <div style={{ fontSize: "12px", fontWeight: "bold", color: "#5A5F4D", marginBottom: "6px" }}>🍳 保姆级烹饪步骤：</div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                        {currentRecipe.steps?.map((step, sIdx) => (
+                          <div key={sIdx} style={{ fontSize: "12px", color: "#444", lineHeight: "1.5", background: "#FAFAFA", padding: "6px 10px", borderRadius: "8px", borderLeft: "3px solid #D6724B" }}>
+                            {step}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* 楼主亲手烹制按钮 */}
+                    <div style={{ borderTop: "1px dashed #EAEAEA", paddingTop: "12px", display: "flex", gap: "8px" }}>
+                      <input
+                        type="text"
+                        value={cookNote}
+                        onChange={(e) => setCookNote(e.target.value)}
+                        placeholder={`为 ${taCharacter?.name || "TA"} 附一句下厨心语便签...`}
+                        style={{
+                          flex: 1,
+                          padding: "8px 12px",
+                          borderRadius: "12px",
+                          border: "1px solid #EAEAEA",
+                          fontSize: "12px",
+                          outline: "none",
+                          background: "#FAF7F2",
+                        }}
+                      />
+                      <button
+                        onClick={() => handleUserCookForTa(currentRecipe)}
+                        className="active-press"
+                        style={{
+                          padding: "8px 16px",
+                          borderRadius: "12px",
+                          background: "linear-gradient(135deg, #E68A64 0%, #D6724B 100%)",
+                          color: "#FFF",
+                          border: "none",
+                          fontSize: "12px",
+                          fontWeight: "bold",
+                          cursor: "pointer",
+                          boxShadow: "0 2px 6px rgba(214,114,75,0.25)",
+                        }}
+                      >
+                        洗手作羹汤
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* TAB 2: 御膳百味库 */}
+            {recipeTab === "all" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                {/* 搜索框 */}
+                <input
+                  type="text"
+                  value={recipeSearchKw}
+                  onChange={(e) => setRecipeSearchKw(e.target.value)}
+                  placeholder="检索食谱名、食材、功效（如：羊肉、安神、鲈鱼、桃花）..."
+                  style={{
+                    padding: "10px 14px",
+                    borderRadius: "14px",
+                    border: "1px solid #EAEAEA",
+                    fontSize: "13px",
+                    outline: "none",
+                    background: "#FFF",
+                  }}
+                />
+
+                {/* 品类分类快捷筛选 */}
+                <div style={{ display: "flex", gap: "6px", overflowX: "auto", paddingBottom: "2px" }} className="no-scrollbar">
+                  {["全部", "经典家常", "川菜", "甜点烘焙", "清心香饮", "东北菜", "鲁菜"].map((cat) => {
+                    const isSelected = cat === "全部" ? !recipeSearchKw : recipeSearchKw === cat;
+                    return (
+                      <button
+                        key={cat}
+                        onClick={() => setRecipeSearchKw(cat === "全部" ? "" : cat)}
+                        style={{
+                          padding: "4px 12px",
+                          borderRadius: "10px",
+                          fontSize: "11px",
+                          fontWeight: "bold",
+                          whiteSpace: "nowrap",
+                          border: isSelected ? "1px solid #D6724B" : "1px solid #EAEAEA",
+                          background: isSelected ? "#FDF0EC" : "#FFF",
+                          color: isSelected ? "#D6724B" : "#8C917B",
+                          cursor: "pointer",
+                        }}
+                      >
+                        {cat}
+                      </button>
+                    );
+                  })}
+                </div>
+                {recipeSearchKw.trim() && (
+                  <button
+                    onClick={() => handleSearchOnlineRecipe(recipeSearchKw.trim())}
+                    className="active-press"
+                    style={{
+                      width: "100%",
+                      padding: "10px",
+                      borderRadius: "12px",
+                      background: "linear-gradient(135deg, #FAF3E8 0%, #F5EFEB 100%)",
+                      border: "1px dashed #DDBAA8",
+                      color: "#A26148",
+                      fontSize: "13px",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "6px",
+                      boxShadow: "0 2px 6px rgba(162,97,72,0.08)",
+                    }}
+                  >
+                    <i className="ph-fill ph-magnifying-glass" style={{ fontSize: "16px" }}></i>
+                    全网调阅《{recipeSearchKw.trim()}》保姆级做法与克重
+                  </button>
+                )}
+
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  {window.mcpCookbookEngine &&
+                    window.mcpCookbookEngine.searchDishes(recipeSearchKw).map((dish) => (
+                      <div
+                        key={dish.id}
+                        style={{
+                          background: "#FFF",
+                          borderRadius: "14px",
+                          border: "1px solid #EAE6D6",
+                          padding: "12px 14px",
+                        }}
+                      >
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                          <span style={{ fontSize: "14px", fontWeight: "bold", color: "#3D3B38" }}>《{dish.name}》</span>
+                          <span style={{ fontSize: "11px", color: "#5A8F6D", background: "#E8F1ED", padding: "2px 6px", borderRadius: "6px" }}>
+                            {dish.category}
+                          </span>
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#666", lineHeight: "1.4", marginBottom: "8px" }}>
+                          {dish.summary}
+                        </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <span style={{ fontSize: "11px", color: "#8C917B" }}>{dish.dynasty} · {dish.source}</span>
+                          <button
+                            onClick={() => {
+                              setCurrentRecipe(dish);
+                              setRecipeDialogue(`今日若能品得此味《${dish.name}》，足慰平生。`);
+                              setRecipeTab("ask");
+                            }}
+                            style={{
+                              padding: "4px 10px",
+                              borderRadius: "8px",
+                              background: "#FAF7F2",
+                              border: "1px solid #DDBAA8",
+                              color: "#A26148",
+                              fontSize: "11px",
+                              fontWeight: "bold",
+                              cursor: "pointer",
+                            }}
+                          >
+                            选此菜问膳
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+
+            {/* TAB 3: 美食手账 */}
+            {recipeTab === "history" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {recipeHistory.length === 0 ? (
+                  <div style={{ textAlign: "center", padding: "40px 10px", color: "#AAA" }}>
+                    <i className="ph-duotone ph-book-open" style={{ fontSize: "36px", color: "#D6724B", opacity: 0.5, marginBottom: "8px", display: "block" }}></i>
+                    <span>暂无美食记录，快去问问 TA 想吃什么吧...</span>
+                  </div>
+                ) : (
+                  recipeHistory.map((item) => (
+                    <div
+                      key={item.id}
+                      style={{
+                        background: "#FFF",
+                        borderRadius: "14px",
+                        border: item.type === "user_cook" ? "1px solid #B8D8C9" : "1px solid #E8DFD3",
+                        padding: "12px 14px",
+                        animation: "fadeIn 0.2s",
+                      }}
+                    >
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                        <span style={{ fontSize: "13px", fontWeight: "bold", color: "#3D3B38" }}>
+                          {item.type === "user_cook" ? `楼主掌勺 · 《${item.dishName}》` : `${taCharacter?.name || "名士"}点单 · 《${item.dishName}》`}
+                        </span>
+                        <span style={{ fontSize: "11px", color: "#8C917B" }}>{item.time}</span>
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#666", lineHeight: "1.4" }}>
+                        {item.type === "user_cook" ? `便签：${item.note}` : `心语：“${item.dialogue}”`}
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
           </div>
         </>
       )}

@@ -1,5 +1,6 @@
 scratch/
 *.py
+!ao3_server.py
 *.ps1
 scratch_*
 bump_cache.js
