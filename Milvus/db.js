@@ -1,7 +1,7 @@
 
 // IndexedDB 数据库配置
 const DB_NAME = "t8_chat_db";
-const DB_VERSION = 16;
+const DB_VERSION = 50; // 全面升级数据库版本至 50，确保包含所有表和最新架构
 const STORES = {
   AVATARS: "avatars",
   USER_SETTINGS: "user_settings", // 存储用户设置，包括头像和背景
@@ -15,106 +15,140 @@ const STORES = {
   BOOKS: "books", // 存储书籍元数据
   BOOK_CONTENTS: "book_contents", // 存储书籍全文内容
   MUSIC_PLAYLIST: "music_playlist", // 存储音乐列表
-  EMOJIS: "emojis", // [新增] 存储用户自定义表情包
-  BACKPACK: "backpack", // ✅ 新增：背包存储
-  LOCKSCREEN: "lockscreen", // ✅ 新增：锁屏图片存储
+  EMOJIS: "emojis", // 存储用户自定义表情包
+  BACKPACK: "backpack", // 背包存储
+  LOCKSCREEN: "lockscreen", // 锁屏图片存储
+  DELIVERY_ORDERS: "delivery_orders", // 配送订单存储
+  MCP_TOOLS: "mcp_tools", // MCP 工具存储
+  MCP_LOGS: "mcp_logs", // MCP 调用日志
+  MCP_CACHE: "mcp_cache", // MCP 缓存
 };
 
 // 挂载到 window 方便全局使用
 if (typeof window !== "undefined") {
   window.STORES = STORES;
+  window.DB_VERSION = DB_VERSION;
+  window.DB_NAME = DB_NAME;
   window.openDB = openDB;
 }
 
-// 打开数据库连接
+// 统一辅助函数：在 onupgradeneeded 中确保所有 Store 都已完整创建
+function initAllStores(db) {
+  // 1. 头像存储
+  if (!db.objectStoreNames.contains(STORES.AVATARS)) {
+    db.createObjectStore(STORES.AVATARS, { keyPath: "id" });
+  }
+
+  // 2. 日记存储
+  if (!db.objectStoreNames.contains(STORES.DIARY)) {
+    db.createObjectStore(STORES.DIARY, { keyPath: "id" });
+  }
+
+  // 3. 用户设置存储 (包含背景、头像、系统配置)
+  if (!db.objectStoreNames.contains(STORES.USER_SETTINGS)) {
+    db.createObjectStore(STORES.USER_SETTINGS, { keyPath: "key" });
+  }
+
+  // 4. 聊天角色存储
+  if (!db.objectStoreNames.contains(STORES.CHAT_CHARACTERS)) {
+    db.createObjectStore(STORES.CHAT_CHARACTERS, { keyPath: "id" });
+  }
+
+  // 5. 聊天历史存储 (复合键 characterId + id，带索引)
+  if (!db.objectStoreNames.contains(STORES.CHAT_HISTORY)) {
+    const historyStore = db.createObjectStore(STORES.CHAT_HISTORY, {
+      keyPath: ["characterId", "id"],
+    });
+    historyStore.createIndex("by_character", "characterId", {
+      unique: false,
+    });
+  }
+
+  // 6. 世界书存储
+  if (!db.objectStoreNames.contains(STORES.WORLD_BOOK)) {
+    db.createObjectStore(STORES.WORLD_BOOK, { keyPath: "id" });
+  }
+
+  // 7. 关系数据存储
+  if (!db.objectStoreNames.contains(STORES.RELATIONSHIP)) {
+    db.createObjectStore(STORES.RELATIONSHIP, { keyPath: "id" });
+  }
+
+  // 8. 日历任务存储
+  if (!db.objectStoreNames.contains(STORES.CALENDAR)) {
+    db.createObjectStore(STORES.CALENDAR, { keyPath: "id" });
+  }
+
+  // 9. 区域数据存储
+  if (!db.objectStoreNames.contains(STORES.AREAS)) {
+    db.createObjectStore(STORES.AREAS, { keyPath: "id" });
+  }
+
+  // 10. 书籍元数据存储
+  if (!db.objectStoreNames.contains(STORES.BOOKS)) {
+    db.createObjectStore(STORES.BOOKS, { keyPath: "id" });
+  }
+
+  // 11. 书籍内容存储
+  if (!db.objectStoreNames.contains(STORES.BOOK_CONTENTS)) {
+    db.createObjectStore(STORES.BOOK_CONTENTS, { keyPath: "id" });
+  }
+
+  // 12. 音乐列表存储
+  if (!db.objectStoreNames.contains(STORES.MUSIC_PLAYLIST)) {
+    db.createObjectStore(STORES.MUSIC_PLAYLIST, { keyPath: "id" });
+  }
+
+  // 13. 表情包存储
+  if (!db.objectStoreNames.contains(STORES.EMOJIS)) {
+    db.createObjectStore(STORES.EMOJIS, { keyPath: "id" });
+  }
+
+  // 14. 背包存储
+  if (!db.objectStoreNames.contains(STORES.BACKPACK)) {
+    db.createObjectStore(STORES.BACKPACK, { keyPath: "id" });
+  }
+
+  // 15. 锁屏图片存储
+  if (!db.objectStoreNames.contains(STORES.LOCKSCREEN)) {
+    db.createObjectStore(STORES.LOCKSCREEN, { keyPath: "id" });
+  }
+
+  // 16. 配送订单存储
+  if (!db.objectStoreNames.contains(STORES.DELIVERY_ORDERS)) {
+    db.createObjectStore(STORES.DELIVERY_ORDERS, { keyPath: "id" });
+  }
+
+  // 17. MCP 工具存储
+  if (!db.objectStoreNames.contains(STORES.MCP_TOOLS)) {
+    db.createObjectStore(STORES.MCP_TOOLS, { keyPath: "name" });
+  }
+
+  // 18. MCP 日志存储
+  if (!db.objectStoreNames.contains(STORES.MCP_LOGS)) {
+    db.createObjectStore(STORES.MCP_LOGS, { keyPath: "id" });
+  }
+
+  // 19. MCP 缓存存储
+  if (!db.objectStoreNames.contains(STORES.MCP_CACHE)) {
+    db.createObjectStore(STORES.MCP_CACHE, { keyPath: "key" });
+  }
+}
+
+// 打开数据库连接 (支持自动升版与版本兼容自愈)
 function openDB() {
   return new Promise((resolve, reject) => {
-    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    let request;
+    try {
+      request = indexedDB.open(DB_NAME, DB_VERSION);
+    } catch (e) {
+      request = indexedDB.open(DB_NAME);
+    }
 
     request.onupgradeneeded = (event) => {
+      console.log(`[IndexedDB 升级] 从旧版本升级至版本 ${DB_VERSION}`);
       const db = event.target.result;
-
-      // 创建头像存储
-      if (!db.objectStoreNames.contains(STORES.AVATARS)) {
-        db.createObjectStore(STORES.AVATARS, { keyPath: "id" });
-      }
-
-      // 创建日记存储
-      if (!db.objectStoreNames.contains(STORES.DIARY)) {
-        db.createObjectStore(STORES.DIARY, { keyPath: "id" });
-      }
-
-      // 创建用户设置存储
-      if (!db.objectStoreNames.contains(STORES.USER_SETTINGS)) {
-        db.createObjectStore(STORES.USER_SETTINGS, { keyPath: "key" });
-      }
-
-      // 创建聊天角色存储
-      if (!db.objectStoreNames.contains(STORES.CHAT_CHARACTERS)) {
-        db.createObjectStore(STORES.CHAT_CHARACTERS, { keyPath: "id" });
-      }
-
-      // 创建聊天历史存储
-      if (!db.objectStoreNames.contains(STORES.CHAT_HISTORY)) {
-        // 使用复合键：characterId + messageId，确保唯一性
-        const historyStore = db.createObjectStore(STORES.CHAT_HISTORY, {
-          keyPath: ["characterId", "id"],
-        });
-        // 创建索引，以便按角色ID查询
-        historyStore.createIndex("by_character", "characterId", {
-          unique: false,
-        });
-      }
-
-      // 创建世界书存储
-      if (!db.objectStoreNames.contains(STORES.WORLD_BOOK)) {
-        db.createObjectStore(STORES.WORLD_BOOK, { keyPath: "id" });
-      }
-
-      // 创建关系数据存储
-      if (!db.objectStoreNames.contains(STORES.RELATIONSHIP)) {
-        db.createObjectStore(STORES.RELATIONSHIP, { keyPath: "id" });
-      }
-
-      // 创建日历任务存储
-      if (!db.objectStoreNames.contains(STORES.CALENDAR)) {
-        db.createObjectStore(STORES.CALENDAR, { keyPath: "id" });
-      }
-
-      // 创建区域数据存储
-      if (!db.objectStoreNames.contains(STORES.AREAS)) {
-        db.createObjectStore(STORES.AREAS, { keyPath: "id" });
-      }
-
-      // 创建书籍元数据存储
-      if (!db.objectStoreNames.contains(STORES.BOOKS)) {
-        db.createObjectStore(STORES.BOOKS, { keyPath: "id" });
-      }
-
-      // 创建书籍内容存储
-      if (!db.objectStoreNames.contains(STORES.BOOK_CONTENTS)) {
-        db.createObjectStore(STORES.BOOK_CONTENTS, { keyPath: "id" });
-      }
-
-      // 创建音乐列表存储
-      if (!db.objectStoreNames.contains(STORES.MUSIC_PLAYLIST)) {
-        db.createObjectStore(STORES.MUSIC_PLAYLIST, { keyPath: "id" });
-      }
-
-      // 创建表情包存储
-      if (!db.objectStoreNames.contains(STORES.EMOJIS)) {
-        db.createObjectStore(STORES.EMOJIS, { keyPath: "id" });
-      }
-
-      // ✅ 新增：创建背包存储
-      if (!db.objectStoreNames.contains(STORES.BACKPACK)) {
-        db.createObjectStore(STORES.BACKPACK, { keyPath: "id" });
-      }
-
-      // ✅ 新增：创建锁屏图片存储
-      if (!db.objectStoreNames.contains(STORES.LOCKSCREEN)) {
-        db.createObjectStore(STORES.LOCKSCREEN, { keyPath: "id" });
-      }
+      initAllStores(db);
     };
 
     request.onsuccess = (event) => {
@@ -122,11 +156,34 @@ function openDB() {
     };
 
     request.onerror = (event) => {
-      reject("数据库打开失败: " + event.target.error);
+      console.warn("[DB] 指定版本号打开失败，自动以现有最新版本回退打开:", event.target?.error);
+      try {
+        const fallbackReq = indexedDB.open(DB_NAME);
+        fallbackReq.onsuccess = (ev) => resolve(ev.target.result);
+        fallbackReq.onerror = (errEv) => reject("数据库打开失败: " + errEv.target.error);
+      } catch (fbErr) {
+        reject("数据库打开失败: " + event.target.error);
+      }
     };
   });
 }
 window.openDB = openDB;
+
+// 手动或代码调用的主动升级数据库函数
+window.upgradeIndexedDB = async function(targetVer) {
+  const currentDb = await openDB();
+  const nextVer = targetVer || Math.max(currentDb.version + 1, DB_VERSION);
+  currentDb.close();
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, nextVer);
+    req.onupgradeneeded = (e) => {
+      initAllStores(e.target.result);
+      console.log(`[IndexedDB 手动升级成功] 当前版本为: ${nextVer}`);
+    };
+    req.onsuccess = (e) => resolve(e.target.result);
+    req.onerror = (e) => reject(e.target.error);
+  });
+};
 
 // 音乐存储操作对象
 const musicStore = {

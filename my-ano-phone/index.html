@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Ano-Phone 智能手机模拟器 (纯静态免构建版)</title>
+    
+    <!-- 引入样式 -->
+    <link rel="stylesheet" href="css/style.css" />
+
+    <!-- 引入 React 18 & ReactDOM 18 UMD 生产版 CDN (完全无需 npm/Vite 构建) -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+    <!-- 引入本地持久化数据库与 MCP 扩展引擎 -->
+    <script src="js/db.js"></script>
+    <script src="js/mcp_store.js"></script>
+  </head>
+  <body>
+    <!-- React 挂载根节点 -->
+    <div id="root"></div>
+
+    <!-- 引入核心业务与界面交互逻辑 -->
+    <script src="js/app.js"></script>
+  </body>
+</html>

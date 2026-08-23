@@ -96112,15 +96112,12 @@ const T8Page = () => {
           }
         }
 
-        // 如果加载失败，使用空数组
+        // 如果加载失败，保持默认角色或现有状态，不执行清空
         if (!loaded) {
-          setChats([]);
-          console.log("没有找到保存的聊天角色，使用空数组");
+          console.log("未检测到已存储角色，保持现有阵容");
         }
       } catch (e) {
         console.error("加载聊天角色失败:", e);
-        // 发生错误时使用空数组
-        setChats([]);
       } finally {
         setLoading(false);
       }
@@ -96135,8 +96132,8 @@ const T8Page = () => {
 
   // 当 chats 发生变化时，自动保存到 IndexedDB
   useEffect(() => {
-    // 跳过初始化时的保存
-    if (chats === T8_INITIAL_CHATS) return;
+    // 严格安全保护：跳过初始状态、空数组或异常数据，防止误清空 IndexedDB
+    if (chats === T8_INITIAL_CHATS || !Array.isArray(chats) || chats.length === 0) return;
 
     const saveChats = async () => {
       try {
