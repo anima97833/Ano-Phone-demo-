@@ -59379,8 +59379,9 @@ const WaterMirrorAvatar = ({ avatar, name, size = 38, fallbackColor, style = {} 
 };
 
 // ==================== T13 方天水镜·人物专属视界组件 (传讯、动向、娱乐、购物) ====================
+// ==================== T13 方天水镜·人物专属视界组件 (日常、传讯、动向、娱乐、购物) ====================
 const T13CharacterMirrorView = ({ character, characterId, characterProfile, avatar, onBack }) => {
-  const [activeTab, setActiveTab] = React.useState("msg"); // msg | dynamics | play | shop
+  const [activeTab, setActiveTab] = React.useState("daily"); // daily | msg | dynamics | play | shop
   const [toastText, setToastText] = React.useState("");
 
   // 1. 传讯模块状态 (与他人的秘信记录 >= 5条，点击展开对话详情)
@@ -59404,6 +59405,11 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
   const [orders, setOrders] = React.useState([]);
   const [selectedOrder, setSelectedOrder] = React.useState(null);
   const [isLoadingOrders, setIsLoadingOrders] = React.useState(false);
+
+  // 5. [新增] 日常模块状态 (名士调用5大游戏工具：东汉驿路通、谶纬小摊、沙盘模拟器、列星、蝴蝶效应)
+  const [dailyData, setDailyData] = React.useState(null);
+  const [selectedDailyTool, setSelectedDailyTool] = React.useState(null);
+  const [isLoadingDaily, setIsLoadingDaily] = React.useState(false);
 
   // 提示弹窗
   const showToast = (txt) => {
@@ -59520,7 +59526,195 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
     return { worldContext, userContext, activeUser, chatHistoryContext };
   };
 
-  // ================= 1. 加载 / 生成【传讯】(>= 5条与他人的暗中通信) =================
+  // ================= 1. 加载 / 生成【日常】(东汉驿路通、谶纬小摊、沙盘模拟器、列星、蝴蝶效应) =================
+  const loadOrGenerateDaily = async (forceRefresh = false) => {
+    const cacheKey = `fangtian_daily_${character}`;
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && (parsed.yilutong || parsed.chenwei || parsed.shapan || parsed.liexing || parsed.hudie)) {
+            setDailyData(parsed);
+            return;
+          }
+        } catch (e) { }
+      }
+    }
+
+    setIsLoadingDaily(true);
+    showToast("方天通灵，正在探查名士调用各大奇物手札...");
+
+    try {
+      const { worldContext, userContext, activeUser, chatHistoryContext } = await getContexts();
+      const charInfo = getCharProfileText();
+
+      const prompt = `
+【世界观设定】
+${worldContext}
+
+${userContext}
+
+【密探/名士角色设定】
+角色姓名：${character}
+角色人设与说话风格：${charInfo}
+
+【该角色与用户在传讯页面的近期真实聊天记录】：
+${chatHistoryContext}
+
+【核心任务与生成规则】
+在日常生活中，角色【${character}】也会在手机/水镜中主动使用游戏界面的五大奇物工具（东汉驿路通、谶纬小摊、沙盘模拟器、列星、蝴蝶效应）。
+请以【${character}】的【第一人称专属语气与口吻】（完全贴合其性格特点、用词风格以及对${activeUser.name}的独特态度），生成其近期使用这五大工具的真实手札与调用记录！
+
+【五大工具调用要求】：
+1. 🐎【东汉驿路通 (yilutong)】：
+   - 记录该名士规划的一条行进/出巡/查探/奔赴见${activeUser.name}的驿道路线。
+   - 包含：起点、终点、途径核心驿站、行进时辰、名士亲笔行程随笔（用第一人称写下路上见闻、所思所想或因何奔波）。
+
+2. 🔮【谶纬小摊 (chenwei)】：
+   - 记录该名士在谶纬小摊前求问的一签一卦（可关于时局、财运、吉凶、两人的缘分或心结）。
+   - 包含：所问事由、摇得卦象/签文、解卦谶语、名士第一人称私密心境与批注（真实流露内心波澜或祈愿）。
+
+3. 🗺️【沙盘模拟器 (shapan)】：
+   - 记录该名士在沙盘模拟器上推演的一场军政防御、密探布控、粮道运转或局势推演。
+   - 包含：推演主题、战场/局势地形、敌我兵力布防、推演结论与胜率、名士第一人称战术批注与战略算计。
+
+4. 🌌【列星 (liexing)】：
+   - 记录该名士夜观天象、星盘命轨感应（如感应紫微、贪狼、七杀、文曲、天市垣等星曜异动）。
+   - 包含：观察主曜星宿、星象异动征兆、对天下或对${activeUser.name}命运之映射、名士第一人称观星手札。
+
+5. 🦋【蝴蝶效应 (hudie)】：
+   - 记录该名士用蝴蝶效应推演如果此前某一句话或某个微小抉择改变，命运将如何分歧。
+   - 包含：起源事件（可呼应近期聊天中的某件事）、推演的因果涟漪分支结局、名士第一人称的深思与感慨。
+
+6. 📜【今日手札总述 (dailyQuote)】：
+   - 该名士今日晨起/深夜写下的一两句总体心绪随笔（极富角色神韵，20-50字）。
+
+必须严格返回纯 JSON 对象格式（不要包含 \`\`\`json 标记）：
+{
+  "dailyQuote": "今日心绪随笔总述（第一人称口吻）",
+  "recordDate": "今日时辰（如：建安四年 暮春 申时）",
+  "yilutong": {
+    "title": "行程主题（如：暗查宛南官道巡防）",
+    "origin": "起点（如：广陵绣衣楼主阁）",
+    "destination": "终点（如：伏牛山秘密粮仓）",
+    "stations": ["广陵驿", "合肥南驿", "汝南分水驿", "伏牛山隐驿"],
+    "duration": "行程耗时（如：两日一夜 / 快马四时辰）",
+    "time": "出行时辰",
+    "status": "已抵达 / 途经歇马 / 秘密折返",
+    "characterNote": "名士第一人称随笔笔记（如：此去伏牛山山路险峻，若非为了替${activeUser.name}核查那批精铁，倒真不愿在风雨中策马...）"
+  },
+  "chenwei": {
+    "queryTopic": "求问事由（如：求测广陵今夏粮秣与安危 / 卜问前路因缘）",
+    "hexagram": "卦象名称（如：上上卦·地天泰卦 / 泽水困卦）",
+    "poem": "签诗谶语（如：云开雾散见青天，暗夜行舟得月圆）",
+    "meaning": "谶纬揭示之天机寓意",
+    "time": "求签时辰",
+    "characterNote": "名士第一人称私密心境（如：本不信这江湖方士之言，可关乎${activeUser.name}之事，终究忍不住摇了一签...）"
+  },
+  "shapan": {
+    "topic": "军略推演主题（如：广陵城防三道暗哨与流民袭扰推演）",
+    "terrain": "推演地形（如：水网平原与城垣夹角）",
+    "layout": "敌我布防概要（如：设轻弩暗卡八处，伏兵六十人于芦苇荡）",
+    "winRate": "推演胜算与推断（如：胜率九成，损耗战马两匹）",
+    "time": "推演时辰",
+    "characterNote": "名士第一人称战术批注（如：若正面交锋必遭暗算，唯有依沙盘所示，以退为进诱敌深入...）"
+  },
+  "liexing": {
+    "star": "感应主曜（如：天市垣·帝座星 / 贪狼星与七杀相冲）",
+    "phenomenon": "星象异动（如：天狼星光芒晦暗，紫微垣东南隐泛赤光）",
+    "omen": "天象命轨映射（如：主南疆有兵戈扰动，然贵人星临广陵无虞）",
+    "time": "观星时辰",
+    "characterNote": "名士第一人称观星手札（如：夜半凭栏，见东南星曜微明。天下大乱在即，所求者不过是护佑一人周全罢了...）"
+  },
+  "hudie": {
+    "originEvent": "假设起源事件（如：若那日在茶馆未曾答应前往洛阳...）",
+    "rippleEffect": "因果涟漪分歧（如：少了一次惊心动魄之涉险，却也错失了知晓身世之契机）",
+    "alternativeEnd": "推演平行结局（如：安居广陵作一寻常文士，终老江湖）",
+    "time": "推演时辰",
+    "characterNote": "名士第一人称感慨（如：万般因果，皆由一念。即便重来千百次，我依然会做出那日的抉择...）"
+  }
+}
+`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是该名士的本尊灵魂。请严格以该名士的第一人称视角、口吻与性格输出纯 JSON 对象，切勿在字符串中换行。" },
+            { role: "user", content: prompt },
+          ],
+          null,
+          (reply) => {
+            try {
+              const parsed = safeParseLLMJson(reply);
+              if (parsed && (parsed.yilutong || parsed.chenwei || parsed.shapan || parsed.liexing || parsed.hudie)) {
+                setDailyData(parsed);
+                localStorage.setItem(cacheKey, JSON.stringify(parsed));
+                showToast("已捕获名士最新日常奇物手札！");
+              }
+            } catch (err) {
+              console.error("解析日常失败:", err);
+            }
+            setIsLoadingDaily(false);
+          },
+          () => setIsLoadingDaily(false)
+        );
+      } else {
+        const defaultDaily = {
+          dailyQuote: `今日案牍稍歇，抽空以各大神器巡览一番，心中所念之事，终是有了几分眉目。`,
+          recordDate: "今日未时",
+          yilutong: {
+            title: `巡察通往${activeUser.name}府邸之密道驿路`,
+            origin: "内阁公廨",
+            destination: `${activeUser.name}府邸东水榭`,
+            stations: ["内阁侧门", "广陵春和驿", "流水暗渠码头", "水榭暗门"],
+            duration: "半个时辰",
+            time: "今日辰时三刻",
+            status: "路线通畅·已排查隐患",
+            characterNote: `沿途暗桩已重新换防，特意避开了人声鼎沸的闹市。若${activeUser.name}有急召，策马半刻便至。`
+          },
+          chenwei: {
+            queryTopic: `求问近期江东风云与${activeUser.name}平安吉凶`,
+            hexagram: "上上卦·地天泰卦",
+            poem: "天地交泰物顺通，风平浪静见长虹。任凭惊涛拍岸起，同舟共济万事融。",
+            meaning: "阴阳交和，诸事吉亨，虽有暗流但终可化险为夷。",
+            time: "今日巳时",
+            characterNote: `摇得此泰卦，悬着的心总算放下大半。无论局势如何动荡，卦象既言大吉，我便护你周全。`
+          },
+          shapan: {
+            topic: "广陵外围伏牛山防御与暗桩粮道推演",
+            terrain: "山林险谷与狭窄关道",
+            layout: "扼守一线天隘口，部署神臂弓暗卡三座，精锐四十人",
+            winRate: "阻击成功率 92%，可支撑三日",
+            time: "今日午时",
+            characterNote: `以沙盘推演数遍，此隘口易守难攻。哪怕敌军数倍来犯，亦能从容据守，确保后方粮道无忧。`
+          },
+          liexing: {
+            star: "天市垣·帝座星 & 文昌曜",
+            phenomenon: "天市垣诸星璀璨，文昌星隐隐与主星相拱，西北虽有浊气，然紫光内敛",
+            omen: "主谋略得当，天下英豪相聚，贵人运势昌隆",
+            time: "昨夜子时",
+            characterNote: `仰观星汉灿烂，虽有战乱暗曜闪烁，但广陵上空星气澄澈。只要所谋不差，天下大势尽在掌中。`
+          },
+          hudie: {
+            originEvent: `若初见之时未曾与${activeUser.name}结下同盟契约...`,
+            rippleEffect: "少了一路涉险与刀光剑影，退居山林作一逍遥散人",
+            alternativeEnd: "虽得一世清闲，却终究错过这风云际会与知心之人",
+            time: "今日丑时",
+            characterNote: `因果推演千百遍，世间并无后悔二字。若能重选，我依然会走向你，共赴这场乱世局。`
+          }
+        };
+        setDailyData(defaultDaily);
+        localStorage.setItem(cacheKey, JSON.stringify(defaultDaily));
+        setIsLoadingDaily(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsLoadingDaily(false);
+    }
+  };
+
+  // ================= 2. 加载 / 生成【传讯】(>= 5条与他人的暗中通信) =================
   const loadOrGenerateSecrets = async (forceRefresh = false) => {
     const cacheKey = `fangtian_secrets_${character}`;
     if (!forceRefresh) {
@@ -59602,7 +59796,6 @@ ${chatHistoryContext}
           () => setIsLoadingSecrets(false)
         );
       } else {
-        // Fallback default 5 messages
         const defaultSecrets = [
           {
             id: 1,
@@ -59680,7 +59873,7 @@ ${chatHistoryContext}
     }
   };
 
-  // ================= 2. 加载 / 生成【动向】(用户强相关备忘录 + 私人资产与交易变动) =================
+  // ================= 3. 加载 / 生成【动向】(用户强相关备忘录 + 私人资产与交易变动) =================
   const loadOrGenerateDynamics = async (forceRefresh = false) => {
     const cacheKey = `fangtian_dynamics_${character}`;
     if (!forceRefresh) {
@@ -59808,7 +60001,7 @@ ${chatHistoryContext}
     }
   };
 
-  // ================= 3. 加载 / 生成【娱乐】(琴棋书画 + 君子六艺) =================
+  // ================= 4. 加载 / 生成【娱乐】(琴棋书画 + 君子六艺) =================
   const loadOrGeneratePlay = async (forceRefresh = false) => {
     const cacheKey = `fangtian_play_${character}`;
     if (!forceRefresh) {
@@ -59922,7 +60115,7 @@ ${chatHistoryContext}
     }
   };
 
-  // ================= 4. 加载 / 生成【购物】(太疾驰订单记录) =================
+  // ================= 5. 加载 / 生成【购物】(太疾驰订单记录) =================
   const loadOrGenerateOrders = async (forceRefresh = false) => {
     const cacheKey = `fangtian_orders_${character}`;
     if (!forceRefresh) {
@@ -60078,7 +60271,8 @@ ${chatHistoryContext}
 
   // 初始加载当前 Tab 数据
   React.useEffect(() => {
-    if (activeTab === "msg") loadOrGenerateSecrets();
+    if (activeTab === "daily") loadOrGenerateDaily();
+    else if (activeTab === "msg") loadOrGenerateSecrets();
     else if (activeTab === "dynamics") loadOrGenerateDynamics();
     else if (activeTab === "play") loadOrGeneratePlay();
     else if (activeTab === "shop") loadOrGenerateOrders();
@@ -60134,7 +60328,7 @@ ${chatHistoryContext}
             <WaterMirrorAvatar avatar={avatar} name={character} size={38} />
             <div>
               <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4033" }}>{character} · 方天视界</div>
-              <div style={{ fontSize: "11px", color: "#8E9482" }}>神识通灵 · 虚实尽览</div>
+              <div style={{ fontSize: "11px", color: "#8E9485" }}>神识通灵 · 虚实尽览</div>
             </div>
           </div>
         </div>
@@ -60142,12 +60336,13 @@ ${chatHistoryContext}
         {/* 刷新当前模块 AI 探查按钮 */}
         <button
           onClick={() => {
-            if (activeTab === "msg") loadOrGenerateSecrets(true);
+            if (activeTab === "daily") loadOrGenerateDaily(true);
+            else if (activeTab === "msg") loadOrGenerateSecrets(true);
             else if (activeTab === "dynamics") loadOrGenerateDynamics(true);
             else if (activeTab === "play") loadOrGeneratePlay(true);
             else if (activeTab === "shop") loadOrGenerateOrders(true);
           }}
-          disabled={isLoadingSecrets || isLoadingDynamics || isLoadingPlay || isLoadingOrders}
+          disabled={isLoadingDaily || isLoadingSecrets || isLoadingDynamics || isLoadingPlay || isLoadingOrders}
           style={{
             fontSize: "12px",
             background: "linear-gradient(135deg, #89A8B2 0%, #5E8896 100%)",
@@ -60168,17 +60363,18 @@ ${chatHistoryContext}
         </button>
       </div>
 
-      {/* 四大功能导航 Tab */}
+      {/* 五大功能导航 Tab */}
       <div
         style={{
           display: "flex",
           background: "#FFFFFF",
           borderBottom: "1px solid #EBE6DC",
-          padding: "0 10px",
+          padding: "0 6px",
           flexShrink: 0,
         }}
       >
         {[
+          { key: "daily", name: "日常", icon: "ph-calendar-check" },
           { key: "msg", name: "传讯", icon: "ph-chats-teardrop" },
           { key: "dynamics", name: "动向", icon: "ph-compass" },
           { key: "play", name: "娱乐", icon: "ph-game-controller" },
@@ -60195,8 +60391,8 @@ ${chatHistoryContext}
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
-                gap: "5px",
-                fontSize: "14px",
+                gap: "4px",
+                fontSize: "13.5px",
                 fontWeight: isAct ? "700" : "500",
                 color: isAct ? "#447585" : "#7C8272",
                 borderBottom: isAct ? "3px solid #447585" : "3px solid transparent",
@@ -60204,7 +60400,7 @@ ${chatHistoryContext}
                 transition: "all 0.2s ease",
               }}
             >
-              <i className={`ph ${tab.icon}`} style={{ fontSize: "17px" }}></i>
+              <i className={`ph ${tab.icon}`} style={{ fontSize: "16px" }}></i>
               <span>{tab.name}</span>
             </div>
           );
@@ -60221,7 +60417,292 @@ ${chatHistoryContext}
           boxSizing: "border-box",
         }}
       >
-        {/* ================= 1. 传讯模块：探查与他人的暗中通信 (>= 5条) ================= */}
+        {/* ================= 1. [新增] 日常模块：名士调用5大游戏工具手札 ================= */}
+        {activeTab === "daily" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            {/* 今日心绪随笔 Banner */}
+            <div
+              style={{
+                background: "linear-gradient(135deg, #E6F0F2 0%, #DCE8EC 100%)",
+                borderRadius: "18px",
+                padding: "14px 16px",
+                border: "1px solid #C4DCE2",
+                boxShadow: "0 2px 10px rgba(68, 117, 133, 0.08)",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span style={{ fontSize: "16px" }}>📜</span>
+                  <span style={{ fontSize: "14px", fontWeight: "700", color: "#2B525D" }}>
+                    今日奇物调用与起居随笔
+                  </span>
+                </div>
+                <span style={{ fontSize: "11px", background: "#4A7A88", color: "#fff", padding: "2px 8px", borderRadius: "10px", fontWeight: "600" }}>
+                  {dailyData?.recordDate || "今日时辰"}
+                </span>
+              </div>
+              <div style={{ fontSize: "13px", color: "#3A5660", lineHeight: "1.6", fontStyle: "italic" }}>
+                “{dailyData?.dailyQuote || `${character}今日案牍稍歇，以此五大神器巡历各方，记此手札。`}”
+              </div>
+            </div>
+
+            {isLoadingDaily ? (
+              <div style={{ textAlign: "center", padding: "40px 20px", color: "#7B8072" }}>
+                <i className="ph ph-spinner animate-spin text-3xl mb-2" style={{ color: "#4D7C8A" }}></i>
+                <div style={{ fontSize: "13px" }}>神识通灵中，正在读取名士奇物手札...</div>
+              </div>
+            ) : dailyData ? (
+              <>
+                {/* 1. 东汉驿路通 Card */}
+                {dailyData.yilutong && (
+                  <div
+                    onClick={() => setSelectedDailyTool({ type: "yilutong", name: "东汉驿路通", icon: "🐎", color: "#547A8A", data: dailyData.yilutong })}
+                    style={{
+                      background: "#FFFFFF",
+                      borderRadius: "16px",
+                      padding: "14px",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                      borderLeft: "4px solid #547A8A",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      transition: "transform 0.15s",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "15px" }}>🐎</span>
+                        <span style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235" }}>
+                          东汉驿路通 · {dailyData.yilutong.title}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "11px", background: "#E8F0F2", color: "#447585", padding: "2px 6px", borderRadius: "6px", fontWeight: "600" }}>
+                        {dailyData.yilutong.status || "行进中"}
+                      </span>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6A7062", background: "#F7F6F2", padding: "6px 10px", borderRadius: "8px" }}>
+                      <span style={{ fontWeight: "700", color: "#3B4235" }}>{dailyData.yilutong.origin}</span>
+                      <i className="ph ph-arrow-right" style={{ color: "#8E9485" }}></i>
+                      <span style={{ fontWeight: "700", color: "#3B4235" }}>{dailyData.yilutong.destination}</span>
+                      <span style={{ marginLeft: "auto", fontSize: "11px", color: "#8E9485" }}>耗时：{dailyData.yilutong.duration}</span>
+                    </div>
+
+                    {dailyData.yilutong.stations && Array.isArray(dailyData.yilutong.stations) && (
+                      <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
+                        {dailyData.yilutong.stations.map((st, i) => (
+                          <span key={i} style={{ fontSize: "10.5px", background: "#EDF2F4", color: "#547A8A", padding: "1px 6px", borderRadius: "4px" }}>
+                            驿站: {st}
+                          </span>
+                        ))}
+                      </div>
+                    )}
+
+                    <div style={{ fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" }}>
+                      <b>亲笔手札：</b>"{dailyData.yilutong.characterNote}"
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#8E9485", marginTop: "2px" }}>
+                      <span><i className="ph ph-clock mr-1"></i>{dailyData.yilutong.time}</span>
+                      <span style={{ color: "#547A8A", fontWeight: "600" }}>查看驿道详情 &gt;</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 2. 谶纬小摊 Card */}
+                {dailyData.chenwei && (
+                  <div
+                    onClick={() => setSelectedDailyTool({ type: "chenwei", name: "谶纬小摊", icon: "🔮", color: "#8A6494", data: dailyData.chenwei })}
+                    style={{
+                      background: "#FFFFFF",
+                      borderRadius: "16px",
+                      padding: "14px",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                      borderLeft: "4px solid #8A6494",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      transition: "transform 0.15s",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "15px" }}>🔮</span>
+                        <span style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235" }}>
+                          谶纬小摊 · {dailyData.chenwei.queryTopic}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "11px", background: "#F3EBF5", color: "#7B4F87", padding: "2px 6px", borderRadius: "6px", fontWeight: "700" }}>
+                        {dailyData.chenwei.hexagram}
+                      </span>
+                    </div>
+
+                    <div style={{ background: "#FAF4FC", borderLeft: "3px solid #C49BD1", padding: "8px 12px", borderRadius: "0 8px 8px 0" }}>
+                      <div style={{ fontSize: "13px", fontWeight: "600", color: "#5F3A6C", fontStyle: "italic" }}>
+                        “{dailyData.chenwei.poem}”
+                      </div>
+                      <div style={{ fontSize: "11.5px", color: "#84658F", marginTop: "4px" }}>
+                        <b>天机简释：</b>{dailyData.chenwei.meaning}
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" }}>
+                      <b>密探心境：</b>"{dailyData.chenwei.characterNote}"
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#8E9485", marginTop: "2px" }}>
+                      <span><i className="ph ph-clock mr-1"></i>{dailyData.chenwei.time}</span>
+                      <span style={{ color: "#8A6494", fontWeight: "600" }}>查看解卦卷宗 &gt;</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 3. 沙盘模拟器 Card */}
+                {dailyData.shapan && (
+                  <div
+                    onClick={() => setSelectedDailyTool({ type: "shapan", name: "沙盘模拟器", icon: "🗺️", color: "#B8623D", data: dailyData.shapan })}
+                    style={{
+                      background: "#FFFFFF",
+                      borderRadius: "16px",
+                      padding: "14px",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                      borderLeft: "4px solid #B8623D",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      transition: "transform 0.15s",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "15px" }}>🗺️</span>
+                        <span style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235" }}>
+                          沙盘模拟器 · {dailyData.shapan.topic}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "11px", background: "#FAEEE9", color: "#B8623D", padding: "2px 6px", borderRadius: "6px", fontWeight: "700" }}>
+                        {dailyData.shapan.winRate}
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: "12px", color: "#6A7062", background: "#FDF9F7", border: "1px solid #F3DDD3", padding: "8px 10px", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <div><b>地形要害：</b>{dailyData.shapan.terrain}</div>
+                      <div><b>布防安排：</b>{dailyData.shapan.layout}</div>
+                    </div>
+
+                    <div style={{ fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" }}>
+                      <b>战术批注：</b>"{dailyData.shapan.characterNote}"
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#8E9485", marginTop: "2px" }}>
+                      <span><i className="ph ph-clock mr-1"></i>{dailyData.shapan.time}</span>
+                      <span style={{ color: "#B8623D", fontWeight: "600" }}>查看沙盘全貌 &gt;</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 4. 列星 Card */}
+                {dailyData.liexing && (
+                  <div
+                    onClick={() => setSelectedDailyTool({ type: "liexing", name: "列星·星象图", icon: "🌌", color: "#2B4C7E", data: dailyData.liexing })}
+                    style={{
+                      background: "#FFFFFF",
+                      borderRadius: "16px",
+                      padding: "14px",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                      borderLeft: "4px solid #2B4C7E",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      transition: "transform 0.15s",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "15px" }}>🌌</span>
+                        <span style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235" }}>
+                          列星 · {dailyData.liexing.star}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "11px", background: "#E8EEF7", color: "#2B4C7E", padding: "2px 6px", borderRadius: "6px", fontWeight: "700" }}>
+                        星象观微
+                      </span>
+                    </div>
+
+                    <div style={{ fontSize: "12.5px", color: "#2F4858", background: "#F2F6FA", padding: "8px 10px", borderRadius: "8px", lineHeight: "1.5" }}>
+                      <div><b>天象异动：</b>{dailyData.liexing.phenomenon}</div>
+                      <div style={{ marginTop: "4px", color: "#3D608A" }}><b>命轨映射：</b>{dailyData.liexing.omen}</div>
+                    </div>
+
+                    <div style={{ fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" }}>
+                      <b>观星札记：</b>"{dailyData.liexing.characterNote}"
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#8E9485", marginTop: "2px" }}>
+                      <span><i className="ph ph-clock mr-1"></i>{dailyData.liexing.time}</span>
+                      <span style={{ color: "#2B4C7E", fontWeight: "600" }}>感应星曜命轨 &gt;</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* 5. 蝴蝶效应 Card */}
+                {dailyData.hudie && (
+                  <div
+                    onClick={() => setSelectedDailyTool({ type: "hudie", name: "蝴蝶效应", icon: "🦋", color: "#3D8A68", data: dailyData.hudie })}
+                    style={{
+                      background: "#FFFFFF",
+                      borderRadius: "16px",
+                      padding: "14px",
+                      boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                      borderLeft: "4px solid #3D8A68",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      transition: "transform 0.15s",
+                    }}
+                  >
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <span style={{ fontSize: "15px" }}>🦋</span>
+                        <span style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235" }}>
+                          蝴蝶效应 · 命运分歧推演
+                        </span>
+                      </div>
+                      <span style={{ fontSize: "11px", background: "#EBF5F0", color: "#3D8A68", padding: "2px 6px", borderRadius: "6px", fontWeight: "700" }}>
+                        因果推演
+                      </span>
+                    </div>
+
+                    <div style={{ background: "#F3FAF6", borderLeft: "3px solid #82C2A5", padding: "8px 10px", borderRadius: "0 8px 8px 0", fontSize: "12px", color: "#285842", display: "flex", flexDirection: "column", gap: "4px" }}>
+                      <div><b>假定起源：</b>{dailyData.hudie.originEvent}</div>
+                      <div><b>因果涟漪：</b>{dailyData.hudie.rippleEffect}</div>
+                      <div style={{ color: "#1F4D38", fontWeight: "600" }}><b>平行结局：</b>{dailyData.hudie.alternativeEnd}</div>
+                    </div>
+
+                    <div style={{ fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" }}>
+                      <b>深思感触：</b>"{dailyData.hudie.characterNote}"
+                    </div>
+
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#8E9485", marginTop: "2px" }}>
+                      <span><i className="ph ph-clock mr-1"></i>{dailyData.hudie.time}</span>
+                      <span style={{ color: "#3D8A68", fontWeight: "600" }}>探寻因果全貌 &gt;</span>
+                    </div>
+                  </div>
+                )}
+              </>
+            ) : null}
+          </div>
+        )}
+
+        {/* ================= 2. 传讯模块：探查与他人的暗中通信 (>= 5条) ================= */}
         {activeTab === "msg" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div
@@ -60309,7 +60790,7 @@ ${chatHistoryContext}
           </div>
         )}
 
-        {/* ================= 2. 动向模块：用户强相关备忘录 + 私人固有资产与交易变动 ================= */}
+        {/* ================= 3. 动向模块：用户强相关备忘录 + 私人固有资产与交易变动 ================= */}
         {activeTab === "dynamics" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {/* 子分类切换 */}
@@ -60356,7 +60837,7 @@ ${chatHistoryContext}
                 <div style={{ fontSize: "13px" }}>正在感应私密动向与资产变化...</div>
               </div>
             ) : dynamicsSubTab === "memo" ? (
-              // 备忘录列表 (简短通俗，与用户及聊天记录强相关)
+              // 备忘录列表
               memos.map((m) => (
                 <div
                   key={m.id}
@@ -60383,7 +60864,7 @@ ${chatHistoryContext}
                 </div>
               ))
             ) : (
-              // 私人资产变动与交易列表 (良田、坞堡、军队人数、矿产)
+              // 私人资产变动与交易列表
               assets.map((a) => (
                 <div
                   key={a.id}
@@ -60437,7 +60918,7 @@ ${chatHistoryContext}
           </div>
         )}
 
-        {/* ================= 3. 娱乐模块：琴棋书画 + 君子六艺 ================= */}
+        {/* ================= 4. 娱乐模块：琴棋书画 + 君子六艺 ================= */}
         {activeTab === "play" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             {/* 子分类切换 */}
@@ -60484,7 +60965,6 @@ ${chatHistoryContext}
                 <div style={{ fontSize: "13px" }}>正在品鉴雅玩修行卷宗...</div>
               </div>
             ) : playSubTab === "fourArts" ? (
-              // 琴棋书画
               fourArts.map((art) => (
                 <div
                   key={art.id}
@@ -60522,7 +61002,6 @@ ${chatHistoryContext}
                 </div>
               ))
             ) : (
-              // 君子六艺
               sixSkills.map((skill) => (
                 <div
                   key={skill.id}
@@ -60563,7 +61042,7 @@ ${chatHistoryContext}
           </div>
         )}
 
-        {/* ================= 4. 购物模块：太疾驰订单记录 (买什么、买多少、给谁) ================= */}
+        {/* ================= 5. 购物模块：太疾驰订单记录 (买什么、买多少、给谁) ================= */}
         {activeTab === "shop" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
             <div
@@ -60656,6 +61135,204 @@ ${chatHistoryContext}
           </div>
         )}
       </div>
+
+      {/* [新增] 日常工具详情弹窗 Modal */}
+      {selectedDailyTool && (
+        <div
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            width: "100vw",
+            height: "100vh",
+            background: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(6px)",
+            zIndex: 999,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "20px",
+            boxSizing: "border-box",
+          }}
+          onClick={() => setSelectedDailyTool(null)}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "420px",
+              maxHeight: "85vh",
+              background: "#FDFCFA",
+              borderRadius: "24px",
+              padding: "20px",
+              boxSizing: "border-box",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+              animation: "scaleUp 0.2s ease-out",
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #EBE6DC", paddingBottom: "12px", marginBottom: "14px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "20px" }}>{selectedDailyTool.icon}</span>
+                <div>
+                  <div style={{ fontSize: "16px", fontWeight: "700", color: "#3B4235" }}>
+                    {selectedDailyTool.name} · 调用详情
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#8E9485" }}>
+                    {character} 的私密手札卷宗
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setSelectedDailyTool(null)}
+                style={{ background: "none", border: "none", fontSize: "22px", color: "#8E9485", cursor: "pointer" }}
+              >
+                ×
+              </button>
+            </div>
+
+            <div
+              className="no-scrollbar"
+              style={{
+                flex: 1,
+                overflowY: "auto",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                padding: "4px 0",
+              }}
+            >
+              {/* 1. 驿路通详情 */}
+              {selectedDailyTool.type === "yilutong" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ fontSize: "15px", fontWeight: "700", color: "#547A8A" }}>
+                    {selectedDailyTool.data.title}
+                  </div>
+                  <div style={{ background: "#F5F8FA", padding: "10px 14px", borderRadius: "12px", fontSize: "13px", color: "#4A4F44", lineHeight: "1.6" }}>
+                    <div><b>出发地：</b>{selectedDailyTool.data.origin}</div>
+                    <div><b>目的地：</b>{selectedDailyTool.data.destination}</div>
+                    <div><b>耗时：</b>{selectedDailyTool.data.duration}</div>
+                    <div><b>时辰：</b>{selectedDailyTool.data.time}</div>
+                    <div><b>状态：</b>{selectedDailyTool.data.status}</div>
+                  </div>
+                  {selectedDailyTool.data.stations && (
+                    <div style={{ background: "#EDF3F5", padding: "10px 14px", borderRadius: "12px" }}>
+                      <div style={{ fontSize: "12px", fontWeight: "700", color: "#547A8A", marginBottom: "6px" }}>
+                        【途经驿站】
+                      </div>
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                        {selectedDailyTool.data.stations.map((st, i) => (
+                          <span key={i} style={{ fontSize: "11px", background: "#FFFFFF", color: "#447585", padding: "3px 8px", borderRadius: "6px", border: "1px solid #D5E4E8" }}>
+                            {st}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  <div style={{ background: "#FFFDF9", border: "1px solid #EBE4D8", padding: "12px", borderRadius: "12px", fontSize: "13px", color: "#3B4235", lineHeight: "1.6" }}>
+                    <b>【名士亲笔见闻】</b><br />
+                    "{selectedDailyTool.data.characterNote}"
+                  </div>
+                </div>
+              )}
+
+              {/* 2. 谶纬小摊详情 */}
+              {selectedDailyTool.type === "chenwei" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ fontSize: "15px", fontWeight: "700", color: "#8A6494" }}>
+                    求测：{selectedDailyTool.data.queryTopic}
+                  </div>
+                  <div style={{ background: "#FAF4FC", border: "1px solid #EAD8F0", padding: "14px", borderRadius: "14px", textAlign: "center" }}>
+                    <div style={{ fontSize: "16px", fontWeight: "700", color: "#6E3F7C", marginBottom: "8px" }}>
+                      【{selectedDailyTool.data.hexagram}】
+                    </div>
+                    <div style={{ fontSize: "14px", fontWeight: "600", color: "#4A2B54", fontStyle: "italic", lineHeight: "1.7" }}>
+                      “{selectedDailyTool.data.poem}”
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#7B5885", marginTop: "10px", borderTop: "1px dashed #DCC3E6", paddingTop: "8px" }}>
+                      <b>天机解卦：</b>{selectedDailyTool.data.meaning}
+                    </div>
+                  </div>
+                  <div style={{ background: "#FFFDF9", border: "1px solid #EBE4D8", padding: "12px", borderRadius: "12px", fontSize: "13px", color: "#3B4235", lineHeight: "1.6" }}>
+                    <b>【密探私密心境】</b><br />
+                    "{selectedDailyTool.data.characterNote}"
+                  </div>
+                </div>
+              )}
+
+              {/* 3. 沙盘模拟器详情 */}
+              {selectedDailyTool.type === "shapan" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ fontSize: "15px", fontWeight: "700", color: "#B8623D" }}>
+                    推演主题：{selectedDailyTool.data.topic}
+                  </div>
+                  <div style={{ background: "#FAF4F0", border: "1px solid #F2DDD3", padding: "12px 14px", borderRadius: "12px", fontSize: "13px", color: "#4A4F44", lineHeight: "1.6" }}>
+                    <div><b>推演地形：</b>{selectedDailyTool.data.terrain}</div>
+                    <div style={{ marginTop: "4px" }}><b>兵力布防：</b>{selectedDailyTool.data.layout}</div>
+                    <div style={{ marginTop: "4px", color: "#B8623D", fontWeight: "700" }}><b>兵推胜率：</b>{selectedDailyTool.data.winRate}</div>
+                  </div>
+                  <div style={{ background: "#FFFDF9", border: "1px solid #EBE4D8", padding: "12px", borderRadius: "12px", fontSize: "13px", color: "#3B4235", lineHeight: "1.6" }}>
+                    <b>【战术批注】</b><br />
+                    "{selectedDailyTool.data.characterNote}"
+                  </div>
+                </div>
+              )}
+
+              {/* 4. 列星详情 */}
+              {selectedDailyTool.type === "liexing" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ fontSize: "15px", fontWeight: "700", color: "#2B4C7E" }}>
+                    感应主曜：{selectedDailyTool.data.star}
+                  </div>
+                  <div style={{ background: "#F0F5FA", border: "1px solid #D6E3F2", padding: "12px 14px", borderRadius: "12px", fontSize: "13px", color: "#2A4568", lineHeight: "1.6" }}>
+                    <div><b>星象异动：</b>{selectedDailyTool.data.phenomenon}</div>
+                    <div style={{ marginTop: "6px", color: "#1D3A63", fontWeight: "600" }}><b>命轨征兆：</b>{selectedDailyTool.data.omen}</div>
+                  </div>
+                  <div style={{ background: "#FFFDF9", border: "1px solid #EBE4D8", padding: "12px", borderRadius: "12px", fontSize: "13px", color: "#3B4235", lineHeight: "1.6" }}>
+                    <b>【观星札记】</b><br />
+                    "{selectedDailyTool.data.characterNote}"
+                  </div>
+                </div>
+              )}
+
+              {/* 5. 蝴蝶效应详情 */}
+              {selectedDailyTool.type === "hudie" && (
+                <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                  <div style={{ fontSize: "15px", fontWeight: "700", color: "#3D8A68" }}>
+                    假定起源：{selectedDailyTool.data.originEvent}
+                  </div>
+                  <div style={{ background: "#F0F8F4", border: "1px solid #D1EADE", padding: "12px 14px", borderRadius: "12px", fontSize: "13px", color: "#25533F", lineHeight: "1.6" }}>
+                    <div><b>因果涟漪：</b>{selectedDailyTool.data.rippleEffect}</div>
+                    <div style={{ marginTop: "6px", color: "#1B4734", fontWeight: "700" }}><b>平行分支结局：</b>{selectedDailyTool.data.alternativeEnd}</div>
+                  </div>
+                  <div style={{ background: "#FFFDF9", border: "1px solid #EBE4D8", padding: "12px", borderRadius: "12px", fontSize: "13px", color: "#3B4235", lineHeight: "1.6" }}>
+                    <b>【深思感触】</b><br />
+                    "{selectedDailyTool.data.characterNote}"
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={() => setSelectedDailyTool(null)}
+              style={{
+                marginTop: "14px",
+                padding: "10px 0",
+                borderRadius: "12px",
+                border: "none",
+                background: selectedDailyTool.color || "#89A8B2",
+                color: "#FFFFFF",
+                fontWeight: "700",
+                fontSize: "13px",
+                cursor: "pointer",
+              }}
+            >
+              收纳手札
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 传讯详情弹窗 Modal */}
       {selectedSecret && (
@@ -110895,9 +111572,632 @@ const BackupRestorePage = ({ onClose }) => {
     </div>
   );
 };
-const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage }) => {
+// ==================== [新增] MCP 扩展工具箱设置页面组件 ====================
+
+const MCPToolsSettingsPage = ({ onClose }) => {
+  const { useState, useEffect } = React;
+
+  const [masterEnabled, setMasterEnabled] = useState(true);
+  const [builtInTools, setBuiltInTools] = useState([]);
+  const [externalServers, setExternalServers] = useState([]);
+  const [activeTab, setActiveTab] = useState("builtin"); // 'builtin' | 'external' | 'guide'
+
+  // 添加外部节点表单
+  const [serverName, setServerName] = useState("");
+  const [serverUrl, setServerUrl] = useState("");
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connectError, setConnectError] = useState(null);
+  const [connectSuccess, setConnectSuccess] = useState(null);
+
+  // 刷新状态
+  const refreshHubState = () => {
+    if (window.mcpHub) {
+      setMasterEnabled(window.mcpHub.isMasterEnabled());
+      setBuiltInTools([...window.mcpHub.builtInTools]);
+      setExternalServers([...window.mcpHub.externalServers]);
+    }
+  };
+
+  useEffect(() => {
+    refreshHubState();
+  }, []);
+
+  const handleToggleMaster = (val) => {
+    if (window.mcpHub) {
+      window.mcpHub.setMasterEnabled(val);
+      setMasterEnabled(val);
+    }
+  };
+
+  const handleToggleTool = (toolName, val) => {
+    if (window.mcpHub) {
+      window.mcpHub.toggleTool(toolName, val);
+      refreshHubState();
+    }
+  };
+
+  const handleAddExternal = async () => {
+    if (!serverUrl.trim()) {
+      setConnectError("请输入有效的 MCP 服务地址");
+      return;
+    }
+    setIsConnecting(true);
+    setConnectError(null);
+    setConnectSuccess(null);
+    try {
+      const added = await window.mcpHub.addExternalServer(serverName, serverUrl);
+      setConnectSuccess(`成功连接到节点【${added.name}】，发现 ${added.toolsCount} 个外部工具！`);
+      setServerName("");
+      setServerUrl("");
+      refreshHubState();
+    } catch (err) {
+      setConnectError(`连接失败: ${err.message}`);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleRemoveExternal = (id) => {
+    if (confirm("确定要移除该外部 MCP 节点吗？")) {
+      if (window.mcpHub) {
+        window.mcpHub.removeExternalServer(id);
+        refreshHubState();
+      }
+    }
+  };
+
+  const handleToggleExternal = (id, val) => {
+    if (window.mcpHub) {
+      window.mcpHub.toggleExternalServer(id, val);
+      refreshHubState();
+    }
+  };
+
+  return (
+    <div
+      className="no-scrollbar"
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "#F5F3EF",
+        zIndex: 300,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden"
+      }}
+    >
+      {/* 顶部标题栏 */}
+      <div
+        style={{
+          height: "56px",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #E5DFD5",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 16px",
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.04)",
+          flexShrink: 0
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <div
+            onClick={onClose}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#5A5F4D"
+            }}
+          >
+            <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
+          </div>
+          <div>
+            <div style={{ fontSize: "16px", fontWeight: "700", color: "#3B4033" }}>
+              🧩 MCP 扩展工具箱 (Agent Tools)
+            </div>
+            <div style={{ fontSize: "11px", color: "#8E9482" }}>
+              让名士自主调用世界书、备忘录、商城记账与外部万物
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 滚动内容区 */}
+      <div
+        className="no-scrollbar"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "14px"
+        }}
+      >
+        {/* 全局主控卡片 */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #FAF7F2 0%, #F3EEE6 100%)",
+            borderRadius: "20px",
+            padding: "18px",
+            border: "1px solid #E5DFD3",
+            boxShadow: "0 4px 14px rgba(0, 0, 0, 0.03)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+            <div
+              style={{
+                width: "44px",
+                height: "44px",
+                borderRadius: "14px",
+                background: masterEnabled ? "#4E7E8E" : "#A6ABA0",
+                color: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "22px",
+                transition: "background 0.3s"
+              }}
+            >
+              <i className="ph ph-cpu"></i>
+            </div>
+            <div>
+              <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B4235" }}>
+                AI 自主工具调用 (MCP)
+              </div>
+              <div style={{ fontSize: "12px", color: "#7B8072", marginTop: "2px" }}>
+                {masterEnabled ? "已启用 · 名士可在对话中按需自主调用工具" : "已关闭 · 回退至常规无工具文本对话"}
+              </div>
+            </div>
+          </div>
+
+          <label style={{ position: "relative", display: "inline-block", width: "48px", height: "26px", cursor: "pointer" }}>
+            <input
+              type="checkbox"
+              checked={masterEnabled}
+              onChange={(e) => handleToggleMaster(e.target.checked)}
+              style={{ opacity: 0, width: 0, height: 0 }}
+            />
+            <span
+              style={{
+                position: "absolute",
+                top: 0, left: 0, right: 0, bottom: 0,
+                background: masterEnabled ? "#4E7E8E" : "#D0CCC4",
+                borderRadius: "26px",
+                transition: "0.3s"
+              }}
+            >
+              <span
+                style={{
+                  position: "absolute",
+                  height: "20px",
+                  width: "20px",
+                  left: masterEnabled ? "24px" : "4px",
+                  bottom: "3px",
+                  background: "#FFFFFF",
+                  borderRadius: "50%",
+                  transition: "0.3s",
+                  boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+                }}
+              />
+            </span>
+          </label>
+        </div>
+
+        {/* Tab 选项卡 */}
+        <div style={{ display: "flex", gap: "8px", background: "#EAE7DF", padding: "4px", borderRadius: "14px" }}>
+          {[
+            { key: "builtin", label: `内置 Web 工具 (${builtInTools.filter(t => t.enabled).length}/${builtInTools.length})`, icon: "ph-puzzle-piece" },
+            { key: "external", label: `外部 MCP 节点 (${externalServers.length})`, icon: "ph-broadcast" },
+            { key: "guide", label: "新手指南", icon: "ph-lightbulb" }
+          ].map(tab => {
+            const isAct = activeTab === tab.key;
+            return (
+              <button
+                key={tab.key}
+                onClick={() => setActiveTab(tab.key)}
+                style={{
+                  flex: 1,
+                  padding: "9px 0",
+                  borderRadius: "10px",
+                  border: "none",
+                  fontSize: "12.5px",
+                  fontWeight: isAct ? "700" : "500",
+                  background: isAct ? "#FFFFFF" : "transparent",
+                  color: isAct ? "#3B4235" : "#7B8072",
+                  cursor: "pointer",
+                  boxShadow: isAct ? "0 2px 6px rgba(0,0,0,0.06)" : "none",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "4px",
+                  transition: "all 0.2s"
+                }}
+              >
+                <i className={`ph ${tab.icon}`}></i>
+                <span>{tab.label}</span>
+              </button>
+            );
+          })}
+        </div>
+
+        {/* 1. 内置 Web-MCP 工具列表 */}
+        {activeTab === "builtin" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+            <div style={{ fontSize: "12px", color: "#8E9485", padding: "0 4px" }}>
+              💡 内置工具无需任何外部环境，在手机和电脑浏览器中即开即用：
+            </div>
+
+            {builtInTools.map(tool => (
+              <div
+                key={tool.name}
+                style={{
+                  background: "#FFFFFF",
+                  borderRadius: "16px",
+                  padding: "14px 16px",
+                  boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                  border: "1px solid #EBE7DE",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <div
+                      style={{
+                        width: "32px",
+                        height: "32px",
+                        borderRadius: "10px",
+                        background: tool.enabled ? "rgba(78, 126, 142, 0.12)" : "#F0EFEB",
+                        color: tool.enabled ? "#4E7E8E" : "#999",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        fontSize: "18px"
+                      }}
+                    >
+                      <i className={`ph ${tool.icon}`}></i>
+                    </div>
+                    <div>
+                      <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>
+                        {tool.displayName}
+                      </div>
+                      <div style={{ fontSize: "11px", color: "#8E9485" }}>
+                        标识符: <code style={{ background: "#F5F3ED", padding: "1px 4px", borderRadius: "4px" }}>{tool.name}</code> · {tool.category}
+                      </div>
+                    </div>
+                  </div>
+
+                  <label style={{ position: "relative", display: "inline-block", width: "40px", height: "22px", cursor: "pointer" }}>
+                    <input
+                      type="checkbox"
+                      checked={tool.enabled}
+                      onChange={(e) => handleToggleTool(tool.name, e.target.checked)}
+                      style={{ opacity: 0, width: 0, height: 0 }}
+                    />
+                    <span
+                      style={{
+                        position: "absolute",
+                        top: 0, left: 0, right: 0, bottom: 0,
+                        background: tool.enabled ? "#4E7E8E" : "#D0CCC4",
+                        borderRadius: "22px",
+                        transition: "0.2s"
+                      }}
+                    >
+                      <span
+                        style={{
+                          position: "absolute",
+                          height: "16px",
+                          width: "16px",
+                          left: tool.enabled ? "20px" : "3px",
+                          bottom: "3px",
+                          background: "#FFFFFF",
+                          borderRadius: "50%",
+                          transition: "0.2s"
+                        }}
+                      />
+                    </span>
+                  </label>
+                </div>
+
+                <div style={{ fontSize: "12.5px", color: "#5F6557", lineHeight: "1.5", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" }}>
+                  {tool.description}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* 2. 外部 MCP 服务节点 */}
+        {activeTab === "external" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+            {/* 添加新服务表单 */}
+            <div
+              style={{
+                background: "#FFFFFF",
+                borderRadius: "18px",
+                padding: "16px",
+                boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+                border: "1px solid #EBE7DE",
+                display: "flex",
+                flexDirection: "column",
+                gap: "10px"
+              }}
+            >
+              <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235", display: "flex", alignItems: "center", gap: "6px" }}>
+                <i className="ph ph-plus-circle" style={{ color: "#4E7E8E", fontSize: "18px" }}></i>
+                <span>连接外部标准 MCP 服务</span>
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12px", color: "#7B8072" }}>节点名称 (可选)</label>
+                <input
+                  type="text"
+                  placeholder="例如: 本地文件助手 / 联网搜索"
+                  value={serverName}
+                  onChange={(e) => setServerName(e.target.value)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid #D5D0C5",
+                    fontSize: "13px",
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                <label style={{ fontSize: "12px", color: "#7B8072" }}>MCP 服务端点 URL (支持 HTTP / SSE / JSON-RPC)</label>
+                <input
+                  type="text"
+                  placeholder="http://localhost:3000/sse 或 http://127.0.0.1:8000/mcp"
+                  value={serverUrl}
+                  onChange={(e) => setServerUrl(e.target.value)}
+                  style={{
+                    padding: "8px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid #D5D0C5",
+                    fontSize: "13px",
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              {connectError && (
+                <div style={{ fontSize: "12px", color: "#C2185B", background: "#FCE4EC", padding: "8px 12px", borderRadius: "8px" }}>
+                  {connectError}
+                </div>
+              )}
+              {connectSuccess && (
+                <div style={{ fontSize: "12px", color: "#2E7D32", background: "#E8F5E9", padding: "8px 12px", borderRadius: "8px" }}>
+                  {connectSuccess}
+                </div>
+              )}
+
+              <button
+                onClick={handleAddExternal}
+                disabled={isConnecting}
+                style={{
+                  marginTop: "4px",
+                  padding: "10px 0",
+                  borderRadius: "12px",
+                  border: "none",
+                  background: isConnecting ? "#A0AFB5" : "linear-gradient(135deg, #4E7E8E 0%, #3D6A78 100%)",
+                  color: "#FFFFFF",
+                  fontWeight: "700",
+                  fontSize: "13.5px",
+                  cursor: isConnecting ? "not-allowed" : "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "6px",
+                  boxShadow: "0 2px 8px rgba(78, 126, 142, 0.3)"
+                }}
+              >
+                {isConnecting ? <i className="ph ph-spinner animate-spin"></i> : <i className="ph ph-plug"></i>}
+                <span>{isConnecting ? "正在握手探测工具列表..." : "测试并保存连接"}</span>
+              </button>
+            </div>
+
+            {/* 已连接的外部服务列表 */}
+            <div style={{ fontSize: "13px", fontWeight: "700", color: "#3B4235" }}>
+              已保存的外部节点 ({externalServers.length})
+            </div>
+
+            {externalServers.length === 0 ? (
+              <div style={{ textAlign: "center", padding: "30px 16px", color: "#8E9485", background: "#FFFFFF", borderRadius: "16px", border: "1px dashed #D5D0C5" }}>
+                <i className="ph ph-broadcast text-3xl mb-2" style={{ color: "#B8C0B0" }}></i>
+                <div style={{ fontSize: "13px" }}>暂未添加外部 MCP 节点</div>
+                <div style={{ fontSize: "11px", marginTop: "4px" }}>您可填入本地跑起来的 MCP 服务或远程网关地址</div>
+              </div>
+            ) : (
+              externalServers.map(srv => (
+                <div
+                  key={srv.id}
+                  style={{
+                    background: "#FFFFFF",
+                    borderRadius: "16px",
+                    padding: "14px 16px",
+                    boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+                    border: "1px solid #EBE7DE",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "8px"
+                  }}
+                >
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <span style={{ fontSize: "18px" }}>🌐</span>
+                      <div>
+                        <div style={{ fontSize: "14px", fontWeight: "700", color: "#3B4235" }}>{srv.name}</div>
+                        <div style={{ fontSize: "11px", color: "#8E9485" }}>{srv.url}</div>
+                      </div>
+                    </div>
+
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                      <label style={{ position: "relative", display: "inline-block", width: "36px", height: "20px", cursor: "pointer" }}>
+                        <input
+                          type="checkbox"
+                          checked={srv.enabled}
+                          onChange={(e) => handleToggleExternal(srv.id, e.target.checked)}
+                          style={{ opacity: 0, width: 0, height: 0 }}
+                        />
+                        <span
+                          style={{
+                            position: "absolute",
+                            top: 0, left: 0, right: 0, bottom: 0,
+                            background: srv.enabled ? "#4E7E8E" : "#D0CCC4",
+                            borderRadius: "20px",
+                            transition: "0.2s"
+                          }}
+                        >
+                          <span
+                            style={{
+                              position: "absolute",
+                              height: "14px",
+                              width: "14px",
+                              left: srv.enabled ? "18px" : "3px",
+                              bottom: "3px",
+                              background: "#FFFFFF",
+                              borderRadius: "50%",
+                              transition: "0.2s"
+                            }}
+                          />
+                        </span>
+                      </label>
+
+                      <button
+                        onClick={() => handleRemoveExternal(srv.id)}
+                        style={{
+                          background: "#FCE4EC",
+                          border: "none",
+                          color: "#C2185B",
+                          width: "28px",
+                          height: "28px",
+                          borderRadius: "8px",
+                          cursor: "pointer",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center"
+                        }}
+                      >
+                        <i className="ph ph-trash" style={{ fontSize: "14px" }}></i>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div style={{ fontSize: "11.5px", background: "#F7F6F2", padding: "6px 10px", borderRadius: "8px", color: "#547A8A" }}>
+                    包含 <b>{srv.toolsCount || srv.tools?.length || 0}</b> 个工具 · 上次连接: {srv.updatedAt || "刚刚"}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {/* 3. 新手指南与 FAQ */}
+        {activeTab === "guide" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+            <div style={{ background: "#FFFFFF", borderRadius: "16px", padding: "16px", border: "1px solid #EBE7DE", lineHeight: "1.6", fontSize: "13px", color: "#4A4F44" }}>
+              <div style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235", marginBottom: "8px" }}>
+                💡 什么是 MCP（模型上下文协议）？
+              </div>
+              <p style={{ margin: "0 0 8px 0" }}>
+                MCP 是由 Anthropic 提出的全球开源统一扩展协议。它就像给 AI 装上了一个“万能 Type-C 插座”，让 AI 从原本“只会文字打字”进化为“能主动调用外部工具、查档案、翻账本、做计算”的超级智能体。
+              </p>
+            </div>
+
+            <div style={{ background: "#FFFFFF", borderRadius: "16px", padding: "16px", border: "1px solid #EBE7DE", lineHeight: "1.6", fontSize: "13px", color: "#4A4F44" }}>
+              <div style={{ fontSize: "14.5px", fontWeight: "700", color: "#3B4235", marginBottom: "8px" }}>
+                🚀 我需要配置什么才能使用？
+              </div>
+              <p style={{ margin: "0 0 8px 0" }}>
+                <b>零门槛直接使用</b>：只要上方的主开关开启，小手机已内置的 6 大 Web 工具（如世界书查阅、备忘录写入、太疾驰记账等）就会自动生效！
+              </p>
+              <p style={{ margin: 0 }}>
+                <b>极客进阶</b>：如果您在本地电脑运行了官方提供的开源 MCP Server（如 <code>npx @modelcontextprotocol/server-filesystem</code> 或 Brave 搜索），可在“外部 MCP 节点”填入对应 URL，小手机便可操控本地万物！
+              </p>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+};
+
+const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage, onOpenMcp }) => {
   const [activeSubPage, setActiveSubPage] = React.useState(null);
 
+  const [minimaxEnabled, setMinimaxEnabled] = React.useState(() => {
+    try {
+      const s = localStorage.getItem("minimax_api_config");
+      return s ? JSON.parse(s).enabled !== false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const [aiImageEnabled, setAiImageEnabled] = React.useState(() => {
+    try {
+      const s = localStorage.getItem("image_generation_api_config");
+      return s ? JSON.parse(s).enabled !== false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const [mcpEnabled, setMcpEnabled] = React.useState(() => {
+    return window.mcpHub ? window.mcpHub.isMasterEnabled() : true;
+  });
+
+  const handleToggleMinimax = (e) => {
+    e.stopPropagation();
+    const nextVal = e.target.checked;
+    setMinimaxEnabled(nextVal);
+    try {
+      const s = localStorage.getItem("minimax_api_config");
+      const parsed = s ? JSON.parse(s) : {};
+      parsed.enabled = nextVal;
+      localStorage.setItem("minimax_api_config", JSON.stringify(parsed));
+    } catch (err) {}
+  };
+
+  const handleToggleAiImage = (e) => {
+    e.stopPropagation();
+    const nextVal = e.target.checked;
+    setAiImageEnabled(nextVal);
+    try {
+      const s = localStorage.getItem("image_generation_api_config");
+      const parsed = s ? JSON.parse(s) : {};
+      parsed.enabled = nextVal;
+      localStorage.setItem("image_generation_api_config", JSON.stringify(parsed));
+    } catch (err) {}
+  };
+
+  const handleToggleMcp = (e) => {
+    e.stopPropagation();
+    const nextVal = e.target.checked;
+    setMcpEnabled(nextVal);
+    if (window.mcpHub) {
+      window.mcpHub.setMasterEnabled(nextVal);
+    }
+  };
+
+  if (activeSubPage === "mcp_tools") {
+    return <MCPToolsSettingsPage onClose={() => setActiveSubPage(null)} />;
+  }
   if (activeSubPage === "wallet") {
     return <WalletPage onClose={() => setActiveSubPage(null)} />;
   }
@@ -111084,25 +112384,30 @@ const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage }) => {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "12px 0",
+            padding: "14px 0",
             borderBottom: "1px solid #f5f5f5",
             cursor: "pointer",
           }}
         >
-          <div>
-            <div
-              style={{ fontSize: "14px", fontWeight: "500", color: "#3B82F6" }}
-            >
-              MiniMax 语音配置 (TTS)
+          <div style={{ flex: 1, paddingRight: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "14px", fontWeight: "600", color: "#3B82F6" }}>
+                🔊 MiniMax 语音配置 (TTS)
+              </span>
+              <span style={{ fontSize: "11px", padding: "1px 6px", borderRadius: "10px", background: minimaxEnabled ? "#EBF7F0" : "#F3F4F6", color: minimaxEnabled ? "#2E7D32" : "#888" }}>
+                {minimaxEnabled ? "已开启" : "已停用"}
+              </span>
             </div>
-            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
-              自主配置 API Key、Group ID 与语音模型（与大模型聊天独立）
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "3px" }}>
+              自主配置 API Key 与语音模型，点击进入详细设置
             </div>
           </div>
-          <i
-            data-lucide="volume-2"
-            style={{ color: "#3B82F6", width: 18, height: 18 }}
-          ></i>
+          <label onClick={(e) => e.stopPropagation()} style={{ position: "relative", display: "inline-block", width: "44px", height: "24px", margin: 0, cursor: "pointer", flexShrink: 0 }}>
+            <input type="checkbox" checked={minimaxEnabled} onChange={handleToggleMinimax} style={{ opacity: 0, width: 0, height: 0 }} />
+            <span style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: minimaxEnabled ? "#3B82F6" : "#D1D5DB", borderRadius: "24px", transition: "0.25s" }}>
+              <span style={{ position: "absolute", height: "18px", width: "18px", left: minimaxEnabled ? "23px" : "3px", bottom: "3px", backgroundColor: "#FFF", borderRadius: "50%", transition: "0.25s", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" }} />
+            </span>
+          </label>
         </div>
 
         {/* AI 文生图服务配置 */}
@@ -111112,31 +112417,69 @@ const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage }) => {
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "12px 0",
+            padding: "14px 0",
+            borderBottom: "1px solid #f5f5f5",
             cursor: "pointer",
           }}
         >
-          <div>
-            <div
-              style={{ fontSize: "14px", fontWeight: "500", color: "#8B5CF6" }}
-            >
-              🎨 AI 文生图配置 (Text-to-Image)
+          <div style={{ flex: 1, paddingRight: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "14px", fontWeight: "600", color: "#8B5CF6" }}>
+                🎨 AI 文生图配置 (Text-to-Image)
+              </span>
+              <span style={{ fontSize: "11px", padding: "1px 6px", borderRadius: "10px", background: aiImageEnabled ? "#F3E8FF" : "#F3F4F6", color: aiImageEnabled ? "#7E22CE" : "#888" }}>
+                {aiImageEnabled ? "已开启" : "已停用"}
+              </span>
             </div>
-            <div style={{ fontSize: "12px", color: "#888", marginTop: "2px" }}>
-              支持硅基流动 Flux / OpenAI DALL·E 3 / 智谱 CogView / 本地代理（与传讯独立）
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "3px" }}>
+              支持 Flux / DALL·E 3 / CogView 角色作画，点击进入详细设置
             </div>
           </div>
-          <i
-            data-lucide="image"
-            style={{ color: "#8B5CF6", width: 18, height: 18 }}
-          ></i>
+          <label onClick={(e) => e.stopPropagation()} style={{ position: "relative", display: "inline-block", width: "44px", height: "24px", margin: 0, cursor: "pointer", flexShrink: 0 }}>
+            <input type="checkbox" checked={aiImageEnabled} onChange={handleToggleAiImage} style={{ opacity: 0, width: 0, height: 0 }} />
+            <span style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: aiImageEnabled ? "#8B5CF6" : "#D1D5DB", borderRadius: "24px", transition: "0.25s" }}>
+              <span style={{ position: "absolute", height: "18px", width: "18px", left: aiImageEnabled ? "23px" : "3px", bottom: "3px", backgroundColor: "#FFF", borderRadius: "50%", transition: "0.25s", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" }} />
+            </span>
+          </label>
+        </div>
+
+        {/* MCP 扩展工具箱配置 */}
+        <div
+          onClick={() => (onOpenMcp ? onOpenMcp() : setActiveSubPage("mcp_tools"))}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "14px 0",
+            cursor: "pointer",
+          }}
+        >
+          <div style={{ flex: 1, paddingRight: "12px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              <span style={{ fontSize: "14px", fontWeight: "600", color: "#4E7E8E" }}>
+                🧩 MCP 扩展工具箱 (Agent Tools)
+              </span>
+              <span style={{ fontSize: "11px", padding: "1px 6px", borderRadius: "10px", background: mcpEnabled ? "#E0F2FE" : "#F3F4F6", color: mcpEnabled ? "#0369A1" : "#888" }}>
+                {mcpEnabled ? "已开启" : "已停用"}
+              </span>
+            </div>
+            <div style={{ fontSize: "12px", color: "#888", marginTop: "3px" }}>
+              开启 AI 自主调用世界书、备忘录、商城记账与外部万物工具
+            </div>
+          </div>
+          <label onClick={(e) => e.stopPropagation()} style={{ position: "relative", display: "inline-block", width: "44px", height: "24px", margin: 0, cursor: "pointer", flexShrink: 0 }}>
+            <input type="checkbox" checked={mcpEnabled} onChange={handleToggleMcp} style={{ opacity: 0, width: 0, height: 0 }} />
+            <span style={{ position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: mcpEnabled ? "#4E7E8E" : "#D1D5DB", borderRadius: "24px", transition: "0.25s" }}>
+              <span style={{ position: "absolute", height: "18px", width: "18px", left: mcpEnabled ? "23px" : "3px", bottom: "3px", backgroundColor: "#FFF", borderRadius: "50%", transition: "0.25s", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" }} />
+            </span>
+          </label>
         </div>
       </div>
     </div>
   );
 };
 
-const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax, onOpenAiImage }) => {
+const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax, onOpenAiImage, onOpenMcp }) => {
   if (!isOpen) return null;
   return (
     <div className="settings-overlay open" style={{ zIndex: 1005 }}>
@@ -111158,11 +112501,19 @@ const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax, onOpenAiImage 
         </div>
         <div className="title">隐私与安全</div>
       </div>
-      <PrivacySecurityPage onOpenMinimax={onOpenMinimax} onOpenAiImage={onOpenAiImage} />
+      <PrivacySecurityPage onOpenMinimax={onOpenMinimax} onOpenAiImage={onOpenAiImage} onOpenMcp={onOpenMcp} />
     </div>
   );
 };
 
+const MCPToolsOverlay = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  return (
+    <div className="settings-overlay open" style={{ zIndex: 1006 }}>
+      <MCPToolsSettingsPage onClose={onClose} />
+    </div>
+  );
+};
 // ==================== [修改] 列星页面组件 (AI 命轨推演版) ====================
 const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
   const { character, chatId } = session;
@@ -113221,6 +114572,7 @@ const MasterApp = () => {
 
   // [新增] 隐私与安全二级页面状态
   const [isPrivacySecurityOpen, setIsPrivacySecurityOpen] = useState(false);
+  const [isMCPToolsOpen, setIsMCPToolsOpen] = useState(false);
 
   // [ADD] 新增用户配置状态
   const [isProfileOpen, setIsProfileOpen] = useState(false);

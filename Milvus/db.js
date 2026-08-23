@@ -2254,13 +2254,11 @@ const deliveryOrderStore = {
       const now = Date.now();
       let changed = false;
       for (const order of orders) {
+        // 倒计时结束后变更为 delivered (已送达·待签收)，依然保留在【待收货】中由主公亲手点击签收
         if (order.status === "delivering" && now >= order.estimatedDeliveryTime) {
-          order.status = "completed";
-          order.completedTime = now;
+          order.status = "delivered";
+          order.deliveredTime = now;
           changed = true;
-          if (window.backpackStore && order.items && order.items.length > 0) {
-            await window.backpackStore.addItems(order.items);
-          }
         }
       }
       if (changed) {
