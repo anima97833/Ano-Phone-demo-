@@ -7,3 +7,4 @@ extract.js
 fix_*.js
 inject_error.js
 replace_*.js
+__pycache__/

@@ -98,7 +98,7 @@
           let dynData = { memos: [], assets: [] };
           const raw = localStorage.getItem(cacheKey);
           if (raw) {
-            try { dynData = JSON.parse(raw); } catch (e) {}
+            try { dynData = JSON.parse(raw); } catch (e) { }
           }
           if (!Array.isArray(dynData.memos)) dynData.memos = [];
 
@@ -131,7 +131,7 @@
                   未竟之事: parsed["未竟之事"] || parsed["\u672A\u7ADF\u4E4B\u4E8B"] || []
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           } else if (window.calendarStore) {
             try {
               const loaded = await window.calendarStore.getTasks();
@@ -142,7 +142,7 @@
                   未竟之事: loaded["未竟之事"] || loaded["\u672A\u7ADF\u4E4B\u4E8B"] || []
                 };
               }
-            } catch (e) {}
+            } catch (e) { }
           }
 
           if (!Array.isArray(calendarTasks["进行之事"])) {
@@ -187,7 +187,7 @@
           if (window.calendarStore) {
             try {
               await window.calendarStore.saveTasks(calendarTasks);
-            } catch (e) {}
+            } catch (e) { }
           }
 
           window.dispatchEvent(new CustomEvent("calendar_tasks_updated", { detail: calendarTasks }));
@@ -199,7 +199,8 @@
         } catch (err) {
           return { error: `写入备忘与日历失败: ${err.message}` };
         }
-      }},
+      }
+    },
     {
       name: "create_shop_order",
       displayName: "太疾驰商城记账",
@@ -227,7 +228,7 @@
           let orders = [];
           const raw = localStorage.getItem(cacheKey);
           if (raw) {
-            try { orders = JSON.parse(raw); } catch (e) {}
+            try { orders = JSON.parse(raw); } catch (e) { }
           }
           if (!Array.isArray(orders)) orders = [];
 
@@ -284,7 +285,7 @@
             const rawDelivery = localStorage.getItem("tjc_delivery_orders");
             let deliveryOrders = [];
             if (rawDelivery) {
-              try { deliveryOrders = JSON.parse(rawDelivery); } catch (e) {}
+              try { deliveryOrders = JSON.parse(rawDelivery); } catch (e) { }
             }
             if (!Array.isArray(deliveryOrders)) deliveryOrders = [];
             deliveryOrders.unshift({
@@ -396,7 +397,7 @@
             const jq = lunar.getJieQi();
             if (jq) jieqiStr = ` · 今日逢【${jq}】节气`;
           }
-        } catch (e) {}
+        } catch (e) { }
 
         const shichenList = ["子时(夜深)", "丑时(鸡鸣)", "寅时(平旦)", "卯时(日出)", "辰时(食时)", "巳时(隅中)", "午时(日中)", "未时(日昳)", "申时(晡时)", "酉时(日入)", "戌时(黄昏)", "亥时(人定)"];
         const shichen = shichenList[Math.floor((hours + 1) % 24 / 2)];
@@ -490,7 +491,7 @@
           let dynData = { memos: [], assets: [], paintings: [] };
           const raw = localStorage.getItem(cacheKey);
           if (raw) {
-            try { dynData = JSON.parse(raw); } catch (e) {}
+            try { dynData = JSON.parse(raw); } catch (e) { }
           }
           if (!Array.isArray(dynData.paintings)) dynData.paintings = [];
           if (!Array.isArray(dynData.assets)) dynData.assets = [];
@@ -531,7 +532,7 @@
           window.dispatchEvent(new CustomEvent("mcp_image_generated", {
             detail: { imageUrl, title, character: charName, timestamp: Date.now() }
           }));
-        } catch (e) {}
+        } catch (e) { }
 
         // 5. 返回标准结构化结果
         return {
@@ -541,6 +542,160 @@
           prompt: prompt,
           style: style,
           note: `画卷已丹青落墨并装裱完毕。请在对白中向主公呈递这幅画作，并附上标签 [图片: ${imageUrl}]，系统会自动将其渲染为精美画卷气泡。`
+        };
+      }
+    },
+    {
+      name: "draw_handdrawn_sketch",
+      displayName: "手绘线稿与动效简笔画 (Stroke Animation)",
+      icon: "ph-pen-nib-straight",
+      category: "艺术与工坊",
+      description: "当主公要求角色“画个草图”、“画个简笔画”、“手绘一张图”、“画个线稿”、“示意图”、“手绘头像/小物件”，或角色想要现场运笔为画作一笔一划勾勒线条时调用。此工具接收结构化矢量图形/SVG代码，并自动生成具有真实手绘质感、从第一笔画到最后一笔实时逐渐勾勒成形的动态矢量线稿卡片。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "线稿/画作的雅致标题，例如'《绣衣楼密室平面图》'、'《手绘小猫像》'、'《兰草折枝图》'"
+          },
+          svgContent: {
+            type: "string",
+            description: "完整的标准 SVG 矢量图形代码字符串。必须包含 viewBox=\"0 0 400 300\" 及各类 path、circle、line、rect、text 等图形元素，绘制内容细腻工整，富有手绘美感。"
+          },
+          strokeColor: {
+            type: "string",
+            description: "线条主色调 HEX 码，如 '#3d3b38' (古墨色), '#990000' (朱砂红), '#5e6756' (竹青色), '#b38243' (藤黄色)，默认 '#3d3b38'"
+          },
+          duration: {
+            type: "number",
+            description: "一笔一划绘制完成的总时长秒数，通常为 2.5 到 4.0 秒，默认为 3.0"
+          },
+          description: {
+            type: "string",
+            description: "名士对此幅手绘线稿/画作的题跋与心意解说"
+          }
+        },
+        required: ["title", "svgContent"]
+      },
+      defaultEnabled: true,
+      handler: async (args, context) => {
+        const charName = context?.character || "名士";
+        const title = (args.title || "《手绘草图》").trim();
+        let rawSvg = (args.svgContent || "").trim();
+        const strokeColor = args.strokeColor || "#3d3b38";
+        const duration = args.duration || 3.0;
+        const description = (args.description || "").trim();
+
+        if (!rawSvg) return { error: "SVG 内容不能为空" };
+
+        // 1. 清洗 Markdown 标记
+        rawSvg = rawSvg.replace(/```(?:xml|svg)?/gi, "").replace(/```/g, "").trim();
+
+        // 2. 规范化 SVG 根标签，强制注入标准 xmlns 命名空间以保证 100% 浏览器兼容
+        if (!rawSvg.includes("<svg")) {
+          rawSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 400 300" width="100%" height="100%">${rawSvg}</svg>`;
+        } else {
+          if (!/xmlns\s*=\s*["'][^"']*["']/i.test(rawSvg)) {
+            rawSvg = rawSvg.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
+          }
+          if (!/viewBox\s*=/i.test(rawSvg)) {
+            rawSvg = rawSvg.replace(/<svg/i, '<svg viewBox="0 0 400 300"');
+          }
+        }
+
+        const sketchId = "sketch_" + Date.now();
+
+        // 3. 自动注入一笔一划的描边关键帧动效 CSS
+        const animCss = `
+          <style>
+            @keyframes ao3StrokeAnim_${sketchId} {
+              0% { stroke-dashoffset: 1200; opacity: 0.1; }
+              20% { opacity: 1; }
+              100% { stroke-dashoffset: 0; opacity: 1; }
+            }
+            .ao3-sketch-${sketchId} path, 
+            .ao3-sketch-${sketchId} line, 
+            .ao3-sketch-${sketchId} circle, 
+            .ao3-sketch-${sketchId} rect, 
+            .ao3-sketch-${sketchId} polyline, 
+            .ao3-sketch-${sketchId} polygon {
+              stroke-dasharray: 1200;
+              stroke-dashoffset: 1200;
+              animation: ao3StrokeAnim_${sketchId} ${duration}s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+              stroke: ${strokeColor};
+              stroke-width: 2.2;
+              stroke-linecap: round;
+              stroke-linejoin: round;
+              fill-opacity: 0;
+              transition: fill-opacity 0.8s ease ${duration * 0.8}s;
+            }
+            .ao3-sketch-${sketchId} text {
+              opacity: 0;
+              animation: ao3FadeIn_${sketchId} 0.6s ease forwards ${duration * 0.85}s;
+              font-family: serif, sans-serif;
+            }
+            @keyframes ao3FadeIn_${sketchId} {
+              from { opacity: 0; transform: translateY(4px); }
+              to { opacity: 1; transform: translateY(0); }
+            }
+          </style>
+        `;
+
+        // 包装为带动画类名的 SVG
+        let animatedSvg = rawSvg.replace(/<svg([^>]*)>/i, `<svg$1 class="ao3-sketch-${sketchId}">` + animCss);
+
+        // 转换为安全标准的 Base64 Data URL (确保 100% 不损坏)
+        let svgDataUrl = "";
+        try {
+          const encoded = btoa(unescape(encodeURIComponent(animatedSvg)));
+          svgDataUrl = `data:image/svg+xml;base64,${encoded}`;
+        } catch (e) {
+          svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(animatedSvg)}`;
+        }
+
+        // 保存到名士动向/随身画作库
+        const cacheKey = `fangtian_dynamics_${charName}`;
+        try {
+          let dynData = { memos: [], assets: [], paintings: [] };
+          const raw = localStorage.getItem(cacheKey);
+          if (raw) {
+            try { dynData = JSON.parse(raw); } catch (e) { }
+          }
+          if (!Array.isArray(dynData.paintings)) dynData.paintings = [];
+          dynData.paintings.unshift({
+            id: sketchId,
+            title: title,
+            imageUrl: svgDataUrl,
+            prompt: title,
+            style: "handdrawn_vector",
+            description: description,
+            svgContent: animatedSvg,
+            timestamp: Date.now()
+          });
+          localStorage.setItem(cacheKey, JSON.stringify(dynData));
+        } catch (e) { }
+
+        // 广播画作生成事件
+        try {
+          window.__lastMcpGeneratedImage = {
+            imageUrl: svgDataUrl,
+            title: title,
+            character: charName,
+            timestamp: Date.now(),
+            isVectorSketch: true,
+            svgContent: animatedSvg
+          };
+          window.dispatchEvent(new CustomEvent("mcp_image_generated", {
+            detail: { imageUrl: svgDataUrl, title, character: charName, timestamp: Date.now() }
+          }));
+        } catch (e) { }
+
+        return {
+          status: "success",
+          sketchId: sketchId,
+          title: title,
+          imageUrl: svgDataUrl,
+          note: `手绘线稿画卷已在画纸上落笔成形！请在对白中向主公呈递这幅手绘作品，并在回复末尾附上标签 [生成图片: 《${title}》]，系统会自动在传讯气泡中为您实时逐笔绘制并直接呈现这幅手绘作品图片！`
         };
       }
     },
@@ -616,7 +771,7 @@
 
         // 2. 图像生成与绑定
         let imageUrl = args.image || null;
-        
+
         // 如果本轮刚刚生成过画作，优先直接使用该画作
         if (!imageUrl && window.__lastMcpGeneratedImage && window.__lastMcpGeneratedImage.imageUrl) {
           imageUrl = window.__lastMcpGeneratedImage.imageUrl;
@@ -626,7 +781,7 @@
         if (!imageUrl && args.imagePrompt && typeof window.generateAIImage === "function") {
           try {
             const cleanPrompt = args.imagePrompt.replace(/[\u4e00-\u9fa5]/g, "").trim();
-            const finalPrompt = cleanPrompt 
+            const finalPrompt = cleanPrompt
               ? `${cleanPrompt}, masterpiece, high quality, aesthetic scenery, no text, no words, no calligraphy, no watermark`
               : `aesthetic ancient Chinese scenery, poetic landscape, masterpiece, no text`;
             imageUrl = await window.generateAIImage(finalPrompt);
@@ -640,7 +795,7 @@
           try {
             const fallbackPrompt = `aesthetic poetic ancient scenery, tranquil atmosphere, masterpiece, no text, related to ${content.substring(0, 30)}`;
             imageUrl = await window.generateAIImage(fallbackPrompt);
-          } catch (e) {}
+          } catch (e) { }
         }
 
         // 3. 构建朋友圈动态条目
@@ -662,7 +817,7 @@
           let existingMoments = [];
           const raw = localStorage.getItem("t8_moments");
           if (raw) {
-            try { existingMoments = JSON.parse(raw); } catch (e) {}
+            try { existingMoments = JSON.parse(raw); } catch (e) { }
           }
           if (!Array.isArray(existingMoments)) existingMoments = [];
 
@@ -696,6 +851,85 @@
           return { error: `发布朋友圈失败: ${err.message}` };
         }
       }
+    },
+    {
+      name: "search_ao3_fanfics",
+      displayName: "AO3 官方同人检索与调阅",
+      icon: "ph-magnifying-glass",
+      category: "同人与文学",
+      description: "在 AO3 (Archive of Our Own) 上实时检索同人小说、CP粮、特定标签或原作热门榜单。若本地开启了 ao3_server.py，将直接抓取 AO3 官网最新真实作品数据。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          keyword: { type: "string", description: "搜索关键词、CP名称、角色名或标签，如'咖啡店'、'傅融'、'广陵王'、'慢热'" },
+          fandom: { type: "string", description: "可选的世界观/原作筛选，如'代号鸢'、'原神'" }
+        },
+        required: ["keyword"]
+      },
+      defaultEnabled: true,
+      handler: async (args, context) => {
+        const keyword = (args.keyword || "").trim();
+        if (!keyword) return { error: "搜索关键词不能为空" };
+
+        // 1. 优先尝试向本地运行的 AO3 桥接服务请求真实数据
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 4500);
+          const resp = await fetch(`http://127.0.0.1:8765/api/search?query=${encodeURIComponent(keyword)}&fandom=${encodeURIComponent(args.fandom || "")}`, {
+            signal: controller.signal
+          });
+          clearTimeout(timeoutId);
+          if (resp.ok) {
+            const data = await resp.json();
+            if (data.status === "success" && data.results && data.results.length > 0) {
+              console.log("[MCP] 成功从本地 AO3 桥接服务获取实时数据:", data);
+              return {
+                status: "success",
+                source: "AO3 官网实时抓取",
+                count: data.results.length,
+                results: data.results.slice(0, 4)
+              };
+            }
+          }
+        } catch (e) {
+          // 本地服务未开启或超时，自动平滑降级
+        }
+
+        // 2. 降级模式：从本地保存的同人库中检索
+        let works = [];
+        try {
+          const raw = localStorage.getItem("ao3_works_library") || localStorage.getItem("world_custom_books");
+          if (raw) works = JSON.parse(raw);
+        } catch (e) { }
+        if (!Array.isArray(works)) works = [];
+
+        const matched = works.filter(w => {
+          const target = `${w.title || ""} ${w.author || ""} ${w.fandom || ""} ${w.relationships || ""} ${(w.tags || []).join(" ")} ${w.summary || ""}`.toLowerCase();
+          return target.includes(keyword.toLowerCase());
+        });
+
+        if (matched.length > 0) {
+          return {
+            status: "success",
+            source: "手机本地同人馆藏",
+            count: matched.length,
+            results: matched.slice(0, 3).map(w => ({
+              id: w.id,
+              title: w.title,
+              author: w.author,
+              fandom: w.fandom || "同人",
+              relationships: w.relationships || "",
+              summary: w.summary || "",
+              kudos: w.kudos || 0
+            }))
+          };
+        }
+
+        return {
+          status: "not_found",
+          message: `未在 AO3 检索到与「${keyword}」完全匹配的已存同人作品。若需实时检索，请确认本地已运行 python ao3_server.py。`
+        };
+      }
     }
   ];
 
@@ -705,12 +939,12 @@
       this.toolOverrides = {};
       try {
         this.toolOverrides = JSON.parse(localStorage.getItem(STORAGE_KEYS.TOOL_OVERRIDES) || "{}");
-      } catch (e) {}
+      } catch (e) { }
 
       this.externalServers = [];
       try {
         this.externalServers = JSON.parse(localStorage.getItem(STORAGE_KEYS.EXTERNAL_SERVERS) || "[]");
-      } catch (e) {}
+      } catch (e) { }
 
       this.builtInTools = BUILTIN_TOOL_DEFINITIONS.map(t => ({
         ...t,
@@ -896,7 +1130,7 @@
   }
 
   // 挂载到全局单例
-  
+
   // 全局置顶浮动调用气泡管理器 (100% 独立挂载，不受组件切换影响)
   window.showMcpIndicator = function (toolName, displayName, status) {
     if (!document.getElementById("mcp-indicator-styles")) {
@@ -1052,12 +1286,36 @@
       const wrappedOnFinish = async (reply) => {
         let finalReply = reply || "";
 
-        // ① 如果本轮模型调用了 generate_pollinations_image 工具
+        // ① 如果本轮模型调用了 generate_pollinations_image 或 draw_handdrawn_sketch 工具
         if (window.__lastMcpGeneratedImage && window.__lastMcpGeneratedImage.imageUrl) {
           const img = window.__lastMcpGeneratedImage;
-          const hasImageTag = /\[\s*(?:生成图片|画图|生图|图片|图\s*片|photo|image|draw|img)\s*[:：]/i.test(finalReply);
+          const hasImageTag = /\[\s*(?:生成图片|画图|生图|草图|手绘|简笔画|图片|图\s*片|photo|image|draw|img)\s*[:：]/i.test(finalReply);
           if (!hasImageTag) {
-            finalReply = `${finalReply}\n[生成图片: ${img.prompt || img.title || "画卷"}]`;
+            finalReply = `${finalReply}\n[生成图片: ${img.title || img.prompt || "手绘画卷"}]`;
+          }
+        }
+
+        // 拦截并提取模型可能直接输出的 data:image 链接或 [图片: data:...]
+        const rawDataUrlMatch = finalReply.match(/(?:\[\s*(?:图片|生成图片|生图|画图|photo|image)\s*[:：]\s*)?(data:image\/[a-zA-Z0-9\+\-\.]+;[^\s\n"'\)\]]+)(?:\])?/i);
+        if (rawDataUrlMatch) {
+          let matchedUrl = rawDataUrlMatch[1];
+          if (matchedUrl.includes("data:image/svg+xml")) {
+            try {
+              let decoded = decodeURIComponent(matchedUrl.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
+              if (!decoded.includes("xmlns=")) {
+                decoded = decoded.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
+                matchedUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(decoded)))}`;
+              }
+            } catch (e) {}
+          }
+          window.__lastMcpGeneratedImage = {
+            imageUrl: matchedUrl,
+            title: "手绘画卷",
+            timestamp: Date.now()
+          };
+          finalReply = finalReply.replace(rawDataUrlMatch[0], "").trim();
+          if (!/\[\s*(?:生成图片|画图|生图|草图|手绘|图片|图\s*片|photo|image|draw|img)\s*[:：]/i.test(finalReply)) {
+            finalReply = `${finalReply}\n[生成图片: 手绘画卷]`;
           }
         }
 
@@ -1088,12 +1346,12 @@
           }
         }
 
-                // ③ 朋友圈动态标签抓取与自动发布 (双重保险 · 保证 100% 执行)
+        // ③ 朋友圈动态标签抓取与自动发布 (双重保险 · 保证 100% 执行)
         const momentTagMatch = finalReply.match(/\[\s*(?:发布朋友圈|发朋友圈|朋友圈动态|发动态|朋友圈|post_moment)\s*[:：]\s*([\s\S]*?)\]/i);
         if (momentTagMatch) {
           const rawMomentBody = momentTagMatch[1].trim();
           finalReply = finalReply.replace(momentTagMatch[0], "").trim();
-          
+
           let momentContent = rawMomentBody;
           let momentImagePrompt = "";
           if (rawMomentBody.includes("|")) {

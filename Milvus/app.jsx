@@ -37928,6 +37928,30 @@ const T9Page = () => {
   const [isGuessGenerating, setIsGuessGenerating] = useState(false);
   const [showScoreBoard, setShowScoreBoard] = useState(false);
 
+  // 6. 我画你猜功能状态 (Draw & Guess)
+  const [showDrawGuessGame, setShowDrawGuessGame] = useState(false);
+  const [drawGuessState, setDrawGuessState] = useState({
+    round: 1,
+    turn: "char", // "char": TA画我猜, "user": 我画TA猜
+    charScore: 0,
+    userScore: 0,
+    topic: "",
+    hint: "",
+    drawingUrl: "",
+    userGuess: "",
+    charGuess: "",
+    feedback: "",
+    status: "idle", // "idle", "drawing", "guessing", "judged"
+  });
+  const [drawGuessInput, setDrawGuessInput] = useState("");
+  const [userDrawTopic, setUserDrawTopic] = useState("");
+  const [isDrawGenerating, setIsDrawGenerating] = useState(false);
+  const [showDrawScoreBoard, setShowDrawScoreBoard] = useState(false);
+  const [drawBrushColor, setDrawBrushColor] = useState("#3d3b38");
+  const [drawBrushSize, setDrawBrushSize] = useState(3);
+  const drawCanvasRef = React.useRef(null);
+  const isDrawingRef = React.useRef(false);
+
   // 5. 愿望清单功能状态 (参考共同记账布局与双重视角)
   const [showWishlistModal, setShowWishlistModal] = useState(false);
   const [wishlistViewTab, setWishlistViewTab] = useState("all"); // "all", "user", "ta"
@@ -38129,6 +38153,56 @@ const T9Page = () => {
       );
     }
   }, [guessState, taCharacter?.id]);
+
+  // 6. 我画你猜数据隔离重载 (按伴侣 ID)
+  useEffect(() => {
+    if (taCharacter?.id) {
+      const savedDrawGame = localStorage.getItem(`t9_draw_guess_game_${taCharacter.id}`);
+      if (savedDrawGame) {
+        try {
+          setDrawGuessState(JSON.parse(savedDrawGame));
+        } catch (e) {
+          setDrawGuessState({
+            round: 1,
+            turn: "char",
+            charScore: 0,
+            userScore: 0,
+            topic: "",
+            hint: "",
+            drawingUrl: "",
+            userGuess: "",
+            charGuess: "",
+            feedback: "",
+            status: "idle",
+          });
+        }
+      } else {
+        setDrawGuessState({
+          round: 1,
+          turn: "char",
+          charScore: 0,
+          userScore: 0,
+          topic: "",
+          hint: "",
+          drawingUrl: "",
+          userGuess: "",
+          charGuess: "",
+          feedback: "",
+          status: "idle",
+        });
+      }
+    }
+  }, [taCharacter?.id]);
+
+  // 我画你猜数据保存 (按伴侣 ID)
+  useEffect(() => {
+    if (taCharacter?.id && drawGuessState.round > 0) {
+      localStorage.setItem(
+        `t9_draw_guess_game_${taCharacter.id}`,
+        JSON.stringify(drawGuessState),
+      );
+    }
+  }, [drawGuessState, taCharacter?.id]);
 
   // 5. 愿望清单数据隔离重载
   useEffect(() => {
@@ -38654,6 +38728,233 @@ ${rpTexts ? rpTexts + '\n' : ''}${giftTexts ? giftTexts + '\n' : ''}
     });
   };
 
+  // ================== 我画你猜功能逻辑 (Draw & Guess) ==================
+  // 1. 名士挥毫作画 (TA画，我猜)
+  const handleCharStartDraw = async () => {
+    if (isDrawGenerating || !taCharacter) return;
+    setIsDrawGenerating(true);
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
+      let userContext = mePersona ? `【用户身份】姓名:${mePersona.name}, 性格:${mePersona.personality || "无"}` : "";
+      const sysPrompt = "你是一个沉浸式古风角色扮演AI。正在情侣空间与用户玩'我画你猜'游戏。";
+      const userPrompt = `
+${worldContext}
+${userContext}
+【你的设定】姓名:${taCharacter.name}, 性格:${taCharacter.profile?.personality || "无"}
+【任务】：请你暗自选定一个雅致有趣的古风日常事物、动植物、小物件或场景作为画作主题，现场画一幅极简手绘简笔画/线稿，并留下一句符合你性格的神秘线索题跋让用户猜测。
+【必须严格以纯 JSON 格式返回】：
+{
+  "topic": "画作主题名称，如'折扇'、'白玉簪'、'小黑猫'、'青梅酒'、'糖葫芦'、'兰花'",
+  "hint": "一句符合你性格的提示，如'此物夏日最宜握于掌中，可生清风，你猜我画的是什么？'",
+  "svgContent": "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 400 300\" width=\"100%\" height=\"100%\"><path d=\"...\" stroke=\"#3d3b38\" stroke-width=\"2.5\" fill=\"none\"/></svg>"
+}
+注意：svgContent 必须包含完整有效的 path、circle、line 等矢量元素，线条简洁清晰，易于辨识。
+`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
+          null,
+          (reply) => {
+            try {
+              const clean = reply.replace(/```json|```/g, "").trim();
+              const data = JSON.parse(clean);
+              let svg = data.svgContent || `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><circle cx="200" cy="150" r="60" stroke="#3d3b38" stroke-width="3" fill="none"/><text x="200" y="160" text-anchor="middle" font-size="20" fill="#3d3b38">${data.topic || "妙画"}</text></svg>`;
+              if (!svg.includes("xmlns=")) {
+                svg = svg.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
+              }
+              const dataUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(svg)))}`;
+              setDrawGuessState((prev) => ({
+                ...prev,
+                topic: data.topic || "画作",
+                hint: data.hint || "猜猜我画的是什么？",
+                drawingUrl: dataUrl,
+                status: "guessing",
+                userGuess: "",
+                charGuess: "",
+                feedback: "",
+              }));
+            } catch (e) {
+              console.error("解析作画失败:", e, reply);
+              // 兜底生成一幅水墨折扇
+              const fallbackSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 300"><path d="M 120 220 Q 200 100 280 220 Z" stroke="#3d3b38" stroke-width="3" fill="none"/><line x1="200" y1="220" x2="140" y2="160" stroke="#3d3b38" stroke-width="2"/><line x1="200" y1="220" x2="200" y2="130" stroke="#3d3b38" stroke-width="2"/><line x1="200" y1="220" x2="260" y2="160" stroke="#3d3b38" stroke-width="2"/></svg>`;
+              setDrawGuessState((prev) => ({
+                ...prev,
+                topic: "折扇",
+                hint: "清风徐来，随身相伴的小物件。",
+                drawingUrl: `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(fallbackSvg)))}`,
+                status: "guessing",
+                userGuess: "",
+                charGuess: "",
+                feedback: "",
+              }));
+            } finally {
+              setIsDrawGenerating(false);
+            }
+          },
+          () => setIsDrawGenerating(false),
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      setIsDrawGenerating(false);
+    }
+  };
+
+  // 2. 用户提交猜测 (TA画，我猜)
+  const handleUserSubmitDrawGuess = async () => {
+    if (!drawGuessInput.trim() || !taCharacter) return alert("请先输入你的猜测！");
+    setIsDrawGenerating(true);
+    const guessText = drawGuessInput.trim();
+    setDrawGuessState((prev) => ({ ...prev, userGuess: guessText }));
+    setDrawGuessInput("");
+
+    try {
+      const sysPrompt = "你是一个沉浸式古风角色扮演AI。负责判定用户在'我画你猜'中是否猜对你画的作品。";
+      const userPrompt = `
+【你的设定】姓名:${taCharacter.name}, 性格:${taCharacter.profile?.personality}
+【你画的真实主题】：${drawGuessState.topic}
+【你的线索提示】：${drawGuessState.hint}
+【用户的猜测】：${guessText}
+请判定用户是否猜对（含义相近、包含关键词即可算对）。
+严格以纯 JSON 格式输出：
+{
+  "isCorrect": true或false,
+  "feedback": "用你的角色口吻说一句生动点评（如果猜对夸奖亲昵，如果猜错调侃或告知答案）"
+}
+`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
+          null,
+          (reply) => {
+            try {
+              const data = JSON.parse(reply.replace(/```json|```/g, "").trim());
+              setDrawGuessState((prev) => ({
+                ...prev,
+                userScore: prev.userScore + (data.isCorrect ? 10 : -5),
+                feedback: data.feedback,
+                status: "judged",
+              }));
+            } catch (e) {
+              const isMatch = guessText.includes(drawGuessState.topic) || drawGuessState.topic.includes(guessText);
+              setDrawGuessState((prev) => ({
+                ...prev,
+                userScore: prev.userScore + (isMatch ? 10 : -5),
+                feedback: isMatch ? `正解！楼主果然灵犀通透，正是我画的《${drawGuessState.topic}》。` : `噗……猜错了，我画的分明是《${drawGuessState.topic}》。`,
+                status: "judged",
+              }));
+            } finally {
+              setIsDrawGenerating(false);
+            }
+          },
+          () => setIsDrawGenerating(false),
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      setIsDrawGenerating(false);
+    }
+  };
+
+  // 3. 用户呈递自己画的画作让名士猜 (我画，TA猜)
+  const handleUserSubmitDrawing = async () => {
+    if (!userDrawTopic.trim()) return alert("请先填写你画的事物谜底（方便名士比对）！");
+    let canvasUrl = "";
+    if (drawCanvasRef.current) {
+      try {
+        canvasUrl = drawCanvasRef.current.toDataURL("image/png");
+      } catch (e) {}
+    }
+    setIsDrawGenerating(true);
+    const targetTopic = userDrawTopic.trim();
+    setDrawGuessState((prev) => ({
+      ...prev,
+      topic: targetTopic,
+      drawingUrl: canvasUrl || prev.drawingUrl,
+    }));
+
+    try {
+      const sysPrompt = "你是一个沉浸式古风角色扮演AI。正在看用户为你手绘的画作并进行竞猜。";
+      const userPrompt = `
+【你的设定】姓名:${taCharacter.name}, 性格:${taCharacter.profile?.personality}
+【用户画的真实谜底】：${targetTopic}
+你作为名士，正在仔细端详用户现场为你手绘的画作。
+请以你的角色性格来猜测用户画的是什么（可以非常聪明地猜中，或者故意装傻/调侃/猜出一个可爱的相关事物），并对用户的画技与心意做出第一人称的亲昵点评。
+严格以纯 JSON 格式输出：
+{
+  "charGuess": "你猜的答案词语",
+  "isCorrect": true或false,
+  "feedback": "第一人称对画作的点评与心声"
+}
+`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [{ role: "system", content: sysPrompt }, { role: "user", content: userPrompt }],
+          null,
+          (reply) => {
+            try {
+              const data = JSON.parse(reply.replace(/```json|```/g, "").trim());
+              setDrawGuessState((prev) => ({
+                ...prev,
+                charGuess: data.charGuess || targetTopic,
+                feedback: data.feedback || `这画笔线条虽显稚拙，但我一看便知是《${targetTopic}》，甚合我意。`,
+                charScore: prev.charScore + (data.isCorrect !== false ? 10 : -5),
+                status: "judged",
+              }));
+            } catch (e) {
+              setDrawGuessState((prev) => ({
+                ...prev,
+                charGuess: targetTopic,
+                feedback: `妙哉，观此笔墨灵动，定是《${targetTopic}》无疑。`,
+                charScore: prev.charScore + 10,
+                status: "judged",
+              }));
+            } finally {
+              setIsDrawGenerating(false);
+            }
+          },
+          () => setIsDrawGenerating(false),
+        );
+      }
+    } catch (e) {
+      console.error(e);
+      setIsDrawGenerating(false);
+    }
+  };
+
+  // 4. 切换下一轮我画你猜回合
+  const handleNextDrawTurn = (userJudgeAiIsCorrect = null) => {
+    setDrawGuessState((prev) => {
+      let nextCharScore = prev.charScore;
+      if (prev.turn === "user" && userJudgeAiIsCorrect !== null) {
+        nextCharScore += userJudgeAiIsCorrect ? 10 : -10;
+      }
+      return {
+        ...prev,
+        round: prev.turn === "user" ? prev.round + 1 : prev.round,
+        turn: prev.turn === "char" ? "user" : "char",
+        charScore: nextCharScore,
+        topic: "",
+        hint: "",
+        drawingUrl: "",
+        userGuess: "",
+        charGuess: "",
+        feedback: "",
+        status: "idle",
+      };
+    });
+    setUserDrawTopic("");
+    setDrawGuessInput("");
+    // 清空画板
+    if (drawCanvasRef.current) {
+      const ctx = drawCanvasRef.current.getContext("2d");
+      ctx.clearRect(0, 0, drawCanvasRef.current.width, drawCanvasRef.current.height);
+    }
+  };
+
   // ================== 愿望清单功能逻辑 (参考共同记账布局与全维度AI深度联动) ==================
   const handleSaveWish = () => {
     if (!newWish.title.trim()) {
@@ -38821,7 +39122,7 @@ JSON 格式示例：
     { title: "共同记账", icon: "coin", colorClass: "bg-morandi-3" },
     { title: "愿望清单", icon: "star", colorClass: "bg-morandi-4" },
     { title: "我问你猜", icon: "question", colorClass: "bg-morandi-5" },
-    { title: "敬请期待", icon: "lock-key", colorClass: "bg-morandi-5" },
+    { title: "我画你猜", icon: "paint-brush-broad", colorClass: "bg-morandi-3" },
     { title: "敬请期待", icon: "lock-key", colorClass: "bg-morandi-5" },
     { title: "敬请期待", icon: "lock-key", colorClass: "bg-morandi-5" },
   ];
@@ -38849,18 +39150,18 @@ JSON 格式示例：
             {features.map((item, index) => (
               <div
                 key={index}
-                className={index < 5 ? `active-press ${item.colorClass}` : ""}
+                className={index < 6 ? `active-press ${item.colorClass}` : ""}
                 style={{
                   display: "flex",
                   flexDirection: "column",
                   alignItems: "center",
                   gap: "10px",
-                  background: index >= 5 ? "rgba(255,255,255,0.4)" : undefined,
+                  background: index >= 6 ? "rgba(255,255,255,0.4)" : undefined,
                   padding: "16px 6px",
                   borderRadius: "20px",
                   boxShadow: "0 4px 12px rgba(140, 145, 123, 0.05)",
-                  cursor: index < 5 ? "pointer" : "not-allowed",
-                  opacity: index >= 5 ? 0.6 : 1,
+                  cursor: index < 6 ? "pointer" : "not-allowed",
+                  opacity: index >= 6 ? 0.6 : 1,
                   border: "1px solid rgba(255,255,255,0.5)",
                 }}
                 onClick={() => {
@@ -38874,6 +39175,8 @@ JSON 格式示例：
                     setShowWishlistModal(true);
                   } else if (index === 4) {
                     setShowGuessGame(true);
+                  } else if (index === 5) {
+                    setShowDrawGuessGame(true);
                   } else {
                     alert("模块升级部署中，敬请期待！");
                   }
@@ -38896,7 +39199,7 @@ JSON 格式示例：
                     className={`ph-fill ph-${item.icon}`}
                     style={{
                       fontSize: "22px",
-                      color: index < 5 ? "#8fa99d" : "#ccc",
+                      color: index < 6 ? "#8fa99d" : "#ccc",
                     }}
                   ></i>
                 </div>
@@ -40744,6 +41047,599 @@ JSON 格式示例：
                         ? "提交回答"
                         : "发送问题"}
                   </button>
+                )}
+              </div>
+
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                <WaterMirrorAvatar avatar={mePersona?.avatar} name={mePersona?.name || "我"} size={40} />
+                <span style={{ fontSize: "10px", color: "#8C917B" }}>我</span>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* ================== 我画你猜弹窗 (Draw & Guess) ================== */}
+      {showDrawGuessGame && (
+        <>
+          <div
+            className="t9-companion-mask"
+            style={{
+              position: "fixed",
+              inset: 0,
+              background: "rgba(0,0,0,0.55)",
+              zIndex: 1000,
+              backdropFilter: "blur(3px)",
+            }}
+            onClick={() => setShowDrawGuessGame(false)}
+          ></div>
+          <div
+            className="t9-companion-modal no-scrollbar"
+            style={{
+              position: "fixed",
+              bottom: 0,
+              left: 0,
+              right: 0,
+              maxHeight: "90vh",
+              overflowY: "auto",
+              borderTopLeftRadius: "28px",
+              borderTopRightRadius: "28px",
+              padding: "20px 20px 30px",
+              zIndex: 1001,
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.2)",
+              animation: "slideUp 0.3s ease-out",
+              background: "#FDFCF8",
+            }}
+          >
+            {/* 顶栏 */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                marginBottom: "16px",
+              }}
+            >
+              <h2
+                style={{
+                  fontSize: "17px",
+                  fontWeight: "bold",
+                  color: "#5a5f4d",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <i className="ph-fill ph-paint-brush-broad" style={{ color: "#D6724B", fontSize: "20px" }}></i>
+                我画你猜 - 与 {taCharacter?.name} (第 {drawGuessState.round} 轮)
+              </h2>
+              <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                <button
+                  onClick={() => setShowDrawScoreBoard(!showDrawScoreBoard)}
+                  style={{
+                    padding: "5px 12px",
+                    background: "#F5EFEB",
+                    color: "#A26148",
+                    border: "1px solid #DDBAA8",
+                    borderRadius: "12px",
+                    fontSize: "12px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                  }}
+                >
+                  丹青谱
+                </button>
+                <button
+                  onClick={() => setShowDrawGuessGame(false)}
+                  style={{
+                    background: "none",
+                    border: "none",
+                    fontSize: "24px",
+                    color: "#999",
+                    cursor: "pointer",
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            {/* 计分面板 */}
+            {showDrawScoreBoard && (
+              <div
+                style={{
+                  background: "#FFF",
+                  border: "1px solid #EAE6D6",
+                  borderRadius: "16px",
+                  padding: "14px",
+                  marginBottom: "16px",
+                  display: "flex",
+                  justifyContent: "space-around",
+                  boxShadow: "0 4px 12px rgba(0,0,0,0.04)",
+                  animation: "fadeIn 0.2s",
+                }}
+              >
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "12px", color: "#8C917B" }}>{taCharacter?.name} 妙笔</div>
+                  <div style={{ fontSize: "22px", fontWeight: "bold", color: "#D6724B" }}>{drawGuessState.charScore}</div>
+                </div>
+                <div style={{ width: "1px", background: "#EAEAEA" }}></div>
+                <div style={{ textAlign: "center" }}>
+                  <div style={{ fontSize: "12px", color: "#8C917B" }}>我 ({mePersona?.name || "玩家"}) 丹青</div>
+                  <div style={{ fontSize: "22px", fontWeight: "bold", color: "#5A8F6D" }}>{drawGuessState.userScore}</div>
+                </div>
+              </div>
+            )}
+
+            {/* 模式 A：名士画，我猜 */}
+            {drawGuessState.turn === "char" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                {/* 画卷展示区 */}
+                <div
+                  style={{
+                    background: "#FAF7F2",
+                    borderRadius: "18px",
+                    padding: "16px",
+                    border: "1px solid #E8E2D2",
+                    minHeight: "220px",
+                    display: "flex",
+                    flexDirection: "column",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    position: "relative",
+                    boxShadow: "inset 0 2px 6px rgba(0,0,0,0.02)",
+                  }}
+                >
+                  <div style={{ alignSelf: "flex-start", fontSize: "12px", color: "#8C917B", fontWeight: "bold", marginBottom: "8px" }}>
+                    【执笔作画】: {taCharacter?.name}
+                  </div>
+
+                  {drawGuessState.status === "idle" ? (
+                    <div style={{ textAlign: "center", padding: "30px 10px", color: "#999" }}>
+                      <i className="ph-duotone ph-paint-brush" style={{ fontSize: "36px", color: "#D6724B", opacity: 0.6, marginBottom: "8px", display: "block" }}></i>
+                      <span>名士正待展卷，点击右下角毛笔让 TA 挥毫作画...</span>
+                    </div>
+                  ) : (
+                    <div style={{ width: "100%", display: "flex", flexDirection: "column", alignItems: "center" }}>
+                      {drawGuessState.drawingUrl && (
+                        <div
+                          style={{
+                            width: "100%",
+                            maxWidth: "320px",
+                            height: "190px",
+                            background: "#FFF",
+                            borderRadius: "12px",
+                            border: "1px solid rgba(180,160,130,0.3)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            overflow: "hidden",
+                            boxShadow: "0 2px 8px rgba(0,0,0,0.05)",
+                          }}
+                        >
+                          <img
+                            src={drawGuessState.drawingUrl}
+                            alt="名士画作"
+                            style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain", display: "block" }}
+                          />
+                        </div>
+                      )}
+                      {drawGuessState.hint && (
+                        <div
+                          style={{
+                            marginTop: "10px",
+                            fontSize: "13px",
+                            color: "#6E5B4B",
+                            fontStyle: "italic",
+                            textAlign: "center",
+                            background: "rgba(255,255,255,0.7)",
+                            padding: "6px 14px",
+                            borderRadius: "20px",
+                            border: "1px dashed #E0D3C1",
+                          }}
+                        >
+                          题跋线索：“{drawGuessState.hint}”
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {(drawGuessState.status === "idle" || drawGuessState.status === "guessing") && (
+                    <button
+                      onClick={handleCharStartDraw}
+                      disabled={isDrawGenerating}
+                      style={{
+                        position: "absolute",
+                        bottom: "12px",
+                        right: "12px",
+                        width: "40px",
+                        height: "40px",
+                        borderRadius: "50%",
+                        background: "linear-gradient(135deg, #E68A64 0%, #D6724B 100%)",
+                        color: "#FFF",
+                        border: "none",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        cursor: isDrawGenerating ? "not-allowed" : "pointer",
+                        boxShadow: "0 4px 10px rgba(214,114,75,0.3)",
+                      }}
+                      title="挥毫作画 / 重新作画"
+                    >
+                      <i
+                        className={
+                          isDrawGenerating
+                            ? "ph ph-spinner animate-spin"
+                            : "ph-fill ph-paint-brush-broad"
+                        }
+                        style={{ fontSize: "18px" }}
+                      ></i>
+                    </button>
+                  )}
+                </div>
+
+                {/* 竞猜输入与判定揭晓 */}
+                {drawGuessState.status === "judged" ? (
+                  <div
+                    style={{
+                      background: "#FFF5F2",
+                      padding: "14px 16px",
+                      borderRadius: "16px",
+                      border: "1px dashed #E0A899",
+                      animation: "popIn 0.3s",
+                    }}
+                  >
+                    <div style={{ fontSize: "13px", color: "#D6724B", fontWeight: "bold", marginBottom: "6px" }}>
+                      【揭晓正解】: 《{drawGuessState.topic}》（我的猜测：{drawGuessState.userGuess}）
+                    </div>
+                    <div style={{ fontSize: "14px", color: "#5A5F4D", lineHeight: "1.5" }}>
+                      【{taCharacter?.name}的点评】: {drawGuessState.feedback}
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", gap: "10px" }}>
+                    <input
+                      type="text"
+                      value={drawGuessInput}
+                      onChange={(e) => setDrawGuessInput(e.target.value)}
+                      placeholder={drawGuessState.status === "guessing" ? "看画卷猜事物：输入你的猜测..." : "请先点击毛笔让名士画图..."}
+                      disabled={drawGuessState.status !== "guessing" || isDrawGenerating}
+                      style={{
+                        flex: 1,
+                        padding: "12px 16px",
+                        borderRadius: "16px",
+                        border: "1px solid #EAEAEA",
+                        outline: "none",
+                        fontSize: "14px",
+                        color: "#5A5F4D",
+                        background: "#FFF",
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            ) : (
+              /* 模式 B：用户画，名士猜 */
+              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                <div style={{ fontSize: "12px", color: "#8C917B", fontWeight: "bold" }}>
+                  【执笔作画】: 我 ({mePersona?.name || "楼主"}) · 请在画板上挥毫涂鸦
+                </div>
+
+                {drawGuessState.status === "judged" ? (
+                  /* 已揭晓判定 */
+                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+                    {drawGuessState.drawingUrl && (
+                      <div
+                        style={{
+                          width: "100%",
+                          height: "170px",
+                          background: "#FFF",
+                          borderRadius: "14px",
+                          border: "1px solid #EAE6D6",
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          overflow: "hidden",
+                        }}
+                      >
+                        <img src={drawGuessState.drawingUrl} alt="我的画作" style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                      </div>
+                    )}
+                    <div
+                      style={{
+                        background: "#F5F8F6",
+                        padding: "14px 16px",
+                        borderRadius: "16px",
+                        border: "1px dashed #A8C8BA",
+                        animation: "popIn 0.3s",
+                      }}
+                    >
+                      <div style={{ fontSize: "13px", color: "#5A8F6D", fontWeight: "bold", marginBottom: "6px" }}>
+                        【我的谜底】: 《{drawGuessState.topic}》 ｜ 【{taCharacter?.name}的猜测】: “{drawGuessState.charGuess}”
+                      </div>
+                      <div style={{ fontSize: "14px", color: "#5A5F4D", lineHeight: "1.5" }}>
+                        【{taCharacter?.name}的心声评价】: {drawGuessState.feedback}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* 手绘涂鸦画板 */
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    {/* 画板容器 */}
+                    <div
+                      style={{
+                        width: "100%",
+                        height: "200px",
+                        background: "#FFF",
+                        borderRadius: "16px",
+                        border: "2px solid #EAE6D6",
+                        position: "relative",
+                        overflow: "hidden",
+                        touchAction: "none",
+                        boxShadow: "inset 0 2px 6px rgba(0,0,0,0.03)",
+                      }}
+                    >
+                      <canvas
+                        ref={(canvas) => {
+                          drawCanvasRef.current = canvas;
+                          if (canvas && !canvas.__inited) {
+                            canvas.__inited = true;
+                            canvas.width = canvas.offsetWidth || 340;
+                            canvas.height = canvas.offsetHeight || 200;
+                            const ctx = canvas.getContext("2d");
+                            ctx.lineCap = "round";
+                            ctx.lineJoin = "round";
+                          }
+                        }}
+                        style={{ width: "100%", height: "100%", display: "block", cursor: "crosshair" }}
+                        onMouseDown={(e) => {
+                          isDrawingRef.current = true;
+                          const canvas = drawCanvasRef.current;
+                          const rect = canvas.getBoundingClientRect();
+                          const ctx = canvas.getContext("2d");
+                          ctx.strokeStyle = drawBrushColor;
+                          ctx.lineWidth = drawBrushSize;
+                          ctx.beginPath();
+                          ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+                        }}
+                        onMouseMove={(e) => {
+                          if (!isDrawingRef.current) return;
+                          const canvas = drawCanvasRef.current;
+                          const rect = canvas.getBoundingClientRect();
+                          const ctx = canvas.getContext("2d");
+                          ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+                          ctx.stroke();
+                        }}
+                        onMouseUp={() => { isDrawingRef.current = false; }}
+                        onMouseLeave={() => { isDrawingRef.current = false; }}
+                        onTouchStart={(e) => {
+                          isDrawingRef.current = true;
+                          const canvas = drawCanvasRef.current;
+                          const rect = canvas.getBoundingClientRect();
+                          const touch = e.touches[0];
+                          const ctx = canvas.getContext("2d");
+                          ctx.strokeStyle = drawBrushColor;
+                          ctx.lineWidth = drawBrushSize;
+                          ctx.beginPath();
+                          ctx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+                        }}
+                        onTouchMove={(e) => {
+                          if (!isDrawingRef.current) return;
+                          const canvas = drawCanvasRef.current;
+                          const rect = canvas.getBoundingClientRect();
+                          const touch = e.touches[0];
+                          const ctx = canvas.getContext("2d");
+                          ctx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+                          ctx.stroke();
+                        }}
+                        onTouchEnd={() => { isDrawingRef.current = false; }}
+                      />
+                    </div>
+
+                    {/* 调色盘与画笔工具 */}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "4px 2px" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        {[
+                          { color: "#3d3b38", label: "古墨" },
+                          { color: "#c94042", label: "朱砂" },
+                          { color: "#4f7942", label: "竹青" },
+                          { color: "#c99e32", label: "藤黄" },
+                          { color: "#2e5b88", label: "花青" },
+                        ].map((c) => (
+                          <div
+                            key={c.color}
+                            onClick={() => setDrawBrushColor(c.color)}
+                            style={{
+                              width: "22px",
+                              height: "22px",
+                              borderRadius: "50%",
+                              background: c.color,
+                              cursor: "pointer",
+                              border: drawBrushColor === c.color ? "2px solid #5A8F6D" : "2px solid #FFF",
+                              boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
+                              transform: drawBrushColor === c.color ? "scale(1.2)" : "scale(1)",
+                              transition: "transform 0.15s ease",
+                            }}
+                            title={c.label}
+                          />
+                        ))}
+                      </div>
+
+                      <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                        {[
+                          { size: 2, label: "细" },
+                          { size: 5, label: "中" },
+                          { size: 10, label: "粗" },
+                        ].map((s) => (
+                          <button
+                            key={s.size}
+                            onClick={() => setDrawBrushSize(s.size)}
+                            style={{
+                              padding: "2px 8px",
+                              borderRadius: "8px",
+                              fontSize: "11px",
+                              border: drawBrushSize === s.size ? "1px solid #5A8F6D" : "1px solid #EAEAEA",
+                              background: drawBrushSize === s.size ? "#E8F1ED" : "#FFF",
+                              color: drawBrushSize === s.size ? "#5A8F6D" : "#666",
+                              cursor: "pointer",
+                            }}
+                          >
+                            {s.label}
+                          </button>
+                        ))}
+                        <button
+                          onClick={() => {
+                            if (drawCanvasRef.current) {
+                              const ctx = drawCanvasRef.current.getContext("2d");
+                              ctx.clearRect(0, 0, drawCanvasRef.current.width, drawCanvasRef.current.height);
+                            }
+                          }}
+                          style={{
+                            padding: "2px 8px",
+                            borderRadius: "8px",
+                            fontSize: "11px",
+                            border: "1px solid #EAEAEA",
+                            background: "#FFF",
+                            color: "#999",
+                            cursor: "pointer",
+                          }}
+                        >
+                          清空
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 输入画作真实谜底 */}
+                    <input
+                      type="text"
+                      value={userDrawTopic}
+                      onChange={(e) => setUserDrawTopic(e.target.value)}
+                      placeholder="填写你画的物品谜底（如：纸鸢、绣球）..."
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "14px",
+                        border: "1px solid #EAEAEA",
+                        outline: "none",
+                        fontSize: "13px",
+                        color: "#5A5F4D",
+                        background: "#FFF",
+                      }}
+                    />
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* 底部按钮栏 */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "18px" }}>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>
+                <WaterMirrorAvatar avatar={taCharacter?.avatar} name={taCharacter?.name} size={40} />
+                <span style={{ fontSize: "10px", color: "#8C917B" }}>{taCharacter?.name}</span>
+              </div>
+
+              <div style={{ flex: 1, padding: "0 14px" }}>
+                {drawGuessState.turn === "char" ? (
+                  drawGuessState.status === "judged" ? (
+                    <button
+                      onClick={() => handleNextDrawTurn()}
+                      className="active-press"
+                      style={{
+                        width: "100%",
+                        padding: "12px",
+                        borderRadius: "20px",
+                        background: "linear-gradient(135deg, #A8C8BA 0%, #8FA99D 100%)",
+                        color: "#FFF",
+                        border: "none",
+                        fontWeight: "bold",
+                        fontSize: "14px",
+                        boxShadow: "0 4px 12px rgba(143,169,157,0.3)",
+                      }}
+                    >
+                      下一回合：轮到我画让TA猜
+                    </button>
+                  ) : (
+                    <button
+                      onClick={handleUserSubmitDrawGuess}
+                      disabled={isDrawGenerating || !drawGuessInput.trim() || drawGuessState.status !== "guessing"}
+                      className="active-press"
+                      style={{
+                        width: "100%",
+                        padding: "12px",
+                        borderRadius: "20px",
+                        background:
+                          isDrawGenerating || !drawGuessInput.trim() || drawGuessState.status !== "guessing"
+                            ? "#E0E0E0"
+                            : "linear-gradient(135deg, #D6724B 0%, #C95E36 100%)",
+                        color: "#FFF",
+                        border: "none",
+                        fontWeight: "bold",
+                        fontSize: "14px",
+                        boxShadow: "0 4px 12px rgba(214,114,75,0.25)",
+                      }}
+                    >
+                      {isDrawGenerating ? "名士辨认中..." : "呈递猜测"}
+                    </button>
+                  )
+                ) : (
+                  drawGuessState.status === "judged" ? (
+                    <div style={{ display: "flex", gap: "10px" }}>
+                      <button
+                        onClick={() => handleNextDrawTurn(false)}
+                        className="active-press"
+                        style={{
+                          flex: 1,
+                          padding: "12px",
+                          borderRadius: "16px",
+                          background: "#FFF",
+                          color: "#D62F2F",
+                          border: "1px solid #FFCCCC",
+                          fontWeight: "bold",
+                          fontSize: "13px",
+                        }}
+                      >
+                        扣5分
+                      </button>
+                      <button
+                        onClick={() => handleNextDrawTurn(true)}
+                        className="active-press"
+                        style={{
+                          flex: 1,
+                          padding: "12px",
+                          borderRadius: "16px",
+                          background: "#E8F1ED",
+                          color: "#5A8F6D",
+                          border: "1px solid #A8C8BA",
+                          fontWeight: "bold",
+                          fontSize: "13px",
+                        }}
+                      >
+                        加10分 · 下一轮
+                      </button>
+                    </div>
+                  ) : (
+                    <button
+                      onClick={handleUserSubmitDrawing}
+                      disabled={isDrawGenerating || !userDrawTopic.trim()}
+                      className="active-press"
+                      style={{
+                        width: "100%",
+                        padding: "12px",
+                        borderRadius: "20px",
+                        background:
+                          isDrawGenerating || !userDrawTopic.trim()
+                            ? "#E0E0E0"
+                            : "linear-gradient(135deg, #5A8F6D 0%, #467557 100%)",
+                        color: "#FFF",
+                        border: "none",
+                        fontWeight: "bold",
+                        fontSize: "14px",
+                        boxShadow: "0 4px 12px rgba(90,143,109,0.25)",
+                      }}
+                    >
+                      {isDrawGenerating ? "名士赏画竞猜中..." : "呈递画卷让TA猜"}
+                    </button>
+                  )
                 )}
               </div>
 
@@ -81268,10 +82164,11 @@ ${docContext}
 
         let imagePromptToProcess = null;
         let isAiImageRequest = false;
-        const aiImageGenerateMatch = cleanReply.match(/\[\s*(?:生成图片|画图|生图|图片|图\s*片|photo|image|draw|img)\s*[:：]\s*([\s\S]*?)\]/i);
+        const aiImageGenerateMatch = cleanReply.match(/\[\s*(?:生成图片|画图|生图|草图|手绘|简笔画|线稿|图片|图\s*片|photo|image|draw|img|sketch)\s*[:：]\s*([\s\S]*?)\]/i);
         const imageSearchMatch = cleanReply.match(/\[\s*搜索图片\s*[:：]\s*([\s\S]*?)\]/i);
-        const markdownImageMatch = cleanReply.match(/!\[(.*?)\]\((https?:\/\/[^\s\)]+)\)/i);
-        const directImageUrlMatch = cleanReply.match(/(https:\/\/(?:image\.pollinations\.ai\/prompt\/[^\s\n"'\)\]]+|[^\s\n"'\)\]]+\.(?:png|jpg|jpeg|webp|gif)(?:\?[^\s\n"'\)\]]*)?))/i);
+        const markdownImageMatch = cleanReply.match(/!\[(.*?)\]\((https?:\/\/[^\s\)]+|data:image\/[^\s\)]+)\)/i);
+        const directDataUrlMatch = cleanReply.match(/(data:image\/[a-zA-Z0-9\+\-\.]+;[^\s\n"'\)\]]+)/i);
+        const directImageUrlMatch = cleanReply.match(/(https:\/\/(?:image\.pollinations\.ai\/prompt\/[^\s\n"'\)\]]+|[^\s\n"'\)\]]+\.(?:png|jpg|jpeg|webp|gif|svg)(?:\?[^\s\n"'\)\]]*)?))/i);
 
         if (aiImageGenerateMatch) {
           imagePromptToProcess = aiImageGenerateMatch[1].trim();
@@ -81285,6 +82182,11 @@ ${docContext}
           imagePromptToProcess = markdownImageMatch[2].trim();
           isAiImageRequest = true;
           cleanReply = cleanReply.replace(markdownImageMatch[0], "").trim();
+        } else if (directDataUrlMatch) {
+          imagePromptToProcess = directDataUrlMatch[1].trim();
+          isAiImageRequest = true;
+          cleanReply = cleanReply.replace(directDataUrlMatch[0], "").trim();
+          cleanReply = cleanReply.replace(/\[\s*(?:图片|生成图片|生图|画图|photo|image)?\s*[:：]?\s*\]/gi, "").trim();
         } else if (directImageUrlMatch) {
           imagePromptToProcess = directImageUrlMatch[1].trim();
           isAiImageRequest = true;
@@ -81428,9 +82330,13 @@ ${docContext}
                 const generatedImageUrl = await window.generateAIImage(imagePromptToProcess);
                 if (generatedImageUrl) {
                   msgIdCounter++;
+                  let safeDisplayName = imagePromptToProcess;
+                  if (typeof safeDisplayName === "string" && (safeDisplayName.startsWith("data:") || safeDisplayName.startsWith("http"))) {
+                    safeDisplayName = "手绘画卷";
+                  }
                   newAiMsgs.push({
                     id: msgIdCounter,
-                    text: imagePromptToProcess,
+                    text: safeDisplayName,
                     content: generatedImageUrl,
                     type: "image",
                     isMe: false,
@@ -84683,17 +85589,96 @@ ${docContext}
                             ))}
                           </div>
                         ) : msg.type === "image" ? (
-                          <div style={{ position: "relative" }}>
-                            <img
-                              src={msg.content}
-                              alt={msg.text}
+                          <div style={{ position: "relative", maxWidth: "260px" }}>
+                            <div
                               style={{
-                                maxWidth: "200px",
-                                maxHeight: "200px",
-                                borderRadius: "12px",
-                                display: "block",
+                                borderRadius: "14px",
+                                overflow: "hidden",
+                                backgroundColor: "#faf7f2",
+                                border: "1px solid rgba(180, 160, 130, 0.25)",
+                                boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
+                                padding: "4px",
+                                transition: "transform 0.2s ease, box-shadow 0.2s ease"
                               }}
-                            />
+                            >
+                              <img
+                                src={
+                                  (() => {
+                                    const raw = msg.content;
+                                    if (raw && typeof raw === "string" && raw.startsWith("data:image/svg+xml")) {
+                                      if (raw.includes(";utf8,") || raw.includes(";charset=utf-8,")) {
+                                        try {
+                                          let clean = decodeURIComponent(raw.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
+                                          if (!clean.includes("xmlns=")) {
+                                            clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
+                                          }
+                                          return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
+                                        } catch (e) {
+                                          return raw;
+                                        }
+                                      }
+                                    }
+                                    return raw;
+                                  })()
+                                }
+                                alt={msg.text && !msg.text.startsWith("data:") ? msg.text : "手绘画卷"}
+                                style={{
+                                  width: "100%",
+                                  maxHeight: "320px",
+                                  borderRadius: "10px",
+                                  display: "block",
+                                  objectFit: "contain",
+                                  cursor: "pointer",
+                                  backgroundColor: "#fff"
+                                }}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  let targetUrl = msg.content;
+                                  if (targetUrl && typeof targetUrl === "string" && targetUrl.startsWith("data:image/svg+xml")) {
+                                    try {
+                                      let clean = decodeURIComponent(targetUrl.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
+                                      if (!clean.includes("xmlns=")) {
+                                        clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
+                                      }
+                                      targetUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
+                                    } catch (e) {}
+                                  }
+                                  if (targetUrl) {
+                                    try {
+                                      const win = window.open();
+                                      if (win) {
+                                        win.document.write(`<body style="margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;"><img style="max-width:95vw;max-height:95vh;object-fit:contain;" src="${targetUrl}" /></body>`);
+                                      }
+                                    } catch(e) {}
+                                  }
+                                }}
+                                onError={(e) => {
+                                  const raw = msg.content;
+                                  if (raw && typeof raw === "string" && raw.includes("data:image/svg+xml")) {
+                                    try {
+                                      let clean = decodeURIComponent(raw.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
+                                      if (!clean.includes("xmlns=")) {
+                                        clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
+                                      }
+                                      e.target.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
+                                    } catch(err){}
+                                  }
+                                }}
+                              />
+                              {msg.text && !msg.text.startsWith("data:") && (
+                                <div
+                                  style={{
+                                    fontSize: "11px",
+                                    color: "#7a6e5d",
+                                    textAlign: "center",
+                                    padding: "4px 6px 2px",
+                                    fontFamily: "serif, sans-serif"
+                                  }}
+                                >
+                                  {msg.text}
+                                </div>
+                              )}
+                            </div>
                           </div>
                         ) : msg.type === "voice" ? (
                           msg.showText ? (
@@ -84819,9 +85804,9 @@ ${docContext}
                         ) : (
                           <div>
                             {(() => {
-                              const text = msg.text;
+                              const text = msg.text || "";
                               const imageUrlRegex =
-                                /(https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp|bmp|svg))/gi;
+                                /(https?:\/\/[^\s]+\.(?:jpg|jpeg|png|gif|webp|bmp|svg)(?:\?[^\s]*)?|data:image\/[a-zA-Z0-9\+\-\.]+;[^\s\n"'\)\]]+)/gi;
                               const parts = text.split(imageUrlRegex);
                               return parts.map((part, index) => {
                                 if (imageUrlRegex.test(part)) {
