@@ -473,6 +473,108 @@
   }
 
   // 挂载到全局单例
+  
+  // 全局置顶浮动调用气泡管理器 (100% 独立挂载，不受组件切换影响)
+  window.showMcpIndicator = function (toolName, displayName, status) {
+    if (!document.getElementById("mcp-indicator-styles")) {
+      const style = document.createElement("style");
+      style.id = "mcp-indicator-styles";
+      style.textContent = `
+        @keyframes mcpSpin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes mcpPulse { 0% { box-shadow: 0 4px 15px rgba(78, 126, 142, 0.25); } 50% { box-shadow: 0 6px 25px rgba(78, 126, 142, 0.5); } 100% { box-shadow: 0 4px 15px rgba(78, 126, 142, 0.25); } }
+      `;
+      document.head.appendChild(style);
+    }
+
+    let container = document.getElementById("mcp-floating-indicator");
+
+    if (status === "idle") {
+      if (container) {
+        container.style.opacity = "0";
+        container.style.transform = "translate(-50%, 15px) scale(0.95)";
+        setTimeout(() => {
+          if (container && container.dataset.status === "idle") {
+            container.remove();
+          }
+        }, 350);
+      }
+      return;
+    }
+
+    if (!container) {
+      container = document.createElement("div");
+      container.id = "mcp-floating-indicator";
+      container.style.cssText = `
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translate(-50%, 15px) scale(0.95);
+        z-index: 999999;
+        background: linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(246, 250, 248, 0.98) 100%);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+        border: 1.5px solid #4E7E8E;
+        border-radius: 30px;
+        padding: 7px 18px;
+        box-shadow: 0 8px 25px rgba(78, 126, 142, 0.35);
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #2C434B;
+        pointer-events: none;
+        white-space: nowrap;
+        opacity: 0;
+        transition: all 0.3s cubic-bezier(0.18, 0.89, 0.32, 1.28);
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        animation: mcpPulse 2s infinite ease-in-out;
+      `;
+      document.body.appendChild(container);
+    }
+
+    container.dataset.status = status;
+    const isCalling = status === "calling";
+    const iconBg = isCalling ? "#4E7E8E" : "#2E7D32";
+    const iconContent = isCalling
+      ? `<svg style="animation: mcpSpin 1s linear infinite; width: 13px; height: 13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`
+      : `<svg style="width: 13px; height: 13px;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+
+    const label = displayName || toolName || "扩展工具";
+    const text = isCalling
+      ? `名士正在调用「${label}」...`
+      : `已完成「${label}」调用`;
+
+    container.innerHTML = `
+      <span style="display: inline-flex; align-items: center; justify-content: center; width: 22px; height: 22px; border-radius: 50%; background: ${iconBg}; color: #FFF; flex-shrink: 0; transition: background 0.3s;">
+        ${iconContent}
+      </span>
+      <span style="letter-spacing: 0.2px;">${text}</span>
+    `;
+
+    // 优雅升起
+    requestAnimationFrame(() => {
+      container.style.opacity = "1";
+      container.style.transform = "translate(-50%, 0) scale(1)";
+    });
+
+    if (!isCalling) {
+      setTimeout(() => {
+        if (container && container.dataset.status === "done") {
+          container.style.opacity = "0";
+          container.style.transform = "translate(-50%, 15px) scale(0.95)";
+          setTimeout(() => {
+            if (container && container.dataset.status === "done") {
+              container.remove();
+            }
+          }, 350);
+        }
+      }, 1800);
+    }
+  };
+
+
+  // 挂载到全局单例
   window.mcpHub = new MCPHub();
   console.log("[MCP] Milvus MCP Hub 初始化就绪，已装载内置工具:", window.mcpHub.builtInTools.length);
 })();
