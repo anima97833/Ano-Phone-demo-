@@ -1,0 +1,14 @@
+{
+  "mcpServers": {
+    "duhanjun-ima-mcp": {
+      "command": "npx",
+      "args": ["-y", "duhanjun-ima-mcp"],
+      "env": {
+        "IMA_OPENAPI_CLIENTID": "eb227c4d9fe754c584821c423584709",
+        "IMA_OPENAPI_APIKEY": "kPjS3IPffegdpk0rwWMnKFk+5PHHgb",
+        "IMA_CLIENT_ID": "eb227c4d9fe754c584821c423584709",
+        "IMA_API_KEY": "kPjS3IPffegdpk0rwWMnKFk+5PHHgb"
+      }
+    }
+  }
+}

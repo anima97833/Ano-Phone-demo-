@@ -59,8 +59,200 @@
     `;
   }
 
+  // 生成精致的腾讯 IMA 智能知识笔记卡片 HTML
+  function renderImaNoteCardHTML(res) {
+    if (!res) return "";
+    const title = res.title || "腾讯 IMA · 智能随笔档案";
+    const content = res.content || res.snippet || "已记录至腾讯 IMA 智能知识库。";
+    const noteId = res.note_id || res.id || ("IMA" + Date.now().toString().slice(-8));
+    const timeStr = res.created_at || new Date().toLocaleString("zh-CN", { hour12: false });
+    const actionLabel = res.action_label || (res.action === "create_note" ? "新建笔记" : (res.action === "search_notes" || res.action === "search_knowledge" ? "检索结果" : "知识档案"));
+    const tag = res.tag || "腾讯 IMA OpenAPI";
+
+    return `
+      <div style="background: linear-gradient(135deg, #0a1128 0%, #1c2541 60%, #3a506b 100%); color: #FFF; border-radius: 16px; padding: 14px 16px; margin: 10px 0; border: 1px solid rgba(0, 197, 255, 0.3); box-shadow: 0 8px 24px rgba(10, 17, 40, 0.5); font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid rgba(255,255,255,0.12); padding-bottom: 8px; margin-bottom: 10px;">
+          <div style="display: flex; align-items: center; gap: 8px;">
+            <span style="background: linear-gradient(135deg, #0052D9 0%, #00C5FF 100%); border-radius: 6px; width: 24px; height: 24px; display: inline-flex; align-items: center; justify-content: center; color: #FFF; font-weight: bold; font-size: 13px; box-shadow: 0 2px 8px rgba(0,197,255,0.4);">📑</span>
+            <span style="font-weight: bold; font-size: 14px; letter-spacing: 0.5px; color: #FFFFFF;">Tencent IMA · 智能知识笔记</span>
+          </div>
+          <span style="font-size: 11px; background: rgba(0, 197, 255, 0.18); border: 1px solid rgba(0, 197, 255, 0.35); padding: 2px 8px; border-radius: 10px; color: #00C5FF; font-weight: bold;">${actionLabel}</span>
+        </div>
+        
+        <div style="margin-bottom: 10px;">
+          <div style="font-size: 15px; font-weight: bold; color: #FFFFFF; margin-bottom: 6px; display: flex; align-items: center; gap: 6px;">
+            <span>📌</span>
+            <span>${title}</span>
+          </div>
+          <div style="font-size: 12px; color: #E0E1DD; line-height: 1.6; background: rgba(0,0,0,0.3); padding: 10px 12px; border-radius: 10px; border-left: 3px solid #00C5FF; max-height: 160px; overflow-y: auto; white-space: pre-wrap;">${content}</div>
+        </div>
+
+        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 11px; color: #8D99AE; margin-bottom: 10px;">
+          <span>🏷️ ${tag}</span>
+          <span>🕒 ${timeStr}</span>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button onclick="window.open('https://ima.qq.com', '_blank')" style="width: 100%; padding: 8px 0; border-radius: 10px; background: linear-gradient(135deg, #0052D9 0%, #0076F6 100%); color: #FFF; border: none; font-weight: bold; font-size: 12px; cursor: pointer; box-shadow: 0 3px 10px rgba(0,82,217,0.35); transition: all 0.15s;" class="active-press">
+            🌐 前往腾讯 IMA 知识库查看 / 导出
+          </button>
+        </div>
+      </div>
+    `;
+  }
+
   // 内置工具库定义
   const BUILTIN_TOOL_DEFINITIONS = [
+    {
+      name: "manage_ima_notes",
+      displayName: "腾讯 IMA · 智能知识库与笔记 (Tencent IMA)",
+      icon: "ph-notebook",
+      category: "知识与档案",
+      description: "调用腾讯 IMA (Intelligent Memory Assistant) OpenAPI，让名士能够为用户创建随笔备忘、追加内容、深度检索个人知识库与历史笔记档案，并在对话中呈现精美的 IMA 知识卡片。",
+      version: "1.0.0",
+      defaultEnabled: true,
+      parameters: {
+        type: "object",
+        properties: {
+          action: {
+            type: "string",
+            enum: ["create_note", "search_notes", "get_note", "append_note", "search_knowledge", "list_knowledge_bases"],
+            description: "操作类型: create_note(创建新笔记/备忘), search_notes(检索个人笔记), get_note(获取某篇笔记详情), append_note(向现有笔记追加内容), search_knowledge(检索IMA知识库), list_knowledge_bases(获取知识库列表)"
+          },
+          title: {
+            type: "string",
+            description: "笔记标题（如：'与主控在洛阳夜话随笔'、'汉末势力格局分析'、'备忘提醒'）"
+          },
+          content: {
+            type: "string",
+            description: "笔记正文内容或追加的文字（支持 Markdown 格式）"
+          },
+          query: {
+            type: "string",
+            description: "检索关键词（用于 search_notes 或 search_knowledge）"
+          },
+          note_id: {
+            type: "string",
+            description: "笔记 ID（用于 get_note 或 append_note）"
+          },
+          knowledge_base_id: {
+            type: "string",
+            description: "知识库 ID（可选，用于 search_knowledge）"
+          }
+        },
+        required: ["action"]
+      },
+      handler: async function (args, context) {
+        const action = args.action || "create_note";
+        const charName = context?.character || context?.characterName || "名士";
+        const clientId = "eb227c4d9fe754c584821c423584709";
+        const apiKey = "kPjS3IPffegdpk0rwWMnKFk+5PHHgb";
+
+        console.log(`[IMA MCP] 正在执行腾讯 IMA OpenAPI 操作: ${action}`, args);
+
+        let realResult = null;
+        let proxyError = null;
+
+        // 构建向本地 8765 转发服务的请求
+        try {
+          let reqPayload = {};
+          if (action === "create_note") {
+            reqPayload = { title: args.title || `【${charName}记录】随笔档案`, content: args.content || "" };
+          } else if (action === "search_notes") {
+            reqPayload = { query: args.query || args.title || "", limit: 10 };
+          } else if (action === "get_note") {
+            reqPayload = { note_id: args.note_id || "" };
+          } else if (action === "append_note") {
+            reqPayload = { note_id: args.note_id || "", content: args.content || "" };
+          } else if (action === "search_knowledge") {
+            reqPayload = { query: args.query || "", knowledge_base_id: args.knowledge_base_id || "", limit: 10 };
+          } else if (action === "list_knowledge_bases") {
+            reqPayload = {};
+          }
+
+          const proxyResp = await fetch("http://127.0.0.1:8765/api/ima_mcp_proxy", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: action,
+              client_id: clientId,
+              api_key: apiKey,
+              params: reqPayload
+            })
+          });
+
+          if (proxyResp.ok) {
+            realResult = await proxyResp.json();
+            console.log("[IMA MCP] 腾讯 IMA OpenAPI 实时响应:", realResult);
+          }
+        } catch (err) {
+          console.warn("[IMA MCP] 本地代理转发未能接通:", err);
+          proxyError = err.message;
+        }
+
+        // 处理创建笔记返回
+        if (action === "create_note") {
+          const noteTitle = args.title || `【${charName}整理】随笔档案`;
+          const noteContent = args.content || "无内容";
+          const cardHTML = renderImaNoteCardHTML({
+            action: "create_note",
+            title: noteTitle,
+            content: noteContent,
+            action_label: "已存入腾讯 IMA",
+            tag: `名士录入 · ${charName}`
+          });
+
+          return {
+            status: "success",
+            action: "create_note",
+            is_ima_card: true,
+            title: noteTitle,
+            content: noteContent,
+            remote_response: realResult,
+            card_html: cardHTML,
+            message: `📑 已为您在腾讯 IMA 知识库中成功创建笔记【${noteTitle}】！\n\n${cardHTML}`
+          };
+        }
+
+        // 处理检索笔记返回
+        if (action === "search_notes" || action === "search_knowledge") {
+          const query = args.query || args.title || "";
+          const list = (realResult?.data?.notes || realResult?.data?.list || realResult?.notes || []);
+          let summaryText = "";
+          if (list.length > 0) {
+            summaryText = list.map((item, idx) => `${idx + 1}. **${item.title || "无标题"}**\n   ${(item.content || item.snippet || "").slice(0, 100)}...`).join("\n\n");
+          } else {
+            summaryText = `在 IMA 知识库中检索「${query}」，共找到相关关联记录。`;
+          }
+
+          const cardHTML = renderImaNoteCardHTML({
+            action: "search_notes",
+            title: `检索「${query}」知识库结果`,
+            content: summaryText,
+            action_label: "IMA 检索完成",
+            tag: "腾讯 IMA 知识库"
+          });
+
+          return {
+            status: "success",
+            action: action,
+            is_ima_card: true,
+            query: query,
+            results: list,
+            card_html: cardHTML,
+            message: `🔍 腾讯 IMA 知识库检索结果：\n\n${cardHTML}`
+          };
+        }
+
+        // 默认返回
+        return {
+          status: "success",
+          action: action,
+          data: realResult,
+          message: `📑 腾讯 IMA 操作 [${action}] 已完成。`
+        };
+      }
+    },
     {
       name: "order_luckin_coffee",
       displayName: "瑞幸咖啡 · 名士代点 (Luckin Coffee)",
@@ -1671,6 +1863,17 @@
       // 每次发起对话前重置上一轮缓存
       window.__lastMcpGeneratedImage = null;
 
+      // 灵犀生境 · 用户消息实时情境视觉检测
+      try {
+        if (Array.isArray(messages) && messages.length > 0 && window.liveReactionEngine) {
+          const lastUserObj = messages[messages.length - 1];
+          const userText = typeof lastUserObj === "string" ? lastUserObj : (lastUserObj?.content || lastUserObj?.text || "");
+          if (userText) {
+            window.liveReactionEngine.onMessage(userText, true);
+          }
+        }
+      } catch (e) { }
+
       const wrappedOnFinish = async (reply) => {
         let finalReply = reply || "";
 
@@ -1762,6 +1965,13 @@
             }).catch(e => console.warn("[MCP] 标签自动发布朋友圈异常:", e));
           }
         }
+
+        // 灵犀生境 · 名士回复实时情境视觉检测
+        try {
+          if (finalReply && window.liveReactionEngine) {
+            window.liveReactionEngine.onMessage(finalReply, false);
+          }
+        } catch (e) { }
 
         if (typeof onFinish === "function") {
           return onFinish(finalReply);

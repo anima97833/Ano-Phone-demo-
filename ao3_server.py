@@ -287,6 +287,69 @@ class AO3HTTPHandler(http.server.BaseHTTPRequestHandler):
                     }, ensure_ascii=False).encode("utf-8"))
                     return
 
+            if path == "/api/ima_mcp_proxy" or path == "/api/ima_openapi":
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_body = self.rfile.read(content_length).decode('utf-8')
+                try:
+                    req_data = json.loads(post_body) if post_body else {}
+                except:
+                    req_data = {}
+
+                action = req_data.get("action", "search_notes")
+                client_id = req_data.get("client_id") or "eb227c4d9fe754c584821c423584709"
+                api_key = req_data.get("api_key") or "kPjS3IPffegdpk0rwWMnKFk+5PHHgb"
+
+                headers = {
+                    "ima-openapi-clientid": client_id,
+                    "ima-openapi-apikey": api_key,
+                    "Content-Type": "application/json; charset=utf-8",
+                    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+                }
+
+                endpoint_map = {
+                    "create_note": "https://ima.qq.com/openapi/note/v1/create_note",
+                    "search_notes": "https://ima.qq.com/openapi/note/v1/search_notes",
+                    "get_note": "https://ima.qq.com/openapi/note/v1/get_note",
+                    "append_note": "https://ima.qq.com/openapi/note/v1/append_note",
+                    "search_knowledge": "https://ima.qq.com/openapi/wiki/v1/search_knowledge_base",
+                    "search_knowledge_base": "https://ima.qq.com/openapi/wiki/v1/search_knowledge_base",
+                    "list_knowledge_bases": "https://ima.qq.com/openapi/wiki/v1/get_addable_knowledge_base_list",
+                    "get_knowledge_base_list": "https://ima.qq.com/openapi/wiki/v1/get_addable_knowledge_base_list"
+                }
+
+                target_url = endpoint_map.get(action, "https://ima.qq.com/openapi/note/v1/search_notes")
+                payload = req_data.get("params", {})
+
+                print(f"[IMA Proxy] 正在请求腾讯 IMA OpenAPI: {action} -> {target_url}")
+                try:
+                    s = requests.Session()
+                    s.trust_env = False
+                    resp = s.post(target_url, json=payload, headers=headers, timeout=12)
+                    try:
+                        resp_json = resp.json()
+                    except Exception:
+                        resp_json = {"status_code": resp.status_code, "raw": resp.text}
+
+                    self.send_response(200)
+                    self._send_cors_headers()
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps(resp_json, ensure_ascii=False).encode("utf-8"))
+                    return
+                except Exception as ex:
+                    print(f"[IMA Proxy] 转发异常: {ex}")
+                    self.send_response(200)
+                    self._send_cors_headers()
+                    self.send_header("Content-Type", "application/json; charset=utf-8")
+                    self.end_headers()
+                    self.wfile.write(json.dumps({
+                        "code": -1,
+                        "message": f"IMA 开放平台连接响应: {str(ex)}",
+                        "action": action,
+                        "data": payload
+                    }, ensure_ascii=False).encode("utf-8"))
+                    return
+
             self.send_response(404)
             self._send_cors_headers()
             self.end_headers()

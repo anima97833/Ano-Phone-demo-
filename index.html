@@ -134,12 +134,65 @@
     <!-- D3.js 库 -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <link rel="stylesheet" href="Milvus/style.css?v=1787487073483" />
+    <link rel="stylesheet" href="Milvus/style.css?v=1787568854236" />
 
     <!-- IndexedDB 存储模块 -->
-    <script src="Milvus/db.js?v=1787487073483"></script>
+    <script src="Milvus/db.js?v=1787568854236"></script>
     <!-- MCP 扩展引擎模块 -->
-    <script src="Milvus/mcp_store.js?v=1787487073483"></script>
+    <script src="Milvus/mcp_store.js?v=1787568854236"></script>
+
+    <!-- 灵犀生境情境微动效样式 -->
+    <link rel="stylesheet" href="Milvus/live_reactions.css?v=1787568854236" />
+
+    <!-- 构造状态气泡视觉样式 -->
+    <link rel="stylesheet" href="Milvus/construct_bubble.css?v=1787564901794" />
+
+  <style id="global-notification-banner-styles">
+@keyframes globalNotifSlideDown {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -100%) scale(0.92);
+  }
+  65% {
+    transform: translate(-50%, 6px) scale(1.02);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+}
+@keyframes globalNotifSlideUp {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -100%) scale(0.92);
+  }
+}
+@keyframes notifTextSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@keyframes notifAvatarPulse {
+  0% {
+    transform: scale(0.85);
+  }
+  50% {
+    transform: scale(1.1);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+</style>
   </head>
   <body>
     <div id="root"></div>
@@ -150,7 +203,16 @@
       style="display: none"
     />
 
-    <script src="Milvus/app.min.js?v=1787487073483"></script>
+    <!-- 构造状态气泡核心引擎 (在 app.min.js 前加载) -->
+    <script src="Milvus/construct_bubble_engine.js?v=3.1.0"></script>
+
+    <!-- 府邸捉迷藏/贝叶斯听声辨位游戏引擎 -->
+    <script src="Milvus/hide_seek_engine.js?v=3.3.0"></script>
+
+    <script src="Milvus/app.min.js?v=3.3.0"></script>
+
+    <!-- 灵犀生境情境视觉引擎 (必须在 app.min.js 之后加载，确保 document.body 已就绪) -->
+    <script src="Milvus/live_reaction_engine.js?v=1787568854236"></script>
 
     <!-- PWA Service Worker 注册 -->
     <script>

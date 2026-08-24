@@ -2810,7 +2810,8 @@ const CalendarPage = () => {
               >
                 <span>{year}</span>
               </div>
-            ))}
+            ))
+            )}
           </div>
         </div>
       )}
@@ -37632,19 +37633,6 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
         )}
 
         <div className="flex-center" style={{ marginTop: "8px" }}>
-          <div
-            className="glass flex-center touch-feedback"
-            onClick={() => setShowStatusModal(true)}
-            style={{
-              padding: "4px 12px",
-              borderRadius: "16px",
-              fontSize: "12px",
-              color: "var(--text-sub)",
-              background: "rgba(255,255,255,0.4)",
-              cursor: "pointer",
-              border: "1px solid rgba(255,255,255,0.6)",
-            }}
-          >
             <T9Icons.Calendar />
             <span style={{ marginLeft: "4px", fontWeight: "600" }}>{status}</span>
           </div>
@@ -37869,6 +37857,1396 @@ const T9Header = ({ taCharacter: propTaCharacter, setTaCharacter: propSetTaChara
   );
 };
 
+// ==========================================
+// 府邸捉迷藏 (Hide & Seek) 沉浸式互动弹窗组件
+// ==========================================
+const HideSeekModal = ({ isOpen, onClose, taCharacter }) => {
+  const [game, setGame] = React.useState(null);
+  const [snapshot, setSnapshot] = React.useState(null);
+  const [gameState, setGameState] = React.useState("setup"); // "setup" | "playing" | "gameover"
+  const [selectedMode, setSelectedMode] = React.useState("player_hide"); // "player_hide" | "player_seek"
+  const [selectedBet, setSelectedBet] = React.useState(null);
+  const [startRoom, setStartRoom] = React.useState("书房");
+  const [startSpot, setStartSpot] = React.useState("");
+  const [showMoveSelect, setShowMoveSelect] = React.useState(false);
+  const [showItemSelect, setShowItemSelect] = React.useState(false);
+  const [showSearchSelect, setShowSearchSelect] = React.useState(false);
+  const [gameHistory, setGameHistory] = React.useState([]);
+  const [savedToJournal, setSavedToJournal] = React.useState(false);
+  
+  // ⏱️ 实时寻觅模式状态
+  const [isAutoRunning, setIsAutoRunning] = React.useState(true);
+  const [autoSpeed, setAutoSpeed] = React.useState(3000);
+  const [tickProgress, setTickProgress] = React.useState(0);
+  
+  // 💌 AI 生成对局心语状态
+  const [aiCustomThought, setAiCustomThought] = React.useState("");
+  const [isGeneratingThought, setIsGeneratingThought] = React.useState(false);
+
+  const historyEndRef = React.useRef(null);
+  const timerRef = React.useRef(null);
+  const tickCounterRef = React.useRef(0);
+
+  const charName = taCharacter?.name || "名士";
+  const charAvatar = taCharacter?.avatar || taCharacter?.charAvatar || taCharacter?.profile?.avatar || "";
+
+  const presetBets = window.HideSeekConfig?.PRESET_BETS || [
+    { id: "bet_massage", title: "研墨捶肩一炷香", desc: "输者需在今夜为赢者研墨捶肩，不可偷懒。" },
+    { id: "bet_nickname", title: "唤三声专属爱称", desc: "输者今日无论何时，皆需唤对方三声专属爱称。" },
+    { id: "bet_wish", title: "兑现愿望清单一条", desc: "输者需在三日内无条件兑现愿望清单中的一条心愿。" },
+    { id: "bet_kiss", title: "任由对方捏脸/亲一下", desc: "输者需闭上双眼，任由赢者轻捏脸颊或轻吻一下。" },
+    { id: "bet_cook", title: "烹制指定膳食", desc: "输者需亲自下厨，为赢者烹制一道心仪的古法菜肴。" }
+  ];
+
+  // 深度检索并组装传讯角色人设、世界书、用户身份与聊天历史
+  const triggerGenerateAIThought = async (finalSnap) => {
+    if (!finalSnap) return;
+    setIsGeneratingThought(true);
+    setAiCustomThought("");
+
+    try {
+      let targetId = taCharacter?.id;
+      let targetName = taCharacter?.name || charName;
+      let fullChar = taCharacter ? { ...taCharacter } : {};
+
+      // 1. 【深度读取传讯-角色配置库】(chatCharacterStore / t8_chat_list / character_settings)
+      if (window.chatCharacterStore) {
+        try {
+          if (targetId && typeof window.chatCharacterStore.get === "function") {
+            const charById = await window.chatCharacterStore.get(targetId);
+            if (charById) fullChar = { ...charById, ...fullChar };
+          }
+          if (typeof window.chatCharacterStore.getAll === "function") {
+            const allInStore = await window.chatCharacterStore.getAll();
+            const foundInStore = allInStore.find(c => (targetId && String(c.id) === String(targetId)) || (targetName && c.name === targetName));
+            if (foundInStore) {
+              fullChar = { ...foundInStore, ...fullChar };
+              if (!targetId) targetId = foundInStore.id;
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (!fullChar.profile && !fullChar.prompt && !fullChar.personality) {
+        try {
+          const t8List = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+          const foundInList = t8List.find(c => (targetId && String(c.id) === String(targetId)) || (targetName && c.name === targetName));
+          if (foundInList) {
+            fullChar = { ...foundInList, ...fullChar };
+            if (!targetId) targetId = foundInList.id;
+          }
+        } catch (e) {}
+      }
+
+      if (!fullChar.profile && !fullChar.prompt && !fullChar.personality) {
+        try {
+          const charSettings = JSON.parse(localStorage.getItem("character_settings") || "{}");
+          if (charSettings[targetId] || charSettings[targetName]) {
+            const cs = charSettings[targetId] || charSettings[targetName];
+            fullChar = { ...cs, ...fullChar };
+          }
+        } catch (e) {}
+      }
+
+      const p = fullChar.profile || fullChar;
+      const finalCharName = fullChar.name || targetName || "名士";
+      const gender = p.gender || fullChar.gender || "未知";
+      const age = p.age || fullChar.age || "未知";
+      const personality = p.personality || fullChar.personality || fullChar.desc || "深情从容";
+      const style = p.style || p.speakingStyle || fullChar.style || fullChar.speakingStyle || "具有强烈个人辨识度的说话口吻与口癖";
+      const background = p.background || fullChar.background || fullChar.desc || fullChar.description || "名门世家";
+      const mbti = p.mbti ? "\nMBTI人格：" + p.mbti : "";
+      const enneagram = p.enneagram ? "\n九型人格：" + p.enneagram : "";
+      const constellation = p.constellation ? "\n星座：" + p.constellation : "";
+      const systemPrompt = p.systemPrompt || fullChar.systemPrompt || fullChar.customPrompt || fullChar.prompt || "";
+      const roleSetting = p.roleSetting || fullChar.roleSetting || "";
+
+      let charSettingBlock = "【" + finalCharName + " 传讯核心人设库设定（最高优先级，必须100%绝对遵守口吻与口癖）】\n" +
+        "姓名：" + finalCharName + "\n" +
+        "性别：" + gender + " | 年龄：" + age + mbti + enneagram + constellation + "\n" +
+        "【性格特质】：\n" + personality + "\n" +
+        "【语言风格与说话口吻（极其关键，必须严格遵从本人口癖与语气）】：\n" + style + "\n" +
+        "【生平背景与经历】：\n" + background;
+
+      if (systemPrompt) charSettingBlock += "\n【核心人设补充指令】：\n" + systemPrompt;
+      if (roleSetting) charSettingBlock += "\n【背景专属设定】：\n" + roleSetting;
+
+      // 挂载的长篇文档与生平记忆
+      if (window.characterDocStore && targetId) {
+        try {
+          const docContext = await window.characterDocStore.getEnabledDocContext(targetId);
+          if (docContext && docContext.trim()) {
+            charSettingBlock += "\n\n【该角色专属长篇人设档案与生平记忆文档】：\n" + docContext.trim();
+          }
+        } catch (e) {}
+      }
+
+      // 2. 【世界书设定库】(设置 - 世界书设置)
+      let worldBookContext = "";
+      if (window.getWorldBookContext) {
+        try {
+          worldBookContext = await window.getWorldBookContext();
+        } catch (e) {}
+      } else if (window.worldBookStore) {
+        try {
+          const allWb = await window.worldBookStore.getAll();
+          worldBookContext = (allWb || []).filter(e => e.enabled !== false).map(e => (e.name || e.title) + ": " + (e.content || "")).join("\n");
+        } catch (e) {}
+      }
+
+      // 3. 【用户身份配置库】(设置 - 身份配置库)
+      let userPersona = "";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_user_persona_id");
+        const activePersona = savedPersonas.find(p => p.id === activeId) || savedPersonas[0];
+        if (activePersona) {
+          userPersona = "【用户身份与性格设定】\n姓名: " + (activePersona.name || "玩家") + "\n身份/性格/人设: " + (activePersona.desc || activePersona.personality || "") + "\n与你的亲密关系: " + (activePersona.relation || "");
+        }
+      } catch (e) {}
+
+      // 4. 【聊天历史】(该角色与用户的近期传讯往来)
+      let recentChatHistory = "";
+      try {
+        if (window.chatHistoryStore && targetId) {
+          const historyRes = await window.chatHistoryStore.getMessages(targetId, 1, 15);
+          if (historyRes && historyRes.messages && historyRes.messages.length > 0) {
+            recentChatHistory = historyRes.messages.slice(-10).map(m => (m.isMe ? "用户: " : (finalCharName + ": ")) + m.text).join("\n");
+          }
+        }
+      } catch (e) {}
+
+      // 5. 组装对局实况提示词
+      const isPlayerWin = (finalSnap.mode === "player_hide" && finalSnap.state === "escaped") ||
+                          (finalSnap.mode === "player_seek" && finalSnap.state === "caught");
+      const modeDesc = finalSnap.mode === "player_hide" ? "【玩家在府邸隐匿，你在府邸各房间循声搜寻】" : "【你在府邸深处隐匿，玩家在各房间循香搜寻你】";
+      const gameResultDesc = isPlayerWin ? "【玩家获胜】你输掉了本次捉迷藏对局" : "【你获胜】玩家输掉了本次捉迷藏对局";
+      const logHistory = (finalSnap.historyLog || []).join("\n");
+
+      const finalSystemPrompt = "你现在【必须完全代入】角色【" + finalCharName + "】的身份、说话口吻、语气与性格。请严格根据下面的人设设定来与用户进行对白互动：\n\n" +
+        charSettingBlock + "\n\n" +
+        (worldBookContext ? "【世界观与背景设定】\n" + worldBookContext + "\n\n" : "") +
+        (userPersona ? userPersona + "\n\n" : "") +
+        (recentChatHistory ? "【你与用户最近的聊天往来与回忆】\n" + recentChatHistory + "\n\n" : "");
+
+      const finalUserPrompt = "刚刚你和用户在府邸中完成了一场捉迷藏博弈。\n" +
+        "对局模式：" + modeDesc + "\n" +
+        "对局胜负：" + gameResultDesc + "\n" +
+        "本次立下的情侣赌约：【" + (finalSnap.bet?.title || "") + "】（" + (finalSnap.bet?.desc || "") + "）\n\n" +
+        "【对局全程轨迹与回廊实况】：\n" + logHistory + "\n\n" +
+        "请你根据上面你在府邸中走过的每一个房间、搜寻过的角落与藏点，以及本局的胜负与赌约，写一段对局结算心语（100~200字）。\n" +
+        "内容要求：\n" +
+        "1. a.【对局总结与心声】：结合你在府邸中走过的具体房间路线、印象深刻的瞬间（例如被障眼法假人外衫欺骗、听到微声扑空、或是将对方一把抓住/被对方翻找出来的亲密瞬间），以你的性格口吻表达对用户的宠溺与真实心理活动；\n" +
+        "2. b.【赌约兑现】：根据输赢胜负，用你的专属语气提及这局立下的赌约（赢了就温柔得意调侃索要赌注，输了就甘拜下风愿赌服输）；\n" +
+        "3. 语气【绝对必须】完全符合【" + finalCharName + "】的人设与口癖，严禁出戏。不要输出任何JSON或Markdown标记，直接输出你对用户说的话。";
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: finalSystemPrompt },
+            { role: "user", content: finalUserPrompt }
+          ],
+          null,
+          (reply) => {
+            const cleanReply = reply.trim().replace(/^["“]|["”]$/g, "");
+            setAiCustomThought(cleanReply);
+            setIsGeneratingThought(false);
+          },
+          (err) => {
+            console.error("AI生成心语失败:", err);
+            setIsGeneratingThought(false);
+          }
+        );
+      } else {
+        setIsGeneratingThought(false);
+      }
+    } catch (err) {
+      console.error("生成对局心语出错:", err);
+      setIsGeneratingThought(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (isOpen) {
+      setGameState("setup");
+      setSelectedBet(presetBets[0]);
+      setStartRoom("书房");
+      const configSpots = window.HideSeekConfig?.ROOM_SPOTS?.["书房"] || [];
+      setStartSpot(configSpots[0] || "");
+      setSavedToJournal(false);
+      setShowMoveSelect(false);
+      setShowItemSelect(false);
+      setShowSearchSelect(false);
+      setIsAutoRunning(true);
+      setTickProgress(0);
+      setAiCustomThought("");
+      setIsGeneratingThought(false);
+      tickCounterRef.current = 0;
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+    }
+  }, [isOpen]);
+
+  React.useEffect(() => {
+    if (historyEndRef.current) {
+      historyEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [gameHistory]);
+
+  // ⏱️ 实时自主巡查时钟调度
+  React.useEffect(() => {
+    if (gameState === "playing" && isAutoRunning) {
+      const stepMs = 50;
+      tickCounterRef.current = 0;
+      setTickProgress(0);
+
+      timerRef.current = setInterval(() => {
+        tickCounterRef.current += stepMs;
+        const progress = Math.min(100, (tickCounterRef.current / autoSpeed) * 100);
+        setTickProgress(progress);
+
+        if (tickCounterRef.current >= autoSpeed) {
+          tickCounterRef.current = 0;
+          setTickProgress(0);
+          
+          setGame((prevGame) => {
+            if (!prevGame || prevGame.state !== "running") return prevGame;
+            if (prevGame.mode === "player_hide") {
+              const res = prevGame.playerWait();
+              setSnapshot(res.snapshot);
+              setGameHistory(res.snapshot.historyLog || []);
+              if (res.snapshot.state === "caught" || res.snapshot.state === "escaped") {
+                setGameState("gameover");
+                setIsAutoRunning(false);
+                triggerGenerateAIThought(res.snapshot);
+              }
+            }
+            return prevGame;
+          });
+        }
+      }, stepMs);
+    } else {
+      if (timerRef.current) clearInterval(timerRef.current);
+      setTickProgress(0);
+    }
+
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [gameState, isAutoRunning, autoSpeed]);
+
+  const resetTick = () => {
+    tickCounterRef.current = 0;
+    setTickProgress(0);
+  };
+
+  const handleStartGame = () => {
+    if (!window.HideSeekGame) return;
+    const g = new window.HideSeekGame();
+    const snap = g.start({
+      mode: selectedMode,
+      playerRoom: selectedMode === "player_hide" ? startRoom : "客厅",
+      playerSpot: selectedMode === "player_hide" ? startSpot : null,
+      characterName: charName,
+      bet: selectedBet
+    });
+    setGame(g);
+    setSnapshot(snap);
+    setGameHistory(snap.historyLog || []);
+    setGameState("playing");
+    setSavedToJournal(false);
+    setIsAutoRunning(true);
+    setAiCustomThought("");
+    setIsGeneratingThought(false);
+    resetTick();
+  };
+
+  const handlePlayerMove = (roomKey, spot = null) => {
+    if (!game) return;
+    resetTick();
+    const res = game.playerMove(roomKey, spot);
+    setSnapshot(res.snapshot);
+    setGameHistory(res.snapshot.historyLog || []);
+    setShowMoveSelect(false);
+    if (res.snapshot.state === "caught" || res.snapshot.state === "escaped") {
+      setGameState("gameover");
+      setIsAutoRunning(false);
+      triggerGenerateAIThought(res.snapshot);
+    }
+  };
+
+  const handleHoldBreath = () => {
+    if (!game) return;
+    resetTick();
+    const res = game.playerHoldBreath();
+    if (!res.ok && res.msg) {
+      alert(res.msg);
+    } else {
+      setSnapshot(res.snapshot);
+      setGameHistory(res.snapshot.historyLog || []);
+      if (res.snapshot.state === "caught" || res.snapshot.state === "escaped") {
+        setGameState("gameover");
+        setIsAutoRunning(false);
+        triggerGenerateAIThought(res.snapshot);
+      }
+    }
+  };
+
+  const handlePlayerWait = () => {
+    if (!game) return;
+    resetTick();
+    const res = game.playerWait();
+    setSnapshot(res.snapshot);
+    setGameHistory(res.snapshot.historyLog || []);
+    if (res.snapshot.state === "caught" || res.snapshot.state === "escaped") {
+      setGameState("gameover");
+      setIsAutoRunning(false);
+      triggerGenerateAIThought(res.snapshot);
+    }
+  };
+
+  const handleUseItem = (itemKey, target = null) => {
+    if (!game) return;
+    resetTick();
+    const res = game.useItem(itemKey, target);
+    if (!res.ok && res.msg) {
+      alert(res.msg);
+    } else {
+      setSnapshot(res.snapshot);
+      setGameHistory(res.snapshot.historyLog || []);
+      setShowItemSelect(false);
+      if (res.snapshot.state === "caught" || res.snapshot.state === "escaped") {
+        setGameState("gameover");
+        setIsAutoRunning(false);
+        triggerGenerateAIThought(res.snapshot);
+      }
+    }
+  };
+
+  const handleSeekerMove = (roomKey) => {
+    if (!game) return;
+    resetTick();
+    const res = game.seekerMove(roomKey);
+    setSnapshot(res.snapshot);
+    setGameHistory(res.snapshot.historyLog || []);
+    setShowMoveSelect(false);
+    if (res.snapshot.state === "caught" || res.snapshot.state === "escaped") {
+      setGameState("gameover");
+      setIsAutoRunning(false);
+      triggerGenerateAIThought(res.snapshot);
+    }
+  };
+
+  const handleSeekerSearch = (spot) => {
+    if (!game) return;
+    resetTick();
+    const res = game.seekerSearch(spot);
+    setSnapshot(res.snapshot);
+    setGameHistory(res.snapshot.historyLog || []);
+    setShowSearchSelect(false);
+    if (res.snapshot.state === "caught" || res.snapshot.state === "escaped") {
+      setGameState("gameover");
+      setIsAutoRunning(false);
+      triggerGenerateAIThought(res.snapshot);
+    }
+  };
+
+  const handleSaveToJournal = () => {
+    if (savedToJournal || !snapshot) return;
+    try {
+      const isPlayerWin = (snapshot.mode === "player_hide" && snapshot.state === "escaped") ||
+                          (snapshot.mode === "player_seek" && snapshot.state === "caught");
+      const title = isPlayerWin ? "【府邸捉迷藏】大获全胜！" : "【府邸捉迷藏】惜败给TA～";
+      const desc = isPlayerWin
+        ? "与 " + charName + " 在府邸对弈捉迷藏，历经 " + snapshot.turn + " 回合赢下赌约【" + (snapshot.bet?.title || "") + "】！"
+        : "在府邸被 " + charName + " 捉住/逃脱，需兑现赌约【" + (snapshot.bet?.title || "") + "】（" + (snapshot.bet?.desc || "") + "）。";
+
+      const storedKey = "ano_phone_couple_memories_" + (taCharacter?.id || "default");
+      const existing = JSON.parse(localStorage.getItem(storedKey) || "[]");
+      existing.unshift({
+        id: "game_" + Date.now(),
+        date: new Date().toISOString().split("T")[0],
+        time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+        title,
+        desc,
+        tag: "闲情游艺",
+        bet: snapshot.bet?.title,
+        winner: isPlayerWin ? "玩家" : charName,
+        aiThought: aiCustomThought || ""
+      });
+      localStorage.setItem(storedKey, JSON.stringify(existing));
+      setSavedToJournal(true);
+      alert("✅ 已成功将本次对局战报、AI心语与赌约收录进「情侣手账与回忆」！");
+    } catch (e) {
+      console.error(e);
+      setSavedToJournal(true);
+    }
+  };
+
+  if (!isOpen) return null;
+
+  const isPlayerHide = (snapshot?.mode || selectedMode) === "player_hide";
+  const isPlayerWin = snapshot && ((snapshot.mode === "player_hide" && snapshot.state === "escaped") || (snapshot.mode === "player_seek" && snapshot.state === "caught"));
+  const isNearDanger = snapshot?.isNearDanger;
+  const dist = snapshot?.distance ?? 99;
+
+  return (
+    <div
+      style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
+        zIndex: 9999,
+        backgroundColor: "rgba(28, 25, 23, 0.75)",
+        backdropFilter: "blur(8px)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "12px"
+      }}
+      onClick={onClose}
+    >
+      <div
+        style={{
+          width: "100%",
+          maxWidth: "480px",
+          maxHeight: "94vh",
+          backgroundColor: "#FAF8F5",
+          borderRadius: "28px",
+          boxShadow: isNearDanger && gameState === "playing"
+            ? "0 0 25px rgba(239, 68, 68, 0.4), 0 25px 50px -12px rgba(0,0,0,0.4)"
+            : "0 25px 50px -12px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(226, 222, 213, 0.8)",
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+          position: "relative",
+          transition: "box-shadow 0.4s ease"
+        }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {isNearDanger && gameState === "playing" && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              height: "4px",
+              background: dist === 0 ? "linear-gradient(90deg, #ef4444, #b91c1c, #ef4444)" : "linear-gradient(90deg, #f97316, #ef4444, #f97316)"
+            }}
+          />
+        )}
+
+        {/* 顶部标题栏 (使用 UniversalAvatarLoader 保证头像永不破损) */}
+        <div
+          style={{
+            padding: "14px 18px 10px",
+            background: "linear-gradient(180deg, #F3EFEA 0%, #FAF8F5 100%)",
+            borderBottom: "1px solid #EAE6DF",
+            display: "flex",
+            flexDirection: "column",
+            gap: "8px"
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <UniversalAvatarLoader
+                avatar={charAvatar}
+                avatarId={taCharacter?.avatar}
+                name={charName}
+                fallbackColor={taCharacter?.avatarColor || "#D6724B"}
+                style={{ width: "38px", height: "38px", borderRadius: "50%", border: "1.5px solid #D6724B", objectFit: "cover" }}
+              />
+              <div>
+                <div style={{ fontSize: "15px", fontWeight: "700", color: "#292524", display: "flex", alignItems: "center", gap: "6px" }}>
+                  <span>府邸捉迷藏</span>
+                  <span style={{ fontSize: "11px", padding: "2px 7px", borderRadius: "10px", backgroundColor: "#D6724B", color: "#fff", fontWeight: "normal" }}>
+                    {gameState === "playing" ? (isPlayerHide ? "实时寻觅中" : "寻踪捉伴中") : "闲情雅趣"}
+                  </span>
+                </div>
+                <div style={{ fontSize: "12px", color: "#78716C", marginTop: "1px" }}>
+                  与 {charName} 的双人听声辨位博弈
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {gameState === "playing" && snapshot && (
+                <>
+                  <button
+                    onClick={() => setIsAutoRunning(!isAutoRunning)}
+                    style={{
+                      padding: "4px 8px",
+                      borderRadius: "10px",
+                      border: "1px solid #E5E0D8",
+                      backgroundColor: isAutoRunning ? "#FEF3C7" : "#F3F4F6",
+                      color: isAutoRunning ? "#B45309" : "#6B7280",
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "3px"
+                    }}
+                    title={isAutoRunning ? "点击暂停伴侣巡查时钟" : "点击恢复实时寻觅"}
+                  >
+                    <span>{isAutoRunning ? "⏱️ 寻觅中" : "⏸️ 暂停"}</span>
+                  </button>
+                  <div style={{ fontSize: "12px", color: "#B45309", backgroundColor: "#FEF3C7", padding: "3px 8px", borderRadius: "12px", fontWeight: "bold" }}>
+                    {snapshot.turn}/{snapshot.maxTurns}
+                  </div>
+                </>
+              )}
+              <button
+                onClick={onClose}
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "50%",
+                  border: "none",
+                  backgroundColor: "rgba(120, 113, 108, 0.12)",
+                  color: "#78716C",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  fontSize: "14px"
+                }}
+              >
+                ✕
+              </button>
+            </div>
+          </div>
+
+          {gameState === "playing" && isAutoRunning && (
+            <div style={{ width: "100%", height: "3px", backgroundColor: "#EAE6DF", borderRadius: "3px", overflow: "hidden" }}>
+              <div
+                style={{
+                  height: "100%",
+                  width: tickProgress + "%",
+                  backgroundColor: dist === 0 ? "#EF4444" : dist === 1 ? "#F59E0B" : "#D6724B",
+                  transition: "width 0.05s linear"
+                }}
+              />
+            </div>
+          )}
+        </div>
+
+        {/* 主内容区域 */}
+        <div style={{ flex: 1, overflowY: "auto", padding: "14px 16px", display: "flex", flexDirection: "column", gap: "12px" }} className="no-scrollbar">
+          
+          {/* ================= 阶段一：开局准备 (Setup) ================= */}
+          {gameState === "setup" && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+              <div style={{ background: "#fff", borderRadius: "16px", padding: "14px", border: "1px solid #EAE6DF", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+                <div style={{ fontSize: "13px", fontWeight: "bold", color: "#44403C", marginBottom: "10px" }}>
+                  🎯 玩法模式
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
+                  <div
+                    onClick={() => setSelectedMode("player_hide")}
+                    style={{
+                      padding: "12px 10px",
+                      borderRadius: "12px",
+                      border: selectedMode === "player_hide" ? "2px solid #D6724B" : "1px solid #EAE6DF",
+                      backgroundColor: selectedMode === "player_hide" ? "#FFF7ED" : "#FAFAF9",
+                      cursor: "pointer",
+                      textAlign: "center"
+                    }}
+                  >
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: selectedMode === "player_hide" ? "#C2410C" : "#44403C" }}>
+                      🥷 我藏 · TA 抓 (实时)
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#78716C", marginTop: "4px" }}>
+                      伴侣自主在府邸巡觅搜查，你静候潜伏、整局限用 3 次屏息
+                    </div>
+                  </div>
+
+                  <div
+                    onClick={() => setSelectedMode("player_seek")}
+                    style={{
+                      padding: "12px 10px",
+                      borderRadius: "12px",
+                      border: selectedMode === "player_seek" ? "2px solid #D6724B" : "1px solid #EAE6DF",
+                      backgroundColor: selectedMode === "player_seek" ? "#FFF7ED" : "#FAFAF9",
+                      cursor: "pointer",
+                      textAlign: "center"
+                    }}
+                  >
+                    <div style={{ fontSize: "14px", fontWeight: "bold", color: selectedMode === "player_seek" ? "#C2410C" : "#44403C" }}>
+                      🌸 TA 藏 · 我抓
+                    </div>
+                    <div style={{ fontSize: "11px", color: "#78716C", marginTop: "4px" }}>
+                      循着 {charName} 的暗香与微响，在府邸翻箱倒柜捉拿
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 实时寻觅速率调节 */}
+              <div style={{ background: "#fff", borderRadius: "16px", padding: "14px", border: "1px solid #EAE6DF", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+                <div style={{ fontSize: "13px", fontWeight: "bold", color: "#44403C", marginBottom: "8px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span>⏱️ 伴侣巡寻节奏</span>
+                  <span style={{ fontSize: "11px", color: "#D6724B" }}>{autoSpeed / 1000} 秒/步</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                  {[
+                    { label: "惬意 4s", val: 4000 },
+                    { label: "适中 3s", val: 3000 },
+                    { label: "心跳 2s", val: 2000 }
+                  ].map((spd) => (
+                    <button
+                      key={spd.val}
+                      onClick={() => setAutoSpeed(spd.val)}
+                      style={{
+                        padding: "8px",
+                        borderRadius: "10px",
+                        border: autoSpeed === spd.val ? "1.5px solid #D6724B" : "1px solid #E5E0D8",
+                        backgroundColor: autoSpeed === spd.val ? "#FFF7ED" : "#F5F2EC",
+                        color: autoSpeed === spd.val ? "#C2410C" : "#57534E",
+                        fontSize: "12px",
+                        fontWeight: autoSpeed === spd.val ? "bold" : "normal",
+                        cursor: "pointer"
+                      }}
+                    >
+                      {spd.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{ background: "#fff", borderRadius: "16px", padding: "14px", border: "1px solid #EAE6DF", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+                <div style={{ fontSize: "13px", fontWeight: "bold", color: "#44403C", marginBottom: "10px", display: "flex", alignItems: "center", gap: "5px" }}>
+                  <span>📜 开局情趣赌约</span>
+                  <span style={{ fontSize: "11px", color: "#A8A29E", fontWeight: "normal" }}>（输者需向赢者兑现）</span>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                  {presetBets.map((b) => (
+                    <div
+                      key={b.id}
+                      onClick={() => setSelectedBet(b)}
+                      style={{
+                        padding: "10px 12px",
+                        borderRadius: "10px",
+                        border: selectedBet?.id === b.id ? "1.5px solid #D6724B" : "1px solid #F0ECE6",
+                        backgroundColor: selectedBet?.id === b.id ? "#FFF7ED" : "#FAF8F5",
+                        cursor: "pointer",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between"
+                      }}
+                    >
+                      <div>
+                        <div style={{ fontSize: "13px", fontWeight: "bold", color: selectedBet?.id === b.id ? "#C2410C" : "#292524" }}>
+                          {b.title}
+                        </div>
+                        <div style={{ fontSize: "11px", color: "#78716C", marginTop: "2px" }}>
+                          {b.desc}
+                        </div>
+                      </div>
+                      <div style={{ width: "18px", height: "18px", borderRadius: "50%", border: selectedBet?.id === b.id ? "5px solid #D6724B" : "1.5px solid #D6D3D1", boxSizing: "border-box" }} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {selectedMode === "player_hide" && (
+                <div style={{ background: "#fff", borderRadius: "16px", padding: "14px", border: "1px solid #EAE6DF", boxShadow: "0 2px 8px rgba(0,0,0,0.03)" }}>
+                  <div style={{ fontSize: "13px", fontWeight: "bold", color: "#44403C", marginBottom: "8px" }}>
+                    🏡 选择初始藏身之所
+                  </div>
+                  <div style={{ display: "flex", gap: "8px", overflowX: "auto", paddingBottom: "4px" }} className="no-scrollbar">
+                    {(window.HideSeekConfig?.HIDEABLE || []).map((rKey) => {
+                      const ancientName = window.HideSeekConfig?.ANCIENT_ROOM_NAMES?.[rKey] || rKey;
+                      const isSel = startRoom === rKey;
+                      return (
+                        <button
+                          key={rKey}
+                          onClick={() => {
+                            setStartRoom(rKey);
+                            const spots = window.HideSeekConfig?.ROOM_SPOTS?.[rKey] || [];
+                            setStartSpot(spots[0] || "");
+                          }}
+                          style={{
+                            padding: "6px 12px",
+                            borderRadius: "10px",
+                            border: isSel ? "1.5px solid #D6724B" : "1px solid #E5E0D8",
+                            backgroundColor: isSel ? "#D6724B" : "#F5F2EC",
+                            color: isSel ? "#fff" : "#57534E",
+                            fontSize: "12px",
+                            fontWeight: isSel ? "bold" : "normal",
+                            whiteSpace: "nowrap",
+                            cursor: "pointer"
+                          }}
+                        >
+                          {ancientName}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {(window.HideSeekConfig?.ROOM_SPOTS?.[startRoom] || []).length > 0 && (
+                    <div style={{ marginTop: "10px", display: "flex", flexWrap: "wrap", gap: "6px" }}>
+                      {(window.HideSeekConfig?.ROOM_SPOTS?.[startRoom] || []).map((s) => (
+                        <button
+                          key={s}
+                          onClick={() => setStartSpot(s)}
+                          style={{
+                            padding: "4px 10px",
+                            borderRadius: "8px",
+                            border: startSpot === s ? "1px solid #EA580C" : "1px dashed #D6D3D1",
+                            backgroundColor: startSpot === s ? "#FFEDD5" : "#FAF8F5",
+                            color: startSpot === s ? "#C2410C" : "#78716C",
+                            fontSize: "11px",
+                            cursor: "pointer"
+                          }}
+                        >
+                          {s}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <button
+                onClick={handleStartGame}
+                style={{
+                  width: "100%",
+                  padding: "14px",
+                  borderRadius: "16px",
+                  border: "none",
+                  background: "linear-gradient(135deg, #D6724B 0%, #B85832 100%)",
+                  color: "#fff",
+                  fontSize: "15px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  boxShadow: "0 6px 16px rgba(214, 114, 75, 0.35)",
+                  letterSpacing: "1px"
+                }}
+              >
+                {selectedMode === "player_hide" ? "🥷 隐匿藏好 · 启动实时对弈" : "🔍 提步入府 · 寻踪捉伴"}
+              </button>
+            </div>
+          )}
+
+          {/* ================= 阶段二：对局进行中 (Playing) ================= */}
+          {gameState === "playing" && snapshot && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              
+              {dist === 0 && (
+                <div style={{ background: "#FEF2F2", border: "1.5px solid #EF4444", borderRadius: "12px", padding: "8px 12px", display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{ fontSize: "18px" }}>🚨</span>
+                  <div style={{ fontSize: "12px", color: "#B91C1C", fontWeight: "bold" }}>
+                    【近身危急】{charName} 已经踏入此屋，正在四处扫视与翻查！
+                  </div>
+                </div>
+              )}
+
+              {/* 伴侣心理与心声栏 */}
+              <div
+                style={{
+                  background: isNearDanger ? "#FEF2F2" : "#FFFFFF",
+                  border: isNearDanger ? "1.5px solid #FCA5A5" : "1px solid #EAE6DF",
+                  borderRadius: "16px",
+                  padding: "12px 14px",
+                  boxShadow: "0 2px 10px rgba(0,0,0,0.03)"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "bold", color: isNearDanger ? "#DC2626" : "#D6724B", display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span>{isNearDanger ? "💓 危机感知" : "💭 伴侣心声"}</span>
+                    {isNearDanger && (
+                      <span style={{ fontSize: "10px", padding: "1px 6px", borderRadius: "8px", background: "#DC2626", color: "#fff" }}>
+                        {dist === 0 ? "同室屏息" : "步步逼近"}
+                      </span>
+                    )}
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#A8A29E" }}>
+                    赌约：{snapshot.bet?.title}
+                  </div>
+                </div>
+
+                <div style={{ fontSize: "13px", color: "#44403C", lineHeight: "1.5", fontStyle: "italic" }}>
+                  {snapshot.aiThought || "对方正在府邸回廊深处凝神静听……"}
+                </div>
+              </div>
+
+              {/* 当前方位与感知 */}
+              <div style={{ background: "#FFFFFF", borderRadius: "16px", padding: "12px 14px", border: "1px solid #EAE6DF" }}>
+                {isPlayerHide ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ fontSize: "13px", color: "#78716C" }}>
+                        你的方位：<strong style={{ color: "#292524", fontSize: "14px" }}>【{snapshot.playerRoomName}】</strong> {snapshot.playerSpot ? ("「" + snapshot.playerSpot + "」") : "（无遮掩）"}
+                      </div>
+                      <div style={{ fontSize: "12px", color: snapshot.holdingBreath ? "#059669" : "#D97706", fontWeight: "bold" }}>
+                        {snapshot.bellLabel}
+                      </div>
+                    </div>
+
+                    <div style={{ fontSize: "12px", color: "#78716C", display: "flex", alignItems: "center", gap: "6px" }}>
+                      <span>👣 对方动静：{snapshot.stepSound?.label}</span>
+                    </div>
+
+                    {(snapshot.holdingBreath || snapshot.stealthTurns > 0 || snapshot.placedDecoy) && (
+                      <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", marginTop: "2px" }}>
+                        {snapshot.holdingBreath && (
+                          <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "6px", background: "#D1FAE5", color: "#065F46" }}>
+                            🌬️ 屏息中 (余 {snapshot.breathRemaining} 次)
+                          </span>
+                        )}
+                        {snapshot.stealthTurns > 0 && (
+                          <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "6px", background: "#E0E7FF", color: "#3730A3" }}>
+                            🪶 踏雪无痕 ({snapshot.stealthTurns}回合)
+                          </span>
+                        )}
+                        {snapshot.placedDecoy && (
+                          <span style={{ fontSize: "10px", padding: "2px 6px", borderRadius: "6px", background: "#FEF3C7", color: "#92400E" }}>
+                            🎎 障眼假人在【{window.HideSeekConfig?.ANCIENT_ROOM_NAMES?.[snapshot.placedDecoy.room]}】
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                    <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                      <div style={{ fontSize: "13px", color: "#78716C" }}>
+                        当前身处：<strong style={{ color: "#292524", fontSize: "14px" }}>【{snapshot.playerRoomName}】</strong>
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#D6724B", fontWeight: "bold" }}>
+                        {snapshot.seekerClue?.level}
+                      </div>
+                    </div>
+                    <div style={{ fontSize: "12px", color: "#57534E", lineHeight: "1.4", background: "#FDF8F5", padding: "8px 10px", borderRadius: "8px" }}>
+                      {snapshot.seekerClue?.text}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* 府邸对弈动态回廊手札 (日志区) */}
+              <div
+                style={{
+                  background: "#FAF7F2",
+                  borderRadius: "14px",
+                  padding: "10px 12px",
+                  maxHeight: "130px",
+                  overflowY: "auto",
+                  border: "1px solid #EAE4DA",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "6px",
+                  fontSize: "12px",
+                  color: "#57534E"
+                }}
+                className="no-scrollbar"
+              >
+                {gameHistory.map((log, idx) => (
+                  <div key={idx} style={{ lineHeight: "1.4" }}>
+                    {log}
+                  </div>
+                ))}
+                <div ref={historyEndRef} />
+              </div>
+
+              {/* 底部操作面板 */}
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {isPlayerHide ? (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "8px" }}>
+                    <button
+                      onClick={() => setShowMoveSelect(true)}
+                      style={{
+                        padding: "12px 6px",
+                        borderRadius: "12px",
+                        border: "1px solid #D6724B",
+                        backgroundColor: "#D6724B",
+                        color: "#fff",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        cursor: "pointer"
+                      }}
+                    >
+                      👟 轻步转移
+                    </button>
+
+                    <button
+                      onClick={handleHoldBreath}
+                      disabled={snapshot.breathRemaining <= 0}
+                      style={{
+                        padding: "12px 6px",
+                        borderRadius: "12px",
+                        border: snapshot.breathRemaining > 0 ? "1px solid #059669" : "1px solid #9CA3AF",
+                        backgroundColor: snapshot.breathRemaining > 0 ? "#10B981" : "#E5E7EB",
+                        color: snapshot.breathRemaining > 0 ? "#fff" : "#9CA3AF",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        cursor: snapshot.breathRemaining > 0 ? "pointer" : "not-allowed"
+                      }}
+                    >
+                      🌬️ 屏息 (余 {snapshot.breathRemaining} 次)
+                    </button>
+
+                    <button
+                      onClick={handlePlayerWait}
+                      style={{
+                        padding: "12px 6px",
+                        borderRadius: "12px",
+                        border: "1px solid #6B7280",
+                        backgroundColor: "#4B5563",
+                        color: "#fff",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        cursor: "pointer"
+                      }}
+                    >
+                      🤫 静候片刻
+                    </button>
+
+                    <button
+                      onClick={() => setShowItemSelect(true)}
+                      style={{
+                        padding: "10px",
+                        borderRadius: "12px",
+                        border: "1px solid #E5E0D8",
+                        backgroundColor: "#fff",
+                        color: "#B45309",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                        gridColumn: "span 3"
+                      }}
+                    >
+                      🎒 施展锦囊妙计 (调虎离山/障眼法/静步/落锁)
+                    </button>
+                  </div>
+                ) : (
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                    <button
+                      onClick={() => setShowMoveSelect(true)}
+                      style={{
+                        padding: "12px",
+                        borderRadius: "12px",
+                        border: "1px solid #D6724B",
+                        backgroundColor: "#D6724B",
+                        color: "#fff",
+                        fontSize: "13px",
+                        fontWeight: "bold",
+                        cursor: "pointer"
+                      }}
+                    >
+                      👟 提步前往邻房
+                    </button>
+
+                    <button
+                      onClick={() => setShowSearchSelect(true)}
+                      style={{
+                        padding: "12px",
+                        borderRadius: "12px",
+                        border: "1px solid #B45309",
+                        backgroundColor: "#F59E0B",
+                        color: "#fff",
+                        fontSize: "13px",
+                        fontWeight: "bold",
+                        cursor: "pointer"
+                      }}
+                    >
+                      🔍 搜查此间藏点
+                    </button>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* ================= 阶段三：胜负结算 (Game Over) ================= */}
+          {gameState === "gameover" && snapshot && (
+            <div style={{ display: "flex", flexDirection: "column", gap: "14px", textAlign: "center", padding: "10px 0" }}>
+              <div style={{ fontSize: "40px" }}>
+                {isPlayerWin ? "🏆" : "🐾"}
+              </div>
+              <div>
+                <div style={{ fontSize: "18px", fontWeight: "bold", color: isPlayerWin ? "#D6724B" : "#78716C" }}>
+                  {isPlayerWin ? "府邸捉迷藏 · 大获全胜！" : "府邸捉迷藏 · 惜败给TA～"}
+                </div>
+                <div style={{ fontSize: "12px", color: "#78716C", marginTop: "4px" }}>
+                  {isPlayerHide
+                    ? (isPlayerWin ? ("成功坚守 " + snapshot.maxTurns + " 回合未被 " + charName + " 搜获！") : ("被 " + charName + " 在「" + (snapshot.lastSearchSpot || snapshot.playerSpot) + "」抓个正着！"))
+                    : (isPlayerWin ? ("在「" + snapshot.lastSearchSpot + "」将 " + charName + " 抓个现行！") : ("耗费 " + snapshot.maxTurns + " 回合，未能寻得 " + charName + " 的踪影～"))}
+                </div>
+              </div>
+
+              {/* 伴侣结算专属 AI 心声对白 */}
+              <div style={{ background: "#FFF7ED", border: "1px solid #FFEDD5", borderRadius: "16px", padding: "14px", textAlign: "left" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <div style={{ fontSize: "12px", fontWeight: "bold", color: "#C2410C" }}>
+                    💌 {charName} 的对局心语：
+                  </div>
+                  {isGeneratingThought ? (
+                    <span style={{ fontSize: "11px", color: "#D97706" }}>✨ AI 正在根据对局构思心声...</span>
+                  ) : (
+                    <button
+                      onClick={() => triggerGenerateAIThought(snapshot)}
+                      style={{ background: "none", border: "none", color: "#C2410C", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}
+                    >
+                      🔄 重新生成
+                    </button>
+                  )}
+                </div>
+
+                <div style={{ fontSize: "13px", color: "#44403C", lineHeight: "1.6" }}>
+                  {aiCustomThought ? (
+                    aiCustomThought
+                  ) : isGeneratingThought ? (
+                    <div style={{ color: "#9CA3AF", fontStyle: "italic" }}>
+                      “正在细细回忆方才在府邸中寻你的每一步与回廊声息……”
+                    </div>
+                  ) : (
+                    isPlayerWin
+                      ? "“掌门这匿身/寻芳之术愈发神妙了，今日这局赌约，我自当愿赌服输～”"
+                      : "“抓到了～看掌门下次还敢不敢在府邸里同我这般捉迷藏？今夜的赌约可莫要抵赖哦。”"
+                  )}
+                </div>
+              </div>
+
+              {/* 赌约结算兑现 */}
+              <div style={{ background: "#fff", border: "1.5px solid #F0ECE6", borderRadius: "16px", padding: "12px 14px", textAlign: "left" }}>
+                <div style={{ fontSize: "11px", color: "#78716C" }}>本局立下的情趣赌约：</div>
+                <div style={{ fontSize: "14px", fontWeight: "bold", color: "#292524", marginTop: "2px" }}>
+                  【{snapshot.bet?.title}】
+                </div>
+                <div style={{ fontSize: "12px", color: "#57534E", marginTop: "2px" }}>
+                  {snapshot.bet?.desc}
+                </div>
+              </div>
+
+              <button
+                onClick={handleSaveToJournal}
+                disabled={savedToJournal}
+                style={{
+                  padding: "12px",
+                  borderRadius: "12px",
+                  border: "none",
+                  background: savedToJournal ? "#D1D5DB" : "linear-gradient(135deg, #10B981 0%, #059669 100%)",
+                  color: "#fff",
+                  fontSize: "13px",
+                  fontWeight: "bold",
+                  cursor: savedToJournal ? "default" : "pointer"
+                }}
+              >
+                {savedToJournal ? "✅ 已存入情侣手账回忆" : "📜 将对局战报、AI心语与赌约收录进情侣手账"}
+              </button>
+
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button
+                  onClick={() => setGameState("setup")}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    borderRadius: "12px",
+                    border: "1px solid #D6724B",
+                    backgroundColor: "#D6724B",
+                    color: "#fff",
+                    fontSize: "13px",
+                    fontWeight: "bold",
+                    cursor: "pointer"
+                  }}
+                >
+                  🔄 再来一局
+                </button>
+                <button
+                  onClick={onClose}
+                  style={{
+                    flex: 1,
+                    padding: "12px",
+                    borderRadius: "12px",
+                    border: "1px solid #E5E0D8",
+                    backgroundColor: "#FAF8F5",
+                    color: "#78716C",
+                    fontSize: "13px",
+                    fontWeight: "bold",
+                    cursor: "pointer"
+                  }}
+                >
+                  退出府邸
+                </button>
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {showMoveSelect && snapshot && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+              zIndex: 10
+            }}
+            onClick={() => setShowMoveSelect(false)}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "360px",
+                background: "#FAF8F5",
+                borderRadius: "20px",
+                padding: "16px",
+                boxShadow: "0 10px 25px rgba(0,0,0,0.2)"
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: "14px", fontWeight: "bold", color: "#292524", marginBottom: "10px" }}>
+                👟 转移至相邻房间
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {snapshot.playerNeighbors.map((nb) => (
+                  <button
+                    key={nb.key}
+                    onClick={() => {
+                      if (isPlayerHide) {
+                        handlePlayerMove(nb.key);
+                      } else {
+                        handleSeekerMove(nb.key);
+                      }
+                    }}
+                    style={{
+                      padding: "10px 14px",
+                      borderRadius: "10px",
+                      border: "1px solid #E5E0D8",
+                      backgroundColor: "#fff",
+                      fontSize: "13px",
+                      color: "#292524",
+                      cursor: "pointer",
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center"
+                    }}
+                  >
+                    <span>【{nb.name}】</span>
+                    <span style={{ fontSize: "11px", color: "#A8A29E" }}>前往 ›</span>
+                  </button>
+                ))}
+              </div>
+              <button
+                onClick={() => setShowMoveSelect(false)}
+                style={{ width: "100%", marginTop: "12px", padding: "8px", borderRadius: "10px", border: "none", background: "#E5E0D8", color: "#57534E", fontSize: "12px", cursor: "pointer" }}
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showSearchSelect && snapshot && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+              zIndex: 10
+            }}
+            onClick={() => setShowSearchSelect(false)}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "360px",
+                background: "#FAF8F5",
+                borderRadius: "20px",
+                padding: "16px",
+                boxShadow: "0 10px 25px rgba(0,0,0,0.2)"
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: "14px", fontWeight: "bold", color: "#292524", marginBottom: "10px" }}>
+                🔍 搜查【{snapshot.playerRoomName}】的遮掩之处
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                {snapshot.playerSpots.length > 0 ? (
+                  snapshot.playerSpots.map((spot) => (
+                    <button
+                      key={spot}
+                      onClick={() => handleSeekerSearch(spot)}
+                      style={{
+                        padding: "10px 14px",
+                        borderRadius: "10px",
+                        border: "1px solid #E5E0D8",
+                        backgroundColor: "#fff",
+                        fontSize: "13px",
+                        color: "#292524",
+                        cursor: "pointer",
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center"
+                      }}
+                    >
+                      <span>掀开「{spot}」</span>
+                      <span style={{ fontSize: "11px", color: "#F59E0B" }}>翻找 ›</span>
+                    </button>
+                  ))
+                ) : (
+                  <div style={{ fontSize: "12px", color: "#78716C", padding: "10px 0", textAlign: "center" }}>
+                    此处空旷无遮无掩，未有藏匿之处
+                  </div>
+                )}
+              </div>
+              <button
+                onClick={() => setShowSearchSelect(false)}
+                style={{ width: "100%", marginTop: "12px", padding: "8px", borderRadius: "10px", border: "none", background: "#E5E0D8", color: "#57534E", fontSize: "12px", cursor: "pointer" }}
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        )}
+
+        {showItemSelect && snapshot && (
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              backgroundColor: "rgba(0,0,0,0.6)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+              zIndex: 10
+            }}
+            onClick={() => setShowItemSelect(false)}
+          >
+            <div
+              style={{
+                width: "100%",
+                maxWidth: "380px",
+                background: "#FAF8F5",
+                borderRadius: "20px",
+                padding: "16px",
+                boxShadow: "0 10px 25px rgba(0,0,0,0.2)"
+              }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div style={{ fontSize: "14px", fontWeight: "bold", color: "#292524", marginBottom: "10px" }}>
+                🎒 施展古风锦囊计谋
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+                <div
+                  onClick={() => handleUseItem("rock")}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid #E5E0D8",
+                    backgroundColor: snapshot.inventory.rock > 0 ? "#fff" : "#F5F5F4",
+                    opacity: snapshot.inventory.rock > 0 ? 1 : 0.5,
+                    cursor: snapshot.inventory.rock > 0 ? "pointer" : "default"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: "bold", color: "#292524" }}>
+                    <span>🪨 调虎离山 (掷瓦引狐)</span>
+                    <span style={{ color: "#D6724B" }}>余 {snapshot.inventory.rock} 次</span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#78716C", marginTop: "2px" }}>
+                    向邻房投掷碎瓦发出清响，引诱对方下一回合前往该处搜查
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => handleUseItem("decoy")}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid #E5E0D8",
+                    backgroundColor: snapshot.inventory.decoy > 0 ? "#fff" : "#F5F5F4",
+                    opacity: snapshot.inventory.decoy > 0 ? 1 : 0.5,
+                    cursor: snapshot.inventory.decoy > 0 ? "pointer" : "default"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: "bold", color: "#292524" }}>
+                    <span>🎎 障眼法 (外衫假人)</span>
+                    <span style={{ color: "#D6724B" }}>余 {snapshot.inventory.decoy} 次</span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#78716C", marginTop: "2px" }}>
+                    在当前藏点放置假人外衫，对方翻找此点时将被惊扰并扑空 1 回合
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => handleUseItem("stealth")}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid #E5E0D8",
+                    backgroundColor: snapshot.inventory.stealth > 0 ? "#fff" : "#F5F5F4",
+                    opacity: snapshot.inventory.stealth > 0 ? 1 : 0.5,
+                    cursor: snapshot.inventory.stealth > 0 ? "pointer" : "default"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: "bold", color: "#292524" }}>
+                    <span>🪶 踏雪无痕 (静步秘术)</span>
+                    <span style={{ color: "#D6724B" }}>余 {snapshot.inventory.stealth} 次</span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#78716C", marginTop: "2px" }}>
+                    提气轻身，接下来的 2 回合移动完全无声无息
+                  </div>
+                </div>
+
+                <div
+                  onClick={() => handleUseItem("lock")}
+                  style={{
+                    padding: "10px 12px",
+                    borderRadius: "10px",
+                    border: "1px solid #E5E0D8",
+                    backgroundColor: snapshot.inventory.lock > 0 ? "#fff" : "#F5F5F4",
+                    opacity: snapshot.inventory.lock > 0 ? 1 : 0.5,
+                    cursor: snapshot.inventory.lock > 0 ? "pointer" : "default"
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: "13px", fontWeight: "bold", color: "#292524" }}>
+                    <span>🗝️ 机关落锁 (门闩暗扣)</span>
+                    <span style={{ color: "#D6724B" }}>余 {snapshot.inventory.lock} 次</span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#78716C", marginTop: "2px" }}>
+                    将通往邻房的通道门闩扣紧，封阻通行 2 回合
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowItemSelect(false)}
+                style={{ width: "100%", marginTop: "12px", padding: "8px", borderRadius: "10px", border: "none", background: "#E5E0D8", color: "#57534E", fontSize: "12px", cursor: "pointer" }}
+              >
+                取消
+              </button>
+            </div>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+};
+
 // T9 情侣空间主页面组件 (全面实现各伴侣子功能历史记录与事件数据完全隔离)
 const T9Page = () => {
   const { useState, useEffect, useRef } = React;
@@ -37930,6 +39308,8 @@ const T9Page = () => {
 
   // 8. 旧日食谱功能状态 (Ancient Cuisine & Recipes - 100% 离线免API)
   const [showRecipeModal, setShowRecipeModal] = useState(false);
+  const [featurePage, setFeaturePage] = useState(0);
+  const [showHideSeekModal, setShowHideSeekModal] = useState(false);
   const [currentRecipe, setCurrentRecipe] = useState(null);
   const [recipeDialogue, setRecipeDialogue] = useState("");
   const [recipeHistory, setRecipeHistory] = useState([]);
@@ -39352,7 +40732,7 @@ JSON 格式示例：
   const completedWishesCount = wishlist.filter((w) => w.done).length;
   const pendingWishesCount = totalWishesCount - completedWishesCount;
 
-  const features = [
+  const page1Features = [
     { title: "与你相伴", icon: "heart-straight", colorClass: "bg-morandi-1" },
     { title: "任务拆解", icon: "list-checks", colorClass: "bg-morandi-2" },
     { title: "共同记账", icon: "coin", colorClass: "bg-morandi-3" },
@@ -39363,12 +40743,16 @@ JSON 格式示例：
     { title: "旧日食谱", icon: "bowl-food", colorClass: "bg-morandi-4" },
   ];
 
+  const page2Features = [
+    { title: "府邸捉迷藏", icon: "footprints", colorClass: "bg-morandi-1" },
+  ];
+
   return (
     <>
       <div id="t9-root" style={{ overflowY: "auto" }} className="no-scrollbar">
         <T9Header taCharacter={taCharacter} setTaCharacter={setTaCharacter} />
 
-        {/* 功能入口网格区域 */}
+        {/* 功能入口左右分页滑动区域 */}
         <div
           style={{
             padding: "0 24px",
@@ -39378,87 +40762,211 @@ JSON 格式示例：
         >
           <div
             style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(4, 1fr)",
-              gap: "12px 10px",
+              position: "relative",
+              width: "100%",
+              overflow: "hidden",
             }}
           >
-            {features.map((item, index) => (
+            <div
+              style={{
+                display: "flex",
+                width: "200%",
+                transform: `translateX(-${featurePage * 50}%)`,
+                transition: "transform 0.35s cubic-bezier(0.25, 1, 0.5, 1)",
+              }}
+            >
+              {/* 第 1 页：原 8 个功能 */}
               <div
-                key={index}
-                className={`active-press ${item.colorClass}`}
                 style={{
-                  display: "flex",
-                  flexDirection: "column",
-                  alignItems: "center",
-                  gap: "10px",
-                  padding: "16px 6px",
-                  borderRadius: "20px",
-                  boxShadow: "0 4px 12px rgba(140, 145, 123, 0.05)",
-                  cursor: "pointer",
-                  opacity: 1,
-                  border: "1px solid rgba(255,255,255,0.5)",
-                }}
-                onClick={() => {
-                  if (index === 0) {
-                    setShowModal(true);
-                  } else if (index === 1) {
-                    setShowTaskModal(true);
-                  } else if (index === 2) {
-                    setShowBillingModal(true);
-                  } else if (index === 3) {
-                    setShowWishlistModal(true);
-                  } else if (index === 4) {
-                    setShowGuessGame(true);
-                  } else if (index === 5) {
-                    setShowDrawGuessGame(true);
-                  } else if (index === 6) {
-                    setShowFeihuaModal(true);
-                  } else if (index === 7) {
-                    setShowRecipeModal(true);
-                    if (!currentRecipe && window.mcpCuisineEngine) {
-                      const initial = window.mcpCuisineEngine.recommendDish(taCharacter?.name || "名士");
-                      if (initial) {
-                        setCurrentRecipe(initial.dish);
-                        setRecipeDialogue(initial.dialogue);
-                      }
-                    }
-                  }
+                  width: "50%",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gap: "12px 10px",
+                  padding: "0 2px",
+                  boxSizing: "border-box",
                 }}
               >
-                <div
-                  style={{
-                    width: "40px",
-                    height: "40px",
-                    borderRadius: "14px",
-                    background: "rgba(255,255,255,0.8)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    boxShadow:
-                      "inset 0 2px 4px rgba(255,255,255,0.5), 0 2px 6px rgba(0,0,0,0.05)",
-                  }}
-                >
-                  <i
-                    className={`ph-fill ph-${item.icon}`}
+                {page1Features.map((item, index) => (
+                  <div
+                    key={index}
+                    className={`active-press ${item.colorClass}`}
                     style={{
-                      fontSize: "22px",
-                      color: "#8fa99d",
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "16px 6px",
+                      borderRadius: "20px",
+                      boxShadow: "0 4px 12px rgba(140, 145, 123, 0.05)",
+                      cursor: "pointer",
+                      opacity: 1,
+                      border: "1px solid rgba(255,255,255,0.5)",
                     }}
-                  ></i>
-                </div>
-                <span
-                  style={{
-                    fontSize: "11px",
-                    color: "#5a5f4d",
-                    fontWeight: "bold",
-                    textAlign: "center",
-                  }}
-                >
-                  {item.title}
-                </span>
+                    onClick={() => {
+                      if (index === 0) {
+                        setShowModal(true);
+                      } else if (index === 1) {
+                        setShowTaskModal(true);
+                      } else if (index === 2) {
+                        setShowBillingModal(true);
+                      } else if (index === 3) {
+                        setShowWishlistModal(true);
+                      } else if (index === 4) {
+                        setShowGuessGame(true);
+                      } else if (index === 5) {
+                        setShowDrawGuessGame(true);
+                      } else if (index === 6) {
+                        setShowFeihuaModal(true);
+                      } else if (index === 7) {
+                        setShowRecipeModal(true);
+                        if (!currentRecipe && window.mcpCuisineEngine) {
+                          const initial = window.mcpCuisineEngine.recommendDish(taCharacter?.name || "名士");
+                          if (initial) {
+                            setCurrentRecipe(initial.dish);
+                            setRecipeDialogue(initial.dialogue);
+                          }
+                        }
+                      }
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "40px",
+                        height: "40px",
+                        borderRadius: "14px",
+                        background: "rgba(255,255,255,0.8)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow:
+                          "inset 0 2px 4px rgba(255,255,255,0.5), 0 2px 6px rgba(0,0,0,0.05)",
+                      }}
+                    >
+                      <i
+                        className={`ph-fill ph-${item.icon}`}
+                        style={{
+                          fontSize: "22px",
+                          color: index < 5 ? "#8fa99d" : "#ccc",
+                        }}
+                      ></i>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "#5a5f4d",
+                        fontWeight: "bold",
+                        textAlign: "center",
+                      }}
+                    >
+                      {item.title}
+                    </span>
+                  </div>
+                ))}
               </div>
-            ))}
+
+              {/* 第 2 页：府邸捉迷藏 */}
+              <div
+                style={{
+                  width: "50%",
+                  display: "grid",
+                  gridTemplateColumns: "repeat(4, 1fr)",
+                  gap: "12px 10px",
+                  padding: "0 2px",
+                  boxSizing: "border-box",
+                }}
+              >
+                {page2Features.map((item, index) => (
+                  <div
+                    key={index}
+                    className={`active-press ${item.colorClass}`}
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      alignItems: "center",
+                      gap: "10px",
+                      padding: "16px 6px",
+                      borderRadius: "20px",
+                      boxShadow: "0 4px 12px rgba(140, 145, 123, 0.05)",
+                      cursor: "pointer",
+                      opacity: 1,
+                      border: "1px solid rgba(255,255,255,0.5)",
+                    }}
+                    onClick={() => {
+                      if (index === 0) {
+                        setShowHideSeekModal(true);
+                      }
+                    }}
+                  >
+                    <div
+                      style={{
+                        width: "40px",
+                        height: "40px",
+                        borderRadius: "14px",
+                        background: "rgba(255,255,255,0.8)",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        boxShadow:
+                          "inset 0 2px 4px rgba(255,255,255,0.5), 0 2px 6px rgba(0,0,0,0.05)",
+                      }}
+                    >
+                      <i
+                        className={`ph-fill ph-${item.icon}`}
+                        style={{
+                          fontSize: "22px",
+                          color: "#D6724B",
+                        }}
+                      ></i>
+                    </div>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        color: "#5a5f4d",
+                        fontWeight: "bold",
+                        textAlign: "center",
+                      }}
+                    >
+                      {item.title}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* 底部指示器 */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                gap: "8px",
+                marginTop: "16px",
+                padding: "4px 0",
+              }}
+            >
+              <div
+                onClick={() => setFeaturePage(0)}
+                style={{
+                  width: featurePage === 0 ? "20px" : "6px",
+                  height: "6px",
+                  borderRadius: "3px",
+                  backgroundColor: featurePage === 0 ? "#7FA393" : "rgba(140, 145, 123, 0.28)",
+                  transition: "all 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+                  cursor: "pointer",
+                }}
+              />
+              <div
+                onClick={() => setFeaturePage(1)}
+                style={{
+                  width: featurePage === 1 ? "20px" : "6px",
+                  height: "6px",
+                  borderRadius: "3px",
+                  backgroundColor: featurePage === 1 ? "#7FA393" : "rgba(140, 145, 123, 0.28)",
+                  transition: "all 0.3s cubic-bezier(0.25, 1, 0.5, 1)",
+                  cursor: "pointer",
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>
@@ -42699,6 +44207,12 @@ JSON 格式示例：
       )}
 
       {/* ================== 愿望清单弹窗 (参考共同记账布局风格，双视角与深度AI联动) ================== */}
+      <HideSeekModal
+        isOpen={showHideSeekModal}
+        onClose={() => setShowHideSeekModal(false)}
+        taCharacter={taCharacter}
+      />
+
       {showWishlistModal && (
         <>
           <div
@@ -81233,6 +82747,34 @@ const GroupChatSettingsModal = ({
         </div>
 
         {/* 原有设置项 */}
+        {/* 情境氛围微动效 */}
+        <div className="cs-row">
+          <div>
+            <div className="cs-label">情境氛围微动效</div>
+            <div className="cs-desc">
+              提到天气、情感、意境、战斗等话题时呈现全屏沉浸微动效，关闭后为纯净无动效状态
+            </div>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              className="toggle-input"
+              checked={settings.enableAmbientEffects !== false}
+              onChange={() => {
+                const nextVal = settings.enableAmbientEffects === false;
+                onChange({
+                  ...settings,
+                  enableAmbientEffects: nextVal,
+                });
+                if (window.liveReactionEngine) {
+                  window.liveReactionEngine.setEnabled(nextVal);
+                }
+              }}
+            />
+            <span className="toggle-slider"></span>
+          </label>
+        </div>
+
         <div className="cs-row">
           <div>
             <div className="cs-label">线上剧情模式</div>
@@ -114091,6 +115633,19 @@ const MCPToolsSettingsPage = ({ onClose }) => {
   const [builtInTools, setBuiltInTools] = useState([]);
   const [externalServers, setExternalServers] = useState([]);
   const [activeTab, setActiveTab] = useState("builtin"); // 'builtin' | 'external' | 'guide'
+  const [searchQuery, setSearchQuery] = useState("");
+
+  const filteredBuiltInTools = builtInTools.filter((tool) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (
+      (tool.displayName && tool.displayName.toLowerCase().includes(q)) ||
+      (tool.name && tool.name.toLowerCase().includes(q)) ||
+      (tool.category && tool.category.toLowerCase().includes(q)) ||
+      (tool.description && tool.description.toLowerCase().includes(q))
+    );
+  });
+  const [searchQuery, setSearchQuery] = useState("");
 
   // 添加外部节点表单
   const [serverName, setServerName] = useState("");
@@ -114107,6 +115662,17 @@ const MCPToolsSettingsPage = ({ onClose }) => {
       setExternalServers([...window.mcpHub.externalServers]);
     }
   };
+
+  const filteredBuiltInTools = builtInTools.filter((tool) => {
+    if (!searchQuery.trim()) return true;
+    const q = searchQuery.toLowerCase().trim();
+    return (
+      (tool.displayName && tool.displayName.toLowerCase().includes(q)) ||
+      (tool.name && tool.name.toLowerCase().includes(q)) ||
+      (tool.category && tool.category.toLowerCase().includes(q)) ||
+      (tool.description && tool.description.toLowerCase().includes(q))
+    );
+  });
 
   useEffect(() => {
     refreshHubState();
@@ -114345,11 +115911,73 @@ const MCPToolsSettingsPage = ({ onClose }) => {
         {/* 1. 内置 Web-MCP 工具列表 */}
         {activeTab === "builtin" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
-            <div style={{ fontSize: "12px", color: "#8E9485", padding: "0 4px" }}>
-              💡 内置工具无需任何外部环境，在手机和电脑浏览器中即开即用：
+            {/* 顶部搜索栏 */}
+            <div style={{ position: "relative", display: "flex", alignItems: "center" }}>
+              <i
+                className="ph ph-magnifying-glass"
+                style={{
+                  position: "absolute",
+                  left: "14px",
+                  color: "#8E9482",
+                  fontSize: "17px",
+                  pointerEvents: "none"
+                }}
+              />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="搜索内置工具名称、标识符、分类或功能描述..."
+                style={{
+                  width: "100%",
+                  padding: "10px 38px 10px 38px",
+                  background: "#FFFFFF",
+                  border: "1px solid #E5DFD5",
+                  borderRadius: "12px",
+                  fontSize: "13px",
+                  color: "#3B4235",
+                  outline: "none",
+                  boxShadow: "0 1px 4px rgba(0, 0, 0, 0.03)",
+                  transition: "border-color 0.2s"
+                }}
+              />
+              {searchQuery && (
+                <div
+                  onClick={() => setSearchQuery("")}
+                  style={{
+                    position: "absolute",
+                    right: "12px",
+                    color: "#9CA194",
+                    fontSize: "16px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    padding: "2px"
+                  }}
+                >
+                  <i className="ph ph-x-circle-fill"></i>
+                </div>
+              )}
             </div>
 
-            {builtInTools.map(tool => (
+            {filteredBuiltInTools.length === 0 ? (
+              <div
+                style={{
+                  textAlign: "center",
+                  padding: "36px 16px",
+                  color: "#8E9482",
+                  background: "#FFFFFF",
+                  borderRadius: "16px",
+                  border: "1px dashed #E2DED5"
+                }}
+              >
+                <i className="ph ph-magnifying-glass" style={{ fontSize: "28px", color: "#B5BAAA", marginBottom: "8px", display: "block" }}></i>
+                <div style={{ fontSize: "14px", fontWeight: "600", color: "#5A5F4D" }}>未找到匹配的工具</div>
+                <div style={{ fontSize: "12px", color: "#9CA194", marginTop: "4px" }}>可以尝试更换关键词搜索</div>
+              </div>
+            ) : (
+              filteredBuiltInTools.map(tool => (
               <div
                 key={tool.name}
                 style={{

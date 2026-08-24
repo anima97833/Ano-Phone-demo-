@@ -10986,7 +10986,7 @@
 }
 
 /* Backup global rule - strictly for app pages, excluding all internal dialogs and modals */
-[class*="-overlay"]:not(.open):not([class*="modal"]):not(.calendar-modal-overlay):not(.join-us-overlay):not(.area-modal-overlay):not(.saved-areas-overlay):not(.wechat-voice-call-overlay):not(.wechat-voice-call-screen):not(.lockscreen-modal-overlay):not(.lockscreen-action-menu-overlay) {
+[class*="-overlay"]:not(.open):not([class*="modal"]):not([class*="ambient"]):not(.ambient-overlay):not(.calendar-modal-overlay):not(.join-us-overlay):not(.area-modal-overlay):not(.saved-areas-overlay):not(.wechat-voice-call-overlay):not(.wechat-voice-call-screen):not(.lockscreen-modal-overlay):not(.lockscreen-action-menu-overlay) {
   display: none !important;
   pointer-events: none !important;
   visibility: hidden !important;
