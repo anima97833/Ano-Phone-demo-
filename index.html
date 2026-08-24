@@ -134,41 +134,42 @@
     <!-- D3.js 库 -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <link rel="stylesheet" href="Milvus/style.css?v=1787568854236" />
+    <link rel="stylesheet" href="Milvus/style.css?v=1787586132341" />
 
     <!-- IndexedDB 存储模块 -->
-    <script src="Milvus/db.js?v=1787568854236"></script>
+    <script src="Milvus/db.js?v=1787586132341"></script>
     <!-- MCP 扩展引擎模块 -->
-    <script src="Milvus/mcp_store.js?v=1787568854236"></script>
+    <script src="Milvus/mcp_store.js?v=1787586132341"></script>
 
     <!-- 灵犀生境情境微动效样式 -->
-    <link rel="stylesheet" href="Milvus/live_reactions.css?v=1787568854236" />
+    <link rel="stylesheet" href="Milvus/live_reactions.css?v=1787586132341" />
 
     <!-- 构造状态气泡视觉样式 -->
     <link rel="stylesheet" href="Milvus/construct_bubble.css?v=1787564901794" />
 
   <style id="global-notification-banner-styles">
-@keyframes globalNotifSlideDown {
+@keyframes notifCardSlideIn {
   0% {
     opacity: 0;
-    transform: translate(-50%, -100%) scale(0.92);
+    transform: translateY(-24px) scale(0.95);
   }
   65% {
-    transform: translate(-50%, 6px) scale(1.02);
+    opacity: 1;
+    transform: translateY(3px) scale(1.01);
   }
   100% {
     opacity: 1;
-    transform: translate(-50%, 0) scale(1);
+    transform: translateY(0) scale(1);
   }
 }
-@keyframes globalNotifSlideUp {
+@keyframes notifCardSlideOut {
   0% {
     opacity: 1;
-    transform: translate(-50%, 0) scale(1);
+    transform: translateY(0) scale(1);
   }
   100% {
     opacity: 0;
-    transform: translate(-50%, -100%) scale(0.92);
+    transform: translateY(-24px) scale(0.95);
   }
 }
 @keyframes notifTextSlide {
@@ -209,10 +210,10 @@
     <!-- 府邸捉迷藏/贝叶斯听声辨位游戏引擎 -->
     <script src="Milvus/hide_seek_engine.js?v=3.3.0"></script>
 
-    <script src="Milvus/app.min.js?v=3.3.0"></script>
+    <script src="Milvus/app.min.js?v=1787586132341"></script>
 
     <!-- 灵犀生境情境视觉引擎 (必须在 app.min.js 之后加载，确保 document.body 已就绪) -->
-    <script src="Milvus/live_reaction_engine.js?v=1787568854236"></script>
+    <script src="Milvus/live_reaction_engine.js?v=1787586132341"></script>
 
     <!-- PWA Service Worker 注册 -->
     <script>

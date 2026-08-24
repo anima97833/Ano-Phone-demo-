@@ -12011,3 +12011,41 @@
     transform: translate(-50%, -50%) scale(1);
   }
 }
+
+/* 传讯消息高亮与搜索跳转动效 */
+@keyframes highlightMsgPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(214, 114, 75, 0.7);
+  }
+  50% {
+    transform: scale(1.02);
+    box-shadow: 0 0 16px 4px rgba(214, 114, 75, 0.55);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 0 0 0 0 rgba(214, 114, 75, 0);
+  }
+}
+
+.chat-msg-highlight {
+  animation: highlightMsgPulse 1.4s ease-in-out !important;
+  border-radius: 14px;
+}
+
+.chat-msg-search-match .msg-bubble,
+.chat-msg-search-match .construct-card-bubble-container {
+  outline: 2.5px solid #d6724b !important;
+  outline-offset: 3px;
+  box-shadow: 0 0 12px rgba(214, 114, 75, 0.4) !important;
+}
+
+.chat-scroll-bottom-fab:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 6px 18px rgba(214, 114, 75, 0.25) !important;
+}
+
+.chat-scroll-bottom-fab:active {
+  transform: translateY(0) scale(0.96);
+}
+
