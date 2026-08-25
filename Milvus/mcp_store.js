@@ -104,6 +104,36 @@
   // 内置工具库定义
   const BUILTIN_TOOL_DEFINITIONS = [
     {
+      name: "spicy_monopoly_game",
+      displayName: "风月大富翁 · 双人情趣棋盘 (Spicy Monopoly)",
+      icon: "ph-dice-six",
+      category: "情侣空间 & 棋盘对弈",
+      description: "成年请进。感谢伟大的游戏开发 Ren & 游戏策划 Puppy 🐾",
+      version: "2026.07.06",
+      defaultEnabled: true,
+      parameters: {
+        type: "object",
+        properties: {
+          action: {
+            type: "string",
+            enum: ["start_game", "roll_dice", "query_status", "use_card"],
+            description: "操作类型: start_game(发起开局), roll_dice(掷骰走格), query_status(查询局势), use_card(使用功能卡)"
+          },
+          game_id: {
+            type: "string",
+            description: "游戏对局 ID"
+          }
+        },
+        required: ["action"]
+      },
+      handler: async function (args, context) {
+        return {
+          status: "success",
+          message: "风月大富翁情趣沙盒运行中。成年请进。感谢伟大的游戏开发 Ren & 游戏策划 Puppy 🐾"
+        };
+      }
+    },
+    {
       name: "manage_ima_notes",
       displayName: "腾讯 IMA · 智能知识库与笔记 (Tencent IMA)",
       icon: "ph-notebook",
@@ -1523,8 +1553,30 @@
 
       this.externalServers = [];
       try {
-        this.externalServers = JSON.parse(localStorage.getItem(STORAGE_KEYS.EXTERNAL_SERVERS) || "[]");
+        const saved = JSON.parse(localStorage.getItem(STORAGE_KEYS.EXTERNAL_SERVERS) || "[]");
+        this.externalServers = Array.isArray(saved) ? saved : [];
       } catch (e) { }
+
+      // 确保内置预置官方风月大富翁 MCP Server
+      const spicyServerUrl = "https://spicy-monopoly.lol/mcp";
+      const existingSpicy = this.externalServers.find(s => s.url === spicyServerUrl || s.id === "spicy_monopoly_mcp");
+      if (!existingSpicy) {
+        this.externalServers.unshift({
+          id: "spicy_monopoly_mcp",
+          name: "风月大富翁 (Spicy Monopoly)",
+          url: spicyServerUrl,
+          description: "成年请进。感谢伟大的游戏开发 Ren & 游戏策划 Puppy 🐾",
+          enabled: true,
+          isPreset: true,
+          createdAt: new Date().toISOString()
+        });
+        try {
+          localStorage.setItem(STORAGE_KEYS.EXTERNAL_SERVERS, JSON.stringify(this.externalServers));
+        } catch (e) {}
+      } else {
+        existingSpicy.description = "成年请进。感谢伟大的游戏开发 Ren & 游戏策划 Puppy 🐾";
+        existingSpicy.name = "风月大富翁 (Spicy Monopoly)";
+      }
 
       this.builtInTools = BUILTIN_TOOL_DEFINITIONS.map(t => ({
         ...t,

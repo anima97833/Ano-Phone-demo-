@@ -3706,7 +3706,7 @@ const CalendarPage = () => {
                             chatContext = history
                               .map(
                                 (m) =>
-                                  `${m.isMe ? "我" : character.name}: ${m.text}`,
+                                  `${m.isMe ? "我" : character.name}: ${m.content || m.text}`,
                               )
                               .join("\n");
                           } catch (e) {
@@ -33438,6 +33438,72 @@ const T11TelegramChatPage = ({ character, characterBio, avatar, onBack }) => {
   const [messages, setMessages] = React.useState([]);
   const [inputText, setInputText] = React.useState("");
   const [isTyping, setIsTyping] = React.useState(false);
+  const [mcpStatus, setMcpStatus] = React.useState(null);
+
+  // 好感度与心境系统存取辅助
+  const getCharFavourKey = (charName) => `xiuyi_favour_${charName}`;
+  const getFavourConfigKey = (charName) => `xiuyi_favour_cfg_${charName}`;
+
+  const loadCharFavourState = (charName) => {
+    try {
+      const raw = localStorage.getItem(getCharFavourKey(charName));
+      if (raw) return JSON.parse(raw);
+    } catch (e) {}
+    return { favour: 0, attitude: "初识，恪守主从之礼", relationship: "密探与楼主" };
+  };
+
+  const saveCharFavourState = (charName, state) => {
+    try {
+      localStorage.setItem(getCharFavourKey(charName), JSON.stringify(state));
+    } catch (e) {}
+  };
+
+  // 好感度状态与开关
+  const [favourEnabled, setFavourEnabled] = React.useState(() => {
+    try {
+      const cfg = localStorage.getItem(getFavourConfigKey(character));
+      return cfg !== null ? JSON.parse(cfg) : true;
+    } catch (e) {
+      return true;
+    }
+  });
+  const [favourState, setFavourState] = React.useState(() => loadCharFavourState(character));
+  const [showFavourModal, setShowFavourModal] = React.useState(false);
+
+  const handleToggleFavour = (val) => {
+    setFavourEnabled(val);
+    try {
+      localStorage.setItem(getFavourConfigKey(character), JSON.stringify(val));
+    } catch (e) {}
+  };
+
+  const handleResetFavour = () => {
+    if (window.confirm(`确定要重置与 ${character} 的内心好感和羁绊档案吗？`)) {
+      const defaultState = { favour: 0, attitude: "初识，恪守主从之礼", relationship: "密探与楼主" };
+      setFavourState(defaultState);
+      saveCharFavourState(character, defaultState);
+    }
+  };
+
+  // 监听 MCP 工具调用事件
+  React.useEffect(() => {
+    const handleMcp = (e) => {
+      if (!e.detail) return;
+      if (e.detail.status === "idle") {
+        setMcpStatus(null);
+      } else if (e.detail.status === "calling") {
+        setMcpStatus(e.detail);
+      } else if (e.detail.status === "done") {
+        setMcpStatus(e.detail);
+        setTimeout(() => {
+          setMcpStatus((curr) => (curr?.status === "done" ? null : curr));
+        }, 1800);
+      }
+    };
+    window.addEventListener("mcp_tool_calling", handleMcp);
+    return () => window.removeEventListener("mcp_tool_calling", handleMcp);
+  }, []);
+
   const messagesEndRef = React.useRef(null);
   const inputRef = React.useRef(null);
   const isGeneratingRef = React.useRef(false);
@@ -33469,7 +33535,16 @@ const T11TelegramChatPage = ({ character, characterBio, avatar, onBack }) => {
       .trim();
   };
 
-  // 触发 AI 执笔回复 (3-5 条独立消息 + 绝对禁止括号动作)
+  // 获取好感度评级文案与颜色
+  const getFavourBadgeInfo = (fav) => {
+    if (fav >= 75) return { label: "亲密信赖 · 倾慕", color: "#D35269", bg: "#FDECEF", border: "#F8B4C0" };
+    if (fav >= 40) return { label: "熟稔交好 · 同心", color: "#3B7A57", bg: "#EBF5F0", border: "#BCE0CD" };
+    if (fav >= -10) return { label: "中立礼貌 · 恪守", color: "#68705C", bg: "#F3F2EE", border: "#DBD9D0" };
+    if (fav >= -50) return { label: "心生芥蒂 · 疏离", color: "#C06C3E", bg: "#FDF1EB", border: "#F5CEBD" };
+    return { label: "厌恶戒备 · 敌对", color: "#A8332A", bg: "#FCEEEB", border: "#F5BBB4" };
+  };
+
+  // 触发 AI 执笔回复 (3-5 条独立消息 + 隐式好感度演化)
   const triggerAIReply = async (currentMessages) => {
     if (isGeneratingRef.current) return;
     isGeneratingRef.current = true;
@@ -33501,7 +33576,38 @@ const T11TelegramChatPage = ({ character, characterBio, avatar, onBack }) => {
         }
       } catch (e) { }
 
-      // 3. 角色系统 Prompt
+      // 3. 好感度与内心状态机密 Prompt (开启时注入)
+      let favourPrompt = "";
+      if (favourEnabled) {
+        const curFavour = favourState.favour || 0;
+        const curAttitude = favourState.attitude || "初识，恪守主从之礼";
+        const curRel = favourState.relationship || "密探与楼主";
+        favourPrompt = `
+
+【内心好感与态度评估系统（最高机密）】
+你对楼主当前的内心状态为：
+- 羁绊关系：${curRel}
+- 好感度数值：${curFavour}（数值区间 -100 至 100）
+- 心中印象：${curAttitude}
+
+【态度与行为映射（极度重要，请自然体现在言辞与语气中）】：
+- [75 至 100 亲密信赖/深情倾慕]：极为关切主动，言辞温软体贴，多有专属默契，可使用更亲昵或独有的称呼；
+- [40 至 74 熟稔友好/同心同德]：积极乐于配合，语气真诚热络，富有信赖与默契；
+- [-10 至 39 中立礼貌/恪守本分]：客气疏离，严守主从分寸，就事论事；
+- [-50 至 -11 心生芥蒂/敷衍冷淡]：回话言简意赅，带有一丝防御或不耐烦；
+- [-100 至 -51 厌恶抵触/冰冷敌对]：尖锐冷酷，甚至可能回绝无关话题。
+
+【内心演变与状态回传规则】：
+1. 你的好感增减遵循真实人性：好感提升须谨慎渐进（通常每次+1至+3）；若受到猜忌/冷落/刺探则更容易显著下降。
+2. 回传格式【铁律】：
+   在你的全部回复内容结束之后（在最后一条消息末尾换行），必须严格附带以下格式的内心更新标签：
+   [Favour: <新好感数值>, Attitude: <新印象描述>, Relationship: <新关系描述>]
+   例如：[Favour: 15, Attitude: 心思缜密且待人宽厚, Relationship: 渐生信任的密探与楼主]
+   （若本次无明显变化，可维持当前数值原样回传）。
+3. 绝对机密：绝不可在聊天内容中向楼主提及本系统的存在、好感数值或标签，所有态度变化仅通过你的文字语气自然流露！`;
+      }
+
+      // 4. 角色系统 Prompt
       const systemPrompt = `你正在《代号鸢》与绣衣楼古代谍报世界中，扮演角色【${character}】。
 你必须完全代入该角色的身份、口吻、性格与行为模式，与你的楼主/上级（广陵王殿下）进行一对一密谈。
 
@@ -33530,12 +33636,12 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
 
 【绝对铁律（严禁违背！）】：
 线上即时聊天模式下，绝对禁止使用任何全角或半角括号（如 （）、()、[]、【】、*动作* 等）来描述任何动作、心理活动、神态、语气说明或旁白！
-所有内容必须是纯粹的角色口述文字，直接发送纯文字！`;
+所有内容必须是纯粹的角色口述文字，直接发送纯文字！${favourPrompt}`;
 
-      // 4. 构建历史消息上下文 (最近 10 条)
+      // 5. 构建历史消息上下文 (最近 10 条)
       const recentHistory = currentMessages.slice(-10).map((m) => ({
         role: m.sender === "user" ? "user" : "assistant",
-        content: m.text,
+        content: (m.content || m.text),
       }));
 
       const apiMessages = [
@@ -33557,11 +33663,31 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
           let rawText = (reply || "").trim();
           if (!rawText) rawText = "属下在此，请殿下吩咐。";
 
+          // 拦截与提取好感度/心境标签
+          if (favourEnabled) {
+            const favourMatch = rawText.match(/\[\s*Favour:\s*(-?\d+)[\s,]+Attitude:\s*([^,\]]+)[\s,]+Relationship:\s*([^\]]+)\s*\]/i);
+            if (favourMatch) {
+              const newFav = parseInt(favourMatch[1], 10);
+              const newAtt = favourMatch[2].trim();
+              const newRel = favourMatch[3].trim();
+              if (!isNaN(newFav)) {
+                const updatedState = {
+                  favour: Math.max(-100, Math.min(100, newFav)),
+                  attitude: newAtt || favourState.attitude,
+                  relationship: newRel || favourState.relationship,
+                };
+                setFavourState(updatedState);
+                saveCharFavourState(character, updatedState);
+              }
+              // 从原始文本中抹除这段标签，保证用户界面整洁
+              rawText = rawText.replace(favourMatch[0], "").trim();
+            }
+          }
+
           // 按照 ||| 或换行拆分为 3-5 条消息
-          let segments = rawText.split(/|||/).map((s) => sanitizeMessageText(s)).filter((s) => s.length > 0);
+          let segments = rawText.split(/\|\|\|/).map((s) => sanitizeMessageText(s)).filter((s) => s.length > 0);
 
           if (segments.length < 3) {
-            // 如果模型未按 ||| 隔开，按多换行或句号拆分
             const lineSplit = rawText.split(/\n+/).map((s) => sanitizeMessageText(s)).filter((s) => s.length > 0);
             if (lineSplit.length >= 3) {
               segments = lineSplit;
@@ -33571,7 +33697,6 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
             }
           }
 
-          // 限制在 3-5 条之间
           if (segments.length < 3 && segments.length > 0) {
             // 保持现有段落
           } else if (segments.length > 5) {
@@ -33627,7 +33752,6 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
             setMessages(history);
             setTimeout(() => scrollToBottom(false), 50);
 
-            // 检查如果最新一条是用户的消息（如考勤卡片），自动触发 AI 回复
             const lastMsg = history[history.length - 1];
             if (lastMsg && lastMsg.sender === "user") {
               setTimeout(() => triggerAIReply(history), 300);
@@ -33639,7 +33763,6 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         console.warn("加载历史消息失败:", e);
       }
 
-      // 如果没有任何历史消息，创建一条来自该密探的初始问候
       const initialGreeting = {
         id: Date.now() + Math.random(),
         sender: "character",
@@ -33695,6 +33818,9 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
     }
   };
 
+  const badgeInfo = getFavourBadgeInfo(favourState.favour);
+  const favourProgress = Math.max(0, Math.min(100, (favourState.favour + 100) / 2));
+
   return (
     <div
       style={{
@@ -33710,7 +33836,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         overflow: "hidden",
       }}
     >
-      {/* 1. Telegram 风格顶部导航栏 (独立专属顶栏，展示对方密探信息) */}
+      {/* 1. Telegram 风格顶部导航栏 */}
       <div
         style={{
           height: "56px",
@@ -33793,9 +33919,27 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
                 whiteSpace: "nowrap",
                 overflow: "hidden",
                 textOverflow: "ellipsis",
+                display: "flex",
+                alignItems: "center",
+                gap: "6px",
               }}
             >
-              {character}
+              <span>{character}</span>
+              {favourEnabled && (
+                <span
+                  style={{
+                    fontSize: "10.5px",
+                    fontWeight: "600",
+                    color: badgeInfo.color,
+                    background: badgeInfo.bg,
+                    padding: "1px 6px",
+                    borderRadius: "10px",
+                    border: `1px solid ${badgeInfo.border}`,
+                  }}
+                >
+                  {favourState.favour > 0 ? `+${favourState.favour}` : favourState.favour}
+                </span>
+              )}
             </div>
             <div style={{ fontSize: "11.5px", color: isTyping ? "#4EBA6F" : "#999DA0", display: "flex", alignItems: "center", gap: "4px" }}>
               {isTyping ? "正在执笔密信..." : "在线 · 密探专线"}
@@ -33805,6 +33949,27 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
 
         {/* 顶部右侧菜单 */}
         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+          {/* 好感度与心境偏好按钮 */}
+          <div
+            onClick={() => setShowFavourModal(true)}
+            title="心境档案与偏好"
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: favourEnabled ? (favourState.favour >= 40 ? "#E06D80" : "#5B8E7D") : "#A0A49D",
+              background: favourEnabled ? (favourState.favour >= 40 ? "#FDECEF" : "#EAF4F0") : "transparent",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <i className={favourEnabled ? "ph-fill ph-heart" : "ph ph-heart"} style={{ fontSize: "19px" }}></i>
+          </div>
+
+          {/* 清空聊天记录 */}
           <div
             onClick={handleClearHistory}
             title="清空记录"
@@ -33824,7 +33989,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         </div>
       </div>
 
-      {/* 2. 聊天消息区 (Telegram 风格背景底纹) */}
+      {/* 2. 聊天消息区 */}
       <div
         className="no-scrollbar"
         style={{
@@ -34102,6 +34267,266 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
         </div>
       </div>
 
+      {/* 4. 好感度与内心世界偏好弹窗 (Modal) */}
+      {showFavourModal && (
+        <div
+          onClick={() => setShowFavourModal(false)}
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            background: "rgba(0, 0, 0, 0.45)",
+            backdropFilter: "blur(4px)",
+            zIndex: 400,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: "16px",
+            boxSizing: "border-box",
+            animation: "tgMsgFadeIn 0.2s ease-out",
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              width: "100%",
+              maxWidth: "340px",
+              background: "#FAF7F2",
+              borderRadius: "20px",
+              border: "1.5px solid #E6DFD5",
+              boxShadow: "0 10px 30px rgba(0, 0, 0, 0.15)",
+              overflow: "hidden",
+              display: "flex",
+              flexDirection: "column",
+            }}
+          >
+            {/* 弹窗头部 */}
+            <div
+              style={{
+                padding: "16px 18px",
+                background: "linear-gradient(135deg, #F5EFEB 0%, #EBE3D7 100%)",
+                borderBottom: "1px solid #E3DBD0",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <div
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "50%",
+                    background: badgeInfo.bg,
+                    color: badgeInfo.color,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    border: `1px solid ${badgeInfo.border}`,
+                  }}
+                >
+                  <i className="ph-fill ph-heart" style={{ fontSize: "15px" }}></i>
+                </div>
+                <div>
+                  <div style={{ fontSize: "15px", fontWeight: "700", color: "#3B3F34" }}>
+                    {character} · 心境档案
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#7B7E76" }}>
+                    内心好感与态度演变系统
+                  </div>
+                </div>
+              </div>
+
+              <div
+                onClick={() => setShowFavourModal(false)}
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "50%",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  cursor: "pointer",
+                  color: "#7E8377",
+                  background: "rgba(0,0,0,0.05)",
+                }}
+              >
+                <i className="ph ph-x" style={{ fontSize: "16px" }}></i>
+              </div>
+            </div>
+
+            {/* 弹窗内容 */}
+            <div style={{ padding: "16px 18px", display: "flex", flexDirection: "column", gap: "14px" }}>
+              {/* 开关选项 */}
+              <div
+                style={{
+                  background: "#FFFFFF",
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  border: "1px solid #E8E2D8",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "13.5px", fontWeight: "600", color: "#363A2F" }}>
+                    启用自主演化好感
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#8E928A", marginTop: "2px" }}>
+                    AI 根据每次对话在内心自主增减好感与态度
+                  </div>
+                </div>
+
+                <label style={{ position: "relative", display: "inline-block", width: "42px", height: "24px", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={favourEnabled}
+                    onChange={(e) => handleToggleFavour(e.target.checked)}
+                    style={{ opacity: 0, width: 0, height: 0 }}
+                  />
+                  <span
+                    style={{
+                      position: "absolute",
+                      top: 0,
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      backgroundColor: favourEnabled ? "#5EA37E" : "#D0CCC4",
+                      borderRadius: "24px",
+                      transition: "0.2s",
+                    }}
+                  >
+                    <span
+                      style={{
+                        position: "absolute",
+                        height: "18px",
+                        width: "18px",
+                        left: favourEnabled ? "20px" : "3px",
+                        bottom: "3px",
+                        backgroundColor: "#FFFFFF",
+                        borderRadius: "50%",
+                        transition: "0.2s",
+                        boxShadow: "0 1px 3px rgba(0,0,0,0.2)",
+                      }}
+                    />
+                  </span>
+                </label>
+              </div>
+
+              {/* 好感度数值与进度条 */}
+              <div
+                style={{
+                  background: "#FFFFFF",
+                  padding: "14px",
+                  borderRadius: "14px",
+                  border: "1px solid #E8E2D8",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "10px",
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                  <span style={{ fontSize: "12px", color: "#7B7F77", fontWeight: "500" }}>当前好感度</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <span style={{ fontSize: "16px", fontWeight: "800", color: badgeInfo.color }}>
+                      {favourState.favour > 0 ? `+${favourState.favour}` : favourState.favour}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: "11px",
+                        fontWeight: "600",
+                        color: badgeInfo.color,
+                        background: badgeInfo.bg,
+                        padding: "2px 7px",
+                        borderRadius: "8px",
+                        border: `1px solid ${badgeInfo.border}`,
+                      }}
+                    >
+                      {badgeInfo.label}
+                    </span>
+                  </div>
+                </div>
+
+                {/* 进度条 */}
+                <div
+                  style={{
+                    height: "8px",
+                    background: "#EBE5DB",
+                    borderRadius: "4px",
+                    overflow: "hidden",
+                    position: "relative",
+                  }}
+                >
+                  <div
+                    style={{
+                      height: "100%",
+                      width: `${favourProgress}%`,
+                      background: `linear-gradient(90deg, #A8332A 0%, #68705C 50%, #D35269 100%)`,
+                      borderRadius: "4px",
+                      transition: "width 0.3s ease",
+                    }}
+                  />
+                </div>
+
+                {/* 范围刻度 */}
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "10px", color: "#A4A89F" }}>
+                  <span>-100 (厌恶)</span>
+                  <span>0 (中立)</span>
+                  <span>+100 (挚爱)</span>
+                </div>
+              </div>
+
+              {/* 羁绊关系与印象卡片 */}
+              <div
+                style={{
+                  background: "#FFFFFF",
+                  padding: "12px 14px",
+                  borderRadius: "14px",
+                  border: "1px solid #E8E2D8",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "11px", color: "#8E928A", fontWeight: "500" }}>羁绊关系</div>
+                  <div style={{ fontSize: "13px", fontWeight: "700", color: "#3B3F34", marginTop: "2px" }}>
+                    {favourState.relationship || "密探与楼主"}
+                  </div>
+                </div>
+                <div style={{ borderTop: "1px dashed #EAE5DC", paddingTop: "6px" }}>
+                  <div style={{ fontSize: "11px", color: "#8E928A", fontWeight: "500" }}>心中印象</div>
+                  <div style={{ fontSize: "12.5px", color: "#54584E", marginTop: "2px", lineHeight: "1.4" }}>
+                    {favourState.attitude || "初识，恪守主从之礼"}
+                  </div>
+                </div>
+              </div>
+
+              {/* 底部重置按钮 */}
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "2px" }}>
+                <button
+                  onClick={handleResetFavour}
+                  style={{
+                    border: "none",
+                    background: "transparent",
+                    color: "#A4A89F",
+                    fontSize: "11.5px",
+                    cursor: "pointer",
+                    padding: "4px 8px",
+                    textDecoration: "underline",
+                  }}
+                >
+                  重置该角色心境档案
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 动画样式 */}
       <style>{`
         @keyframes tgMsgFadeIn {
@@ -34123,6 +34548,7 @@ ${worldBookContext || "东汉末年乱世，广陵王兼任大汉谍报首脑绣
     </div>
   );
 };
+
 
 // ==================== T11 消息列表页面组件 (展示已填写人物介绍的密探) ====================
 const T11MessageListPage = ({ onBack, directChatChar, onClearDirectChatChar }) => {
@@ -39248,6 +39674,1589 @@ const HideSeekModal = ({ isOpen, onClose, taCharacter }) => {
 };
 
 // T9 情侣空间主页面组件 (全面实现各伴侣子功能历史记录与事件数据完全隔离)
+// ==========================================
+// 「手账达人」基于 Turn.js 物理翻页 + 摄像机空白页定位 + 可交互对象层(移动/缩放/镜像) + 自由大色盘 (V7 终极版)
+// ==========================================
+const CoupleJournalModal = ({ isOpen, onClose, taCharacter }) => {
+  const { useState, useEffect, useRef } = React;
+
+  const charName = (taCharacter && taCharacter.name) || "名士";
+  const charId = (taCharacter && taCharacter.id) || "default_char";
+  const storageKeyText = `couple_journal_meta_${charId}`;
+  const idbKeyCoverImage = `couple_journal_cover_img_${charId}`;
+
+  const bookStageRef = useRef(null);
+  const fileInputRef = useRef(null);
+  const turnInstanceRef = useRef(null);
+  const coverBgElRef = useRef(null);
+  const canvasRef = useRef(null);
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const [showCoverSettings, setShowCoverSettings] = useState(false);
+  const [coverImage, setCoverImage] = useState("");
+
+  // 手账内页上下分区数据 (page_2_top, page_2_bottom, etc.)
+  const [pageData, setPageData] = useState({});
+
+  // 当前聚焦的书写半区 (null 表示在正常翻书视图; { page: 2, half: "top"|"bottom" } 表示聚焦书写)
+  const [activeWritingZone, setActiveWritingZone] = useState(null);
+
+  // 涂鸦与工具栏状态
+  const [activeTool, setActiveTool] = useState("brush"); // 'browse' | 'brush' | 'pencil' | 'highlighter' | 'eraser' | 'text' | 'sticker' | 'shape'
+  const [brushColor, setBrushColor] = useState("#D6724B");
+  const [brushSize, setBrushSize] = useState(4);
+  const [showToolOptions, setShowToolOptions] = useState(false);
+  const [showShapePicker, setShowShapePicker] = useState(false);
+  const [showStickerPicker, setShowStickerPicker] = useState(false);
+
+  // 画板上的交互对象列表 (文字、贴纸、形状统一管理，支持移动/缩放/镜像/选色)
+  const [canvasObjects, setCanvasObjects] = useState([]);
+  const [selectedObjId, setSelectedObjId] = useState(null);
+
+  // 撤销历史栈 (画布笔迹)
+  const undoStackRef = useRef([]);
+
+  // 丰富贴纸库 (16 款)
+  const STICKER_LIST = ["🌸", "🌿", "🌟", "💖", "🐱", "☕", "💌", "🎀", "📜", "🕯️", "🎨", "✨", "🍡", "🌙", "🏮", "🍁"];
+
+  // 丰富精选大色盘 (16 色)
+  const COLOR_PALETTE_16 = [
+    { name: "曜石黑", color: "#1F1F1F" },
+    { name: "炭灰", color: "#5C5C5C" },
+    { name: "银灰", color: "#9E9E9E" },
+    { name: "纯白", color: "#FFFFFF" },
+    { name: "鎏金", color: "#D4AF37" },
+    { name: "杏黄", color: "#F3E5AB" },
+    { name: "琥珀橙", color: "#E67E22" },
+    { name: "赤陶", color: "#D6724B" },
+    { name: "胭红", color: "#E74C3C" },
+    { name: "樱粉", color: "#FF6B81" },
+    { name: "紫藤", color: "#9B59B6" },
+    { name: "霁蓝", color: "#4A90E2" },
+    { name: "碧青", color: "#1ABC9C" },
+    { name: "黛绿", color: "#3D6B50" },
+    { name: "棕褐", color: "#8B572A" },
+    { name: "檀木", color: "#3E2723" }
+  ];
+
+  // 封面配置
+  const [coverMeta, setCoverMeta] = useState(() => {
+    try {
+      const saved = localStorage.getItem(storageKeyText);
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      title: `《与${charName}的相伴手账》`,
+      titleColor: "#FFF8E7",
+      subtitle: "岁岁年年 · 晨昏与共",
+      subtitleColor: "#F3E5AB",
+      author: `你 & ${charName}`,
+      authorColor: "#F3E5AB"
+    };
+  });
+
+  // IndexedDB 读写工具
+  const saveToIDB = (key, val) => {
+    return new Promise((resolve) => {
+      try {
+        const req = indexedDB.open("t8_chat_db");
+        req.onsuccess = (e) => {
+          const db = e.target.result;
+          if (db.objectStoreNames.contains("user_settings")) {
+            const tx = db.transaction("user_settings", "readwrite");
+            const store = tx.objectStore("user_settings");
+            store.put({ key, value: val, updatedAt: Date.now() });
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => resolve(false);
+          } else {
+            try { localStorage.setItem(key, val); } catch (err) {}
+            resolve(true);
+          }
+        };
+        req.onerror = () => {
+          try { localStorage.setItem(key, val); } catch (err) {}
+          resolve(true);
+        };
+      } catch (e) {
+        try { localStorage.setItem(key, val); } catch (err) {}
+        resolve(true);
+      }
+    });
+  };
+
+  const loadFromIDB = (key) => {
+    return new Promise((resolve) => {
+      try {
+        const req = indexedDB.open("t8_chat_db");
+        req.onsuccess = (e) => {
+          const db = e.target.result;
+          if (db.objectStoreNames.contains("user_settings")) {
+            const tx = db.transaction("user_settings", "readonly");
+            const store = tx.objectStore("user_settings");
+            const getReq = store.get(key);
+            getReq.onsuccess = () => {
+              if (getReq.result && getReq.result.value) resolve(getReq.result.value);
+              else resolve(localStorage.getItem(key) || "");
+            };
+            getReq.onerror = () => resolve(localStorage.getItem(key) || "");
+          } else {
+            resolve(localStorage.getItem(key) || "");
+          }
+        };
+        req.onerror = () => resolve(localStorage.getItem(key) || "");
+      } catch (e) {
+        resolve(localStorage.getItem(key) || "");
+      }
+    });
+  };
+
+  // 翻书音效
+  const playPageTurnSound = () => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
+      if (ctx.state === "suspended") ctx.resume();
+
+      const now = ctx.currentTime;
+      const bufferSize = ctx.sampleRate * 0.18;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const output = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        output[i] = Math.random() * 2 - 1;
+      }
+
+      const whiteNoise = ctx.createBufferSource();
+      whiteNoise.buffer = buffer;
+
+      const filter = ctx.createBiquadFilter();
+      filter.type = "bandpass";
+      filter.frequency.setValueAtTime(1400, now);
+      filter.frequency.exponentialRampToValueAtTime(700, now + 0.16);
+      filter.Q.setValueAtTime(2.2, now);
+
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.01, now);
+      gain.gain.linearRampToValueAtTime(0.18, now + 0.03);
+      gain.gain.exponentialRampToValueAtTime(0.001, now + 0.17);
+
+      whiteNoise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      whiteNoise.start(now);
+      whiteNoise.stop(now + 0.18);
+    } catch (e) {}
+  };
+
+  // 加载内页已保存的涂鸦数据
+  const loadAllPagesData = async () => {
+    const loaded = {};
+    for (let p = 2; p <= 9; p++) {
+      const topVal = await loadFromIDB(`couple_journal_page_${charId}_${p}_top`);
+      const btmVal = await loadFromIDB(`couple_journal_page_${charId}_${p}_bottom`);
+      if (topVal) loaded[`p_${p}_top`] = topVal;
+      if (btmVal) loaded[`p_${p}_bottom`] = btmVal;
+    }
+    setPageData(loaded);
+    return loaded;
+  };
+
+  // 初始化 Turn.js 书本实体 (仅在打开弹窗时挂载一次，全程保活)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    let isCancelled = false;
+
+    Promise.all([loadFromIDB(idbKeyCoverImage), loadAllPagesData()]).then(([loadedImg, pagesMap]) => {
+      if (isCancelled) return;
+      const currentImg = loadedImg || coverImage;
+      if (loadedImg) setCoverImage(loadedImg);
+
+      const stage = bookStageRef.current;
+      if (!stage) return;
+      stage.innerHTML = "";
+
+      const bookDiv = document.createElement("div");
+      bookDiv.id = "couple-turn-book-" + Date.now();
+      bookDiv.className = "pages";
+      bookDiv.style.width = "380px";
+      bookDiv.style.height = "380px";
+
+      // 1. 封面 (Page 1)
+      const page1 = document.createElement("div");
+      page1.className = "journal-turn-page journal-cover-page-front";
+      page1.style.cssText = `border: 2px solid #734825; cursor: pointer; ${currentImg ? `background: url(${currentImg}) center/cover no-repeat;` : "background: linear-gradient(135deg, #3d2817 0%, #523520 50%, #291a0f 100%);"}`;
+      coverBgElRef.current = page1;
+
+      page1.innerHTML = `
+        <div class="journal-spine-edge"></div>
+        <div class="journal-stitch-line"></div>
+        <div class="journal-ribbon-bookmark"></div>
+        <div class="journal-side-pages-stack"></div>
+        <div style="position: absolute; inset: 18px 18px 18px 34px; border: 1.5px solid rgba(212, 175, 55, 0.75); border-radius: 6px 14px 14px 6px; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 20px 14px; box-sizing: border-box; text-align: center; box-shadow: inset 0 0 16px rgba(0,0,0,0.3); background: ${currentImg ? "rgba(0,0,0,0.3)" : "transparent"}; backdrop-filter: ${currentImg ? "blur(1.5px)" : "none"};">
+          <h2 id="journal-cover-title" style="font-size: 18px; font-weight: bold; color: ${coverMeta.titleColor || "#FFF8E7"}; margin: 0 0 10px 0; letter-spacing: 2px; font-family: serif; text-shadow: 0 2px 8px rgba(0,0,0,0.7);">${coverMeta.title}</h2>
+          <div id="journal-cover-subtitle" style="font-size: 12px; color: ${coverMeta.subtitleColor || "#F3E5AB"}; opacity: 0.95; margin-bottom: 24px; font-style: italic; letter-spacing: 1px; text-shadow: 0 1px 4px rgba(0,0,0,0.6);">${coverMeta.subtitle}</div>
+          <div id="journal-cover-author" style="font-size: 11px; color: ${coverMeta.authorColor || "#F3E5AB"}; opacity: 0.85; border-top: 1px solid rgba(212, 175, 55, 0.4); padding-top: 8px; width: 80%; text-shadow: 0 1px 4px rgba(0,0,0,0.6);">${coverMeta.author}</div>
+          <div style="position: absolute; bottom: 14px; font-size: 10px; color: #F3E5AB; background: rgba(0,0,0,0.45); padding: 3px 10px; border-radius: 10px; letter-spacing: 1px;">✨ 拨动右侧页角或点击翻开</div>
+        </div>
+      `;
+      page1.onclick = (e) => {
+        e.stopPropagation();
+        const $ = window.jQuery || window.$;
+        if ($ && turnInstanceRef.current) $(turnInstanceRef.current).turn("next");
+      };
+      bookDiv.appendChild(page1);
+
+      // 2~9. 内页 (上下虚线分区)
+      for (let i = 2; i <= 9; i++) {
+        const isLeft = i % 2 === 0;
+        const pageEl = document.createElement("div");
+        pageEl.className = `journal-turn-page ${isLeft ? "journal-inner-page-left" : "journal-inner-page-right"}`;
+        
+        const topImg = pagesMap[`p_${i}_top`] || "";
+        const btmImg = pagesMap[`p_${i}_bottom`] || "";
+
+        pageEl.innerHTML = `
+          <div class="journal-page-split-container">
+            <div class="journal-half-page-block top-half" id="journal-block-${i}-top">
+              ${topImg ? `<img src="${topImg}" style="width:100%;height:100%;object-fit:contain;" />` : `<div class="journal-zone-select-hint"><span style="font-size:16px;">✍️</span><span style="font-size:10px;color:#A8A29E;letter-spacing:0.5px;">点击书写上半区</span></div>`}
+            </div>
+            <div class="journal-half-page-block bottom-half" id="journal-block-${i}-bottom">
+              ${btmImg ? `<img src="${btmImg}" style="width:100%;height:100%;object-fit:contain;" />` : `<div class="journal-zone-select-hint"><span style="font-size:16px;">✍️</span><span style="font-size:10px;color:#A8A29E;letter-spacing:0.5px;">点击书写下半区</span></div>`}
+            </div>
+          </div>
+          <div style="position: absolute; bottom: 8px; ${isLeft ? "left: 12px" : "right: 12px"}; font-size: 10px; color: #A8A29E; font-family: serif; pointer-events: none; z-index: 5;">
+            ${i}
+          </div>
+        `;
+
+        // 绑定点击半区进入聚焦书写模式
+        pageEl.querySelector(`#journal-block-${i}-top`).onclick = (e) => {
+          e.stopPropagation();
+          setActiveWritingZone({ page: i, half: "top" });
+        };
+        pageEl.querySelector(`#journal-block-${i}-bottom`).onclick = (e) => {
+          e.stopPropagation();
+          setActiveWritingZone({ page: i, half: "bottom" });
+        };
+
+        bookDiv.appendChild(pageEl);
+      }
+
+      // 10. 封底
+      const page10 = document.createElement("div");
+      page10.className = "journal-turn-page journal-cover-page-back";
+      page10.style.cssText = "background: linear-gradient(135deg, #3d2817 0%, #523520 50%, #291a0f 100%); border: 2px solid #734825; cursor: pointer;";
+      page10.innerHTML = `
+        <div class="journal-stitch-line" style="right: 28px; left: auto;"></div>
+        <div style="position: absolute; inset: 20px; display: flex; flex-direction: column; align-items: center; justify-content: center; color: #D4AF37; opacity: 0.6;">
+          <div style="font-size: 24px;">💮</div>
+        </div>
+      `;
+      page10.onclick = (e) => {
+        e.stopPropagation();
+        const $ = window.jQuery || window.$;
+        if ($ && turnInstanceRef.current) $(turnInstanceRef.current).turn("previous");
+      };
+      bookDiv.appendChild(page10);
+
+      stage.appendChild(bookDiv);
+
+      const $ = window.jQuery || window.$;
+      if ($ && typeof $(bookDiv).turn === "function") {
+        $(bookDiv).turn({
+          width: 380,
+          height: 380,
+          duration: 850,
+          acceleration: true,
+          gradients: true,
+          elevation: 200,
+          turnCorners: "bl,br,tl,tr",
+          when: {
+            turning: function(e, page) {
+              setCurrentPage(page);
+              playPageTurnSound();
+            },
+            turned: function(e, page) {
+              setCurrentPage(page);
+            }
+          }
+        });
+        turnInstanceRef.current = bookDiv;
+      }
+    });
+
+    return () => {
+      isCancelled = true;
+      const $ = window.jQuery || window.$;
+      if ($ && turnInstanceRef.current) {
+        try {
+          $(turnInstanceRef.current).turn("destroy");
+        } catch (err) {}
+        turnInstanceRef.current = null;
+      }
+    };
+  }, [isOpen, charId]);
+
+  // 当 coverMeta 变化时更新文字与颜色
+  useEffect(() => {
+    const tEl = document.getElementById("journal-cover-title");
+    const sEl = document.getElementById("journal-cover-subtitle");
+    const aEl = document.getElementById("journal-cover-author");
+    if (tEl) {
+      tEl.innerText = coverMeta.title;
+      tEl.style.color = coverMeta.titleColor || "#FFF8E7";
+    }
+    if (sEl) {
+      sEl.innerText = coverMeta.subtitle;
+      sEl.style.color = coverMeta.subtitleColor || "#F3E5AB";
+    }
+    if (aEl) {
+      aEl.innerText = coverMeta.author;
+      aEl.style.color = coverMeta.authorColor || "#F3E5AB";
+    }
+  }, [coverMeta]);
+
+  // 📹 摄像机按钮：自动翻到最初空白的那一页/半区
+  const handleCameraLocateBlank = () => {
+    let targetPageFound = null;
+    let targetHalfFound = null;
+
+    for (let p = 2; p <= 9; p++) {
+      const hasTop = !!pageData[`p_${p}_top`];
+      const hasBtm = !!pageData[`p_${p}_bottom`];
+      if (!hasTop) {
+        targetPageFound = p;
+        targetHalfFound = "top";
+        break;
+      } else if (!hasBtm) {
+        targetPageFound = p;
+        targetHalfFound = "bottom";
+        break;
+      }
+    }
+
+    if (!targetPageFound) {
+      targetPageFound = 2;
+      targetHalfFound = "top";
+    }
+
+    const $ = window.jQuery || window.$;
+    if ($ && turnInstanceRef.current) {
+      $(turnInstanceRef.current).turn("page", targetPageFound);
+    }
+    setCurrentPage(targetPageFound);
+
+    setTimeout(() => {
+      setActiveWritingZone({ page: targetPageFound, half: targetHalfFound });
+    }, 450);
+  };
+
+  // ----------------------------------------------------
+  // Canvas 涂鸦逻辑 (Focus Mode)
+  // ----------------------------------------------------
+  const isDrawingRef = useRef(false);
+  const lastPointRef = useRef({ x: 0, y: 0 });
+
+  // 初始化 Canvas 内容
+  useEffect(() => {
+    if (!activeWritingZone) return;
+
+    const timer = setTimeout(() => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      undoStackRef.current = [];
+      setCanvasObjects([]);
+      setSelectedObjId(null);
+
+      const existingImg = pageData[`p_${activeWritingZone.page}_${activeWritingZone.half}`];
+      if (existingImg) {
+        const img = new Image();
+        img.onload = () => {
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+          saveCanvasSnapshot();
+        };
+        img.src = existingImg;
+      } else {
+        saveCanvasSnapshot();
+      }
+    }, 40);
+
+    return () => clearTimeout(timer);
+  }, [activeWritingZone]);
+
+  const saveCanvasSnapshot = () => {
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    try {
+      undoStackRef.current.push(ctx.getImageData(0, 0, canvas.width, canvas.height));
+      if (undoStackRef.current.length > 25) undoStackRef.current.shift();
+    } catch (e) {}
+  };
+
+  const getCanvasCoords = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return { x: 0, y: 0 };
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const clientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const x = (clientX - rect.left) * (canvas.width / rect.width);
+    const y = (clientY - rect.top) * (canvas.height / rect.height);
+    return { x, y };
+  };
+
+  const handlePointerDown = (e) => {
+    if (activeTool === "browse" || activeTool === "shape" || activeTool === "sticker") return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const { x, y } = getCanvasCoords(e);
+
+    isDrawingRef.current = true;
+    lastPointRef.current = { x, y };
+
+    const ctx = canvas.getContext("2d");
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+
+    if (activeTool === "eraser") {
+      ctx.globalCompositeOperation = "destination-out";
+      ctx.lineWidth = brushSize * 3.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+    } else if (activeTool === "highlighter") {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = brushColor;
+      ctx.globalAlpha = 0.35;
+      ctx.lineWidth = 18;
+      ctx.lineCap = "square";
+    } else if (activeTool === "pencil") {
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = brushColor;
+      ctx.globalAlpha = 0.88;
+      ctx.lineWidth = 1.5;
+      ctx.lineCap = "round";
+    } else {
+      // brush
+      ctx.globalCompositeOperation = "source-over";
+      ctx.strokeStyle = brushColor;
+      ctx.globalAlpha = 1;
+      ctx.lineWidth = brushSize;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+    }
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDrawingRef.current || !canvasRef.current) return;
+    const { x, y } = getCanvasCoords(e);
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    lastPointRef.current = { x, y };
+  };
+
+  const handlePointerUp = () => {
+    if (!isDrawingRef.current) return;
+    isDrawingRef.current = false;
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const ctx = canvas.getContext("2d");
+      ctx.closePath();
+      ctx.globalAlpha = 1;
+      ctx.globalCompositeOperation = "source-over";
+      saveCanvasSnapshot();
+    }
+  };
+
+  // 撤销
+  const handleUndo = () => {
+    if (undoStackRef.current.length <= 1 || !canvasRef.current) return;
+    undoStackRef.current.pop();
+    const prev = undoStackRef.current[undoStackRef.current.length - 1];
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    ctx.putImageData(prev, 0, 0);
+  };
+
+  // 清空
+  const handleClearCanvas = () => {
+    if (!canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    setCanvasObjects([]);
+    setSelectedObjId(null);
+    saveCanvasSnapshot();
+  };
+
+  // ----------------------------------------------------
+  // 对象层管理：文字 / 贴纸 / 形状统一对象管理 (可移动、缩放、镜像、改色)
+  // ----------------------------------------------------
+  const handleAddText = () => {
+    const text = window.prompt("请输入要添加到手账的文字：", "今天天气真好 ✨");
+    if (!text) return;
+    const newObj = {
+      id: "obj_" + Date.now(),
+      type: "text",
+      text: text,
+      x: 50,
+      y: 60,
+      w: 200,
+      h: 50,
+      color: brushColor,
+      fontSize: 18,
+      flipX: false,
+      flipY: false
+    };
+    setCanvasObjects([...canvasObjects, newObj]);
+    setSelectedObjId(newObj.id);
+  };
+
+  const handleAddSticker = (stickerChar) => {
+    const newObj = {
+      id: "obj_" + Date.now(),
+      type: "sticker",
+      sticker: stickerChar,
+      x: 140,
+      y: 110,
+      w: 60,
+      h: 60,
+      fontSize: 38,
+      flipX: false,
+      flipY: false
+    };
+    setCanvasObjects([...canvasObjects, newObj]);
+    setSelectedObjId(newObj.id);
+    setShowStickerPicker(false);
+  };
+
+  const SHAPE_TYPES = [
+    { type: "rect", icon: "⬜", name: "矩形" },
+    { type: "circle", icon: "⭕", name: "圆形" },
+    { type: "triangle", icon: "🔺", name: "三角形" },
+    { type: "star", icon: "⭐", name: "五角星" },
+    { type: "heart", icon: "❤️", name: "心形" },
+    { type: "arrow", icon: "➡️", name: "箭头" },
+    { type: "bubble", icon: "💬", name: "气泡框" }
+  ];
+
+  const handleAddShape = (shapeType) => {
+    const newObj = {
+      id: "obj_" + Date.now(),
+      type: "shape",
+      shapeType: shapeType,
+      x: 130,
+      y: 100,
+      w: 90,
+      h: 90,
+      color: brushColor,
+      flipX: false,
+      flipY: false
+    };
+    setCanvasObjects([...canvasObjects, newObj]);
+    setSelectedObjId(newObj.id);
+    setShowShapePicker(false);
+  };
+
+  // 对象属性变更 (镜像/翻转/改色/删除/编辑)
+  const handleToggleFlipX = (id) => {
+    setCanvasObjects(canvasObjects.map(o => o.id === id ? { ...o, flipX: !o.flipX } : o));
+  };
+  const handleToggleFlipY = (id) => {
+    setCanvasObjects(canvasObjects.map(o => o.id === id ? { ...o, flipY: !o.flipY } : o));
+  };
+  const handleChangeObjColor = (id, newCol) => {
+    setCanvasObjects(canvasObjects.map(o => o.id === id ? { ...o, color: newCol } : o));
+  };
+  const handleDeleteObj = (id) => {
+    setCanvasObjects(canvasObjects.filter(o => o.id !== id));
+    if (selectedObjId === id) setSelectedObjId(null);
+  };
+  const handleEditTextObj = (id) => {
+    const obj = canvasObjects.find(o => o.id === id);
+    if (!obj || obj.type !== "text") return;
+    const nextText = window.prompt("修改文字内容：", obj.text);
+    if (nextText !== null) {
+      setCanvasObjects(canvasObjects.map(o => o.id === id ? { ...o, text: nextText } : o));
+    }
+  };
+
+  // 对象拖拽手势
+  const handleObjPointerDown = (e, obj) => {
+    e.stopPropagation();
+    setSelectedObjId(obj.id);
+
+    const startClientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const startClientY = e.clientY !== undefined ? e.clientY : (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const startObjX = obj.x;
+    const startObjY = obj.y;
+
+    const onMove = (me) => {
+      const curClientX = me.clientX !== undefined ? me.clientX : (me.touches && me.touches[0] ? me.touches[0].clientX : 0);
+      const curClientY = me.clientY !== undefined ? me.clientY : (me.touches && me.touches[0] ? me.touches[0].clientY : 0);
+      const dx = curClientX - startClientX;
+      const dy = curClientY - startClientY;
+      const nx = Math.max(-20, Math.min(320, startObjX + dx));
+      const ny = Math.max(-20, Math.min(290, startObjY + dy));
+      setCanvasObjects(prev => prev.map(o => o.id === obj.id ? { ...o, x: nx, y: ny } : o));
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", onUp);
+  };
+
+  // 对象缩放手势
+  const handleResizePointerDown = (e, obj) => {
+    e.stopPropagation();
+    const startClientX = e.clientX !== undefined ? e.clientX : (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const startW = obj.w;
+    const startH = obj.h;
+    const startFontSize = obj.fontSize || 18;
+
+    const onMove = (me) => {
+      const curClientX = me.clientX !== undefined ? me.clientX : (me.touches && me.touches[0] ? me.touches[0].clientX : 0);
+      const dx = curClientX - startClientX;
+      const nw = Math.max(30, startW + dx);
+      const nh = Math.max(30, startH + dx * (startH / startW));
+      const nFontSize = Math.max(12, startFontSize + dx * 0.25);
+      setCanvasObjects(prev => prev.map(o => o.id === obj.id ? { ...o, w: nw, h: nh, fontSize: nFontSize } : o));
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("touchmove", onMove);
+      window.removeEventListener("touchend", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("touchmove", onMove);
+    window.addEventListener("touchend", onUp);
+  };
+
+  // 渲染形状 SVG
+  const renderShapeSVG = (shape) => {
+    const { shapeType, w, h, color, flipX, flipY } = shape;
+    const transform = `scale(${flipX ? -1 : 1}, ${flipY ? -1 : 1})`;
+
+    let innerElement = null;
+    if (shapeType === "rect") {
+      innerElement = React.createElement("rect", { x: 4, y: 4, width: w - 8, height: h - 8, fill: color, stroke: "#3d2817", strokeWidth: 1.5, rx: 6 });
+    } else if (shapeType === "circle") {
+      innerElement = React.createElement("circle", { cx: w / 2, cy: h / 2, r: Math.min(w, h) / 2 - 4, fill: color, stroke: "#3d2817", strokeWidth: 1.5 });
+    } else if (shapeType === "triangle") {
+      innerElement = React.createElement("polygon", { points: `${w / 2},4 4,${h - 4} ${w - 4},${h - 4}`, fill: color, stroke: "#3d2817", strokeWidth: 1.5 });
+    } else if (shapeType === "star") {
+      innerElement = React.createElement("polygon", { points: `${w/2},4 ${w*0.62},${h*0.35} ${w-4},${h*0.38} ${w*0.72},${h*0.62} ${w*0.82},${h-4} ${w/2},${h*0.78} ${w*0.18},${h-4} ${w*0.28},${h*0.62} 4,${h*0.38} ${w*0.38},${h*0.35}`, fill: color, stroke: "#3d2817", strokeWidth: 1.5 });
+    } else if (shapeType === "heart") {
+      innerElement = React.createElement("path", { d: `M ${w/2} ${h*0.8} C ${w*0.1} ${h*0.5} 4 ${h*0.25} ${w*0.25} ${h*0.1} C ${w*0.4} 0 ${w/2} ${h*0.2} ${w/2} ${h*0.3} C ${w/2} ${h*0.2} ${w*0.6} 0 ${w*0.75} ${h*0.1} C ${w-4} ${h*0.25} ${w*0.9} ${h*0.5} ${w/2} ${h*0.8} Z`, fill: color, stroke: "#3d2817", strokeWidth: 1.5 });
+    } else if (shapeType === "arrow") {
+      innerElement = React.createElement("path", { d: `M 4 ${h*0.35} L ${w*0.55} ${h*0.35} L ${w*0.55} 4 L ${w-4} ${h/2} L ${w*0.55} ${h-4} L ${w*0.55} ${h*0.65} L 4 ${h*0.65} Z`, fill: color, stroke: "#3d2817", strokeWidth: 1.5 });
+    } else {
+      // bubble
+      innerElement = React.createElement("path", { d: `M 6 6 L ${w-6} 6 L ${w-6} ${h-16} L ${w*0.4} ${h-16} L ${w*0.25} ${h-4} L ${w*0.25} ${h-16} L 6 ${h-16} Z`, fill: color, stroke: "#3d2817", strokeWidth: 1.5 });
+    }
+
+    return React.createElement(
+      "svg",
+      { width: w, height: h, style: { transform, transformOrigin: "center" } },
+      innerElement
+    );
+  };
+
+  // 保存并退出摄像机聚焦模式 (合成所有笔迹与对象)
+  const handleSaveAndExitCanvas = async () => {
+    if (!activeWritingZone || !canvasRef.current) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas.getContext("2d");
+
+    // 将所有可交互对象合成进 Canvas
+    canvasObjects.forEach(obj => {
+      ctx.save();
+      ctx.translate(obj.x + obj.w / 2, obj.y + obj.h / 2);
+      ctx.scale(obj.flipX ? -1 : 1, obj.flipY ? -1 : 1);
+
+      if (obj.type === "text") {
+        ctx.fillStyle = obj.color || brushColor;
+        ctx.font = `bold ${obj.fontSize || 18}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(obj.text, 0, 0);
+      } else if (obj.type === "sticker") {
+        ctx.font = `${obj.fontSize || 36}px serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillText(obj.sticker, 0, 0);
+      } else if (obj.type === "shape") {
+        const w = obj.w;
+        const h = obj.h;
+        ctx.fillStyle = obj.color || brushColor;
+        ctx.strokeStyle = "#3d2817";
+        ctx.lineWidth = 1.5;
+        if (obj.shapeType === "circle") {
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.min(w, h) / 2 - 4, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.stroke();
+        } else {
+          ctx.fillRect(-w/2 + 4, -h/2 + 4, w - 8, h - 8);
+          ctx.strokeRect(-w/2 + 4, -h/2 + 4, w - 8, h - 8);
+        }
+      }
+      ctx.restore();
+    });
+
+    const dataUrl = canvas.toDataURL("image/png");
+    const { page, half } = activeWritingZone;
+    const idbKey = `couple_journal_page_${charId}_${page}_${half}`;
+
+    await saveToIDB(idbKey, dataUrl);
+
+    // 更新状态与实体 DOM
+    const nextMap = { ...pageData, [`p_${page}_${half}`]: dataUrl };
+    setPageData(nextMap);
+
+    const blockEl = document.getElementById(`journal-block-${page}-${half}`);
+    if (blockEl) {
+      blockEl.innerHTML = `<img src="${dataUrl}" style="width:100%;height:100%;object-fit:contain;" />`;
+    }
+
+    setActiveWritingZone(null);
+  };
+
+  const handleImageUpload = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = async (event) => {
+      const base64 = event.target.result;
+      setCoverImage(base64);
+      await saveToIDB(idbKeyCoverImage, base64);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const handleClearCoverImage = async () => {
+    setCoverImage("");
+    await saveToIDB(idbKeyCoverImage, "");
+  };
+
+  const saveMeta = (next) => {
+    setCoverMeta(next);
+    try {
+      localStorage.setItem(storageKeyText, JSON.stringify(next));
+    } catch (e) {}
+  };
+
+  // PS 涂鸦工具列表
+  const DOODLE_TOOLS = [
+    { id: "browse", icon: "👆", label: "翻页" },
+    { id: "brush", icon: "🖌️", label: "画笔" },
+    { id: "pencil", icon: "✏️", label: "铅笔" },
+    { id: "highlighter", icon: "🖍️", label: "荧光" },
+    { id: "eraser", icon: "🧹", label: "橡皮" },
+    { id: "text", icon: "🔤", label: "文字" },
+    { id: "sticker", icon: "🌸", label: "贴纸" },
+    { id: "shape", icon: "⬡", label: "形状" },
+    { id: "undo", icon: "↩️", label: "撤销" },
+    { id: "clear", icon: "🗑️", label: "清空" }
+  ];
+
+  if (!isOpen) return null;
+
+  return React.createElement(
+    "div",
+    {
+      className: "journal-modal-overlay",
+      onClick: (e) => {
+        if (e.target === e.currentTarget && !activeWritingZone) {
+          onClose();
+        }
+      }
+    },
+    // 文件上传 input
+    React.createElement("input", {
+      type: "file",
+      ref: fileInputRef,
+      accept: "image/*",
+      style: { display: "none" },
+      onChange: handleImageUpload
+    }),
+
+    // 顶部操作工具栏
+    React.createElement(
+      "div",
+      {
+        onClick: (e) => e.stopPropagation(),
+        style: {
+          position: "absolute",
+          top: "16px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "calc(100% - 32px)",
+          maxWidth: "420px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          zIndex: 100
+        }
+      },
+      // 左上角：执笔 + 📹 摄像机定位
+      React.createElement(
+        "div",
+        { style: { display: "flex", gap: "8px", alignItems: "center" } },
+        React.createElement(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              if (activeWritingZone) {
+                handleSaveAndExitCanvas();
+              } else if (currentPage >= 2 && currentPage <= 9) {
+                setActiveWritingZone({ page: currentPage, half: "top" });
+              } else {
+                handleCameraLocateBlank();
+              }
+            },
+            title: activeWritingZone ? "保存并返回书本" : "手账执笔",
+            style: {
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.18)",
+              background: activeWritingZone ? "linear-gradient(135deg, #D6724B 0%, #B8542E 100%)" : "rgba(35, 30, 25, 0.65)",
+              backdropFilter: "blur(12px)",
+              color: "#fff",
+              fontSize: "16px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+            }
+          },
+          "✏️"
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              handleCameraLocateBlank();
+            },
+            title: "摄像机定位到最初空白页",
+            style: {
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.18)",
+              background: "rgba(35, 30, 25, 0.65)",
+              backdropFilter: "blur(12px)",
+              color: "#fff",
+              fontSize: "16px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+            }
+          },
+          "📹"
+        )
+      ),
+
+      // 右上角：自定义封面与关闭
+      React.createElement(
+        "div",
+        { style: { display: "flex", gap: "8px" } },
+        React.createElement(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              setShowCoverSettings(true);
+            },
+            style: {
+              background: "rgba(35, 30, 25, 0.65)",
+              backdropFilter: "blur(12px)",
+              border: "1px solid rgba(255,255,255,0.18)",
+              color: "#fff",
+              padding: "7px 14px",
+              borderRadius: "18px",
+              fontSize: "12px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "5px",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+            }
+          },
+          "📷 自定义封面"
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: (e) => {
+              e.stopPropagation();
+              onClose();
+            },
+            style: {
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              border: "1px solid rgba(255,255,255,0.18)",
+              background: "rgba(35, 30, 25, 0.65)",
+              backdropFilter: "blur(12px)",
+              color: "#fff",
+              fontSize: "14px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.2)"
+            }
+          },
+          "✕"
+        )
+      )
+    ),
+
+    // ----------------------------------------------------
+    // 中间舞台 1：3D 翻书舞台 (DOM 永远保活，绝不被销毁)
+    // ----------------------------------------------------
+    React.createElement(
+      "div",
+      {
+        className: "journal-viewport-stage",
+        style: {
+          display: activeWritingZone ? "none" : "flex",
+          visibility: activeWritingZone ? "hidden" : "visible"
+        },
+        onClick: (e) => e.stopPropagation()
+      },
+      React.createElement(
+        "div",
+        {
+          className: `journal-turn-wrapper ${currentPage === 1 ? "view-cover-front" : currentPage >= 10 ? "view-cover-back" : "view-spread"}`
+        },
+        React.createElement("div", {
+          ref: bookStageRef,
+          style: { width: "380px", height: "380px" }
+        })
+      )
+    ),
+
+    // ----------------------------------------------------
+    // 中间舞台 2：摄像机聚焦书写全屏 Canvas 舞台
+    // ----------------------------------------------------
+    activeWritingZone && React.createElement(
+      "div",
+      {
+        className: "journal-focus-canvas-stage-wrapper",
+        onClick: (e) => e.stopPropagation()
+      },
+      // 顶栏提示与保存返回条
+      React.createElement(
+        "div",
+        { className: "journal-canvas-top-bar" },
+        React.createElement(
+          "button",
+          {
+            onClick: handleSaveAndExitCanvas,
+            style: {
+              background: "linear-gradient(135deg, #7FA393 0%, #5A8F6D 100%)",
+              color: "#fff",
+              border: "none",
+              borderRadius: "14px",
+              padding: "6px 14px",
+              fontSize: "12px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 2px 8px rgba(90,143,109,0.35)",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px"
+            }
+          },
+          "← 完成并返回书本"
+        ),
+        React.createElement(
+          "span",
+          { style: { color: "#F3E5AB", fontSize: "12.5px", fontStyle: "italic", letterSpacing: "1px", fontWeight: "600", textShadow: "0 1px 4px rgba(0,0,0,0.6)" } },
+          `第 ${activeWritingZone.page} 页 · ${activeWritingZone.half === "top" ? "上半区" : "下半区"}`
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: handleClearCanvas,
+            style: {
+              background: "rgba(255,255,255,0.12)",
+              color: "#D1C7B7",
+              border: "1px solid rgba(255,255,255,0.2)",
+              borderRadius: "12px",
+              padding: "5px 10px",
+              fontSize: "11px",
+              cursor: "pointer"
+            }
+          },
+          "🗑️ 清空"
+        )
+      ),
+
+      // 核心 Canvas 纸张舞台
+      React.createElement(
+        "div",
+        {
+          className: "journal-canvas-stage",
+          onClick: (e) => {
+            if (e.target === e.currentTarget) setSelectedObjId(null);
+          }
+        },
+        // 底层原生涂鸦画布
+        React.createElement("canvas", {
+          ref: canvasRef,
+          width: 360,
+          height: 330,
+          onPointerDown: handlePointerDown,
+          onPointerMove: handlePointerMove,
+          onPointerUp: handlePointerUp,
+          onPointerLeave: handlePointerUp,
+          style: { width: "100%", height: "100%", display: "block", cursor: activeTool === "eraser" ? "cell" : "crosshair" }
+        }),
+
+        // 顶层可交互对象层 (文字 / 贴纸 / 形状)
+        canvasObjects.map(obj => {
+          const isSelected = selectedObjId === obj.id;
+          return React.createElement(
+            "div",
+            {
+              key: obj.id,
+              className: `journal-canvas-obj ${isSelected ? "selected" : ""}`,
+              style: {
+                left: `${obj.x}px`,
+                top: `${obj.y}px`,
+                width: `${obj.w}px`,
+                height: `${obj.h}px`
+              },
+              onPointerDown: (e) => handleObjPointerDown(e, obj)
+            },
+            // 悬浮操作栏
+            isSelected && React.createElement(
+              "div",
+              { className: "journal-obj-action-bar" },
+              React.createElement("button", { className: "journal-obj-action-btn", onClick: (e) => { e.stopPropagation(); handleToggleFlipX(obj.id); } }, "↔️ 镜像"),
+              React.createElement("button", { className: "journal-obj-action-btn", onClick: (e) => { e.stopPropagation(); handleToggleFlipY(obj.id); } }, "↕️ 翻转"),
+              (obj.type === "shape" || obj.type === "text") && React.createElement("button", {
+                className: "journal-obj-action-btn",
+                onClick: (e) => { e.stopPropagation(); handleChangeObjColor(obj.id, brushColor); }
+              }, "🎨 上色"),
+              obj.type === "text" && React.createElement("button", {
+                className: "journal-obj-action-btn",
+                onClick: (e) => { e.stopPropagation(); handleEditTextObj(obj.id); }
+              }, "🔤 编辑"),
+              React.createElement("button", {
+                className: "journal-obj-action-btn",
+                style: { color: "#E74C3C" },
+                onClick: (e) => { e.stopPropagation(); handleDeleteObj(obj.id); }
+              }, "🗑️")
+            ),
+
+            // 对象实体渲染
+            obj.type === "text" ? React.createElement(
+              "div",
+              {
+                style: {
+                  color: obj.color || brushColor,
+                  fontSize: `${obj.fontSize || 18}px`,
+                  fontFamily: "serif",
+                  fontWeight: "bold",
+                  transform: `scale(${obj.flipX ? -1 : 1}, ${obj.flipY ? -1 : 1})`,
+                  textAlign: "center",
+                  wordBreak: "break-word",
+                  userSelect: "none"
+                }
+              },
+              obj.text
+            ) : obj.type === "sticker" ? React.createElement(
+              "div",
+              {
+                style: {
+                  fontSize: `${obj.fontSize || 38}px`,
+                  transform: `scale(${obj.flipX ? -1 : 1}, ${obj.flipY ? -1 : 1})`,
+                  userSelect: "none",
+                  lineHeight: 1
+                }
+              },
+              obj.sticker
+            ) : (
+              renderShapeSVG(obj)
+            ),
+
+            // 缩放手柄
+            isSelected && React.createElement("div", {
+              className: "journal-obj-resize-handle",
+              onPointerDown: (e) => handleResizePointerDown(e, obj)
+            })
+          );
+        })
+      )
+    ),
+
+    // ----------------------------------------------------
+    // 大色盘与笔刷调节浮窗 (16 精选色 + 原生色盘任意选色)
+    // ----------------------------------------------------
+    showToolOptions && activeWritingZone && React.createElement(
+      "div",
+      {
+        className: "journal-palette-popover",
+        onClick: (e) => e.stopPropagation()
+      },
+      // 笔触粗细
+      React.createElement(
+        "div",
+        { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+        React.createElement("span", { style: { fontSize: "11.5px", color: "#E5E0D8", fontWeight: "bold" } }, "笔触粗细:"),
+        React.createElement(
+          "div",
+          { style: { display: "flex", gap: "8px", alignItems: "center" } },
+          [2, 4, 8, 14, 22].map(sz =>
+            React.createElement("button", {
+              key: sz,
+              onClick: () => setBrushSize(sz),
+              style: {
+                width: `${sz + 10}px`,
+                height: `${sz + 10}px`,
+                borderRadius: "50%",
+                background: brushSize === sz ? "#D6724B" : "#A8A29E",
+                border: "none",
+                cursor: "pointer"
+              }
+            })
+          )
+        )
+      ),
+
+      // 16 精选色盘
+      React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+        React.createElement("span", { style: { fontSize: "11.5px", color: "#E5E0D8", fontWeight: "bold" } }, "精选调色板:"),
+        React.createElement(
+          "div",
+          { className: "journal-palette-grid" },
+          COLOR_PALETTE_16.map(item =>
+            React.createElement("div", {
+              key: item.color,
+              className: `journal-palette-swatch ${brushColor.toLowerCase() === item.color.toLowerCase() ? "active" : ""}`,
+              style: { background: item.color },
+              title: item.name,
+              onClick: () => {
+                setBrushColor(item.color);
+                if (selectedObjId) handleChangeObjColor(selectedObjId, item.color);
+              }
+            })
+          )
+        )
+      ),
+
+      // 自由原生取色器
+      React.createElement(
+        "div",
+        { style: { display: "flex", alignItems: "center", justifyContent: "space-between", borderTop: "1px solid rgba(255,255,255,0.12)", paddingTop: "8px" } },
+        React.createElement("span", { style: { fontSize: "11.5px", color: "#E5E0D8", fontWeight: "bold" } }, "🎨 自由取色盘:"),
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "8px" } },
+          React.createElement("span", { style: { fontSize: "11px", color: "#C5B396", fontFamily: "monospace" } }, brushColor.toUpperCase()),
+          React.createElement("input", {
+            type: "color",
+            value: brushColor,
+            onChange: (e) => {
+              setBrushColor(e.target.value);
+              if (selectedObjId) handleChangeObjColor(selectedObjId, e.target.value);
+            },
+            style: { width: "32px", height: "28px", border: "none", borderRadius: "8px", cursor: "pointer", background: "transparent", padding: 0 }
+          })
+        )
+      )
+    ),
+
+    // ----------------------------------------------------
+    // 形状选择抽屉 (Shape Picker)
+    // ----------------------------------------------------
+    showShapePicker && activeWritingZone && React.createElement(
+      "div",
+      {
+        className: "journal-shape-picker-popover",
+        onClick: (e) => e.stopPropagation()
+      },
+      SHAPE_TYPES.map(st =>
+        React.createElement(
+          "button",
+          {
+            key: st.type,
+            className: "journal-shape-item-btn",
+            title: st.name,
+            onClick: () => handleAddShape(st.type)
+          },
+          st.icon
+        )
+      )
+    ),
+
+    // ----------------------------------------------------
+    // 贴纸选择抽屉 (Sticker Picker)
+    // ----------------------------------------------------
+    showStickerPicker && activeWritingZone && React.createElement(
+      "div",
+      {
+        className: "journal-shape-picker-popover",
+        onClick: (e) => e.stopPropagation()
+      },
+      STICKER_LIST.map(st =>
+        React.createElement(
+          "button",
+          {
+            key: st,
+            className: "journal-shape-item-btn",
+            onClick: () => handleAddSticker(st)
+          },
+          st
+        )
+      )
+    ),
+
+    // ----------------------------------------------------
+    // 【底栏】：PS 级手账创作工具坞
+    // ----------------------------------------------------
+    React.createElement(
+      "div",
+      {
+        className: "journal-doodle-dock",
+        onClick: (e) => e.stopPropagation()
+      },
+      DOODLE_TOOLS.map(tool => {
+        const isActive = activeTool === tool.id;
+        return React.createElement(
+          "button",
+          {
+            key: tool.id,
+            className: `journal-doodle-tool-btn ${isActive ? "active" : ""}`,
+            onClick: () => {
+              setActiveTool(tool.id);
+              setShowShapePicker(false);
+              setShowStickerPicker(false);
+              setShowToolOptions(false);
+
+              if (tool.id === "brush" || tool.id === "pencil" || tool.id === "highlighter") {
+                setShowToolOptions(true);
+                if (!activeWritingZone) handleCameraLocateBlank();
+              } else if (tool.id === "shape") {
+                setShowShapePicker(true);
+                if (!activeWritingZone) handleCameraLocateBlank();
+              } else if (tool.id === "sticker") {
+                setShowStickerPicker(true);
+                if (!activeWritingZone) handleCameraLocateBlank();
+              } else if (tool.id === "text") {
+                if (!activeWritingZone) handleCameraLocateBlank();
+                else handleAddText();
+              } else if (tool.id === "undo") {
+                handleUndo();
+              } else if (tool.id === "clear") {
+                handleClearCanvas();
+              } else if (tool.id === "browse") {
+                if (activeWritingZone) handleSaveAndExitCanvas();
+              }
+            },
+            title: tool.label
+          },
+          React.createElement("span", { className: "journal-tool-icon" }, tool.icon),
+          React.createElement("span", { className: "journal-tool-label" }, tool.label)
+        );
+      })
+    ),
+
+    // 封面自定义弹窗面板
+    showCoverSettings && React.createElement(
+      "div",
+      {
+        className: "journal-bottom-drawer",
+        onClick: (e) => e.stopPropagation()
+      },
+      React.createElement(
+        "div",
+        { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" } },
+        React.createElement("div", { style: { fontSize: "16px", fontWeight: "bold", color: "#2C3E50" } }, "📷 自定义手账本封面"),
+        React.createElement("button", {
+          onClick: (e) => {
+            e.stopPropagation();
+            setShowCoverSettings(false);
+          },
+          style: { border: "none", background: "transparent", fontSize: "18px", cursor: "pointer", color: "#78716C", padding: "4px" }
+        }, "✕")
+      ),
+
+      // 1. 封面图片上传管理 (IndexedDB 存储)
+      React.createElement("div", { style: { fontSize: "12px", fontWeight: "bold", color: "#78716C", marginBottom: "6px" } }, "手账封面图片 (保存在 IndexedDB)"),
+      React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            gap: "12px",
+            marginBottom: "16px",
+            background: "#F2EDE4",
+            padding: "10px",
+            borderRadius: "14px"
+          }
+        },
+        React.createElement(
+          "div",
+          {
+            style: {
+              width: "60px",
+              height: "75px",
+              borderRadius: "8px",
+              background: coverImage ? `url(${coverImage}) center/cover no-repeat` : "linear-gradient(135deg, #3d2817 0%, #523520 100%)",
+              border: "1.5px solid #D6724B",
+              flexShrink: 0,
+              boxShadow: "0 2px 6px rgba(0,0,0,0.15)"
+            }
+          }
+        ),
+        React.createElement(
+          "div",
+          { style: { flex: 1, display: "flex", flexDirection: "column", gap: "6px" } },
+          React.createElement(
+            "button",
+            {
+              onClick: (e) => {
+                e.stopPropagation();
+                if (fileInputRef.current) fileInputRef.current.click();
+              },
+              style: {
+                padding: "8px 14px",
+                borderRadius: "10px",
+                border: "none",
+                background: "linear-gradient(135deg, #D6724B 0%, #B8542E 100%)",
+                color: "#fff",
+                fontSize: "12px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                boxShadow: "0 2px 6px rgba(214,114,75,0.3)"
+              }
+            },
+            coverImage ? "🔄 更换封面图片" : "📁 上传本地封面图片"
+          ),
+          coverImage && React.createElement(
+            "button",
+            {
+              onClick: (e) => {
+                e.stopPropagation();
+                handleClearCoverImage();
+              },
+              style: {
+                padding: "6px 12px",
+                borderRadius: "8px",
+                border: "1px solid #D1C7B7",
+                background: "transparent",
+                color: "#8C8275",
+                fontSize: "11px",
+                cursor: "pointer"
+              }
+            },
+            "🗑️ 恢复默认封面"
+          )
+        )
+      ),
+
+      // 2. 主标题输入 + 色盘改色
+      React.createElement(
+        "div",
+        { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" } },
+        React.createElement("span", { style: { fontSize: "12px", fontWeight: "bold", color: "#78716C" } }, "手账主标题内容与字色"),
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "6px" } },
+          React.createElement("span", { style: { fontSize: "11px", color: "#8C8275" } }, "字色:"),
+          React.createElement("input", {
+            type: "color",
+            value: coverMeta.titleColor || "#FFF8E7",
+            onChange: (e) => saveMeta({ ...coverMeta, titleColor: e.target.value }),
+            style: { width: "24px", height: "24px", border: "none", borderRadius: "50%", cursor: "pointer", background: "transparent", padding: 0 }
+          })
+        )
+      ),
+      React.createElement("input", {
+        type: "text",
+        value: coverMeta.title,
+        onChange: (e) => saveMeta({ ...coverMeta, title: e.target.value }),
+        placeholder: "输入手账主标题...",
+        style: {
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "9px 12px",
+          borderRadius: "10px",
+          border: "1px solid #E5E0D8",
+          fontSize: "13px",
+          marginBottom: "6px",
+          outline: "none"
+        }
+      }),
+      React.createElement(
+        "div",
+        { style: { display: "flex", gap: "6px", marginBottom: "12px", alignItems: "center" } },
+        COLOR_PALETTE_16.slice(0, 8).map(p =>
+          React.createElement("div", {
+            key: p.color,
+            className: `journal-color-dot ${coverMeta.titleColor === p.color ? "active" : ""}`,
+            style: { background: p.color },
+            title: p.name,
+            onClick: () => saveMeta({ ...coverMeta, titleColor: p.color })
+          })
+        )
+      ),
+
+      // 3. 副标题输入 + 色盘改色
+      React.createElement(
+        "div",
+        { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" } },
+        React.createElement("span", { style: { fontSize: "12px", fontWeight: "bold", color: "#78716C" } }, "手账副标题内容与字色"),
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "6px" } },
+          React.createElement("span", { style: { fontSize: "11px", color: "#8C8275" } }, "字色:"),
+          React.createElement("input", {
+            type: "color",
+            value: coverMeta.subtitleColor || "#F3E5AB",
+            onChange: (e) => saveMeta({ ...coverMeta, subtitleColor: e.target.value }),
+            style: { width: "24px", height: "24px", border: "none", borderRadius: "50%", cursor: "pointer", background: "transparent", padding: 0 }
+          })
+        )
+      ),
+      React.createElement("input", {
+        type: "text",
+        value: coverMeta.subtitle,
+        onChange: (e) => saveMeta({ ...coverMeta, subtitle: e.target.value }),
+        placeholder: "输入手账副标题...",
+        style: {
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "9px 12px",
+          borderRadius: "10px",
+          border: "1px solid #E5E0D8",
+          fontSize: "13px",
+          marginBottom: "6px",
+          outline: "none"
+        }
+      }),
+      React.createElement(
+        "div",
+        { style: { display: "flex", gap: "6px", marginBottom: "12px", alignItems: "center" } },
+        COLOR_PALETTE_16.slice(0, 8).map(p =>
+          React.createElement("div", {
+            key: p.color,
+            className: `journal-color-dot ${coverMeta.subtitleColor === p.color ? "active" : ""}`,
+            style: { background: p.color },
+            title: p.name,
+            onClick: () => saveMeta({ ...coverMeta, subtitleColor: p.color })
+          })
+        )
+      ),
+
+      // 4. 署名输入 + 色盘改色
+      React.createElement(
+        "div",
+        { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" } },
+        React.createElement("span", { style: { fontSize: "12px", fontWeight: "bold", color: "#78716C" } }, "手账署名内容与字色"),
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "6px" } },
+          React.createElement("span", { style: { fontSize: "11px", color: "#8C8275" } }, "字色:"),
+          React.createElement("input", {
+            type: "color",
+            value: coverMeta.authorColor || "#F3E5AB",
+            onChange: (e) => saveMeta({ ...coverMeta, authorColor: e.target.value }),
+            style: { width: "24px", height: "24px", border: "none", borderRadius: "50%", cursor: "pointer", background: "transparent", padding: 0 }
+          })
+        )
+      ),
+      React.createElement("input", {
+        type: "text",
+        value: coverMeta.author,
+        onChange: (e) => saveMeta({ ...coverMeta, author: e.target.value }),
+        placeholder: "输入署名...",
+        style: {
+          width: "100%",
+          boxSizing: "border-box",
+          padding: "9px 12px",
+          borderRadius: "10px",
+          border: "1px solid #E5E0D8",
+          fontSize: "13px",
+          marginBottom: "6px",
+          outline: "none"
+        }
+      }),
+      React.createElement(
+        "div",
+        { style: { display: "flex", gap: "6px", marginBottom: "18px", alignItems: "center" } },
+        COLOR_PALETTE_16.slice(0, 8).map(p =>
+          React.createElement("div", {
+            key: p.color,
+            className: `journal-color-dot ${coverMeta.authorColor === p.color ? "active" : ""}`,
+            style: { background: p.color },
+            title: p.name,
+            onClick: () => saveMeta({ ...coverMeta, authorColor: p.color })
+          })
+        )
+      ),
+
+      // 5. 确定按钮
+      React.createElement(
+        "button",
+        {
+          onClick: (e) => {
+            e.stopPropagation();
+            setShowCoverSettings(false);
+          },
+          style: {
+            width: "100%",
+            padding: "12px",
+            borderRadius: "14px",
+            border: "none",
+            background: "linear-gradient(135deg, #7FA393 0%, #5A8F6D 100%)",
+            color: "#fff",
+            fontSize: "14px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            boxShadow: "0 4px 12px rgba(90,143,109,0.3)"
+          }
+        },
+        "✓ 完成装扮"
+      )
+    )
+  );
+};
+
 const T9Page = () => {
   const { useState, useEffect, useRef } = React;
 
@@ -40745,6 +42754,7 @@ JSON 格式示例：
 
   const page2Features = [
     { title: "府邸捉迷藏", icon: "footprints", colorClass: "bg-morandi-1" },
+    { title: "手账达人", icon: "notebook", colorClass: "bg-morandi-2" },
   ];
 
   return (
@@ -58102,7 +60112,9758 @@ const MusicGamePage = ({ onBack }) => {
 };
 
 
+
+
+// ==================== T13 二零四八 局内小窗数据库 (IndexedDB) ====================
+const Game2048ChatDB = {
+  dbName: "Milvus2048ChatDB",
+  version: 1,
+  db: null,
+  getDB: function () {
+    return new Promise((resolve, reject) => {
+      if (this.db) return resolve(this.db);
+      const req = indexedDB.open(this.dbName, this.version);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("char_chats")) {
+          db.createObjectStore("char_chats", { keyPath: "charId" });
+        }
+      };
+      req.onsuccess = (e) => {
+        this.db = e.target.result;
+        resolve(this.db);
+      };
+      req.onerror = (e) => reject(e);
+    });
+  },
+  getMessages: async function (charId) {
+    if (!charId) return [];
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readonly");
+        const store = tx.objectStore("char_chats");
+        const req = store.get(String(charId));
+        req.onsuccess = () => resolve(req.result ? req.result.messages || [] : []);
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      console.warn("Failed to read 2048 in-game chat:", e);
+      return [];
+    }
+  },
+  saveMessage: async function (charId, message) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      const messages = await this.getMessages(charId);
+      messages.push(message);
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.put({ charId: String(charId), lastUpdated: Date.now(), messages });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      console.warn("Failed to save 2048 in-game chat message:", e);
+    }
+  },
+  clearMessages: async function (charId) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.delete(String(charId));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      console.warn("Failed to clear 2048 in-game chat:", e);
+    }
+  }
+};
+
+// ==================== T13 二零四八 (果冻莫兰迪·经典数字·看TA操作与局内小窗小游戏) ====================
+const Game2048Page = ({ onBack }) => {
+  const { useState, useEffect, useRef, useCallback } = React;
+
+  // 果冻莫兰迪暖心配色配置 (五颜六色、透明轻盈、无黑色)
+  const JELLY_COLORS = {
+    2: {
+      bg: 'linear-gradient(135deg, rgba(238, 246, 240, 0.94) 0%, rgba(218, 240, 224, 0.86) 100%)',
+      color: '#3B6047',
+      shadow: '0 4px 14px rgba(75, 130, 95, 0.18), inset 0 2px 5px rgba(255, 255, 255, 0.95)',
+      border: 'rgba(255, 255, 255, 0.85)',
+      fontSize: '2.2rem'
+    },
+    4: {
+      bg: 'linear-gradient(135deg, rgba(235, 244, 252, 0.94) 0%, rgba(212, 233, 250, 0.86) 100%)',
+      color: '#345A7E',
+      shadow: '0 4px 14px rgba(65, 115, 160, 0.18), inset 0 2px 5px rgba(255, 255, 255, 0.95)',
+      border: 'rgba(255, 255, 255, 0.85)',
+      fontSize: '2.2rem'
+    },
+    8: {
+      bg: 'linear-gradient(135deg, rgba(255, 247, 232, 0.95) 0%, rgba(254, 232, 198, 0.88) 100%)',
+      color: '#965A26',
+      shadow: '0 4px 14px rgba(185, 115, 50, 0.2), inset 0 2px 5px rgba(255, 255, 255, 0.95)',
+      border: 'rgba(255, 255, 255, 0.85)',
+      fontSize: '2.2rem'
+    },
+    16: {
+      bg: 'linear-gradient(135deg, rgba(255, 237, 230, 0.95) 0%, rgba(254, 214, 200, 0.9) 100%)',
+      color: '#A5462D',
+      shadow: '0 5px 16px rgba(200, 85, 60, 0.22), inset 0 2px 5px rgba(255, 255, 255, 0.95)',
+      border: 'rgba(255, 255, 255, 0.9)',
+      fontSize: '2rem'
+    },
+    32: {
+      bg: 'linear-gradient(135deg, rgba(254, 234, 242, 0.95) 0%, rgba(252, 206, 224, 0.9) 100%)',
+      color: '#A2345F',
+      shadow: '0 5px 16px rgba(195, 65, 120, 0.22), inset 0 2px 5px rgba(255, 255, 255, 0.95)',
+      border: 'rgba(255, 255, 255, 0.9)',
+      fontSize: '2rem'
+    },
+    64: {
+      bg: 'linear-gradient(135deg, rgba(244, 236, 254, 0.95) 0%, rgba(228, 210, 250, 0.9) 100%)',
+      color: '#68409A',
+      shadow: '0 5px 16px rgba(130, 80, 190, 0.22), inset 0 2px 5px rgba(255, 255, 255, 0.95)',
+      border: 'rgba(255, 255, 255, 0.9)',
+      fontSize: '2rem'
+    },
+    128: {
+      bg: 'linear-gradient(135deg, rgba(228, 248, 246, 0.96) 0%, rgba(190, 238, 234, 0.92) 100%)',
+      color: '#1E6E66',
+      shadow: '0 6px 18px rgba(35, 140, 130, 0.25), inset 0 2px 6px rgba(255, 255, 255, 0.95)',
+      border: 'rgba(255, 255, 255, 0.95)',
+      fontSize: '1.8rem',
+      fontWeight: '700'
+    },
+    256: {
+      bg: 'linear-gradient(135deg, rgba(255, 250, 224, 0.96) 0%, rgba(255, 239, 172, 0.92) 100%)',
+      color: '#8E660C',
+      shadow: '0 6px 18px rgba(180, 135, 15, 0.28), inset 0 2px 6px rgba(255, 255, 255, 0.95)',
+      border: 'rgba(255, 255, 255, 0.95)',
+      fontSize: '1.8rem',
+      fontWeight: '700'
+    },
+    512: {
+      bg: 'linear-gradient(135deg, rgba(255, 242, 206, 0.96) 0%, rgba(255, 220, 138, 0.94) 100%)',
+      color: '#8A4D00',
+      shadow: '0 6px 20px rgba(190, 110, 0, 0.3), inset 0 2px 6px rgba(255, 255, 255, 0.95)',
+      border: 'rgba(255, 255, 255, 0.95)',
+      fontSize: '1.8rem',
+      fontWeight: '800'
+    },
+    1024: {
+      bg: 'linear-gradient(135deg, rgba(255, 234, 182, 0.97) 0%, rgba(255, 206, 96, 0.95) 100%)',
+      color: '#763800',
+      shadow: '0 7px 22px rgba(215, 120, 0, 0.35), inset 0 2px 6px rgba(255, 255, 255, 0.95)',
+      border: 'rgba(255, 255, 255, 0.95)',
+      fontSize: '1.55rem',
+      fontWeight: '800'
+    },
+    2048: {
+      bg: 'linear-gradient(135deg, rgba(255, 186, 180, 0.98) 0%, rgba(255, 142, 132, 0.95) 100%)',
+      color: '#FFFFFF',
+      shadow: '0 8px 26px rgba(255, 115, 105, 0.45), inset 0 2px 6px rgba(255, 255, 255, 0.85)',
+      border: 'rgba(255, 255, 255, 0.95)',
+      fontSize: '1.55rem',
+      fontWeight: '800'
+    },
+    4096: {
+      bg: 'linear-gradient(135deg, rgba(200, 206, 238, 0.98) 0%, rgba(162, 172, 224, 0.95) 100%)',
+      color: '#FFFFFF',
+      shadow: '0 8px 26px rgba(125, 140, 215, 0.45), inset 0 2px 6px rgba(255, 255, 255, 0.85)',
+      border: 'rgba(255, 255, 255, 0.95)',
+      fontSize: '1.55rem',
+      fontWeight: '800'
+    }
+  };
+
+  const getTileStyle = (val) => {
+    if (!val) return null;
+    return JELLY_COLORS[val] || {
+      bg: 'linear-gradient(135deg, rgba(220, 210, 245, 0.96) 0%, rgba(185, 170, 230, 0.92) 100%)',
+      color: '#FFFFFF',
+      shadow: '0 6px 20px rgba(150, 130, 210, 0.35), inset 0 2px 6px rgba(255, 255, 255, 0.9)',
+      border: 'rgba(255, 255, 255, 0.9)',
+      fontSize: '1.45rem',
+      fontWeight: '800'
+    };
+  };
+
+  // 音效合成器 (Web Audio API 轻微木质音)
+  const playWoodSound = (type = 'move') => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!window._2048AudioCtx) {
+        window._2048AudioCtx = new AudioCtx();
+      }
+      const ctx = window._2048AudioCtx;
+      if (ctx.state === 'suspended') {
+        ctx.resume();
+      }
+      const now = ctx.currentTime;
+
+      if (type === 'move') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(150, now);
+        osc.frequency.exponentialRampToValueAtTime(75, now + 0.045);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(550, now);
+
+        gain.gain.setValueAtTime(0.16, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.045);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.045);
+      } else if (type === 'merge') {
+        const osc1 = ctx.createOscillator();
+        const osc2 = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc1.type = 'sine';
+        osc1.frequency.setValueAtTime(340, now);
+        osc1.frequency.exponentialRampToValueAtTime(240, now + 0.09);
+
+        osc2.type = 'triangle';
+        osc2.frequency.setValueAtTime(680, now);
+        osc2.frequency.exponentialRampToValueAtTime(480, now + 0.07);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(1100, now);
+
+        gain.gain.setValueAtTime(0.24, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+
+        osc1.connect(filter);
+        osc2.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc1.start(now);
+        osc2.start(now + 0.005);
+        osc1.stop(now + 0.09);
+        osc2.stop(now + 0.09);
+      } else if (type === 'win') {
+        const freqs = [392, 493.88, 587.33, 783.99];
+        freqs.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.07);
+          gain.gain.setValueAtTime(0.2, now + idx * 0.07);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.07 + 0.18);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.07);
+          osc.stop(now + idx * 0.07 + 0.18);
+        });
+      }
+    } catch (e) {}
+  };
+
+  // 基础游戏状态
+  const [grid, setGrid] = useState(() => Array(4).fill(0).map(() => Array(4).fill(0)));
+  const [score, setScore] = useState(0);
+  const [bestScore, setBestScore] = useState(() => {
+    try {
+      return parseInt(localStorage.getItem('milvus_2048_best_score') || '0', 10) || 0;
+    } catch (e) { return 0; }
+  });
+  const [undoLeft, setUndoLeft] = useState(3);
+  const [moveHistory, setMoveHistory] = useState([]);
+  const [mergedCoords, setMergedCoords] = useState({});
+  const [newCoords, setNewCoords] = useState({});
+  const [won, setWon] = useState(false);
+  const [continueAfterWin, setContinueAfterWin] = useState(false);
+  const [gameOver, setGameOver] = useState(false);
+  const [toastMsg, setToastMsg] = useState(null);
+  const [showWinModal, setShowWinModal] = useState(false);
+  const [showGameOverModal, setShowGameOverModal] = useState(false);
+  const [newRecordCelebrated, setNewRecordCelebrated] = useState(false);
+  const [settledRewardCoins, setSettledRewardCoins] = useState(0);
+
+  // 模式与角色选择: 'manual' (自己玩) | 'auto' (看TA操作)
+  const [playMode, setPlayMode] = useState('manual');
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedChar, setSelectedChar] = useState(null);
+  const [showCharModal, setShowCharModal] = useState(false);
+
+  // 局内小窗系统
+  const [showInGameChat, setShowInGameChat] = useState(false);
+  const [inGameChatMsgs, setInGameChatMsgs] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiReplying, setIsAiReplying] = useState(false);
+  const [lastActionContext, setLastActionContext] = useState(null);
+  const chatScrollRef = useRef(null);
+  const autoPilotTimerRef = useRef(null);
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 1800);
+  };
+
+  // 加载可用密探角色
+  useEffect(() => {
+    const loadChars = async () => {
+      try {
+        let chars = [];
+        if (window.chatCharacterStore) {
+          chars = await window.chatCharacterStore.getAll();
+        } else {
+          chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const validChars = chars.filter(c => !String(c.id).startsWith("group") && c.type !== "decor");
+        setAvailableChars(validChars);
+
+        const savedAutoCharId = localStorage.getItem("milvus_2048_auto_char_id");
+        if (savedAutoCharId) {
+          const found = validChars.find(c => String(c.id) === String(savedAutoCharId));
+          if (found) setSelectedChar(found);
+        } else if (validChars.length > 0) {
+          setSelectedChar(validChars[0]);
+        }
+      } catch (err) {
+        console.error("加载2048代打角色失败:", err);
+      }
+    };
+    loadChars();
+  }, []);
+
+  // 载入选定角色的局内小窗聊天记录
+  useEffect(() => {
+    if (selectedChar && selectedChar.id) {
+      Game2048ChatDB.getMessages(selectedChar.id).then(msgs => {
+        setInGameChatMsgs(msgs);
+      });
+    }
+  }, [selectedChar]);
+
+  // 自动滚动小窗底部
+  useEffect(() => {
+    if (showInGameChat && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [inGameChatMsgs, showInGameChat, isAiReplying]);
+
+  // 获取当前最大方块数值
+  const getMaxTileValue = (g) => {
+    let max = 0;
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (g[r][c] > max) max = g[r][c];
+      }
+    }
+    return max;
+  };
+
+  // 金库结算同步函数 (每 100 分 = 1 铢五铢钱)
+  const settleToTreasury = (finalScore, isVictory = false) => {
+    const rewardCoins = Math.max(1, Math.floor(finalScore / 100));
+    setSettledRewardCoins(rewardCoins);
+
+    try {
+      const curCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+      localStorage.setItem("farm_coins", String(curCoins + rewardCoins));
+    } catch (e) {}
+
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord(
+        "income",
+        rewardCoins,
+        `二零四八 ${isVictory ? '通关大捷' : '棋道试炼'} (${finalScore}分)`
+      );
+    }
+    return rewardCoins;
+  };
+
+  // 自动存档与读档
+  const saveGameState = useCallback((g, s, bs, ul, hist, w, cont, go) => {
+    try {
+      const state = {
+        grid: g,
+        score: s,
+        bestScore: bs,
+        undoLeft: ul,
+        moveHistory: hist.slice(-3),
+        won: w,
+        continueAfterWin: cont,
+        gameOver: go
+      };
+      localStorage.setItem('milvus_2048_saved_state_v1', JSON.stringify(state));
+      localStorage.setItem('milvus_2048_best_score', String(bs));
+    } catch (e) {
+      console.warn('2048 存档失败:', e);
+    }
+  }, []);
+
+  const addRandomTile = (curGrid) => {
+    const emptyCells = [];
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (curGrid[r][c] === 0) {
+          emptyCells.push({ r, c });
+        }
+      }
+    }
+    if (emptyCells.length === 0) return { newGrid: curGrid, addedCoord: null };
+    const rand = emptyCells[Math.floor(Math.random() * emptyCells.length)];
+    const val = Math.random() < 0.9 ? 2 : 4;
+    const newGrid = curGrid.map(row => [...row]);
+    newGrid[rand.r][rand.c] = val;
+    return { newGrid, addedCoord: `${rand.r}-${rand.c}` };
+  };
+
+  const canMove = (curGrid) => {
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (curGrid[r][c] === 0) return true;
+        if (c < 3 && curGrid[r][c] === curGrid[r][c + 1]) return true;
+        if (r < 3 && curGrid[r][c] === curGrid[r + 1][c]) return true;
+      }
+    }
+    return false;
+  };
+
+  // 初始化新游戏
+  const startNewGame = useCallback(() => {
+    let initialGrid = Array(4).fill(0).map(() => Array(4).fill(0));
+    const first = addRandomTile(initialGrid);
+    const second = addRandomTile(first.newGrid);
+    const newG = second.newGrid;
+
+    setGrid(newG);
+    setScore(0);
+    setUndoLeft(3);
+    setMoveHistory([]);
+    setWon(false);
+    setContinueAfterWin(false);
+    setGameOver(false);
+    setShowWinModal(false);
+    setShowGameOverModal(false);
+    setNewRecordCelebrated(false);
+    setSettledRewardCoins(0);
+    setMergedCoords({});
+    setNewCoords({
+      [first.addedCoord]: true,
+      [second.addedCoord]: true
+    });
+
+    saveGameState(newG, 0, bestScore, 3, [], false, false, false);
+  }, [bestScore, saveGameState]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('milvus_2048_saved_state_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed.grid) && typeof parsed.score === 'number') {
+          setGrid(parsed.grid);
+          setScore(parsed.score);
+          setBestScore(Math.max(parsed.bestScore || 0, bestScore));
+          setUndoLeft(typeof parsed.undoLeft === 'number' ? parsed.undoLeft : 3);
+          setMoveHistory(Array.isArray(parsed.moveHistory) ? parsed.moveHistory : []);
+          setWon(!!parsed.won);
+          setContinueAfterWin(!!parsed.continueAfterWin);
+          setGameOver(!!parsed.gameOver);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn('加载2048存档异常:', e);
+    }
+    startNewGame();
+  }, []);
+
+  const rotateGrid = (g, dir) => {
+    const rotated = Array(4).fill(0).map(() => Array(4).fill(0));
+    if (dir === 'left') {
+      return g.map(row => [...row]);
+    } else if (dir === 'right') {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          rotated[r][c] = g[r][3 - c];
+        }
+      }
+    } else if (dir === 'up') {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          rotated[r][c] = g[c][r];
+        }
+      }
+    } else if (dir === 'down') {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          rotated[r][c] = g[3 - c][r];
+        }
+      }
+    }
+    return rotated;
+  };
+
+  const rotateGridBack = (rotated, dir) => {
+    const orig = Array(4).fill(0).map(() => Array(4).fill(0));
+    if (dir === 'left') {
+      return rotated.map(row => [...row]);
+    } else if (dir === 'right') {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          orig[r][c] = rotated[r][3 - c];
+        }
+      }
+    } else if (dir === 'up') {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          orig[r][c] = rotated[c][r];
+        }
+      }
+    } else if (dir === 'down') {
+      for (let r = 0; r < 4; r++) {
+        for (let c = 0; c < 4; c++) {
+          orig[r][c] = rotated[c][3 - r];
+        }
+      }
+    }
+    return orig;
+  };
+
+  const mergeRow = (row) => {
+    const nonZeros = row.filter(v => v !== 0);
+    const newRow = [];
+    const mergedPositions = [];
+    let addedScore = 0;
+    let reached2048 = false;
+
+    let i = 0;
+    while (i < nonZeros.length) {
+      if (i + 1 < nonZeros.length && nonZeros[i] === nonZeros[i + 1]) {
+        const mergedVal = nonZeros[i] * 2;
+        newRow.push(mergedVal);
+        mergedPositions.push(newRow.length - 1);
+        addedScore += mergedVal;
+        if (mergedVal === 2048) reached2048 = true;
+        i += 2;
+      } else {
+        newRow.push(nonZeros[i]);
+        i += 1;
+      }
+    }
+
+    while (newRow.length < 4) {
+      newRow.push(0);
+    }
+
+    return { newRow, addedScore, mergedPositions, reached2048 };
+  };
+
+  // 模拟单步移动结果 (用于 AI 评估)
+  const simulateMove = (curG, dir) => {
+    const rot = rotateGrid(curG, dir);
+    const mRot = Array(4).fill(0).map(() => Array(4).fill(0));
+    let addScore = 0;
+    for (let r = 0; r < 4; r++) {
+      const res = mergeRow(rot[r]);
+      mRot[r] = res.newRow;
+      addScore += res.addedScore;
+    }
+    const finalG = rotateGridBack(mRot, dir);
+    let changed = false;
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (finalG[r][c] !== curG[r][c]) {
+          changed = true;
+          break;
+        }
+      }
+      if (changed) break;
+    }
+    return { finalGrid: finalG, addedScore: addScore, changed };
+  };
+
+  // 智能拐角单调性与空位最大化评估算法 (聚拢左下角 [3][0])
+  const evaluateGrid = (g) => {
+    // 权重矩阵 (引导最大数聚集在左下角，并呈蛇形单调递减)
+    const WEIGHTS = [
+      [2,      4,     8,     16],
+      [256,    128,   64,    32],
+      [512,    1024,  2048,  4096],
+      [65536,  32768, 16384, 8192]
+    ];
+
+    let posScore = 0;
+    let emptyCount = 0;
+    let smoothness = 0;
+
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        const val = g[r][c];
+        if (val === 0) {
+          emptyCount++;
+        } else {
+          posScore += val * WEIGHTS[r][c];
+          // 平滑度计算 (相邻方块差值惩罚)
+          if (c < 3 && g[r][c + 1] > 0) {
+            smoothness -= Math.abs(Math.log2(val) - Math.log2(g[r][c + 1]));
+          }
+          if (r < 3 && g[r + 1][c] > 0) {
+            smoothness -= Math.abs(Math.log2(val) - Math.log2(g[r + 1][c]));
+          }
+        }
+      }
+    }
+
+    return posScore + emptyCount * 3000 + smoothness * 120;
+  };
+
+  // 核心滑动处理
+  const handleMove = useCallback((direction) => {
+    if (gameOver || (won && !continueAfterWin)) return;
+
+    const rotated = rotateGrid(grid, direction);
+    const mergedRotated = Array(4).fill(0).map(() => Array(4).fill(0));
+    const mergedPositionsMap = {};
+    let totalAddedScore = 0;
+    let hit2048 = false;
+
+    for (let r = 0; r < 4; r++) {
+      const res = mergeRow(rotated[r]);
+      mergedRotated[r] = res.newRow;
+      totalAddedScore += res.addedScore;
+      if (res.reached2048) hit2048 = true;
+
+      res.mergedPositions.forEach(c => {
+        let origR = r, origC = c;
+        if (direction === 'left') { origR = r; origC = c; }
+        else if (direction === 'right') { origR = r; origC = 3 - c; }
+        else if (direction === 'up') { origR = c; origC = r; }
+        else if (direction === 'down') { origR = 3 - c; origC = r; }
+        mergedPositionsMap[`${origR}-${origC}`] = true;
+      });
+    }
+
+    const finalGrid = rotateGridBack(mergedRotated, direction);
+
+    let hasChanged = false;
+    for (let r = 0; r < 4; r++) {
+      for (let c = 0; c < 4; c++) {
+        if (finalGrid[r][c] !== grid[r][c]) {
+          hasChanged = true;
+          break;
+        }
+      }
+      if (hasChanged) break;
+    }
+
+    if (!hasChanged) return;
+
+    // 快照记录
+    const snapshot = {
+      grid: grid.map(row => [...row]),
+      score: score
+    };
+    const newHist = [...moveHistory, snapshot];
+    setMoveHistory(newHist);
+
+    // 新方块生成
+    const spawnRes = addRandomTile(finalGrid);
+    const newG = spawnRes.newGrid;
+    const newS = score + totalAddedScore;
+    const newBs = Math.max(bestScore, newS);
+
+    setGrid(newG);
+    setScore(newS);
+    setBestScore(newBs);
+    setMergedCoords(mergedPositionsMap);
+    setNewCoords(spawnRes.addedCoord ? { [spawnRes.addedCoord]: true } : {});
+
+    if (totalAddedScore > 0) {
+      playWoodSound('merge');
+    } else {
+      playWoodSound('move');
+    }
+
+    // 战况更新记录
+    const maxVal = getMaxTileValue(newG);
+    setLastActionContext({
+      direction,
+      addedScore: totalAddedScore,
+      maxTile: maxVal,
+      score: newS
+    });
+
+    if (newS > bestScore && bestScore > 0 && !newRecordCelebrated) {
+      setNewRecordCelebrated(true);
+      showToast('🎉 创下全新最高分纪录！');
+    }
+
+    // 胜利结算
+    let newWon = won;
+    if (hit2048 && !won && !continueAfterWin) {
+      newWon = true;
+      setWon(true);
+      setShowWinModal(true);
+      playWoodSound('win');
+      settleToTreasury(newS, true);
+    }
+
+    // 失败结算
+    const isOver = !canMove(newG);
+    if (isOver) {
+      setGameOver(true);
+      setShowGameOverModal(true);
+      settleToTreasury(newS, false);
+    }
+
+    saveGameState(newG, newS, newBs, undoLeft, newHist, newWon, continueAfterWin, isOver);
+  }, [grid, score, bestScore, undoLeft, moveHistory, won, continueAfterWin, gameOver, newRecordCelebrated, saveGameState]);
+
+  // 拟真 AI 自动代打循环 (400ms ~ 600ms 节奏 + 14% 拟真手滑失误)
+  useEffect(() => {
+    if (playMode !== 'auto' || gameOver || (won && !continueAfterWin) || showCharModal || showInGameChat) {
+      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
+      return;
+    }
+
+    const stepDelay = 420 + Math.random() * 180;
+    autoPilotTimerRef.current = setTimeout(() => {
+      if (playMode !== 'auto' || gameOver) return;
+
+      const directions = ['down', 'left', 'right', 'up'];
+      const candidateMoves = [];
+
+      directions.forEach(dir => {
+        const sim = simulateMove(grid, dir);
+        if (sim.changed) {
+          const evalScore = evaluateGrid(sim.finalGrid) + sim.addedScore * 10;
+          candidateMoves.push({ dir, evalScore, sim });
+        }
+      });
+
+      if (candidateMoves.length === 0) return;
+
+      candidateMoves.sort((a, b) => b.evalScore - a.evalScore);
+
+      // 拟真失误概率: 约 14% 概率手滑选择次优或随机合法方向
+      const isMistake = candidateMoves.length > 1 && Math.random() < 0.14;
+      let chosenMove = candidateMoves[0].dir;
+
+      if (isMistake) {
+        chosenMove = candidateMoves[1].dir;
+      }
+
+      handleMove(chosenMove);
+
+    }, stepDelay);
+
+    return () => {
+      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
+    };
+  }, [playMode, grid, gameOver, won, continueAfterWin, showCharModal, showInGameChat, handleMove]);
+
+  // 撤回功能 (全局 3 次)
+  const handleUndo = () => {
+    if (undoLeft <= 0) {
+      showToast('本局 3 次撤回机会已用尽');
+      return;
+    }
+    if (moveHistory.length === 0) {
+      showToast('暂无可撤回的步骤');
+      return;
+    }
+
+    const newHist = [...moveHistory];
+    const prev = newHist.pop();
+    const newUl = undoLeft - 1;
+
+    setGrid(prev.grid);
+    setScore(prev.score);
+    setUndoLeft(newUl);
+    setMoveHistory(newHist);
+    setGameOver(false);
+    setShowGameOverModal(false);
+    setMergedCoords({});
+    setNewCoords({});
+
+    playWoodSound('move');
+    showToast(`已撤回一步 (剩余 ${newUl} 次)`);
+
+    saveGameState(prev.grid, prev.score, bestScore, newUl, newHist, won, continueAfterWin, false);
+  };
+
+  // 键盘事件监听 (适配 PC)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (playMode === 'auto') return; // 代打时暂禁按键干扰
+      if (['ArrowUp', 'KeyW'].includes(e.code)) {
+        e.preventDefault();
+        handleMove('up');
+      } else if (['ArrowDown', 'KeyS'].includes(e.code)) {
+        e.preventDefault();
+        handleMove('down');
+      } else if (['ArrowLeft', 'KeyA'].includes(e.code)) {
+        e.preventDefault();
+        handleMove('left');
+      } else if (['ArrowRight', 'KeyD'].includes(e.code)) {
+        e.preventDefault();
+        handleMove('right');
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleMove, playMode]);
+
+  // 触屏滑动监听 (适配 Mobile)
+  const touchStartRef = useRef({ x: 0, y: 0, time: 0 });
+
+  const handleTouchStart = (e) => {
+    if (playMode === 'auto') return;
+    const touch = e.touches[0];
+    touchStartRef.current = {
+      x: touch.clientX,
+      y: touch.clientY,
+      time: Date.now()
+    };
+  };
+
+  const handleTouchEnd = (e) => {
+    if (playMode === 'auto') return;
+    const touch = e.changedTouches[0];
+    const dx = touch.clientX - touchStartRef.current.x;
+    const dy = touch.clientY - touchStartRef.current.y;
+    const absX = Math.abs(dx);
+    const absY = Math.abs(dy);
+
+    if (Math.max(absX, absY) > 25) {
+      if (absX > absY) {
+        handleMove(dx > 0 ? 'right' : 'left');
+      } else {
+        handleMove(dy > 0 ? 'down' : 'up');
+      }
+    }
+  };
+
+  // 选择代打角色
+  const handleSelectAutoChar = (char) => {
+    setSelectedChar(char);
+    localStorage.setItem("milvus_2048_auto_char_id", char.id);
+    setShowCharModal(false);
+  };
+
+  // 局内小窗发送对话
+  const handleSendInGameMessage = async (msgText) => {
+    const textToSend = (msgText || chatInput).trim();
+    if (!textToSend || !selectedChar || isAiReplying) return;
+
+    setChatInput('');
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      role: 'user',
+      content: textToSend,
+      timestamp: Date.now()
+    };
+
+    const newMsgs = [...inGameChatMsgs, userMsg];
+    setInGameChatMsgs(newMsgs);
+    await Game2048ChatDB.saveMessage(selectedChar.id, userMsg);
+    setIsAiReplying(true);
+
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
+      let userContext = "【主控身份】姓名:主控, 性格:沉稳, 背景:隐秘阁主";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId) {
+          const activeUser = savedPersonas.find(p => p.id == activeId);
+          if (activeUser) {
+            userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
+          }
+        }
+      } catch (e) {}
+
+      const profile = selectedChar.profile || {};
+      const charContext = `【密探角色设定】
+姓名: ${selectedChar.name}
+性别: ${profile.gender || "未知"}
+性格: ${profile.personality || "未知"}
+说话风格: ${profile.style || "自然生动"}
+背景故事: ${profile.background || "暂无"}`;
+
+      const isAuto = playMode === 'auto';
+      const maxTile = getMaxTileValue(grid);
+      const gameContext = `【局内二零四八棋道战况】
+模式: ${isAuto ? `看Ta操作（由你【${selectedChar.name}】亲自在棋盘上滑动合体方块，主控在场边看你操作）` : `自己玩（由主控亲自在棋盘上下棋，你在场边观战/支招）`}
+操盘者: ${isAuto ? `是你本人【${selectedChar.name}】！` : '是主控本人！'}
+当前最高合成方块: 【${maxTile}】
+当前累计得分: ${score} 分
+最高分纪录: ${bestScore} 分
+剩余撤回机会: ${undoLeft} 次
+最新战况动向: ${lastActionContext ? (
+        isAuto
+          ? `你刚才在棋盘上向【${lastActionContext.direction}】滑动，合成了 ${lastActionContext.addedScore > 0 ? `+${lastActionContext.addedScore}分` : '方块重新聚拢'}`
+          : `主控刚才在棋盘上向【${lastActionContext.direction}】滑动`
+      ) : '正在观察棋盘局势'}`;
+
+      const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
+${worldContext}
+${userContext}
+${charContext}
+${gameContext}
+
+【交互情境与视角（极其重要）】
+${isAuto ? `
+- 【极其重要】：当前是【看Ta操作】模式！刚才【是你【${selectedChar.name}】本人】亲自在二零四八棋盘上滑动方块！主控是在场边观看你的操作！
+- 刚才无论是漂亮的合成了高阶大方块（如512/1024/2048），还是不小心手滑棋路受阻，都是【你自己的亲身经历】！
+- 请务必以第一人称（如“我”、“本公子”等符合你身份的称呼）描述【你自己刚才在棋盘上的运筹与操作】。绝对不要误以为是主控在玩！
+- 面对主控在小窗里的打趣、支招或夸奖，给出贴合你人设的生动反应。
+` : `
+- 当前是【自己玩】模式，刚才【是主控本人】在棋盘上滑动方块，你在场边陪伴、观战与支招。
+- 请以场边陪伴者的视角，对主控刚才的合成思路给予贴合人设的点评、鼓励或吐槽。
+`}
+
+【核心要求】
+1. 必须完全使用【${selectedChar.name}】的独特口吻和性格说话（严禁出戏、严禁AI腔、严禁说自己是人工智能）。
+2. 字数控制在 25-70 字左右，生动传神。直接输出角色说的话，不要带角色名字前缀。`;
+
+      const recentDialogues = newMsgs.slice(-8).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
+
+      const apiMessages = [
+        { role: "system", content: sysPrompt },
+        ...recentDialogues
+      ];
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          apiMessages,
+          null,
+          async (reply) => {
+            const cleanReply = reply.trim();
+            const assistantMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: cleanReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, assistantMsg]);
+            await Game2048ChatDB.saveMessage(selectedChar.id, assistantMsg);
+            setIsAiReplying(false);
+          },
+          (err) => {
+            console.error("AI回复失败:", err);
+            const fallbackReply = isAuto
+              ? "（指尖轻点棋盘）这格落子略有不慎……不过莫慌，看我下一步绝地反击！"
+              : "（轻摇折扇）楼主方才这步聚合甚妙，再连两手，大数便可汇流一处了。";
+            const fallbackMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: fallbackReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, fallbackMsg]);
+            setIsAiReplying(false);
+          }
+        );
+      } else {
+        setIsAiReplying(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsAiReplying(false);
+    }
+  };
+
+  const handleClearInGameChat = async () => {
+    if (!selectedChar) return;
+    if (confirm("确定要清空与该角色的二零四八局内对话记录吗？（不影响传讯页面正常聊天）")) {
+      await Game2048ChatDB.clearMessages(selectedChar.id);
+      setInGameChatMsgs([]);
+    }
+  };
+
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      zIndex: 260,
+      background: 'linear-gradient(180deg, #FBF9F5 0%, #F5EFEB 100%)',
+      display: 'flex',
+      flexDirection: 'column',
+      fontFamily: '"GuanKiapTsingKhai", "Plus Jakarta Sans", sans-serif',
+      userSelect: 'none',
+      animation: 'fadeIn 0.25s ease-out'
+    }}>
+      {/* 顶部标题栏与撤回/分数 */}
+      <div style={{
+        padding: '16px 20px',
+        paddingTop: 'max(36px, env(safe-area-inset-top))',
+        background: 'rgba(255, 255, 255, 0.85)',
+        backdropFilter: 'blur(12px)',
+        boxShadow: '0 2px 14px rgba(120, 100, 90, 0.05)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+      }}>
+        {/* 左侧返回 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div onClick={onBack} style={{ cursor: 'pointer', padding: '6px 10px', marginLeft: '-10px', display: 'flex', alignItems: 'center' }}>
+            <span style={{ fontSize: '1.3rem', color: '#6A5F55' }}>←</span>
+          </div>
+          <span style={{ fontSize: '1.3rem', fontWeight: 'bold', color: '#4E453D', letterSpacing: '1px' }}>二零四八</span>
+        </div>
+
+        {/* 右侧计分与撤回功能 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* 撤回按钮 */}
+          <button
+            onClick={handleUndo}
+            title={`全局剩余撤回次数: ${undoLeft}`}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '16px',
+              border: '1.5px solid rgba(220, 180, 150, 0.4)',
+              background: undoLeft > 0 && moveHistory.length > 0 ? 'linear-gradient(135deg, #FFF9F2 0%, #F8EDE1 100%)' : 'rgba(240, 235, 230, 0.6)',
+              color: undoLeft > 0 && moveHistory.length > 0 ? '#8C582B' : '#B8AFA6',
+              fontSize: '0.85rem',
+              fontWeight: '600',
+              cursor: undoLeft > 0 && moveHistory.length > 0 ? 'pointer' : 'default',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              boxShadow: undoLeft > 0 && moveHistory.length > 0 ? '0 2px 8px rgba(140, 88, 43, 0.12)' : 'none',
+              transition: 'all 0.15s'
+            }}
+          >
+            <span style={{ fontSize: '1rem', lineHeight: 1 }}>↩</span>
+            <span>撤回 ({undoLeft})</span>
+          </button>
+
+          {/* 得分卡片 */}
+          <div style={{
+            background: 'linear-gradient(135deg, #EAE5DE 0%, #DDD6CC 100%)',
+            padding: '4px 10px',
+            borderRadius: '12px',
+            textAlign: 'center',
+            minWidth: '52px'
+          }}>
+            <div style={{ fontSize: '0.65rem', color: '#7E7368', fontWeight: 'bold' }}>得分</div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#443C35' }}>{score}</div>
+          </div>
+
+          {/* 最高分卡片 */}
+          <div style={{
+            background: 'linear-gradient(135deg, #E6EAE4 0%, #D5DFD2 100%)',
+            padding: '4px 10px',
+            borderRadius: '12px',
+            textAlign: 'center',
+            minWidth: '52px'
+          }}>
+            <div style={{ fontSize: '0.65rem', color: '#556E52', fontWeight: 'bold' }}>最高</div>
+            <div style={{ fontSize: '0.95rem', fontWeight: 'bold', color: '#2F482C' }}>{bestScore}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 游戏主体内容 */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '15px 20px',
+        overflow: 'hidden'
+      }}>
+        {/* 控制栏：纯图标「看TA操作」+ 纯图标「局内小窗」+「新游戏」 */}
+        <div style={{
+          width: '100%',
+          maxWidth: '360px',
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          marginBottom: '14px',
+          padding: '0 4px'
+        }}>
+          {/* 左侧纯图标按钮组 */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+            {/* 1. 看TA操作 / 选人胶囊图标 */}
+            <div
+              onClick={() => {
+                if (playMode === 'manual') {
+                  setPlayMode('auto');
+                  showToast(`🤖 已开启【${selectedChar ? selectedChar.name : '密探'}】代打`);
+                } else {
+                  setPlayMode('manual');
+                  showToast('👤 已切换为自己玩');
+                }
+              }}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                setShowCharModal(true);
+              }}
+              title={playMode === 'auto' ? `代打中: ${selectedChar?.name || '密探'} (点击切回自己玩，长按换人)` : "点击开启看TA代打"}
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: playMode === 'auto'
+                  ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)'
+                  : 'linear-gradient(135deg, #FFFFFF 0%, #F5EDE4 100%)',
+                border: playMode === 'auto' ? '2px solid #FFD1A4' : '1.5px solid #E2D5C7',
+                boxShadow: playMode === 'auto' ? '0 3px 10px rgba(214,114,75,0.4)' : '0 2px 6px rgba(0,0,0,0.06)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                position: 'relative',
+                transition: 'all 0.2s',
+                overflow: 'hidden'
+              }}
+            >
+              <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden' }}>
+                <UniversalAvatarLoader
+                  avatar={selectedChar?.avatar}
+                  name={selectedChar?.name || (playMode === 'auto' ? '🤖' : '👤')}
+                  fallbackColor={selectedChar?.avatarColor || (playMode === 'auto' ? '#D6724B' : '#E2D5C7')}
+                />
+              </div>
+              {playMode === 'auto' && (
+                <span style={{
+                  position: 'absolute',
+                  top: 1,
+                  right: 1,
+                  width: '8px',
+                  height: '8px',
+                  borderRadius: '50%',
+                  background: '#00E676',
+                  boxShadow: '0 0 6px #00E676',
+                  zIndex: 2
+                }} />
+              )}
+            </div>
+
+            {/* 换人小图标按钮 */}
+            {availableChars.length > 0 && (
+              <div
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setShowCharModal(true);
+                }}
+                title="更换代打密探"
+                style={{
+                  width: '28px',
+                  height: '28px',
+                  borderRadius: '50%',
+                  background: 'rgba(255, 255, 255, 0.85)',
+                  border: '1.5px solid #E2D5C7',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: '0.75rem',
+                  color: '#7E6F62',
+                  cursor: 'pointer',
+                  boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
+                }}
+              >
+                👥
+              </div>
+            )}
+
+            {/* 2. 局内小窗纯图标按钮 */}
+            <div
+              onClick={() => setShowInGameChat(true)}
+              title="打开局内复盘小窗"
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                background: 'linear-gradient(135deg, #FFFFFF 0%, #F5EDE4 100%)',
+                border: '1.5px solid #C49C58',
+                boxShadow: '0 2px 8px rgba(196,156,88,0.2)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                position: 'relative'
+              }}
+            >
+              <span style={{ fontSize: '1.15rem' }}>💬</span>
+              {inGameChatMsgs.length > 0 && (
+                <span style={{
+                  position: 'absolute',
+                  top: -2,
+                  right: -2,
+                  background: '#D6724B',
+                  color: '#fff',
+                  fontSize: '0.62rem',
+                  fontWeight: 'bold',
+                  padding: '1px 4px',
+                  borderRadius: '10px',
+                  minWidth: '14px',
+                  textAlign: 'center'
+                }}>
+                  {inGameChatMsgs.length}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* 右侧新游戏按钮 */}
+          <button
+            onClick={startNewGame}
+            style={{
+              padding: '7px 15px',
+              borderRadius: '16px',
+              border: 'none',
+              background: 'linear-gradient(135deg, #A8C8BA 0%, #7FA996 100%)',
+              color: '#FFFFFF',
+              fontSize: '0.88rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 3px 10px rgba(127, 169, 150, 0.35)',
+              transition: 'transform 0.1s'
+            }}
+            onPointerDown={e => e.currentTarget.style.transform = 'scale(0.95)'}
+            onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            新游戏
+          </button>
+        </div>
+
+        {/* 4x4 果冻棋盘容器 */}
+        <div
+          onTouchStart={handleTouchStart}
+          onTouchEnd={handleTouchEnd}
+          style={{
+            width: '100%',
+            maxWidth: '360px',
+            aspectRatio: '1 / 1',
+            background: 'rgba(235, 227, 219, 0.75)',
+            backdropFilter: 'blur(16px)',
+            borderRadius: '22px',
+            padding: '12px',
+            display: 'grid',
+            gridTemplateColumns: 'repeat(4, 1fr)',
+            gridTemplateRows: 'repeat(4, 1fr)',
+            gap: '10px',
+            boxShadow: '0 12px 36px rgba(130, 110, 95, 0.1), inset 0 2px 6px rgba(255, 255, 255, 0.6), inset 0 -2px 6px rgba(0, 0, 0, 0.04)',
+            border: '2px solid rgba(255, 255, 255, 0.8)',
+            touchAction: 'none',
+            position: 'relative'
+          }}
+        >
+          {grid.map((row, r) =>
+            row.map((val, c) => {
+              const coordKey = `${r}-${c}`;
+              const isMerged = !!mergedCoords[coordKey];
+              const isNew = !!newCoords[coordKey];
+              const style = getTileStyle(val);
+
+              return (
+                <div
+                  key={coordKey}
+                  style={{
+                    position: 'relative',
+                    background: 'rgba(224, 215, 206, 0.45)',
+                    borderRadius: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: 'inset 0 1px 3px rgba(0, 0, 0, 0.05)'
+                  }}
+                >
+                  {val > 0 && style && (
+                    <div
+                      key={`${coordKey}-${val}-${isMerged ? 'm' : ''}-${isNew ? 'n' : ''}`}
+                      style={{
+                        position: 'absolute',
+                        inset: 0,
+                        borderRadius: '14px',
+                        background: style.bg,
+                        color: style.color,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        fontSize: style.fontSize,
+                        fontWeight: style.fontWeight || 'bold',
+                        boxShadow: style.shadow,
+                        border: `1.5px solid ${style.border}`,
+                        animation: isMerged ? 'jellyPop 0.22s cubic-bezier(0.34, 1.56, 0.64, 1)' : (isNew ? 'jellyAppear 0.2s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none'),
+                        textShadow: val >= 2048 ? '0 1px 2px rgba(0,0,0,0.15)' : 'none'
+                      }}
+                    >
+                      {val}
+                    </div>
+                  )}
+                </div>
+              );
+            })
+          )}
+        </div>
+      </div>
+
+      {/* 浮动提示条 */}
+      {toastMsg && (
+        <div style={{
+          position: 'absolute',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(50, 40, 35, 0.82)',
+          backdropFilter: 'blur(8px)',
+          color: '#FFFFFF',
+          padding: '8px 18px',
+          borderRadius: '20px',
+          fontSize: '0.9rem',
+          zIndex: 300,
+          pointerEvents: 'none',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          {toastMsg}
+        </div>
+      )}
+
+      {/* 🎭 角色选择抽屉 (用于「看Ta操作」) */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5E8D2 100%)',
+              borderRadius: '24px 24px 0 0', padding: '20px 16px max(24px, env(safe-area-inset-bottom)) 16px',
+              borderTop: '3px solid #C49C58', maxHeight: '75%', overflowY: 'auto'
+            }}
+          >
+            <div style={{ width: 36, height: 4, background: '#D7CCC8', borderRadius: 2, margin: '0 auto 10px auto' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#4E342E' }}>
+                  🎯 选择二零四八代打密探
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#8D6E63', marginTop: 2 }}>
+                  选择后由该角色上阵自动合体方块，并可在局内小窗复盘交流
+                </div>
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {availableChars.length === 0 ? (
+              <div style={{ padding: '30px 0', textAlign: 'center', color: '#8D6E63', fontSize: '0.85rem' }}>
+                暂未在【传讯】中配置密探角色，请先前往传讯添加。
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {availableChars.map(char => {
+                  const isCur = selectedChar && String(selectedChar.id) === String(char.id);
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => handleSelectAutoChar(char)}
+                      style={{
+                        background: isCur ? 'linear-gradient(135deg, #FFF9F2 0%, #F5E8D8 100%)' : '#FFF',
+                        borderRadius: 16, padding: '12px 8px', border: isCur ? '2px solid #D6724B' : '1.5px solid #EAE0D5',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer',
+                        boxShadow: isCur ? '0 4px 10px rgba(214,114,75,0.25)' : '0 2px 4px rgba(0,0,0,0.04)',
+                        position: 'relative'
+                      }}
+                    >
+                      <div style={{ width: 46, height: 46, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #D6724B' : '1.5px solid #E6D7C3', marginBottom: 6 }}>
+                        <UniversalAvatarLoader avatar={char.avatar} name={char.name} fallbackColor={char.avatarColor} />
+                      </div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#D6724B' : '#4E342E', textAlign: 'center' }}>
+                        {char.name}
+                      </div>
+                      {isCur && (
+                        <div style={{ position: 'absolute', top: 6, right: 6, background: '#D6724B', color: '#fff', fontSize: '0.65rem', borderRadius: 8, padding: '0 4px', fontWeight: 'bold' }}>
+                          当前
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 💬 局内小窗半屏毛玻璃抽屉 (与蹴鞠训练一致) */}
+      {showInGameChat && (
+        <div
+          onClick={() => setShowInGameChat(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+            zIndex: 520, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5EADB 100%)',
+              borderRadius: '24px 24px 0 0', padding: '16px 14px max(18px, env(safe-area-inset-bottom)) 14px',
+              borderTop: '3px solid #C49C58', height: '82%', maxHeight: 600,
+              display: 'flex', flexDirection: 'column', boxShadow: '0 -10px 30px rgba(0,0,0,0.4)'
+            }}
+          >
+            {/* 小窗头部 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #E6D7C3' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #C49C58' }}>
+                  <UniversalAvatarLoader avatar={selectedChar?.avatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>{selectedChar ? selectedChar.name : "密探"}</span>
+                    <span style={{ fontSize: '0.68rem', background: 'rgba(214,114,75,0.15)', color: '#D6724B', padding: '1px 6px', borderRadius: 8 }}>
+                      {playMode === 'auto' ? '代打中 · 局内小窗' : '观战中 · 局内小窗'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#8D6E63' }}>
+                    🧩 当前最高: {getMaxTileValue(grid)} | 当前得分: {score}
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  onClick={handleClearInGameChat}
+                  style={{ fontSize: '0.72rem', color: '#A08070', background: 'rgba(0,0,0,0.05)', padding: '3px 8px', borderRadius: 10, cursor: 'pointer' }}
+                  title="清空局内对话"
+                >
+                  清空记录
+                </div>
+                <div
+                  onClick={() => setShowInGameChat(false)}
+                  style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  ✕
+                </div>
+              </div>
+            </div>
+
+            {/* 消息滚动流 */}
+            <div
+              ref={chatScrollRef}
+              style={{
+                flex: 1, overflowY: 'auto', padding: '12px 4px', display: 'flex', flexDirection: 'column', gap: 10
+              }}
+            >
+              {inGameChatMsgs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 10px', color: '#8D6E63', fontSize: '0.82rem', lineHeight: '1.6' }}>
+                  {playMode === 'auto'
+                    ? `🧩 刚才【${selectedChar ? selectedChar.name : '密探'}】这一波棋路走得如何？在下方点击快捷话题或输入文字，跟Ta交流刚才的战况吧！`
+                    : `🧩 刚才这几步棋盘走势如何？在下方点击快捷话题或输入文字，与【${selectedChar ? selectedChar.name : '密探'}】小窗交流支招吧！`}
+                </div>
+              ) : (
+                inGameChatMsgs.map((msg) => {
+                  const isUser = msg.role === 'user';
+                  return (
+                    <div
+                      key={msg.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: isUser ? 'flex-end' : 'flex-start',
+                        gap: 8
+                      }}
+                    >
+                      {!isUser && (
+                        <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginTop: 2 }}>
+                          <UniversalAvatarLoader avatar={selectedChar?.avatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          maxWidth: '75%',
+                          padding: '8px 12px',
+                          borderRadius: isUser ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
+                          background: isUser ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : '#FFF',
+                          color: isUser ? '#FFF' : '#3E2723',
+                          fontSize: '0.85rem',
+                          lineHeight: '1.45',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                          border: isUser ? 'none' : '1px solid #EAE0D5',
+                          wordBreak: 'break-word'
+                        }}
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              {isAiReplying && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+                    <UniversalAvatarLoader avatar={selectedChar?.avatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
+                  </div>
+                  <div style={{ background: '#FFF', padding: '8px 14px', borderRadius: '16px 16px 16px 2px', fontSize: '0.82rem', color: '#8D6E63', border: '1px solid #EAE0D5' }}>
+                    ✍️ 正在思考回复...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 快捷话题气泡 */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, paddingTop: 4 }}>
+              {[
+                playMode === 'auto' ? "刚才这步走得真稳！" : "看我这把冲 2048！",
+                playMode === 'auto' ? "哎呀刚才那步是不是手滑了？" : "帮我看看现在该往哪边合？",
+                "现在的得分已经很可观了~",
+                playMode === 'auto' ? "换我来亲自操作两把！" : "你觉得这一局能创纪录吗？"
+              ].map((topic, i) => (
+                <div
+                  key={i}
+                  onClick={() => handleSendInGameMessage(topic)}
+                  style={{
+                    background: 'rgba(255,255,255,0.92)', border: '1px solid #C49C58', color: '#8C4A1E',
+                    padding: '4px 10px', borderRadius: 14, fontSize: '0.72rem', whiteSpace: 'nowrap', cursor: 'pointer'
+                  }}
+                >
+                  {topic}
+                </div>
+              ))}
+            </div>
+
+            {/* 输入框栏 */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSendInGameMessage(); }}
+                placeholder={`与【${selectedChar ? selectedChar.name : '密探'}】交流对局心得...`}
+                style={{
+                  flex: 1, padding: '10px 14px', borderRadius: 18, border: '1.5px solid #D8C7B2',
+                  fontSize: '0.85rem', outline: 'none', background: '#FFF', color: '#3E2723'
+                }}
+              />
+              <button
+                onClick={() => handleSendInGameMessage()}
+                disabled={!chatInput.trim() || isAiReplying}
+                style={{
+                  padding: '10px 18px', borderRadius: 18, border: 'none',
+                  background: chatInput.trim() && !isAiReplying ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : '#D1C7BD',
+                  color: '#fff', fontWeight: 'bold', fontSize: '0.85rem', cursor: chatInput.trim() && !isAiReplying ? 'pointer' : 'default'
+                }}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 达成 2048 胜利弹窗 (带金库收益同步显示) */}
+      {showWinModal && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(60, 45, 35, 0.45)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 320,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          animation: 'fadeIn 0.25s ease-out'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #FFFDF9 0%, #FDF7EE 100%)',
+            borderRadius: '24px',
+            padding: '28px 24px',
+            width: '100%',
+            maxWidth: '320px',
+            textAlign: 'center',
+            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
+            border: '2px solid rgba(255, 255, 255, 0.9)'
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>✨🎉</div>
+            <h3 style={{ margin: 0, fontSize: '1.4rem', color: '#8A5825', fontWeight: 'bold' }}>登峰造极 · 达成 2048！</h3>
+            <p style={{ margin: '10px 0 14px', fontSize: '0.92rem', color: '#7E6F62', lineHeight: 1.5 }}>
+              恭喜您成功合成了 2048！棋艺精湛，名动京华。
+            </p>
+
+            {/* 金库收益徽标 */}
+            <div style={{
+              background: 'rgba(214, 114, 75, 0.08)',
+              padding: '10px 12px',
+              borderRadius: '14px',
+              border: '1px solid rgba(214,114,75,0.2)',
+              marginBottom: '16px',
+              textAlign: 'left',
+              fontSize: '0.82rem',
+              color: '#5A4638'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>💰 最终得分：</span>
+                <strong style={{ color: '#8A5825' }}>{score} 分</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>🪙 金库折算犒赏：</span>
+                <strong style={{ color: '#D6724B', fontSize: '0.95rem' }}>+{settledRewardCoins} 铢</strong>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '3px', marginTop: '3px' }}>
+                ✨ 赏金已同步存入【隐私与安全-我的金库】
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                onClick={() => {
+                  setShowWinModal(false);
+                  setContinueAfterWin(true);
+                  saveGameState(grid, score, bestScore, undoLeft, moveHistory, true, true, false);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #E6B082 0%, #D68D54 100%)',
+                  color: '#FFFFFF',
+                  fontSize: '0.95rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(214, 141, 84, 0.3)'
+                }}
+              >
+                继续挑战
+              </button>
+              <button
+                onClick={startNewGame}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '16px',
+                  border: '1.5px solid #D8CFC4',
+                  background: '#FFFFFF',
+                  color: '#6E6256',
+                  fontSize: '0.95rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                重开一局
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 游戏结束弹窗 (带金库收益同步显示) */}
+      {showGameOverModal && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(60, 45, 35, 0.45)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 320,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          animation: 'fadeIn 0.25s ease-out'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)',
+            borderRadius: '24px',
+            padding: '28px 24px',
+            width: '100%',
+            maxWidth: '320px',
+            textAlign: 'center',
+            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
+            border: '2px solid rgba(255, 255, 255, 0.9)'
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>🍃🍂</div>
+            <h3 style={{ margin: 0, fontSize: '1.4rem', color: '#5C5046', fontWeight: 'bold' }}>棋逢对手 · 游戏结束</h3>
+            <p style={{ margin: '10px 0 6px', fontSize: '0.92rem', color: '#7E6F62' }}>
+              本局最终得分：<strong style={{ color: '#965A26', fontSize: '1.15rem' }}>{score}</strong>
+            </p>
+
+            {/* 金库收益徽标 */}
+            <div style={{
+              background: 'rgba(214, 114, 75, 0.08)',
+              padding: '10px 12px',
+              borderRadius: '14px',
+              border: '1px solid rgba(214,114,75,0.2)',
+              margin: '12px 0 14px',
+              textAlign: 'left',
+              fontSize: '0.82rem',
+              color: '#5A4638'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>🪙 金库折算入账：</span>
+                <strong style={{ color: '#D6724B', fontSize: '0.95rem' }}>+{settledRewardCoins} 铢</strong>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '3px', marginTop: '3px' }}>
+                ✨ 赏金已同步存入【隐私与安全-我的金库】
+              </div>
+            </div>
+
+            {undoLeft > 0 && moveHistory.length > 0 && (
+              <p style={{ margin: '0 0 14px', fontSize: '0.85rem', color: '#A06836' }}>
+                💡 您还有 <strong>{undoLeft}</strong> 次撤回机会，可以悔棋继续！
+              </p>
+            )}
+            <div style={{ display: 'flex', gap: '10px', marginTop: '8px' }}>
+              {undoLeft > 0 && moveHistory.length > 0 && (
+                <button
+                  onClick={handleUndo}
+                  style={{
+                    flex: 1,
+                    padding: '12px',
+                    borderRadius: '16px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #E6B082 0%, #D68D54 100%)',
+                    color: '#FFFFFF',
+                    fontSize: '0.95rem',
+                    fontWeight: 'bold',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(214, 141, 84, 0.3)'
+                  }}
+                >
+                  ↩ 悔棋继续
+                </button>
+              )}
+              <button
+                onClick={startNewGame}
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  borderRadius: '16px',
+                  border: undoLeft > 0 && moveHistory.length > 0 ? '1.5px solid #D8CFC4' : 'none',
+                  background: undoLeft > 0 && moveHistory.length > 0 ? '#FFFFFF' : 'linear-gradient(135deg, #A8C8BA 0%, #7FA996 100%)',
+                  color: undoLeft > 0 && moveHistory.length > 0 ? '#6E6256' : '#FFFFFF',
+                  fontSize: '0.95rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  boxShadow: undoLeft > 0 && moveHistory.length > 0 ? 'none' : '0 4px 12px rgba(127, 169, 150, 0.35)'
+                }}
+              >
+                再来一局
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
+
+
+// ==================== T13 记忆训练 局内小窗数据库 (IndexedDB) ====================
+const GameMemoryChatDB = {
+  dbName: "MilvusMemoryChatDB",
+  version: 1,
+  db: null,
+  getDB: function () {
+    return new Promise((resolve, reject) => {
+      if (this.db) return resolve(this.db);
+      const req = indexedDB.open(this.dbName, this.version);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("char_chats")) {
+          db.createObjectStore("char_chats", { keyPath: "charId" });
+        }
+      };
+      req.onsuccess = (e) => {
+        this.db = e.target.result;
+        resolve(this.db);
+      };
+      req.onerror = (e) => reject(e);
+    });
+  },
+  getMessages: async function (charId) {
+    if (!charId) return [];
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readonly");
+        const store = tx.objectStore("char_chats");
+        const req = store.get(String(charId));
+        req.onsuccess = () => resolve(req.result ? req.result.messages || [] : []);
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      console.warn("Failed to read Memory in-game chat:", e);
+      return [];
+    }
+  },
+  saveMessage: async function (charId, message) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      const messages = await this.getMessages(charId);
+      messages.push(message);
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.put({ charId: String(charId), lastUpdated: Date.now(), messages });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      console.warn("Failed to save Memory in-game chat message:", e);
+    }
+  },
+  clearMessages: async function (charId) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.delete(String(charId));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      console.warn("Failed to clear Memory in-game chat:", e);
+    }
+  }
+};
+
+// ==================== T13 记忆训练 (纯净莫兰迪果冻·无限闯关·看TA操作·局内小窗·金库同步) ====================
+const MemoryGamePage = ({ onBack }) => {
+  const { useState, useEffect, useRef, useCallback } = React;
+
+  // 果冻莫兰迪配色库 (透明轻盈、温润无黑)
+  const JELLY_CARD_THEMES = [
+    { bg: 'linear-gradient(135deg, rgba(238, 246, 240, 0.95) 0%, rgba(210, 238, 218, 0.88) 100%)', border: 'rgba(255, 255, 255, 0.9)', shadow: '0 4px 14px rgba(75, 130, 95, 0.15), inset 0 2px 5px rgba(255, 255, 255, 0.9)' },
+    { bg: 'linear-gradient(135deg, rgba(235, 244, 252, 0.95) 0%, rgba(205, 230, 250, 0.88) 100%)', border: 'rgba(255, 255, 255, 0.9)', shadow: '0 4px 14px rgba(65, 115, 160, 0.15), inset 0 2px 5px rgba(255, 255, 255, 0.9)' },
+    { bg: 'linear-gradient(135deg, rgba(255, 246, 235, 0.95) 0%, rgba(254, 228, 202, 0.88) 100%)', border: 'rgba(255, 255, 255, 0.9)', shadow: '0 4px 14px rgba(185, 115, 50, 0.15), inset 0 2px 5px rgba(255, 255, 255, 0.9)' },
+    { bg: 'linear-gradient(135deg, rgba(254, 236, 242, 0.95) 0%, rgba(252, 212, 228, 0.88) 100%)', border: 'rgba(255, 255, 255, 0.9)', shadow: '0 4px 14px rgba(195, 65, 120, 0.15), inset 0 2px 5px rgba(255, 255, 255, 0.9)' },
+    { bg: 'linear-gradient(135deg, rgba(245, 238, 255, 0.95) 0%, rgba(230, 216, 252, 0.88) 100%)', border: 'rgba(255, 255, 255, 0.9)', shadow: '0 4px 14px rgba(130, 80, 190, 0.15), inset 0 2px 5px rgba(255, 255, 255, 0.9)' },
+    { bg: 'linear-gradient(135deg, rgba(230, 248, 246, 0.95) 0%, rgba(195, 240, 236, 0.88) 100%)', border: 'rgba(255, 255, 255, 0.9)', shadow: '0 4px 14px rgba(35, 140, 130, 0.15), inset 0 2px 5px rgba(255, 255, 255, 0.9)' },
+    { bg: 'linear-gradient(135deg, rgba(255, 250, 225, 0.95) 0%, rgba(255, 240, 180, 0.88) 100%)', border: 'rgba(255, 255, 255, 0.9)', shadow: '0 4px 14px rgba(180, 135, 15, 0.15), inset 0 2px 5px rgba(255, 255, 255, 0.9)' },
+    { bg: 'linear-gradient(135deg, rgba(255, 238, 232, 0.95) 0%, rgba(254, 218, 206, 0.88) 100%)', border: 'rgba(255, 255, 255, 0.9)', shadow: '0 4px 14px rgba(200, 85, 60, 0.15), inset 0 2px 5px rgba(255, 255, 255, 0.9)' }
+  ];
+
+  // 多元化风物主题 Emoji 库
+  const THEME_POOLS = [
+    { name: '花卉灵木', list: ['🌸', '🍃', '🌺', '🍀', '🌻', '🌷', '🌿', '🌾', '🌼', '🌹', '🌴', '🍁'] },
+    { name: '灵动萌兽', list: ['🐱', '🐶', '🦊', '🐼', '🐰', '🐨', '🐯', '🦁', '🐮', '🐷', '🐸', '🐵'] },
+    { name: '珍馐清果', list: ['🍓', '🍇', '🍎', '🍉', '🍒', '🍧', '🍑', '🥝', '🥑', '🍨', '🍭', '🍰'] },
+    { name: '星汉天象', list: ['🌟', '🌙', '🌞', '🌈', '⚡', '❄️', '🪐', '🌠', '☄️', '🌌', '☁️', '🔥'] },
+    { name: '锦绣奇珍', list: ['💎', '👑', '🪭', '🎈', '🎨', '🧩', '🕊️', '🐬', '🦋', '🏮', '🎐', '🔮'] },
+    { name: '雅韵器物', list: ['📜', '🗡️', '🎋', '🪷', '🪁', '🏹', '🍶', '🍵', '🪕', '🧸', '🔔', '🪞'] }
+  ];
+
+  // 基础关卡模板
+  const BASE_STAGES = [
+    { stage: 1, name: '初入江湖', rows: 3, cols: 2, pairs: 3, baseReward: 2 },  // 6张
+    { stage: 2, name: '渐入佳境', rows: 4, cols: 3, pairs: 6, baseReward: 5 },  // 12张
+    { stage: 3, name: '心领神会', rows: 4, cols: 4, pairs: 8, baseReward: 8 },  // 16张
+    { stage: 4, name: '出神入化', rows: 5, cols: 4, pairs: 10, baseReward: 12 }, // 20张
+    { stage: 5, name: '过目不忘', rows: 6, cols: 4, pairs: 12, baseReward: 18 }  // 24张
+  ];
+
+  // Web Audio API 音效合成器
+  const playSound = (type = 'flip') => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!window._memAudioCtx) {
+        window._memAudioCtx = new AudioCtx();
+      }
+      const ctx = window._memAudioCtx;
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+
+      if (type === 'flip') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(280, now);
+        osc.frequency.exponentialRampToValueAtTime(140, now + 0.05);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800, now);
+
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.05);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.05);
+      } else if (type === 'match') {
+        const freqs = [523.25, 659.25, 783.99];
+        freqs.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.06);
+          gain.gain.setValueAtTime(0.16, now + idx * 0.06);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.06 + 0.14);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.06);
+          osc.stop(now + idx * 0.06 + 0.14);
+        });
+      } else if (type === 'stageWin') {
+        const freqs = [392.00, 523.25, 659.25, 783.99, 1046.50];
+        freqs.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.08);
+          gain.gain.setValueAtTime(0.18, now + idx * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.08 + 0.22);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.08);
+          osc.stop(now + idx * 0.08 + 0.22);
+        });
+      } else if (type === 'timeOut') {
+        const freqs = [300, 220, 160];
+        freqs.forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.12);
+          gain.gain.setValueAtTime(0.18, now + idx * 0.12);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.12 + 0.15);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.12);
+          osc.stop(now + idx * 0.12 + 0.15);
+        });
+      }
+    } catch (e) {}
+  };
+
+  // 基础游戏状态
+  const [currentStage, setCurrentStage] = useState(1);
+  const [cards, setCards] = useState([]);
+  const [flippedIndices, setFlippedIndices] = useState([]);
+  const [matchedIds, setMatchedIds] = useState(new Set());
+  const [moves, setMoves] = useState(0);
+  const [isLocked, setIsLocked] = useState(false);
+  const [timerSeconds, setTimerSeconds] = useState(0);
+  const [isTimerRunning, setIsTimerRunning] = useState(false);
+  const [showStageWinModal, setShowStageWinModal] = useState(false);
+  const [showTimeOutModal, setShowTimeOutModal] = useState(false);
+  const [toastMsg, setToastMsg] = useState(null);
+  const [settledRewardCoins, setSettledRewardCoins] = useState(0);
+
+  // 模式与角色选择: 'manual' (自己玩) | 'auto' (看TA操作)
+  const [playMode, setPlayMode] = useState('manual');
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedChar, setSelectedChar] = useState(null);
+  const [showCharModal, setShowCharModal] = useState(false);
+
+  // 局内小窗系统
+  const [showInGameChat, setShowInGameChat] = useState(false);
+  const [inGameChatMsgs, setInGameChatMsgs] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiReplying, setIsAiReplying] = useState(false);
+  const [lastActionContext, setLastActionContext] = useState(null);
+  const chatScrollRef = useRef(null);
+
+  // AI 工作记忆脑容量 (短期工作记忆字典: { [cardIndex]: emojiValue })
+  const aiMemoryRef = useRef({});
+  const autoPilotTimerRef = useRef(null);
+
+  const showToast = (msg) => {
+    setToastMsg(msg);
+    setTimeout(() => setToastMsg(null), 1800);
+  };
+
+  // 加载可用密探角色
+  useEffect(() => {
+    const loadChars = async () => {
+      try {
+        let chars = [];
+        if (window.chatCharacterStore) {
+          chars = await window.chatCharacterStore.getAll();
+        } else {
+          chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const validChars = chars.filter(c => !String(c.id).startsWith("group") && c.type !== "decor");
+        setAvailableChars(validChars);
+
+        const savedAutoCharId = localStorage.getItem("milvus_memory_auto_char_id");
+        if (savedAutoCharId) {
+          const found = validChars.find(c => String(c.id) === String(savedAutoCharId));
+          if (found) setSelectedChar(found);
+        } else if (validChars.length > 0) {
+          setSelectedChar(validChars[0]);
+        }
+      } catch (err) {
+        console.error("加载记忆训练代打角色失败:", err);
+      }
+    };
+    loadChars();
+  }, []);
+
+  // 载入选定角色的局内小窗聊天记录
+  useEffect(() => {
+    if (selectedChar && selectedChar.id) {
+      GameMemoryChatDB.getMessages(selectedChar.id).then(msgs => {
+        setInGameChatMsgs(msgs);
+      });
+    }
+  }, [selectedChar]);
+
+  // 自动滚动小窗底部
+  useEffect(() => {
+    if (showInGameChat && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [inGameChatMsgs, showInGameChat, isAiReplying]);
+
+  // 获取当前关卡元数据
+  const getStageMeta = (stageNum) => {
+    if (stageNum <= 5) {
+      return BASE_STAGES[stageNum - 1];
+    }
+    const themeIdx = (stageNum - 5) % THEME_POOLS.length;
+    const themeName = THEME_POOLS[themeIdx].name;
+    return {
+      stage: stageNum,
+      name: `登峰 · ${themeName}`,
+      rows: 6,
+      cols: 4,
+      pairs: 12,
+      baseReward: 25
+    };
+  };
+
+  const curConfig = getStageMeta(currentStage);
+  const isCountdown = currentStage > 5;
+
+  const getInitialCountdownSeconds = (stageNum) => {
+    return Math.max(25, 50 - (stageNum - 6) * 2);
+  };
+
+  // 金库结算同步函数 (阶梯式赏金 + 表现加成)
+  const settleToTreasury = (stageNum, finalMoves, isVictory = true) => {
+    const meta = getStageMeta(stageNum);
+    let rewardCoins = meta.baseReward || 2;
+
+    // 优异表现加成
+    if (finalMoves <= meta.pairs * 1.5) {
+      rewardCoins += 3;
+    }
+
+    setSettledRewardCoins(rewardCoins);
+
+    try {
+      const curCoins = parseInt(localStorage.getItem("farm_coins") || "500", 10);
+      localStorage.setItem("farm_coins", String(curCoins + rewardCoins));
+    } catch (e) {}
+
+    if (window.addTransactionRecord) {
+      window.addTransactionRecord(
+        "income",
+        rewardCoins,
+        `记忆训练 第${stageNum}关【${meta.name}】大捷 (${finalMoves}步)`
+      );
+    }
+    return rewardCoins;
+  };
+
+  // 初始化关卡卡牌
+  const initStage = useCallback((stageNum) => {
+    const config = getStageMeta(stageNum);
+    const themeIdx = (stageNum - 1) % THEME_POOLS.length;
+    const selectedTheme = THEME_POOLS[themeIdx];
+    const neededEmojis = selectedTheme.list.slice(0, config.pairs);
+
+    let cardList = [];
+    neededEmojis.forEach((emoji, index) => {
+      const theme = JELLY_CARD_THEMES[index % JELLY_CARD_THEMES.length];
+      cardList.push({ id: `c_${index}_a`, val: emoji, theme, matchKey: emoji });
+      cardList.push({ id: `c_${index}_b`, val: emoji, theme, matchKey: emoji });
+    });
+
+    for (let i = cardList.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [cardList[i], cardList[j]] = [cardList[j], cardList[i]];
+    }
+
+    setCards(cardList);
+    setFlippedIndices([]);
+    setMatchedIds(new Set());
+    setMoves(0);
+    setIsLocked(false);
+    setShowStageWinModal(false);
+    setShowTimeOutModal(false);
+    setSettledRewardCoins(0);
+    aiMemoryRef.current = {}; // 清空 AI 短期记忆
+
+    if (stageNum > 5) {
+      setTimerSeconds(getInitialCountdownSeconds(stageNum));
+    } else {
+      setTimerSeconds(0);
+    }
+    setIsTimerRunning(true);
+  }, []);
+
+  useEffect(() => {
+    initStage(currentStage);
+  }, [currentStage, initStage]);
+
+  // 计时器循环
+  useEffect(() => {
+    let timer = null;
+    if (isTimerRunning && !showStageWinModal && !showTimeOutModal && !showCharModal && !showInGameChat) {
+      timer = setInterval(() => {
+        setTimerSeconds(prev => {
+          if (isCountdown) {
+            if (prev <= 1) {
+              clearInterval(timer);
+              setIsTimerRunning(false);
+              playSound('timeOut');
+              setShowTimeOutModal(true);
+              return 0;
+            }
+            return prev - 1;
+          } else {
+            return prev + 1;
+          }
+        });
+      }, 1000);
+    }
+    return () => {
+      if (timer) clearInterval(timer);
+    };
+  }, [isTimerRunning, showStageWinModal, showTimeOutModal, isCountdown, showCharModal, showInGameChat]);
+
+  const formatTime = (totalSec) => {
+    const m = Math.floor(totalSec / 60);
+    const s = totalSec % 60;
+    return `${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+
+  // 处理卡片点击翻转
+  const handleCardClick = useCallback((index) => {
+    if (isLocked || showTimeOutModal || showStageWinModal) return;
+    if (flippedIndices.includes(index)) return;
+    if (matchedIds.has(cards[index]?.id)) return;
+
+    playSound('flip');
+
+    // 记入 AI 脑海
+    if (cards[index]) {
+      aiMemoryRef.current[index] = cards[index].matchKey;
+    }
+
+    const nextFlipped = [...flippedIndices, index];
+    setFlippedIndices(nextFlipped);
+
+    if (nextFlipped.length === 2) {
+      setIsLocked(true);
+      const newMoves = moves + 1;
+      setMoves(newMoves);
+
+      const [firstIdx, secondIdx] = nextFlipped;
+      const cardA = cards[firstIdx];
+      const cardB = cards[secondIdx];
+
+      const isMatch = cardA.matchKey === cardB.matchKey;
+      setLastActionContext({
+        cardA: cardA.val,
+        cardB: cardB.val,
+        isMatch,
+        stage: currentStage,
+        moves: newMoves
+      });
+
+      if (isMatch) {
+        // 匹配成功
+        setTimeout(() => {
+          playSound('match');
+          setMatchedIds(prev => {
+            const nextSet = new Set(prev);
+            nextSet.add(cardA.id);
+            nextSet.add(cardB.id);
+
+            // 从 AI 工作记忆中清除已消除的卡牌
+            delete aiMemoryRef.current[firstIdx];
+            delete aiMemoryRef.current[secondIdx];
+
+            if (nextSet.size === cards.length) {
+              setIsTimerRunning(false);
+              playSound('stageWin');
+              settleToTreasury(currentStage, newMoves, true);
+              setTimeout(() => {
+                setShowStageWinModal(true);
+              }, 300);
+            }
+            return nextSet;
+          });
+          setFlippedIndices([]);
+          setIsLocked(false);
+        }, 320);
+      } else {
+        // 匹配失败，翻回
+        setTimeout(() => {
+          setFlippedIndices([]);
+          setIsLocked(false);
+        }, 750);
+      }
+    }
+  }, [isLocked, showTimeOutModal, showStageWinModal, flippedIndices, matchedIds, cards, moves, currentStage]);
+
+  // 拟真 AI 短期工作记忆自动代打循环 (500ms ~ 750ms/手 + 12% 拟真手滑/走神)
+  useEffect(() => {
+    if (playMode !== 'auto' || isLocked || showTimeOutModal || showStageWinModal || showCharModal || showInGameChat) {
+      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
+      return;
+    }
+
+    const stepDelay = 520 + Math.random() * 200;
+    autoPilotTimerRef.current = setTimeout(() => {
+      if (playMode !== 'auto' || isLocked || showStageWinModal || showTimeOutModal) return;
+
+      const unMatchedIndices = cards
+        .map((c, i) => (!matchedIds.has(c.id) && !flippedIndices.includes(i) ? i : null))
+        .filter(i => i !== null);
+
+      if (unMatchedIndices.length === 0) return;
+
+      // 1. 如果当前已经翻了第 1 张牌
+      if (flippedIndices.length === 1) {
+        const firstIdx = flippedIndices[0];
+        const targetVal = cards[firstIdx].matchKey;
+
+        // 检索 AI 短期记忆中是否已知另一张相同值的牌
+        let foundMatchIdx = null;
+        for (let idx in aiMemoryRef.current) {
+          const numIdx = parseInt(idx, 10);
+          if (numIdx !== firstIdx && aiMemoryRef.current[idx] === targetVal && !matchedIds.has(cards[numIdx].id)) {
+            foundMatchIdx = numIdx;
+            break;
+          }
+        }
+
+        // 拟真手滑失误机制 (约 12% 概率短暂走神)
+        const isMistake = Math.random() < 0.12;
+
+        if (foundMatchIdx !== null && !isMistake) {
+          handleCardClick(foundMatchIdx);
+        } else {
+          // 未知配对或手滑，从剩余未翻牌中随机选一张
+          const remainUnknown = unMatchedIndices.filter(i => i !== firstIdx);
+          const chosen = remainUnknown[Math.floor(Math.random() * remainUnknown.length)];
+          handleCardClick(chosen);
+        }
+      } else if (flippedIndices.length === 0) {
+        // 2. 当前还未翻牌：先看 AI 短期记忆中是否已经记住了一对完整的未消卡牌
+        const valToIndices = {};
+        for (let idx in aiMemoryRef.current) {
+          const numIdx = parseInt(idx, 10);
+          if (!matchedIds.has(cards[numIdx].id)) {
+            const val = aiMemoryRef.current[idx];
+            if (!valToIndices[val]) valToIndices[val] = [];
+            valToIndices[val].push(numIdx);
+          }
+        }
+
+        let completePair = null;
+        for (let val in valToIndices) {
+          if (valToIndices[val].length >= 2) {
+            completePair = valToIndices[val];
+            break;
+          }
+        }
+
+        const isMistake = Math.random() < 0.12;
+
+        if (completePair && !isMistake) {
+          handleCardClick(completePair[0]);
+        } else {
+          // 否则翻一张尚未在记忆中确定配对的牌
+          const chosen = unMatchedIndices[Math.floor(Math.random() * unMatchedIndices.length)];
+          handleCardClick(chosen);
+        }
+      }
+    }, stepDelay);
+
+    return () => {
+      if (autoPilotTimerRef.current) clearTimeout(autoPilotTimerRef.current);
+    };
+  }, [playMode, isLocked, showTimeOutModal, showStageWinModal, showCharModal, showInGameChat, flippedIndices, matchedIds, cards, handleCardClick]);
+
+  // 选择代打角色
+  const handleSelectAutoChar = (char) => {
+    setSelectedChar(char);
+    localStorage.setItem("milvus_memory_auto_char_id", char.id);
+    setShowCharModal(false);
+  };
+
+  // 局内小窗发送对话
+  const handleSendInGameMessage = async (msgText) => {
+    const textToSend = (msgText || chatInput).trim();
+    if (!textToSend || !selectedChar || isAiReplying) return;
+
+    setChatInput('');
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      role: 'user',
+      content: textToSend,
+      timestamp: Date.now()
+    };
+
+    const newMsgs = [...inGameChatMsgs, userMsg];
+    setInGameChatMsgs(newMsgs);
+    await GameMemoryChatDB.saveMessage(selectedChar.id, userMsg);
+    setIsAiReplying(true);
+
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
+      let userContext = "【主控身份】姓名:主控, 性格:沉稳, 背景:隐秘阁主";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId) {
+          const activeUser = savedPersonas.find(p => p.id == activeId);
+          if (activeUser) {
+            userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
+          }
+        }
+      } catch (e) {}
+
+      const profile = selectedChar.profile || {};
+      const charContext = `【密探角色设定】
+姓名: ${selectedChar.name}
+性别: ${profile.gender || "未知"}
+性格: ${profile.personality || "未知"}
+说话风格: ${profile.style || "自然生动"}
+背景故事: ${profile.background || "暂无"}`;
+
+      const isAuto = playMode === 'auto';
+      const gameContext = `【局内记忆训练翻牌战况】
+模式: ${isAuto ? `看Ta操作（由你【${selectedChar.name}】亲自在桌上翻牌配对，主控在场边看你操作）` : `自己玩（由主控亲自在桌上翻牌，你在场边陪伴/支招）`}
+操盘者: ${isAuto ? `是你本人【${selectedChar.name}】！` : '是主控本人！'}
+当前关卡: 第 ${currentStage} 关 · 【${curConfig.name}】
+配对进度: 已匹配 ${matchedIds.size / 2} / ${curConfig.pairs} 对
+当前步数: ${moves} 步
+时间状态: ${isCountdown ? `倒计时剩余 ${timerSeconds} 秒` : `已用时 ${formatTime(timerSeconds)}`}
+最新战况动向: ${lastActionContext ? (
+        isAuto
+          ? `你刚才翻开了【${lastActionContext.cardA}】与【${lastActionContext.cardB}】，${lastActionContext.isMatch ? '成功完成了一对消除！' : '发现图案不一致，重新扣转了回去。'}`
+          : `主控刚才翻开了【${lastActionContext.cardA}】与【${lastActionContext.cardB}】，${lastActionContext.isMatch ? '成功完成了一对消除！' : '未能匹配。'}`
+      ) : '正在凝神观察牌局'}`;
+
+      const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
+${worldContext}
+${userContext}
+${charContext}
+${gameContext}
+
+【交互情境与视角（极其重要）】
+${isAuto ? `
+- 【极其重要】：当前是【看Ta操作】模式！刚才【是你【${selectedChar.name}】本人】亲自在翻牌桌上配对！主控是在场边观看你的记忆与操作！
+- 刚才无论是敏锐地记住了位置并连续消除，还是小有手滑记混了卡牌，都是【你自己的亲身经历】！
+- 请务必以第一人称（如“我”、“本公子”等符合你身份的称呼）描述【你自己刚才在牌桌上的观察与记忆】。绝对不要误以为是主控在玩！
+- 面对主控在小窗里的打趣、支招或夸奖，给出贴合你人设的生动反应。
+` : `
+- 当前是【自己玩】模式，刚才【是主控本人】在牌桌上翻牌配对，你在场边陪伴、观战与支招。
+- 请以场边陪伴者的视角，对主控刚才的记忆判断给予贴合人设的点评、鼓励或吐槽。
+`}
+
+【核心要求】
+1. 必须完全使用【${selectedChar.name}】的独特口吻和性格说话（严禁出戏、严禁AI腔、严禁说自己是人工智能）。
+2. 字数控制在 25-70 字左右，生动传神。直接输出角色说的话，不要带角色名字前缀。`;
+
+      const recentDialogues = newMsgs.slice(-8).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
+
+      const apiMessages = [
+        { role: "system", content: sysPrompt },
+        ...recentDialogues
+      ];
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          apiMessages,
+          null,
+          async (reply) => {
+            const cleanReply = reply.trim();
+            const assistantMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: cleanReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, assistantMsg]);
+            await GameMemoryChatDB.saveMessage(selectedChar.id, assistantMsg);
+            setIsAiReplying(false);
+          },
+          (err) => {
+            console.error("AI回复失败:", err);
+            const fallbackReply = isAuto
+              ? "（凝视牌阵片刻）方才那两张的方位我已记于心间，下一手看我将其一举拿下！"
+              : "（轻摇折扇）楼主目光如炬，方才那抹残影若是没记错，定在左侧偏隅之处。";
+            const fallbackMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: fallbackReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, fallbackMsg]);
+            setIsAiReplying(false);
+          }
+        );
+      } else {
+        setIsAiReplying(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsAiReplying(false);
+    }
+  };
+
+  const handleClearInGameChat = async () => {
+    if (!selectedChar) return;
+    if (confirm("确定要清空与该角色的记忆训练局内对话记录吗？（不影响传讯页面正常聊天）")) {
+      await GameMemoryChatDB.clearMessages(selectedChar.id);
+      setInGameChatMsgs([]);
+    }
+  };
+
+  // 进入下一关
+  const handleNextStage = () => {
+    setCurrentStage(prev => prev + 1);
+  };
+
+  // 重新开始当前关
+  const handleRestartStage = () => {
+    initStage(currentStage);
+  };
+
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      zIndex: 260,
+      background: 'linear-gradient(180deg, #FBF9F5 0%, #F5EFEB 100%)',
+      display: 'flex',
+      flexDirection: 'column',
+      fontFamily: '"GuanKiapTsingKhai", "Plus Jakarta Sans", sans-serif',
+      userSelect: 'none',
+      animation: 'fadeIn 0.25s ease-out'
+    }}>
+      {/* 顶部标题栏 */}
+      <div style={{
+        padding: '16px 20px',
+        paddingTop: 'max(36px, env(safe-area-inset-top))',
+        background: 'rgba(255, 255, 255, 0.88)',
+        backdropFilter: 'blur(12px)',
+        boxShadow: '0 2px 14px rgba(120, 100, 90, 0.05)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between'
+      }}>
+        {/* 左侧返回与关卡名 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          <div onClick={onBack} style={{ cursor: 'pointer', padding: '6px 10px', marginLeft: '-10px', display: 'flex', alignItems: 'center' }}>
+            <span style={{ fontSize: '1.3rem', color: '#6A5F55' }}>←</span>
+          </div>
+          <div>
+            <div style={{ fontSize: '1.25rem', fontWeight: 'bold', color: '#4E453D', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>记忆训练</span>
+              <span style={{ fontSize: '0.72rem', background: isCountdown ? 'linear-gradient(135deg, #FFE8E8 0%, #FED4D4 100%)' : 'linear-gradient(135deg, #FFF0E2 0%, #FEDBC0 100%)', color: isCountdown ? '#D32F2F' : '#B25D2B', padding: '2px 8px', borderRadius: '10px', fontWeight: 'bold', border: `1px solid ${isCountdown ? 'rgba(211, 47, 47, 0.25)' : 'rgba(214, 114, 75, 0.2)'}` }}>
+                第 {currentStage} 关 · {curConfig.name}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 右侧步数与计时器 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* 步数卡片 */}
+          <div style={{
+            background: 'linear-gradient(135deg, #EAE5DE 0%, #DDD6CC 100%)',
+            padding: '4px 9px',
+            borderRadius: '12px',
+            textAlign: 'center',
+            minWidth: '46px'
+          }}>
+            <div style={{ fontSize: '0.6rem', color: '#7E7368', fontWeight: 'bold' }}>步数</div>
+            <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#443C35' }}>{moves}</div>
+          </div>
+
+          {/* 计时卡片 */}
+          <div style={{
+            background: isCountdown
+              ? (timerSeconds <= 10 ? 'linear-gradient(135deg, #FFEBEE 0%, #FFCDD2 100%)' : 'linear-gradient(135deg, #FFF3E0 0%, #FFE0B2 100%)')
+              : 'linear-gradient(135deg, #E6EAE4 0%, #D5DFD2 100%)',
+            padding: '4px 9px',
+            borderRadius: '12px',
+            textAlign: 'center',
+            minWidth: '56px',
+            border: isCountdown && timerSeconds <= 10 ? '1px solid #E57373' : 'none'
+          }}>
+            <div style={{ fontSize: '0.6rem', color: isCountdown ? (timerSeconds <= 10 ? '#C62828' : '#E65100') : '#556E52', fontWeight: 'bold' }}>
+              {isCountdown ? '⏳ 倒计时' : '用时'}
+            </div>
+            <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: isCountdown ? (timerSeconds <= 10 ? '#B71C1C' : '#BF360C') : '#2F482C' }}>
+              {formatTime(timerSeconds)}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 题目下方留白控制栏：纯图标「看TA操作」+ 纯图标「局内小窗」+「重置本关」 */}
+      <div style={{
+        width: '100%',
+        maxWidth: '360px',
+        margin: '12px auto 6px auto',
+        padding: '0 16px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center'
+      }}>
+        {/* 左侧纯图标按钮组 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          {/* 1. 看TA操作 / 选人胶囊图标 */}
+          <div
+            onClick={() => {
+              if (playMode === 'manual') {
+                setPlayMode('auto');
+                showToast(`🤖 已开启【${selectedChar ? selectedChar.name : '密探'}】代打`);
+              } else {
+                setPlayMode('manual');
+                showToast('👤 已切换为自己玩');
+              }
+            }}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              setShowCharModal(true);
+            }}
+            title={playMode === 'auto' ? `代打中: ${selectedChar?.name || '密探'} (点击切回自己玩，长按换人)` : "点击开启看TA代打"}
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: playMode === 'auto'
+                ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)'
+                : 'linear-gradient(135deg, #FFFFFF 0%, #F5EDE4 100%)',
+              border: playMode === 'auto' ? '2px solid #FFD1A4' : '1.5px solid #E2D5C7',
+              boxShadow: playMode === 'auto' ? '0 3px 10px rgba(214,114,75,0.4)' : '0 2px 6px rgba(0,0,0,0.06)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              position: 'relative',
+              transition: 'all 0.2s',
+              overflow: 'hidden'
+            }}
+          >
+            <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden' }}>
+              <UniversalAvatarLoader
+                avatar={selectedChar?.avatar}
+                name={selectedChar?.name || (playMode === 'auto' ? '🤖' : '👤')}
+                fallbackColor={selectedChar?.avatarColor || (playMode === 'auto' ? '#D6724B' : '#E2D5C7')}
+              />
+            </div>
+            {playMode === 'auto' && (
+              <span style={{
+                position: 'absolute',
+                top: 1,
+                right: 1,
+                width: '8px',
+                height: '8px',
+                borderRadius: '50%',
+                background: '#00E676',
+                boxShadow: '0 0 6px #00E676',
+                zIndex: 2
+              }} />
+            )}
+          </div>
+
+          {/* 换人小图标 */}
+          {availableChars.length > 0 && (
+            <div
+              onClick={(e) => {
+                e.stopPropagation();
+                setShowCharModal(true);
+              }}
+              title="更换代打密探"
+              style={{
+                width: '28px',
+                height: '28px',
+                borderRadius: '50%',
+                background: 'rgba(255, 255, 255, 0.85)',
+                border: '1.5px solid #E2D5C7',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontSize: '0.75rem',
+                color: '#7E6F62',
+                cursor: 'pointer',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.05)'
+              }}
+            >
+              👥
+            </div>
+          )}
+
+          {/* 2. 局内小窗纯图标按钮 */}
+          <div
+            onClick={() => setShowInGameChat(true)}
+            title="打开局内复盘小窗"
+            style={{
+              width: '38px',
+              height: '38px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #FFFFFF 0%, #F5EDE4 100%)',
+              border: '1.5px solid #C49C58',
+              boxShadow: '0 2px 8px rgba(196,156,88,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              position: 'relative'
+            }}
+          >
+            <span style={{ fontSize: '1.15rem' }}>💬</span>
+            {inGameChatMsgs.length > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                background: '#D6724B',
+                color: '#fff',
+                fontSize: '0.62rem',
+                fontWeight: 'bold',
+                padding: '1px 4px',
+                borderRadius: '10px',
+                minWidth: '14px',
+                textAlign: 'center'
+              }}>
+                {inGameChatMsgs.length}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* 右侧纯图标重置按钮 */}
+        <div
+          onClick={handleRestartStage}
+          title="重置本关"
+          style={{
+            width: '36px',
+            height: '36px',
+            borderRadius: '50%',
+            background: 'linear-gradient(135deg, #FFFDFB 0%, #F5EAE0 100%)',
+            border: '1.5px solid #E2D5C7',
+            boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            fontSize: '1rem',
+            color: '#7E6F62',
+            transition: 'transform 0.1s'
+          }}
+          onPointerDown={e => e.currentTarget.style.transform = 'scale(0.9)'}
+          onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+        >
+          🔄
+        </div>
+      </div>
+
+      {/* 3D 莫兰迪果冻卡牌阵列 */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '8px 16px 20px 16px',
+        overflow: 'hidden'
+      }}>
+        <div style={{
+          width: '100%',
+          maxWidth: '360px',
+          maxHeight: '75vh',
+          aspectRatio: `${curConfig.cols} / ${curConfig.rows}`,
+          background: 'rgba(235, 227, 219, 0.65)',
+          backdropFilter: 'blur(16px)',
+          borderRadius: '24px',
+          padding: '10px',
+          display: 'grid',
+          gridTemplateColumns: `repeat(${curConfig.cols}, 1fr)`,
+          gridTemplateRows: `repeat(${curConfig.rows}, 1fr)`,
+          gap: curConfig.cols >= 4 ? '7px' : '9px',
+          boxShadow: '0 12px 36px rgba(130, 110, 95, 0.08), inset 0 2px 6px rgba(255, 255, 255, 0.7), inset 0 -2px 6px rgba(0, 0, 0, 0.03)',
+          border: '2px solid rgba(255, 255, 255, 0.85)',
+          perspective: '1000px'
+        }}>
+          {cards.map((card, idx) => {
+            const isFlipped = flippedIndices.includes(idx);
+            const isMatched = matchedIds.has(card.id);
+            const showFront = isFlipped || isMatched;
+
+            return (
+              <div
+                key={card.id}
+                onClick={() => handleCardClick(idx)}
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  height: '100%',
+                  cursor: isMatched ? 'default' : 'pointer',
+                  transformStyle: 'preserve-3d',
+                  transition: 'transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1)',
+                  transform: showFront ? 'rotateY(180deg)' : 'rotateY(0deg)'
+                }}
+              >
+                {/* 卡片背面 (果冻晶莹卡背 Emoji) */}
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  borderRadius: '16px',
+                  background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.9) 0%, rgba(240, 230, 220, 0.8) 100%)',
+                  backdropFilter: 'blur(8px)',
+                  border: '1.5px solid rgba(255, 255, 255, 0.95)',
+                  boxShadow: '0 4px 12px rgba(160, 135, 120, 0.12), inset 0 2px 5px rgba(255, 255, 255, 0.95)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden'
+                }}>
+                  <span style={{ fontSize: curConfig.cols >= 4 ? '1.45rem' : '1.75rem', opacity: 0.85, filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.06))' }}>
+                    🎴
+                  </span>
+                </div>
+
+                {/* 卡片正面 (莫兰迪五彩果冻卡面) */}
+                <div style={{
+                  position: 'absolute',
+                  inset: 0,
+                  borderRadius: '16px',
+                  background: card.theme.bg,
+                  backdropFilter: 'blur(10px)',
+                  border: `1.5px solid ${card.theme.border}`,
+                  boxShadow: isMatched
+                    ? '0 0 14px rgba(120, 200, 150, 0.4), inset 0 2px 5px rgba(255, 255, 255, 0.95)'
+                    : card.theme.shadow,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  transform: 'rotateY(180deg)',
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden',
+                  animation: isMatched ? 'jellyPop 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)' : 'none'
+                }}>
+                  <span style={{ fontSize: curConfig.cols >= 4 ? '1.65rem' : '2.0rem', filter: 'drop-shadow(0 2px 4px rgba(0,0,0,0.1))' }}>
+                    {card.val}
+                  </span>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* 浮动提示条 */}
+      {toastMsg && (
+        <div style={{
+          position: 'absolute',
+          bottom: '24px',
+          left: '50%',
+          transform: 'translateX(-50%)',
+          background: 'rgba(50, 40, 35, 0.82)',
+          backdropFilter: 'blur(8px)',
+          color: '#FFFFFF',
+          padding: '8px 18px',
+          borderRadius: '20px',
+          fontSize: '0.9rem',
+          zIndex: 300,
+          pointerEvents: 'none',
+          animation: 'fadeIn 0.2s ease-out'
+        }}>
+          {toastMsg}
+        </div>
+      )}
+
+      {/* 🎭 角色选择抽屉 (用于「看Ta操作」) */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+            zIndex: 500, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5E8D2 100%)',
+              borderRadius: '24px 24px 0 0', padding: '20px 16px max(24px, env(safe-area-inset-bottom)) 16px',
+              borderTop: '3px solid #C49C58', maxHeight: '75%', overflowY: 'auto'
+            }}
+          >
+            <div style={{ width: 36, height: 4, background: '#D7CCC8', borderRadius: 2, margin: '0 auto 10px auto' }} />
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#4E342E' }}>
+                  🎯 选择记忆训练代打密探
+                </div>
+                <div style={{ fontSize: '0.74rem', color: '#8D6E63', marginTop: 2 }}>
+                  选择后由该角色上阵自动翻牌配对，并可在局内小窗复盘交流
+                </div>
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {availableChars.length === 0 ? (
+              <div style={{ padding: '30px 0', textAlign: 'center', color: '#8D6E63', fontSize: '0.85rem' }}>
+                暂未在【传讯】中配置密探角色，请先前往传讯添加。
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {availableChars.map(char => {
+                  const isCur = selectedChar && String(selectedChar.id) === String(char.id);
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => handleSelectAutoChar(char)}
+                      style={{
+                        background: isCur ? 'linear-gradient(135deg, #FFF9F2 0%, #F5E8D8 100%)' : '#FFF',
+                        borderRadius: 16, padding: '12px 8px', border: isCur ? '2px solid #D6724B' : '1.5px solid #EAE0D5',
+                        display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: 'pointer',
+                        boxShadow: isCur ? '0 4px 10px rgba(214,114,75,0.25)' : '0 2px 4px rgba(0,0,0,0.04)',
+                        position: 'relative'
+                      }}
+                    >
+                      <div style={{ width: 46, height: 46, borderRadius: '50%', overflow: 'hidden', border: isCur ? '2px solid #D6724B' : '1.5px solid #E6D7C3', marginBottom: 6 }}>
+                        <UniversalAvatarLoader avatar={char.avatar} name={char.name} fallbackColor={char.avatarColor} />
+                      </div>
+                      <div style={{ fontSize: '0.82rem', fontWeight: 'bold', color: isCur ? '#D6724B' : '#4E342E', textAlign: 'center' }}>
+                        {char.name}
+                      </div>
+                      {isCur && (
+                        <div style={{ position: 'absolute', top: 6, right: 6, background: '#D6724B', color: '#fff', fontSize: '0.65rem', borderRadius: 8, padding: '0 4px', fontWeight: 'bold' }}>
+                          当前
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 💬 局内小窗半屏毛玻璃抽屉 */}
+      {showInGameChat && (
+        <div
+          onClick={() => setShowInGameChat(false)}
+          style={{
+            position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+            zIndex: 520, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end'
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FBF7EE 0%, #F5EADB 100%)',
+              borderRadius: '24px 24px 0 0', padding: '16px 14px max(18px, env(safe-area-inset-bottom)) 14px',
+              borderTop: '3px solid #C49C58', height: '82%', maxHeight: 600,
+              display: 'flex', flexDirection: 'column', boxShadow: '0 -10px 30px rgba(0,0,0,0.4)'
+            }}
+          >
+            {/* 小窗头部 */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingBottom: 10, borderBottom: '1px solid #E6D7C3' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div style={{ width: 38, height: 38, borderRadius: '50%', overflow: 'hidden', border: '2px solid #C49C58' }}>
+                  <UniversalAvatarLoader avatar={selectedChar?.avatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E', display: 'flex', alignItems: 'center', gap: 4 }}>
+                    <span>{selectedChar ? selectedChar.name : "密探"}</span>
+                    <span style={{ fontSize: '0.68rem', background: 'rgba(214,114,75,0.15)', color: '#D6724B', padding: '1px 6px', borderRadius: 8 }}>
+                      {playMode === 'auto' ? '代打中 · 局内小窗' : '观战中 · 局内小窗'}
+                    </span>
+                  </div>
+                  <div style={{ fontSize: '0.7rem', color: '#8D6E63' }}>
+                    🎴 第 {currentStage} 关 | 已配对 {matchedIds.size / 2}/{curConfig.pairs} 对
+                  </div>
+                </div>
+              </div>
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  onClick={handleClearInGameChat}
+                  style={{ fontSize: '0.72rem', color: '#A08070', background: 'rgba(0,0,0,0.05)', padding: '3px 8px', borderRadius: 10, cursor: 'pointer' }}
+                  title="清空局内对话"
+                >
+                  清空记录
+                </div>
+                <div
+                  onClick={() => setShowInGameChat(false)}
+                  style={{ width: 28, height: 28, borderRadius: '50%', background: 'rgba(78, 52, 46, 0.1)', color: '#5D4037', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold' }}
+                >
+                  ✕
+                </div>
+              </div>
+            </div>
+
+            {/* 消息滚动流 */}
+            <div
+              ref={chatScrollRef}
+              style={{
+                flex: 1, overflowY: 'auto', padding: '12px 4px', display: 'flex', flexDirection: 'column', gap: 10
+              }}
+            >
+              {inGameChatMsgs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 10px', color: '#8D6E63', fontSize: '0.82rem', lineHeight: '1.6' }}>
+                  {playMode === 'auto'
+                    ? `🎴 刚才【${selectedChar ? selectedChar.name : '密探'}】这一波记忆翻牌如何？在下方点击快捷话题或输入文字，跟Ta交流刚才的翻牌心得吧！`
+                    : `🎴 刚才这几张牌的位置记清楚了吗？在下方点击快捷话题或输入文字，与【${selectedChar ? selectedChar.name : '密探'}】小窗支招互动吧！`}
+                </div>
+              ) : (
+                inGameChatMsgs.map((msg) => {
+                  const isUser = msg.role === 'user';
+                  return (
+                    <div
+                      key={msg.id}
+                      style={{
+                        display: 'flex',
+                        justifyContent: isUser ? 'flex-end' : 'flex-start',
+                        gap: 8
+                      }}
+                    >
+                      {!isUser && (
+                        <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, marginTop: 2 }}>
+                          <UniversalAvatarLoader avatar={selectedChar?.avatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
+                        </div>
+                      )}
+                      <div
+                        style={{
+                          maxWidth: '75%',
+                          padding: '8px 12px',
+                          borderRadius: isUser ? '16px 16px 2px 16px' : '16px 16px 16px 2px',
+                          background: isUser ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : '#FFF',
+                          color: isUser ? '#FFF' : '#3E2723',
+                          fontSize: '0.85rem',
+                          lineHeight: '1.45',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.06)',
+                          border: isUser ? 'none' : '1px solid #EAE0D5',
+                          wordBreak: 'break-word'
+                        }}
+                      >
+                        {msg.content}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              {isAiReplying && (
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <div style={{ width: 30, height: 30, borderRadius: '50%', overflow: 'hidden', flexShrink: 0 }}>
+                    <UniversalAvatarLoader avatar={selectedChar?.avatar} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} />
+                  </div>
+                  <div style={{ background: '#FFF', padding: '8px 14px', borderRadius: '16px 16px 16px 2px', fontSize: '0.82rem', color: '#8D6E63', border: '1px solid #EAE0D5' }}>
+                    ✍️ 正在思考回复...
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* 快捷话题气泡 */}
+            <div style={{ display: 'flex', gap: 6, overflowX: 'auto', paddingBottom: 8, paddingTop: 4 }}>
+              {[
+                playMode === 'auto' ? "刚才翻得真准！" : "看我这把速通本关！",
+                playMode === 'auto' ? "哎呀刚才那张牌是不是记混了？" : "帮我留意一下刚才角落那张~",
+                isCountdown ? "倒计时还有时间，沉住气！" : "现在的节奏非常稳！",
+                playMode === 'auto' ? "换我来亲自操作两把！" : "你觉得这一局能创纪录吗？"
+              ].map((topic, i) => (
+                <div
+                  key={i}
+                  onClick={() => handleSendInGameMessage(topic)}
+                  style={{
+                    background: 'rgba(255,255,255,0.92)', border: '1px solid #C49C58', color: '#8C4A1E',
+                    padding: '4px 10px', borderRadius: 14, fontSize: '0.72rem', whiteSpace: 'nowrap', cursor: 'pointer'
+                  }}
+                >
+                  {topic}
+                </div>
+              ))}
+            </div>
+
+            {/* 输入框栏 */}
+            <div style={{ display: 'flex', gap: 8 }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={e => setChatInput(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleSendInGameMessage(); }}
+                placeholder={`与【${selectedChar ? selectedChar.name : '密探'}】交流对局心得...`}
+                style={{
+                  flex: 1, padding: '10px 14px', borderRadius: 18, border: '1.5px solid #D8C7B2',
+                  fontSize: '0.85rem', outline: 'none', background: '#FFF', color: '#3E2723'
+                }}
+              />
+              <button
+                onClick={() => handleSendInGameMessage()}
+                disabled={!chatInput.trim() || isAiReplying}
+                style={{
+                  padding: '10px 18px', borderRadius: 18, border: 'none',
+                  background: chatInput.trim() && !isAiReplying ? 'linear-gradient(135deg, #D6724B 0%, #B85630 100%)' : '#D1C7BD',
+                  color: '#fff', fontWeight: 'bold', fontSize: '0.85rem', cursor: chatInput.trim() && !isAiReplying ? 'pointer' : 'default'
+                }}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 关卡大捷弹窗 (带金库收益同步显示) */}
+      {showStageWinModal && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(60, 45, 35, 0.45)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 320,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          animation: 'fadeIn 0.25s ease-out'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)',
+            borderRadius: '24px',
+            padding: '28px 24px',
+            width: '100%',
+            maxWidth: '320px',
+            textAlign: 'center',
+            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
+            border: '2px solid rgba(255, 255, 255, 0.9)'
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>
+              🎉🌸
+            </div>
+            <h3 style={{ margin: 0, fontSize: '1.35rem', color: '#8A5825', fontWeight: 'bold' }}>
+              心有灵犀 · 第 {currentStage} 关通过！
+            </h3>
+            <p style={{ margin: '8px 0 12px', fontSize: '0.88rem', color: '#7E6F62' }}>
+              【{curConfig.name}】完美配对成功！
+            </p>
+
+            {/* 金库收益与战绩统计 */}
+            <div style={{
+              background: 'rgba(214, 114, 75, 0.08)',
+              padding: '10px 14px',
+              borderRadius: '14px',
+              border: '1px solid rgba(214,114,75,0.2)',
+              marginBottom: '16px',
+              textAlign: 'left',
+              fontSize: '0.84rem',
+              color: '#5A4638'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>🎯 本关用步：</span>
+                <strong style={{ color: '#8A5825' }}>{moves} 步</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>{isCountdown ? '⏱️ 剩余时间：' : '⏱️ 本关耗时：'}</span>
+                <strong style={{ color: '#5A4638' }}>{formatTime(timerSeconds)}</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '2px' }}>
+                <span>🪙 金库赏金入账：</span>
+                <strong style={{ color: '#D6724B', fontSize: '0.95rem' }}>+{settledRewardCoins} 铢</strong>
+              </div>
+              <div style={{ fontSize: '0.72rem', color: '#8C7A6B', borderTop: '1px dashed #E5D5C5', paddingTop: '3px', marginTop: '3px' }}>
+                ✨ 赏金已存入【隐私与安全-我的金库】
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleRestartStage}
+                style={{
+                  flex: 1,
+                  padding: '11px',
+                  borderRadius: '16px',
+                  border: '1.5px solid #D8CFC4',
+                  background: '#FFFFFF',
+                  color: '#6E6256',
+                  fontSize: '0.9rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                再试一次
+              </button>
+              <button
+                onClick={handleNextStage}
+                style={{
+                  flex: 1,
+                  padding: '11px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #A8C8BA 0%, #7FA996 100%)',
+                  color: '#FFFFFF',
+                  fontSize: '0.9rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(127, 169, 150, 0.35)'
+                }}
+              >
+                下一关 ▶
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 倒计时耗尽超时弹窗 (第6关起有效) */}
+      {showTimeOutModal && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(60, 45, 35, 0.5)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 320,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          animation: 'fadeIn 0.25s ease-out'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)',
+            borderRadius: '24px',
+            padding: '28px 24px',
+            width: '100%',
+            maxWidth: '320px',
+            textAlign: 'center',
+            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.25)',
+            border: '2px solid rgba(255, 255, 255, 0.9)'
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '8px' }}>
+              ⏳🍂
+            </div>
+            <h3 style={{ margin: 0, fontSize: '1.35rem', color: '#B71C1C', fontWeight: 'bold' }}>
+              惜败 · 时限已至
+            </h3>
+            <p style={{ margin: '8px 0 16px', fontSize: '0.88rem', color: '#7E6F62' }}>
+              本关倒计时已耗尽。莫要气馁，稍事调整再战！
+            </p>
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={handleRestartStage}
+                style={{
+                  flex: 1,
+                  padding: '11px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #E6B082 0%, #D68D54 100%)',
+                  color: '#FFFFFF',
+                  fontSize: '0.92rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(214, 141, 84, 0.3)'
+                }}
+              >
+                🔄 重新挑战本关
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+
+
+
+
+
+
+// ==================== T13 东汉尼拔 头像数据库 (IndexedDB) ====================
+const SnakeAvatarDB = {
+  dbName: "MilvusSnakeAvatarDB",
+  version: 1,
+  db: null,
+  getDB: function () {
+    return new Promise((resolve, reject) => {
+      if (this.db) return resolve(this.db);
+      const req = indexedDB.open(this.dbName, this.version);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("avatars")) {
+          db.createObjectStore("avatars", { keyPath: "key" });
+        }
+      };
+      req.onsuccess = (e) => {
+        this.db = e.target.result;
+        resolve(this.db);
+      };
+      req.onerror = (e) => reject(e);
+    });
+  },
+  getAllAvatars: async function () {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("avatars", "readonly");
+        const store = tx.objectStore("avatars");
+        const req = store.getAll();
+        req.onsuccess = () => {
+          const map = {};
+          (req.result || []).forEach((item) => {
+            map[item.key] = item.dataUrl;
+          });
+          resolve(map);
+        };
+        req.onerror = () => resolve({});
+      });
+    } catch (e) {
+      return {};
+    }
+  },
+  setAvatar: async function (key, dataUrl) {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("avatars", "readwrite");
+        const store = tx.objectStore("avatars");
+        store.put({ key, dataUrl, updatedAt: Date.now() });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {
+      return false;
+    }
+  }
+};
+
+// ==================== T13 东汉尼拔 局内小窗数据库 (IndexedDB) ====================
+const GameSnakeChatDB = {
+  dbName: "MilvusSnakeChatDB",
+  version: 1,
+  db: null,
+  getDB: function () {
+    return new Promise((resolve, reject) => {
+      if (this.db) return resolve(this.db);
+      const req = indexedDB.open(this.dbName, this.version);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("char_chats")) {
+          db.createObjectStore("char_chats", { keyPath: "charId" });
+        }
+      };
+      req.onsuccess = (e) => {
+        this.db = e.target.result;
+        resolve(this.db);
+      };
+      req.onerror = (e) => reject(e);
+    });
+  },
+  getMessages: async function (charId) {
+    if (!charId) return [];
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readonly");
+        const store = tx.objectStore("char_chats");
+        const req = store.get(String(charId));
+        req.onsuccess = () => resolve(req.result ? req.result.messages || [] : []);
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      return [];
+    }
+  },
+  saveMessage: async function (charId, message) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      const messages = await this.getMessages(charId);
+      messages.push(message);
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.put({ charId: String(charId), lastUpdated: Date.now(), messages });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {}
+  },
+  clearMessages: async function (charId) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.delete(String(charId));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {}
+  }
+};
+
+// ==================== T13 东汉尼拔 (果冻珠·看TA操作·局内小窗·金库结算) ====================
+const SnakeGamePage = ({ onBack }) => {
+  const { useState, useEffect, useRef, useCallback } = React;
+
+  const GRID_SIZE = 18;
+
+  const ROSTER_NAMES = [
+    "傅融", "吕蒙", "孙尚香", "郭解", "孙权", "张修", "郭嘉", "荀彧", "华佗", "杨修",
+    "庞统", "贾诩", "张角", "葛洪", "蔡琰", "张邈", "夏侯惇", "马超", "程昱", "太史慈",
+    "张闿", "徐庶", "甘宁", "甄宓", "张鲁", "孔融", "黄月英", "张郃", "董奉", "曹植",
+    "诸葛瑾", "诸葛诞", "满宠", "荀攸", "凌统", "安期", "刘繇", "戏学", "马腾", "令狐茂",
+    "朱然", "黄盖", "祢衡", "蒯越", "刘豹", "张绣", "鲁肃", "张辽", "干吉", "张仲景",
+    "周瑜", "王粲", "陆逊", "董白", "张昭", "程普", "士燮", "虞翻", "张燕", "钟繇",
+    "夏侯渊", "颜良", "小乔", "史子眇", "陈登", "公孙珊", "文丑", "许曼", "严白虎", "周忠",
+    "张飞", "阿蝉", "许攸", "飞云", "周群", "吕布", "绣球", "庞羲", "刘璋", "陈群",
+    "法正", "蒯良", "郭女王", "简雍", "曹丕"
+  ];
+
+  const JELLY_PEARL_THEMES = [
+    { name: '粉晶', main: '#E8A5B8', glow: 'rgba(232, 165, 184, 0.45)', light: '#FFF0F5' },
+    { name: '晴空', main: '#8EBDDC', glow: 'rgba(142, 189, 220, 0.45)', light: '#F0F8FF' },
+    { name: '青提', main: '#97CBA9', glow: 'rgba(151, 203, 169, 0.45)', light: '#F2FAF4' },
+    { name: '蜜桃', main: '#F4B084', glow: 'rgba(244, 176, 132, 0.45)', light: '#FFF6F0' },
+    { name: '丁香', main: '#C3A6CB', glow: 'rgba(195, 166, 203, 0.45)', light: '#FAF4FC' },
+    { name: '凝脂', main: '#D5C4A1', glow: 'rgba(213, 196, 161, 0.45)', light: '#FDFBF7' },
+    { name: '湖碧', main: '#7BBFB0', glow: 'rgba(123, 191, 176, 0.45)', light: '#EEFAF7' }
+  ];
+
+  const playSound = (type = 'eat') => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!window._snakeAudioCtx) {
+        window._snakeAudioCtx = new AudioCtx();
+      }
+      const ctx = window._snakeAudioCtx;
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+
+      if (type === 'eat') {
+        const freqs = [659.25, 880.00];
+        freqs.forEach((f, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(f, now + idx * 0.04);
+          gain.gain.setValueAtTime(0.12, now + idx * 0.04);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.04 + 0.1);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.04);
+          osc.stop(now + idx * 0.04 + 0.1);
+        });
+      } else if (type === 'die') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(260, now);
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.22);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.22);
+      } else if (type === 'turn') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(440, now);
+        gain.gain.setValueAtTime(0.03, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.02);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.02);
+      }
+    } catch (e) {}
+  };
+
+  // 1. 密探代打模式与密探列表
+  const [playMode, setPlayMode] = useState('manual'); // 'manual' | 'auto'
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedChar, setSelectedChar] = useState(null);
+  const [showCharModal, setShowCharModal] = useState(false);
+
+  // 加载可用密探角色 (与记忆训练/传讯数据库完全对齐)
+  useEffect(() => {
+    const loadChars = async () => {
+      try {
+        let chars = [];
+        if (window.chatCharacterStore) {
+          chars = await window.chatCharacterStore.getAll();
+        } else {
+          chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const validChars = (chars || []).filter(c => !String(c.id).startsWith("group") && c.type !== "decor");
+        setAvailableChars(validChars);
+
+        const savedAutoCharId = localStorage.getItem("milvus_snake_auto_char_id");
+        if (savedAutoCharId) {
+          const found = validChars.find(c => String(c.id) === String(savedAutoCharId));
+          if (found) setSelectedChar(found);
+        } else if (validChars.length > 0) {
+          setSelectedChar(validChars[0]);
+        }
+      } catch (err) {
+        console.error("加载东汉尼拔代打角色失败:", err);
+      }
+    };
+    loadChars();
+  }, []);
+
+  // 2. 局内小窗系统
+  const [showInGameChat, setShowInGameChat] = useState(false);
+  const [inGameChatMsgs, setInGameChatMsgs] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiReplying, setIsAiReplying] = useState(false);
+  const [lastFailEvent, setLastFailEvent] = useState(null);
+  const chatScrollRef = useRef(null);
+
+  // 载入当前密探对话
+  useEffect(() => {
+    if (selectedChar?.id) {
+      GameSnakeChatDB.getMessages(selectedChar.id).then((msgs) => {
+        setInGameChatMsgs(msgs || []);
+      });
+    }
+  }, [selectedChar]);
+
+  // 对话滚动触底
+  useEffect(() => {
+    if (showInGameChat && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [inGameChatMsgs, showInGameChat, isAiReplying]);
+
+  // 3. 自定义头像字典与图片实例缓存
+  const [avatarsMap, setAvatarsMap] = useState({});
+  const imgCacheRef = useRef({});
+  const [, setForceRenderTrigger] = useState(0);
+
+  useEffect(() => {
+    SnakeAvatarDB.getAllAvatars().then((map) => {
+      setAvatarsMap(map);
+      Object.keys(map).forEach((k) => {
+        const img = new Image();
+        img.onload = () => setForceRenderTrigger((t) => t + 1);
+        img.src = map[k];
+        imgCacheRef.current[k] = img;
+      });
+    });
+  }, []);
+
+  // 4. 游戏核心状态
+  const [snake, setSnake] = useState([
+    { x: 9, y: 9, name: 'chef', theme: { main: '#7AA693', light: '#A8C8BA' } },
+    { x: 8, y: 9, name: '', theme: { main: '#86B09E', light: '#A0C6B5' } },
+    { x: 7, y: 9, name: '', theme: { main: '#86B09E', light: '#A0C6B5' } }
+  ]);
+  const [direction, setDirection] = useState({ x: 1, y: 0 });
+  const nextDirRef = useRef({ x: 1, y: 0 });
+  const [pearl, setPearl] = useState({ x: 13, y: 9, name: '傅融', theme: JELLY_PEARL_THEMES[0] });
+  const [score, setScore] = useState(0);
+  const [bestScore, setBestScore] = useState(() => {
+    return parseInt(localStorage.getItem('milvus_snake_best_score') || '0', 10);
+  });
+  const [isGameOver, setIsGameOver] = useState(false);
+  const [isPaused, setIsPaused] = useState(false);
+  const [eatenItems, setEatenItems] = useState([]);
+  const [earnedCoins, setEarnedCoins] = useState(0);
+  const [hasAwardedThisRound, setHasAwardedThisRound] = useState(false);
+
+  // 战局书信弹窗与头像上传
+  const [showLetterModal, setShowLetterModal] = useState(false);
+  const fileInputRef = useRef(null);
+  const [currentUploadTargetKey, setCurrentUploadTargetKey] = useState(null);
+
+  const canvasRef = useRef(null);
+
+  // 生成果冻珠
+  const generateNewPearl = useCallback((currentSnake) => {
+    let newX, newY, onSnake;
+    do {
+      newX = Math.floor(Math.random() * GRID_SIZE);
+      newY = Math.floor(Math.random() * GRID_SIZE);
+      onSnake = currentSnake.some((seg) => seg.x === newX && seg.y === newY);
+    } while (onSnake);
+
+    const randomName = ROSTER_NAMES[Math.floor(Math.random() * ROSTER_NAMES.length)];
+    const randomTheme = JELLY_PEARL_THEMES[Math.floor(Math.random() * JELLY_PEARL_THEMES.length)];
+    return { x: newX, y: newY, name: randomName, theme: randomTheme };
+  }, []);
+
+  // 重置游戏
+  const restartGame = useCallback(() => {
+    const initSnake = [
+      { x: 9, y: 9, name: 'chef', theme: { main: '#7AA693', light: '#A8C8BA' } },
+      { x: 8, y: 9, name: '', theme: { main: '#86B09E', light: '#A0C6B5' } },
+      { x: 7, y: 9, name: '', theme: { main: '#86B09E', light: '#A0C6B5' } }
+    ];
+    setSnake(initSnake);
+    setDirection({ x: 1, y: 0 });
+    nextDirRef.current = { x: 1, y: 0 };
+    setScore(0);
+    setIsGameOver(false);
+    setIsPaused(false);
+    setEatenItems([]);
+    setEarnedCoins(0);
+    setHasAwardedThisRound(false);
+    setPearl(generateNewPearl(initSnake));
+  }, [generateNewPearl]);
+
+  // 转向响应
+  const handleTurn = useCallback((newDir) => {
+    if (newDir.x + direction.x === 0 && newDir.y + direction.y === 0) return;
+    if (newDir.x === direction.x && newDir.y === direction.y) return;
+    nextDirRef.current = newDir;
+    playSound('turn');
+  }, [direction]);
+
+  // 5. 🤖 AI 寻路算法 (拟真名士巡游流：BFS安全寻路 + 35% 拟真手滑/贪吃决策)
+  const computeNextAiStep = useCallback((currentSnake, targetPearl, curDir) => {
+    const head = currentSnake[0];
+    const DIRS = [
+      { x: 0, y: -1 },
+      { x: 0, y: 1 },
+      { x: -1, y: 0 },
+      { x: 1, y: 0 }
+    ];
+
+    // BFS 最短路径搜索
+    const queue = [{ x: head.x, y: head.y, path: [] }];
+    const visited = Array.from({ length: GRID_SIZE }, () => Array(GRID_SIZE).fill(false));
+    visited[head.y][head.x] = true;
+
+    // 标记身体障碍
+    currentSnake.slice(0, currentSnake.length - 1).forEach((seg) => {
+      if (seg.x >= 0 && seg.x < GRID_SIZE && seg.y >= 0 && seg.y < GRID_SIZE) {
+        visited[seg.y][seg.x] = true;
+      }
+    });
+
+    let foundPath = null;
+    while (queue.length > 0) {
+      const curr = queue.shift();
+      if (curr.x === targetPearl.x && curr.y === targetPearl.y) {
+        foundPath = curr.path;
+        break;
+      }
+
+      for (const d of DIRS) {
+        const nx = curr.x + d.x;
+        const ny = curr.y + d.y;
+        if (nx >= 0 && nx < GRID_SIZE && ny >= 0 && ny < GRID_SIZE && !visited[ny][nx]) {
+          visited[ny][nx] = true;
+          queue.push({ x: nx, y: ny, path: [...curr.path, d] });
+        }
+      }
+    }
+
+    // 35% 拟真手滑/绕路走神与真实代打手感
+    const isSlip = Math.random() < 0.35;
+
+    // 筛选当前所有不会立即撞墙或撞自身身段的可用安全方向
+    const safeDirs = DIRS.filter((d) => {
+      if (d.x + curDir.x === 0 && d.y + curDir.y === 0) return false;
+      const nx = head.x + d.x;
+      const ny = head.y + d.y;
+      if (nx < 0 || nx >= GRID_SIZE || ny < 0 || ny >= GRID_SIZE) return false;
+      if (currentSnake.some((s) => s.x === nx && s.y === ny)) return false;
+      return true;
+    });
+
+    if (safeDirs.length === 0) {
+      return curDir; // 无路可走
+    }
+
+    // 如果发生 35% 手滑/走神：
+    if (isSlip) {
+      // 70% 概率随机选择一个侧向安全方向绕弯试探，30% 概率冲动前行
+      const randomSideDir = safeDirs[Math.floor(Math.random() * safeDirs.length)];
+      return randomSideDir;
+    }
+
+    // 正常状态：优先沿着 BFS 最优安全路径前进
+    if (foundPath && foundPath.length > 0) {
+      return foundPath[0];
+    }
+
+    // 若 BFS 未直达（如被自身身段包围），优先选相对更靠近灵珠的安全方向
+    safeDirs.sort((a, b) => {
+      const distA = Math.abs(head.x + a.x - targetPearl.x) + Math.abs(head.y + a.y - targetPearl.y);
+      const distB = Math.abs(head.x + b.x - targetPearl.x) + Math.abs(head.y + b.y - targetPearl.y);
+      return distA - distB;
+    });
+    return safeDirs[0];
+  }, []);
+
+  // 键盘支持
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (showLetterModal || showInGameChat || showCharModal) return;
+      const key = e.key.toLowerCase();
+      if (key === 'arrowup' || key === 'w') {
+        e.preventDefault();
+        handleTurn({ x: 0, y: -1 });
+      } else if (key === 'arrowdown' || key === 's') {
+        e.preventDefault();
+        handleTurn({ x: 0, y: 1 });
+      } else if (key === 'arrowleft' || key === 'a') {
+        e.preventDefault();
+        handleTurn({ x: -1, y: 0 });
+      } else if (key === 'arrowright' || key === 'd') {
+        e.preventDefault();
+        handleTurn({ x: 1, y: 0 });
+      } else if (key === ' ') {
+        e.preventDefault();
+        setIsPaused((p) => !p);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [handleTurn, showLetterModal, showInGameChat, showCharModal]);
+
+  // 游戏主循环 (140ms / 帧)
+  useEffect(() => {
+    if (isGameOver || isPaused || showLetterModal || showInGameChat || showCharModal) return;
+
+    const timer = setInterval(() => {
+      setSnake((prevSnake) => {
+        let currentDir = nextDirRef.current;
+
+        // 如果在 AI 代打模式下，自动计算下一步
+        if (playMode === 'auto') {
+          const aiDir = computeNextAiStep(prevSnake, pearl, currentDir);
+          currentDir = aiDir;
+          nextDirRef.current = aiDir;
+        }
+
+        setDirection(currentDir);
+
+        const oldHead = prevSnake[0];
+        const nextHeadPos = {
+          x: oldHead.x + currentDir.x,
+          y: oldHead.y + currentDir.y
+        };
+
+        // 越界撞墙
+        if (nextHeadPos.x < 0 || nextHeadPos.x >= GRID_SIZE || nextHeadPos.y < 0 || nextHeadPos.y >= GRID_SIZE) {
+          setIsGameOver(true);
+          setLastFailEvent('撞墙出界');
+          playSound('die');
+          return prevSnake;
+        }
+
+        // 自身碰撞
+        if (prevSnake.some((seg) => seg.x === nextHeadPos.x && seg.y === nextHeadPos.y)) {
+          setIsGameOver(true);
+          setLastFailEvent('身躯缠绕');
+          playSound('die');
+          return prevSnake;
+        }
+
+        // 吃到果冻珠
+        if (nextHeadPos.x === pearl.x && nextHeadPos.y === pearl.y) {
+          playSound('eat');
+          const newScore = score + 10;
+          setScore(newScore);
+          if (newScore > bestScore) {
+            setBestScore(newScore);
+            localStorage.setItem('milvus_snake_best_score', String(newScore));
+          }
+
+          setEatenItems((prev) => [
+            ...prev,
+            { id: Date.now() + Math.random(), name: pearl.name, theme: pearl.theme }
+          ]);
+
+          const newHead = {
+            x: nextHeadPos.x,
+            y: nextHeadPos.y,
+            name: 'chef',
+            theme: { main: '#7AA693', light: '#A8C8BA' }
+          };
+
+          const eatenSegment = {
+            x: oldHead.x,
+            y: oldHead.y,
+            name: pearl.name,
+            theme: pearl.theme
+          };
+
+          const shiftedBody = [];
+          for (let i = 1; i < prevSnake.length; i++) {
+            shiftedBody.push({
+              x: prevSnake[i - 1].x,
+              y: prevSnake[i - 1].y,
+              name: prevSnake[i].name,
+              theme: prevSnake[i].theme
+            });
+          }
+
+          const newSnake = [newHead, eatenSegment, ...shiftedBody];
+          setPearl(generateNewPearl(newSnake));
+          return newSnake;
+        } else {
+          const newHead = {
+            x: nextHeadPos.x,
+            y: nextHeadPos.y,
+            name: 'chef',
+            theme: { main: '#7AA693', light: '#A8C8BA' }
+          };
+
+          const newBody = [];
+          for (let i = 1; i < prevSnake.length; i++) {
+            newBody.push({
+              x: prevSnake[i - 1].x,
+              y: prevSnake[i - 1].y,
+              name: prevSnake[i].name,
+              theme: prevSnake[i].theme
+            });
+          }
+
+          return [newHead, ...newBody];
+        }
+      });
+    }, 140);
+
+    return () => clearInterval(timer);
+  }, [isGameOver, isPaused, showLetterModal, showInGameChat, showCharModal, playMode, pearl, score, bestScore, generateNewPearl, computeNextAiStep]);
+
+  // 6. 🪙 金库赏金结算机制 (积分折算 + 身长>=10加成 + 账本同步)
+  useEffect(() => {
+    if (isGameOver && !hasAwardedThisRound) {
+      let coins = Math.floor(score / 10);
+      if (snake.length >= 10) {
+        coins += 5; // 身长>=10 额外犒赏 +5 铢
+      }
+      coins = Math.min(coins, 50); // 单局上限 50 铢
+      setEarnedCoins(coins);
+      setHasAwardedThisRound(true);
+
+      if (coins > 0) {
+        try {
+          const currentTotal = parseInt(localStorage.getItem('farm_coins') || '0', 10);
+          const newTotal = currentTotal + coins;
+          localStorage.setItem('farm_coins', String(newTotal));
+          window.dispatchEvent(new Event('storage'));
+
+          if (typeof window.addTransactionRecord === 'function') {
+            window.addTransactionRecord({
+              type: 'income',
+              amount: coins,
+              title: '东汉尼拔 · 饕餮赏金',
+              description: `身长 ${snake.length} 节，吞食 ${eatenItems.length} 颗灵珠，得分 ${score}`,
+              time: new Date().toLocaleString()
+            });
+          }
+        } catch (e) {}
+      }
+    }
+  }, [isGameOver, hasAwardedThisRound, score, snake.length, eatenItems.length]);
+
+  // 头像上传处理
+  const handleTriggerUpload = (targetKey) => {
+    setCurrentUploadTargetKey(targetKey);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+      fileInputRef.current.click();
+    }
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file || !currentUploadTargetKey) return;
+
+    const reader = new FileReader();
+    reader.onload = async (ev) => {
+      const dataUrl = ev.target.result;
+      await SnakeAvatarDB.setAvatar(currentUploadTargetKey, dataUrl);
+
+      const img = new Image();
+      img.onload = () => {
+        imgCacheRef.current[currentUploadTargetKey] = img;
+        setAvatarsMap((prev) => ({ ...prev, [currentUploadTargetKey]: dataUrl }));
+        setForceRenderTrigger((t) => t + 1);
+      };
+      img.src = dataUrl;
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // 7. 💬 局内小窗 AI 发送与 Prompt 构建 (与 2048 完全对齐的 window.sendToLLM 架构)
+  const handleSendMessage = async (msgText) => {
+    const textToSend = (msgText || chatInput).trim();
+    if (!textToSend || !selectedChar || isAiReplying) return;
+
+    setChatInput('');
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      role: 'user',
+      content: textToSend,
+      timestamp: Date.now()
+    };
+
+    const newMsgs = [...inGameChatMsgs, userMsg];
+    setInGameChatMsgs(newMsgs);
+    await GameSnakeChatDB.saveMessage(selectedChar.id, userMsg);
+    setIsAiReplying(true);
+
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
+      let userContext = "【主控身份】姓名:主控, 性格:沉稳, 背景:隐秘阁主";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId) {
+          const activeUser = savedPersonas.find(p => p.id == activeId);
+          if (activeUser) {
+            userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
+          }
+        }
+      } catch (e) {}
+
+      const profile = selectedChar.profile || {};
+      const charContext = `【密探角色设定】
+姓名: ${selectedChar.name}
+性别: ${profile.gender || "未知"}
+性格: ${profile.personality || "未知"}
+说话风格: ${profile.style || "自然生动"}
+背景故事: ${profile.background || "暂无"}`;
+
+      const isAuto = playMode === 'auto';
+      const eatenNamesStr = eatenItems.map(item => item.name).join('、') || '暂无';
+      const gameContext = `【局内东汉尼拔贪吃蛇战况】
+模式: ${isAuto ? `看Ta操作（由你【${selectedChar.name}】亲自操控贪吃蛇在棋盘上觅食灵珠，主控在场边看你操作）` : `自己玩（由主控亲自在棋盘上操控贪吃蛇，你在场边观战/支招）`}
+操盘者: ${isAuto ? `是你本人【${selectedChar.name}】！` : '是主控本人！'}
+当前贪吃蛇体长: 【${snake.length}】节
+当前吞食的灵珠角色: 【${eatenNamesStr}】
+当前累计得分: ${score} 分
+历史最高分纪录: ${bestScore} 分
+局内状态: ${isGameOver ? `游戏已结束（原因：${lastFailEvent || '失误'}）` : '正在棋盘游走觅食中'}`;
+
+      const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
+${worldContext}
+${userContext}
+${charContext}
+${gameContext}
+
+【交互情境与视角（极其重要）】
+${isAuto ? `
+- 【极其重要】：当前是【看Ta操作】模式！刚才【是你【${selectedChar.name}】本人】亲自在东汉尼拔棋盘上操控灵蛇游走！主控是在场边观看你的操作！
+- 刚才无论是漂亮的吞食名士灵珠、身体变幻出绚丽色彩，还是不小心手滑绕弯或撞墙，都是【你自己的亲身经历】！
+- 请务必以第一人称（如“我”、“本公子”等符合你身份的称呼）描述【你自己刚才在棋盘上的身法走位与吞食体验】。绝对不要误以为是主控在玩！
+- 面对主控在小窗里的打趣、支招或夸奖，给出贴合你人设的生动反应。
+` : `
+- 当前是【自己玩】模式，刚才【是主控本人】在棋盘上游弋觅珠，你在场边陪伴、观战与支招。
+- 请以场边陪伴者的视角，对主控刚才的走位身法、吞食变色给予贴合人设的点评、鼓励或吐槽。
+`}
+
+【核心要求】
+1. 必须完全使用【${selectedChar.name}】的独特口吻和性格说话（严禁出戏、严禁AI腔、严禁说自己是人工智能）。
+2. 字数控制在 25-75 字左右，生动传神。直接输出角色说的话，不要带角色名字前缀。`;
+
+      const recentDialogues = newMsgs.slice(-8).map(m => ({
+        role: m.role === 'user' ? 'user' : 'assistant',
+        content: m.content
+      }));
+
+      const apiMessages = [
+        { role: "system", content: sysPrompt },
+        ...recentDialogues
+      ];
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          apiMessages,
+          null,
+          async (reply) => {
+            const cleanReply = reply.trim();
+            const assistantMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: cleanReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, assistantMsg]);
+            await GameSnakeChatDB.saveMessage(selectedChar.id, assistantMsg);
+            setIsAiReplying(false);
+          },
+          (err) => {
+            console.error("AI回复失败:", err);
+            const fallbackReply = isAuto
+              ? "（轻扶衣袖）方才这一记回环走位虽有险阻，但下一局定能游刃有余。"
+              : "（含笑观战）楼主方才这身法游弋甚妙，已连聚数颗灵珠了。";
+            const fallbackMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: fallbackReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, fallbackMsg]);
+            setIsAiReplying(false);
+          }
+        );
+      } else {
+        setIsAiReplying(false);
+      }
+    } catch (err) {
+      console.error(err);
+      setIsAiReplying(false);
+    }
+  };
+
+  const handleClearInGameChat = async () => {
+    if (!selectedChar) return;
+    if (confirm("确定要清空与该角色的东汉尼拔局内对话记录吗？（不影响传讯页面正常聊天）")) {
+      await GameSnakeChatDB.clearMessages(selectedChar.id);
+      setInGameChatMsgs([]);
+    }
+  };
+
+  // 动态快捷气泡
+  const getDynamicQuickBubbles = () => {
+    const bubbles = [];
+    if (playMode === 'auto') {
+      bubbles.push('你刚才这一记神龙摆尾真巧妙！');
+      bubbles.push('程师傅今天胃口真好，还要继续吃吗？');
+    } else {
+      bubbles.push('看我这身段走位如何？');
+      bubbles.push('吃了这几颗灵珠，感觉身体格外晶莹！');
+    }
+    if (eatenItems.length > 0) {
+      const lastEaten = eatenItems[eatenItems.length - 1];
+      bubbles.push(`刚才吞了【${lastEaten.name}】的灵珠，身子变成对应颜色了！`);
+    } else {
+      bubbles.push('棋盘这么大，先去吃哪一颗好？');
+    }
+    if (isGameOver) {
+      bubbles.push('刚才怎么一不小心撞到了，快来复盘！');
+    }
+    return bubbles.slice(0, 4);
+  };
+
+  // Canvas 绘制
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+    const tileSize = width / GRID_SIZE;
+
+    // 1. 底板
+    ctx.fillStyle = '#FAF7F2';
+    ctx.fillRect(0, 0, width, height);
+
+    // 2. 细网格
+    ctx.strokeStyle = 'rgba(224, 214, 202, 0.45)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= GRID_SIZE; i++) {
+      ctx.beginPath();
+      ctx.moveTo(i * tileSize, 0);
+      ctx.lineTo(i * tileSize, height);
+      ctx.stroke();
+
+      ctx.beginPath();
+      ctx.moveTo(0, i * tileSize);
+      ctx.lineTo(width, i * tileSize);
+      ctx.stroke();
+    }
+
+    // 3. 果冻珠
+    const px = pearl.x * tileSize + tileSize / 2;
+    const py = pearl.y * tileSize + tileSize / 2;
+    const radius = tileSize * 0.42;
+    const pearlAvatar = avatarsMap[pearl.name];
+    let pearlImg = pearlAvatar ? imgCacheRef.current[pearl.name] : null;
+    if (pearlAvatar && (!pearlImg || pearlImg.src !== pearlAvatar)) {
+      pearlImg = new Image();
+      pearlImg.src = pearlAvatar;
+      imgCacheRef.current[pearl.name] = pearlImg;
+    }
+
+    const glow = ctx.createRadialGradient(px, py, radius * 0.3, px, py, radius * 1.6);
+    glow.addColorStop(0, pearl.theme.glow);
+    glow.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(px, py, radius * 1.6, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (pearlImg && pearlImg.complete && pearlImg.naturalWidth !== 0) {
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.clip();
+      ctx.drawImage(pearlImg, px - radius, py - radius, radius * 2, radius * 2);
+      ctx.restore();
+
+      ctx.strokeStyle = pearl.theme.main;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.stroke();
+    } else {
+      const ballGrad = ctx.createRadialGradient(px - radius * 0.3, py - radius * 0.3, radius * 0.1, px, py, radius);
+      ballGrad.addColorStop(0, pearl.theme.light);
+      ballGrad.addColorStop(0.6, pearl.theme.main);
+      ballGrad.addColorStop(1, pearl.theme.main);
+      ctx.fillStyle = ballGrad;
+      ctx.beginPath();
+      ctx.arc(px, py, radius, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+      ctx.beginPath();
+      ctx.arc(px - radius * 0.32, py - radius * 0.32, radius * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = '#4A3B32';
+      const nameFontSize = Math.max(8, Math.floor(tileSize * 0.38));
+      ctx.font = `bold ${nameFontSize}px "GuanKiapTsingKhai", "Plus Jakarta Sans", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(pearl.name, px, py);
+    }
+
+    // 4. 绘制蛇身
+    snake.forEach((seg, idx) => {
+      const isHead = idx === 0;
+      const x = seg.x * tileSize + 1.5;
+      const y = seg.y * tileSize + 1.5;
+      const size = tileSize - 3;
+      const r = isHead ? size / 2.3 : size / 3.2;
+      const segAvatarKey = isHead ? 'chef' : seg.name;
+      const segAvatar = segAvatarKey ? avatarsMap[segAvatarKey] : null;
+      let segImg = segAvatar ? imgCacheRef.current[segAvatarKey] : null;
+      if (segAvatar && (!segImg || segImg.src !== segAvatar)) {
+        segImg = new Image();
+        segImg.src = segAvatar;
+        imgCacheRef.current[segAvatarKey] = segImg;
+      }
+
+      ctx.save();
+      ctx.beginPath();
+      if (ctx.roundRect) {
+        ctx.roundRect(x, y, size, size, r);
+      } else {
+        ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+      }
+
+      if (segImg && segImg.complete && segImg.naturalWidth !== 0) {
+        ctx.clip();
+        ctx.drawImage(segImg, x, y, size, size);
+        ctx.restore();
+
+        ctx.strokeStyle = seg.theme?.main || '#7AA693';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        if (ctx.roundRect) ctx.roundRect(x, y, size, size, r);
+        else ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+        ctx.stroke();
+      } else {
+        const mainColor = seg.theme?.main || (isHead ? '#7AA693' : '#86B09E');
+        const lightColor = seg.theme?.light || (isHead ? '#5C8A76' : '#A0C6B5');
+
+        const grad = ctx.createLinearGradient(x, y, x + size, y + size);
+        grad.addColorStop(0, isHead ? '#7AA693' : mainColor);
+        grad.addColorStop(1, isHead ? '#5C8A76' : lightColor);
+        ctx.fillStyle = grad;
+
+        if (isHead) {
+          ctx.shadowColor = 'rgba(92, 138, 118, 0.3)';
+          ctx.shadowBlur = 6;
+        }
+        ctx.fill();
+        ctx.restore();
+
+        if (isHead) {
+          ctx.fillStyle = '#FFF';
+          let e1x = x + size * 0.3, e1y = y + size * 0.3;
+          let e2x = x + size * 0.7, e2y = y + size * 0.3;
+
+          if (direction.x === 1) {
+            e1x = x + size * 0.65; e1y = y + size * 0.3;
+            e2x = x + size * 0.65; e2y = y + size * 0.7;
+          } else if (direction.x === -1) {
+            e1x = x + size * 0.35; e1y = y + size * 0.3;
+            e2x = x + size * 0.35; e2y = y + size * 0.7;
+          } else if (direction.y === 1) {
+            e1x = x + size * 0.3; e1y = y + size * 0.65;
+            e2x = x + size * 0.7; e2y = y + size * 0.65;
+          }
+
+          ctx.beginPath();
+          ctx.arc(e1x, e1y, size * 0.11, 0, Math.PI * 2);
+          ctx.arc(e2x, e2y, size * 0.11, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.fillStyle = '#2D473A';
+          ctx.beginPath();
+          ctx.arc(e1x, e1y, size * 0.05, 0, Math.PI * 2);
+          ctx.arc(e2x, e2y, size * 0.05, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+    });
+  }, [snake, pearl, direction, avatarsMap]);
+
+  return (
+    <div style={{
+      position: 'absolute',
+      inset: 0,
+      zIndex: 260,
+      background: 'linear-gradient(180deg, #FBF9F5 0%, #F5EFEB 100%)',
+      display: 'flex',
+      flexDirection: 'column',
+      fontFamily: '"GuanKiapTsingKhai", "Plus Jakarta Sans", sans-serif',
+      userSelect: 'none',
+      overflow: 'hidden',
+      animation: 'fadeIn 0.25s ease-out'
+    }}>
+      {/* 隐藏的上传 input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleFileChange}
+      />
+
+      {/* 顶部标题栏 */}
+      <div style={{
+        padding: '10px 16px',
+        paddingTop: 'max(28px, env(safe-area-inset-top))',
+        background: 'rgba(255, 255, 255, 0.88)',
+        backdropFilter: 'blur(12px)',
+        boxShadow: '0 2px 10px rgba(120, 100, 90, 0.05)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexShrink: 0
+      }}>
+        {/* 左侧纯图标返回与标题 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div onClick={onBack} title="返回" style={{ cursor: 'pointer', padding: '4px 8px', marginLeft: '-8px', display: 'flex', alignItems: 'center' }}>
+            <span style={{ fontSize: '1.2rem', color: '#6A5F55' }}>←</span>
+          </div>
+          <div>
+            <div style={{ fontSize: '1.12rem', fontWeight: 'bold', color: '#4E453D', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>东汉尼拔</span>
+              <span style={{ fontSize: '0.68rem', background: 'linear-gradient(135deg, #E6F3EB 0%, #D4EAE0 100%)', color: '#467B63', padding: '1px 6px', borderRadius: '8px', fontWeight: 'bold', border: '1px solid rgba(70, 123, 99, 0.2)' }}>
+                ✨ 果冻珠
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 右侧得分与最高分 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #EAE5DE 0%, #DDD6CC 100%)',
+            padding: '3px 8px',
+            borderRadius: '10px',
+            textAlign: 'center',
+            minWidth: '42px'
+          }}>
+            <div style={{ fontSize: '0.58rem', color: '#7E7368', fontWeight: 'bold' }}>得分</div>
+            <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#443C35' }}>{score}</div>
+          </div>
+
+          <div style={{
+            background: 'linear-gradient(135deg, #FDEED9 0%, #F5DEC2 100%)',
+            padding: '3px 8px',
+            borderRadius: '10px',
+            textAlign: 'center',
+            minWidth: '42px'
+          }}>
+            <div style={{ fontSize: '0.58rem', color: '#A06D3B', fontWeight: 'bold' }}>最高</div>
+            <div style={{ fontSize: '0.85rem', fontWeight: 'bold', color: '#7A4D1F' }}>{bestScore}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* 🎯 当前珠印名牌 */}
+      <div style={{
+        width: '100%',
+        maxWidth: '320px',
+        margin: '4px auto 0 auto',
+        padding: '0 16px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexShrink: 0
+      }}>
+        <div style={{ fontSize: '0.76rem', color: '#8A7D71', fontWeight: '500', display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span>🎯 当前珠印：</span>
+          <span style={{ fontWeight: 'bold', color: '#467B63' }}>【{pearl.name}】</span>
+        </div>
+      </div>
+
+      {/* 🎮 当前珠印下方留白控制栏：看TA操作 + 局内小窗 + 书信 + 暂停 + 重开 */}
+      <div style={{
+        width: '100%',
+        maxWidth: '320px',
+        margin: '4px auto 2px auto',
+        padding: '0 16px',
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        flexShrink: 0
+      }}>
+        {/* 左侧：看TA操作按钮 + 密探切换 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div
+            onClick={() => setPlayMode((m) => (m === 'manual' ? 'auto' : 'manual'))}
+            title={playMode === 'auto' ? '点击切换为自己操作' : '点击由密探代打'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              padding: '3px 7px 3px 4px',
+              borderRadius: '20px',
+              background: playMode === 'auto' ? 'linear-gradient(135deg, #E6F3EB 0%, #D4EAE0 100%)' : 'rgba(255, 255, 255, 0.9)',
+              border: `1.5px solid ${playMode === 'auto' ? '#7AA693' : '#E2D5C7'}`,
+              boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+              cursor: 'pointer',
+              transition: 'all 0.15s'
+            }}
+          >
+            <div style={{ width: '22px', height: '22px', borderRadius: '50%', overflow: 'hidden', position: 'relative', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#DDD' }}>
+              {typeof UniversalAvatarLoader === 'function' ? (
+                <UniversalAvatarLoader avatar={selectedChar?.avatar} avatarId={selectedChar?.avatarId || selectedChar?.id} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+              ) : (
+                <span style={{ fontSize: '0.8rem' }}>👤</span>
+              )}
+              {playMode === 'auto' && (
+                <span style={{
+                  position: 'absolute',
+                  bottom: 0,
+                  right: 0,
+                  width: '6px',
+                  height: '6px',
+                  borderRadius: '50%',
+                  background: '#4CAF50',
+                  border: '1px solid #FFF',
+                  boxShadow: '0 0 4px #4CAF50'
+                }} />
+              )}
+            </div>
+            <span style={{ fontSize: '0.72rem', color: playMode === 'auto' ? '#467B63' : '#6A5F55', fontWeight: 'bold' }}>
+              {playMode === 'auto' ? '代打中' : '看TA操作'}
+            </span>
+          </div>
+
+          <div
+            onClick={() => setShowCharModal(true)}
+            title="更换上阵密探"
+            style={{
+              width: '26px',
+              height: '26px',
+              borderRadius: '50%',
+              background: 'rgba(255, 255, 255, 0.9)',
+              border: '1.5px solid #E2D5C7',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '0.75rem',
+              color: '#6A5F55'
+            }}
+          >
+            👥
+          </div>
+        </div>
+
+        {/* 右侧：💬 局内小窗 + ✉️ 书信 + ⏸ 暂停 + 🔄 重开 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          {/* 💬 局内小窗按钮 */}
+          <div
+            onClick={() => {
+              setIsPaused(true);
+              setShowInGameChat(true);
+            }}
+            title="局内复盘小窗"
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #F0F6FF 0%, #E2EDFC 100%)',
+              border: '1.5px solid #B8D4F5',
+              boxShadow: '0 2px 5px rgba(65, 120, 190, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              color: '#3B6EA8'
+            }}
+          >
+            💬
+          </div>
+
+          {/* ✉️ 书信(战局名录) */}
+          <div
+            onClick={() => {
+              setIsPaused(true);
+              setShowLetterModal(true);
+            }}
+            title="查看战局与名册"
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #FFF9F0 0%, #F7EAD9 100%)',
+              border: '1.5px solid #E4CDAF',
+              boxShadow: '0 2px 5px rgba(214, 114, 75, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              color: '#8C4A1E',
+              position: 'relative'
+            }}
+          >
+            ✉️
+            {eatenItems.length > 0 && (
+              <span style={{
+                position: 'absolute',
+                top: -2,
+                right: -2,
+                background: '#D6724B',
+                color: '#fff',
+                fontSize: '0.52rem',
+                fontWeight: 'bold',
+                padding: '0px 3px',
+                borderRadius: '8px',
+                minWidth: '11px',
+                textAlign: 'center'
+              }}>
+                {eatenItems.length}
+              </span>
+            )}
+          </div>
+
+          {/* 暂停按钮 */}
+          <div
+            onClick={() => setIsPaused((p) => !p)}
+            title={isPaused ? "继续" : "暂停"}
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #FFFDFB 0%, #F5EAE0 100%)',
+              border: '1.5px solid #E2D5C7',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '0.78rem',
+              color: '#7E6F62'
+            }}
+          >
+            {isPaused ? '▶' : '⏸'}
+          </div>
+
+          {/* 重开按钮 */}
+          <div
+            onClick={restartGame}
+            title="重新开始"
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #FFFDFB 0%, #F5EAE0 100%)',
+              border: '1.5px solid #E2D5C7',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.06)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '0.82rem',
+              color: '#7E6F62',
+              transition: 'transform 0.1s'
+            }}
+            onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.9)')}
+            onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            🔄
+          </div>
+        </div>
+      </div>
+
+      {/* 游戏画布区域 */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '2px 16px',
+        overflow: 'hidden',
+        minHeight: 0
+      }}>
+        <div style={{
+          width: '100%',
+          maxWidth: '260px',
+          maxHeight: '40vh',
+          aspectRatio: '1 / 1',
+          background: 'rgba(235, 227, 219, 0.65)',
+          backdropFilter: 'blur(16px)',
+          borderRadius: '20px',
+          padding: '6px',
+          boxShadow: '0 8px 24px rgba(130, 110, 95, 0.08), inset 0 2px 6px rgba(255, 255, 255, 0.7), inset 0 -2px 6px rgba(0, 0, 0, 0.03)',
+          border: '2px solid rgba(255, 255, 255, 0.85)',
+          position: 'relative'
+        }}>
+          <canvas
+            ref={canvasRef}
+            width={248}
+            height={248}
+            style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '14px',
+              display: 'block'
+            }}
+          />
+
+          {/* 暂停遮罩 */}
+          {isPaused && !isGameOver && !showLetterModal && !showInGameChat && !showCharModal && (
+            <div
+              onClick={() => setIsPaused(false)}
+              style={{
+                position: 'absolute',
+                inset: 6,
+                borderRadius: '14px',
+                background: 'rgba(50, 40, 35, 0.35)',
+                backdropFilter: 'blur(4px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                color: '#FFF',
+                fontSize: '1rem',
+                fontWeight: 'bold',
+                cursor: 'pointer'
+              }}
+            >
+              ⏸ 暂歇中 · 点击继续
+            </div>
+          )}
+        </div>
+
+        {/* 📱 手机端微凸十字按键 */}
+        <div style={{
+          marginTop: '8px',
+          marginBottom: 'max(8px, env(safe-area-inset-bottom))',
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 44px)',
+          gridTemplateRows: 'repeat(2, 38px)',
+          gap: '6px',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}>
+          <div />
+          <div
+            onClick={() => handleTurn({ x: 0, y: -1 })}
+            style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
+              backdropFilter: 'blur(8px)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.1rem',
+              color: '#5C4E42',
+              boxShadow: '0 3px 8px rgba(120, 100, 85, 0.12), inset 0 2px 3px rgba(255, 255, 255, 0.95)',
+              border: '1.5px solid rgba(255, 255, 255, 0.9)',
+              cursor: 'pointer',
+              transition: 'transform 0.08s'
+            }}
+            onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.9)')}
+            onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            ▲
+          </div>
+          <div />
+
+          <div
+            onClick={() => handleTurn({ x: -1, y: 0 })}
+            style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
+              backdropFilter: 'blur(8px)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.1rem',
+              color: '#5C4E42',
+              boxShadow: '0 3px 8px rgba(120, 100, 85, 0.12), inset 0 2px 3px rgba(255, 255, 255, 0.95)',
+              border: '1.5px solid rgba(255, 255, 255, 0.9)',
+              cursor: 'pointer',
+              transition: 'transform 0.08s'
+            }}
+            onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.9)')}
+            onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            ◀
+          </div>
+          <div
+            onClick={() => handleTurn({ x: 0, y: 1 })}
+            style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
+              backdropFilter: 'blur(8px)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.1rem',
+              color: '#5C4E42',
+              boxShadow: '0 3px 8px rgba(120, 100, 85, 0.12), inset 0 2px 3px rgba(255, 255, 255, 0.95)',
+              border: '1.5px solid rgba(255, 255, 255, 0.9)',
+              cursor: 'pointer',
+              transition: 'transform 0.08s'
+            }}
+            onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.9)')}
+            onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            ▼
+          </div>
+          <div
+            onClick={() => handleTurn({ x: 1, y: 0 })}
+            style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
+              backdropFilter: 'blur(8px)',
+              borderRadius: '12px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: '1.1rem',
+              color: '#5C4E42',
+              boxShadow: '0 3px 8px rgba(120, 100, 85, 0.12), inset 0 2px 3px rgba(255, 255, 255, 0.95)',
+              border: '1.5px solid rgba(255, 255, 255, 0.9)',
+              cursor: 'pointer',
+              transition: 'transform 0.08s'
+            }}
+            onPointerDown={(e) => (e.currentTarget.style.transform = 'scale(0.9)')}
+            onPointerUp={(e) => (e.currentTarget.style.transform = 'scale(1)')}
+          >
+            ▶
+          </div>
+        </div>
+      </div>
+
+      {/* 👥 密探选择抽屉 (与记忆训练完全对齐的精致九宫格卡片) */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 400,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFDF9',
+              borderRadius: 24,
+              padding: 20,
+              width: '100%',
+              maxWidth: 320,
+              maxHeight: '75vh',
+              overflowY: 'auto',
+              boxShadow: '0 16px 36px rgba(0,0,0,0.2)',
+              border: '2px solid rgba(255,255,255,0.9)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ fontWeight: 'bold', fontSize: '1rem', color: '#4E342E' }}>
+                👥 选择代打密探
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{ cursor: 'pointer', fontSize: '1.2rem', color: '#8D6E63' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {availableChars.length === 0 ? (
+              <div style={{ padding: '30px 0', textAlign: 'center', color: '#8D6E63', fontSize: '0.85rem' }}>
+                暂未在【传讯】中配置密探角色，请先前往传讯添加。
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {availableChars.map(char => {
+                  const isCur = selectedChar && String(selectedChar.id) === String(char.id);
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => {
+                        setSelectedChar(char);
+                        try {
+                          localStorage.setItem("milvus_snake_auto_char_id", String(char.id));
+                        } catch(e) {}
+                        setShowCharModal(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        padding: '10px 6px',
+                        borderRadius: 16,
+                        background: isCur ? 'rgba(122, 166, 147, 0.18)' : 'rgba(240, 235, 228, 0.6)',
+                        border: isCur ? '2px solid #7AA693' : '1px solid transparent',
+                        cursor: 'pointer',
+                        position: 'relative'
+                      }}
+                    >
+                      <div style={{
+                        width: 44,
+                        height: 44,
+                        borderRadius: '50%',
+                        overflow: 'hidden',
+                        marginBottom: 6,
+                        background: '#EAE0D5'
+                      }}>
+                        {typeof UniversalAvatarLoader === 'function' ? (
+                          <UniversalAvatarLoader avatar={char.avatar} avatarId={char.avatarId || char.id} name={char.name} fallbackColor={char.avatarColor} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          <span style={{ fontSize: '1.2rem' }}>👤</span>
+                        )}
+                      </div>
+                      <div style={{
+                        fontSize: '0.8rem',
+                        fontWeight: 'bold',
+                        color: '#4E342E',
+                        textAlign: 'center',
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        width: '100%'
+                      }}>
+                        {char.name}
+                      </div>
+                      {isCur && (
+                        <div style={{
+                          position: 'absolute',
+                          top: 4,
+                          right: 4,
+                          background: '#7AA693',
+                          color: '#FFF',
+                          borderRadius: '50%',
+                          width: 16,
+                          height: 16,
+                          fontSize: '0.65rem',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          fontWeight: 'bold'
+                        }}>
+                          ✓
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 💬 局内小窗复盘弹窗 (半屏毛玻璃AI对话) */}
+      {showInGameChat && (
+        <div
+          onClick={() => setShowInGameChat(false)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(50, 40, 35, 0.45)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 450,
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FDFBF7 0%, #F8F1E8 100%)',
+              borderTopLeftRadius: '24px',
+              borderTopRightRadius: '24px',
+              padding: '16px',
+              width: '100%',
+              maxWidth: '360px',
+              height: '65vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 -8px 24px rgba(0,0,0,0.15)',
+              borderTop: '2px solid rgba(255,255,255,0.9)'
+            }}
+          >
+            {/* 小窗头部 */}
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', background: '#EEE' }}>
+                  {typeof UniversalAvatarLoader === 'function' ? (
+                    <UniversalAvatarLoader avatar={selectedChar?.avatar} avatarId={selectedChar?.avatarId || selectedChar?.id} name={selectedChar?.name} fallbackColor={selectedChar?.avatarColor} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: '1rem' }}>👤</span>
+                  )}
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E' }}>
+                    {selectedChar?.name || '密探'} · 局内复盘
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#8A7D71' }}>
+                    得分 {score} | 体长 {snake.length} 节
+                  </div>
+                </div>
+              </div>
+
+              <div
+                onClick={() => setShowInGameChat(false)}
+                style={{ width: '26px', height: '26px', borderRadius: '50%', background: 'rgba(0,0,0,0.06)', color: '#6A5F55', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.8rem' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {/* 快捷战况气泡 */}
+            <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '8px', flexShrink: 0 }}>
+              {getDynamicQuickBubbles().map((bubble, bIdx) => (
+                <div
+                  key={bIdx}
+                  onClick={() => handleSendMessage(bubble)}
+                  style={{
+                    fontSize: '0.7rem',
+                    color: '#467B63',
+                    background: 'rgba(230, 243, 235, 0.9)',
+                    border: '1px solid rgba(70, 123, 99, 0.2)',
+                    padding: '4px 8px',
+                    borderRadius: '12px',
+                    whiteSpace: 'nowrap',
+                    cursor: 'pointer'
+                  }}
+                >
+                  💬 {bubble}
+                </div>
+              ))}
+            </div>
+
+            {/* 消息列表 */}
+            <div
+              ref={chatScrollRef}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                padding: '6px 2px'
+              }}
+            >
+              {inGameChatMsgs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 0', color: '#A09285', fontSize: '0.8rem' }}>
+                  🍃 点击上方快捷气泡或在下方输入，与【{selectedChar?.name || '密探'}】聊聊本局战况吧！
+                </div>
+              ) : (
+                inGameChatMsgs.map((m, mIdx) => {
+                  const isMe = m.role === 'user' || m.sender === 'user';
+                  return (
+                    <div
+                      key={mIdx}
+                      style={{
+                        display: 'flex',
+                        justifyContent: isMe ? 'flex-end' : 'flex-start',
+                        gap: '6px'
+                      }}
+                    >
+                      <div
+                        style={{
+                          maxWidth: '78%',
+                          padding: '8px 12px',
+                          borderRadius: '14px',
+                          fontSize: '0.82rem',
+                          lineHeight: '1.4',
+                          background: isMe ? 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)' : '#FFF',
+                          color: isMe ? '#FFF' : '#443C35',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+                          border: isMe ? 'none' : '1px solid #EDE4D8'
+                        }}
+                      >
+                        {m.content || m.text}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              {isAiReplying && (
+                <div style={{ alignSelf: 'flex-start', fontSize: '0.78rem', color: '#8A7D71', padding: '4px 10px', background: '#FFF', borderRadius: '12px', border: '1px solid #EDE4D8' }}>
+                  💭 {selectedChar?.name} 正在思索...
+                </div>
+              )}
+            </div>
+
+            {/* 输入框 */}
+            <div style={{ display: 'flex', gap: '6px', paddingTop: '8px', borderTop: '1px solid #EAE0D5' }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSendMessage();
+                }}
+                placeholder={`与 ${selectedChar?.name || '密探'} 聊聊战况...`}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '16px',
+                  border: '1.5px solid #D8CFC4',
+                  background: '#FFF',
+                  fontSize: '0.82rem',
+                  outline: 'none'
+                }}
+              />
+              <button
+                onClick={() => handleSendMessage()}
+                disabled={isAiReplying}
+                style={{
+                  padding: '0 14px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
+                  color: '#FFF',
+                  fontSize: '0.82rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ✉️ 战局书信弹窗 */}
+      {showLetterModal && (
+        <div
+          onClick={() => setShowLetterModal(false)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(50, 40, 35, 0.55)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 500,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '16px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FDFBF7 0%, #F7EFE5 100%)',
+              borderRadius: '24px',
+              padding: '22px 18px',
+              width: '100%',
+              maxWidth: '330px',
+              maxHeight: '80vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 16px 40px rgba(0,0,0,0.25)',
+              border: '2px solid rgba(255,255,255,0.9)',
+              position: 'relative'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <div
+                  onClick={() => handleTriggerUpload('chef')}
+                  title="点击更换程师傅头像"
+                  style={{
+                    width: '44px',
+                    height: '44px',
+                    borderRadius: '50%',
+                    background: '#7AA693',
+                    border: '2px solid #5C8A76',
+                    overflow: 'hidden',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    cursor: 'pointer',
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.1)',
+                    position: 'relative'
+                  }}
+                >
+                  {avatarsMap['chef'] ? (
+                    <img src={avatarsMap['chef']} alt="程师傅" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ) : (
+                    <span style={{ fontSize: '1.4rem' }}>🐉</span>
+                  )}
+                  <span style={{ position: 'absolute', bottom: 0, right: 0, background: 'rgba(0,0,0,0.45)', color: '#fff', fontSize: '0.55rem', padding: '1px 3px', borderRadius: '4px' }}>📷</span>
+                </div>
+
+                <div>
+                  <div
+                    onClick={() => handleTriggerUpload('chef')}
+                    style={{ fontSize: '1.05rem', fontWeight: 'bold', color: '#4A3B32', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4 }}
+                  >
+                    <span>程师傅</span>
+                    <span style={{ fontSize: '0.65rem', color: '#8A7D71', fontWeight: 'normal' }}>✎更换头像</span>
+                  </div>
+                  <div style={{ fontSize: '0.72rem', color: '#8A7D71' }}>
+                    当前体长: {snake.length} 节 | 得分: {score}
+                  </div>
+                </div>
+              </div>
+
+              <div
+                onClick={() => setShowLetterModal(false)}
+                style={{ width: '28px', height: '28px', borderRadius: '50%', background: 'rgba(0,0,0,0.06)', color: '#6A5F55', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontWeight: 'bold', fontSize: '0.85rem' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            <div style={{ height: '1px', background: '#EAE0D5', margin: '4px 0 10px 0' }} />
+
+            <div style={{ fontSize: '0.86rem', fontWeight: 'bold', color: '#8C4A1E', marginBottom: '8px' }}>
+              📜 程师傅吃掉了（点击名牌更换头像）：
+            </div>
+
+            <div style={{
+              flex: 1,
+              overflowY: 'auto',
+              display: 'grid',
+              gridTemplateColumns: 'repeat(3, 1fr)',
+              gap: '8px',
+              padding: '4px 2px',
+              minHeight: '120px'
+            }}>
+              {eatenItems.length === 0 ? (
+                <div style={{ gridColumn: 'span 3', textAlign: 'center', padding: '30px 0', color: '#A09285', fontSize: '0.82rem' }}>
+                  🍃 暂未进食灵珠，快去棋盘游走觅珠吧！
+                </div>
+              ) : (
+                eatenItems.map((item, idx) => {
+                  const avatar = avatarsMap[item.name];
+                  return (
+                    <div
+                      key={item.id || idx}
+                      onClick={() => handleTriggerUpload(item.name)}
+                      title={`点击为【${item.name}】上传专属头像`}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.9)',
+                        border: `1.5px solid ${item.theme?.main || '#D6C8B8'}`,
+                        borderRadius: '12px',
+                        padding: '6px 4px',
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: '4px',
+                        cursor: 'pointer',
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.04)',
+                        position: 'relative',
+                        transition: 'transform 0.1s'
+                      }}
+                    >
+                      <div style={{
+                        width: '32px',
+                        height: '32px',
+                        borderRadius: '50%',
+                        background: item.theme?.main || '#EAE0D5',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        overflow: 'hidden',
+                        fontSize: '0.78rem',
+                        color: '#4A3B32',
+                        fontWeight: 'bold'
+                      }}>
+                        {avatar ? (
+                          <img src={avatar} alt={item.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                        ) : (
+                          item.name.slice(0, 1)
+                        )}
+                      </div>
+                      <span style={{ fontSize: '0.72rem', color: '#4E342E', fontWeight: 'bold' }}>
+                        {item.name}
+                      </span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div style={{ fontSize: '0.68rem', color: '#A09285', textAlign: 'center', marginTop: '10px' }}>
+              ✨ 提示：上传后的头像将永久保存在本地，并在棋盘灵珠与蛇身上显现
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 结算弹窗 (展示金库入账流水与赏金) */}
+      {isGameOver && (
+        <div style={{
+          position: 'absolute',
+          inset: 0,
+          background: 'rgba(60, 45, 35, 0.45)',
+          backdropFilter: 'blur(6px)',
+          zIndex: 520,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '20px',
+          animation: 'fadeIn 0.25s ease-out'
+        }}>
+          <div style={{
+            background: 'linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)',
+            borderRadius: '24px',
+            padding: '26px 22px',
+            width: '100%',
+            maxWidth: '300px',
+            textAlign: 'center',
+            boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
+            border: '2px solid rgba(255, 255, 255, 0.9)'
+          }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: '6px' }}>
+              🔮✨
+            </div>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#8A5825', fontWeight: 'bold' }}>
+              试炼暂歇 · 珠华结清
+            </h3>
+            <p style={{ margin: '6px 0 12px', fontSize: '0.82rem', color: '#7E6F62' }}>
+              身躯达 {snake.length} 节，集齐 {eatenItems.length} 颗灵珠！
+            </p>
+
+            <div style={{
+              background: 'rgba(122, 166, 147, 0.1)',
+              padding: '10px 14px',
+              borderRadius: '14px',
+              border: '1px solid rgba(122, 166, 147, 0.25)',
+              marginBottom: '14px',
+              textAlign: 'left',
+              fontSize: '0.82rem',
+              color: '#443C35'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>🎯 本局得分：</span>
+                <strong style={{ color: '#5C8A76' }}>{score} 分</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>🏆 历史最高：</span>
+                <strong style={{ color: '#8A5825' }}>{bestScore} 分</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #C8BDB0', paddingTop: '4px', marginTop: '4px' }}>
+                <span>🪙 金库入账：</span>
+                <strong style={{ color: '#B36B21', fontWeight: 'bold' }}>+{earnedCoins} 铢</strong>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                onClick={onBack}
+                title="返回"
+                style={{
+                  width: '50px',
+                  height: '42px',
+                  borderRadius: '14px',
+                  border: '1.5px solid #D8CFC4',
+                  background: '#FFFFFF',
+                  color: '#6E6256',
+                  fontSize: '1.15rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ←
+              </button>
+              <button
+                onClick={restartGame}
+                title="重新开始"
+                style={{
+                  flex: 1,
+                  height: '42px',
+                  borderRadius: '14px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
+                  color: '#FFFFFF',
+                  fontSize: '1.15rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(92, 138, 118, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                🔄
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 // 修武扬文 - 主页面组件
+
+// ==================== T13 棋逢对手 五子棋对弈对话数据库 (IndexedDB) ====================
+const GomokuChatDB = {
+  dbName: "MilvusGomokuChatDB",
+  version: 1,
+  db: null,
+  getDB: function () {
+    return new Promise((resolve, reject) => {
+      if (this.db) return resolve(this.db);
+      const req = indexedDB.open(this.dbName, this.version);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains("char_chats")) {
+          db.createObjectStore("char_chats", { keyPath: "charId" });
+        }
+      };
+      req.onsuccess = (e) => {
+        this.db = e.target.result;
+        resolve(this.db);
+      };
+      req.onerror = (e) => reject(e);
+    });
+  },
+  getMessages: async function (charId) {
+    if (!charId) return [];
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readonly");
+        const store = tx.objectStore("char_chats");
+        const req = store.get(String(charId));
+        req.onsuccess = () => resolve(req.result ? req.result.messages || [] : []);
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      return [];
+    }
+  },
+  saveMessage: async function (charId, message) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      const messages = await this.getMessages(charId);
+      messages.push(message);
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.put({ charId: String(charId), lastUpdated: Date.now(), messages });
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {}
+  },
+  clearMessages: async function (charId) {
+    if (!charId) return;
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction("char_chats", "readwrite");
+        const store = tx.objectStore("char_chats");
+        store.delete(String(charId));
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+      });
+    } catch (e) {}
+  }
+};
+
+// ==================== T13 棋逢对手 (五子棋·莫兰迪果冻珠·密探心理诱导对弈·金库赏金) ====================
+const GomokuGamePage = ({ onBack }) => {
+  const { useState, useEffect, useRef, useCallback } = React;
+
+  const GRID_COUNT = 15;
+  const colLetters = "ABCDEFGHIJKLMNO";
+
+  // 播放落子与胜负音效
+  const playSound = (type = 'piece') => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!window._gomokuAudioCtx) {
+        window._gomokuAudioCtx = new AudioCtx();
+      }
+      const ctx = window._gomokuAudioCtx;
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+
+      if (type === 'piece') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(587.33, now);
+        osc.frequency.exponentialRampToValueAtTime(329.63, now + 0.08);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      } else if (type === 'win') {
+        [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(freq, now + idx * 0.09);
+          gain.gain.setValueAtTime(0.2, now + idx * 0.09);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.2);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + idx * 0.09);
+          osc.stop(now + idx * 0.09 + 0.2);
+        });
+      } else if (type === 'lose') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220, now);
+        osc.frequency.exponentialRampToValueAtTime(110, now + 0.35);
+        gain.gain.setValueAtTime(0.15, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.35);
+      }
+    } catch (e) {}
+  };
+
+  // 棋盘数据 (0: 空, 1: 玩家黑棋, 2: 密探白棋)
+  const [board, setBoard] = useState(() => Array.from({ length: GRID_COUNT }, () => Array(GRID_COUNT).fill(0)));
+  const [moveHistory, setMoveHistory] = useState([]); // [{ x, y, player }]
+  const [currentTurn, setCurrentTurn] = useState('player'); // 'player' (1) | 'ai' (2)
+  const [isAiThinking, setIsAiThinking] = useState(false);
+  const [gameState, setGameState] = useState('playing'); // 'playing' | 'player_win' | 'ai_win' | 'draw'
+  const [winningLine, setWinningLine] = useState(null); // [{x, y}, ...]
+  const [earnedCoins, setEarnedCoins] = useState(0);
+  const [hasAwarded, setHasAwarded] = useState(false);
+
+  // 密探角色列表与当前对弈密探
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedChar, setSelectedChar] = useState(null);
+  const [showCharModal, setShowCharModal] = useState(false);
+
+  // 顶部微信通知风格气泡
+  const [topBubble, setTopBubble] = useState(null); // { text, time }
+  const [isBubbleExiting, setIsBubbleExiting] = useState(false);
+  const [showChatHistoryModal, setShowChatHistoryModal] = useState(false);
+  const [chatHistory, setChatHistory] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiReplyingChat, setIsAiReplyingChat] = useState(false);
+  const bubbleTimerRef = useRef(null);
+
+  const canvasRef = useRef(null);
+
+  // 1. 加载密探角色列表
+  useEffect(() => {
+    const loadChars = async () => {
+      try {
+        let chars = [];
+        if (window.chatCharacterStore) {
+          chars = await window.chatCharacterStore.getAll();
+        } else {
+          chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const validChars = (chars || []).filter(c => !String(c.id).startsWith("group") && c.type !== "decor");
+        setAvailableChars(validChars);
+
+        const savedCharId = localStorage.getItem("milvus_gomoku_char_id");
+        if (savedCharId) {
+          const found = validChars.find(c => String(c.id) === String(savedCharId));
+          if (found) setSelectedChar(found);
+        } else if (validChars.length > 0) {
+          setSelectedChar(validChars[0]);
+        }
+      } catch (err) {
+        console.error("加载棋逢对手密探列表失败:", err);
+      }
+    };
+    loadChars();
+  }, []);
+
+  // 2. 加载当前密探历史对话
+  useEffect(() => {
+    if (selectedChar?.id) {
+      GomokuChatDB.getMessages(selectedChar.id).then(msgs => {
+        setChatHistory(msgs || []);
+      });
+    }
+  }, [selectedChar]);
+
+  // 3. 气泡展示工具函数
+  const triggerTopBubble = (text) => {
+    if (!text) return;
+    if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+    setIsBubbleExiting(false);
+    setTopBubble({ text, time: Date.now() });
+
+    bubbleTimerRef.current = setTimeout(() => {
+      setIsBubbleExiting(true);
+      setTimeout(() => {
+        setTopBubble(null);
+        setIsBubbleExiting(false);
+      }, 300);
+    }, 8500);
+  };
+
+  // 4. 五子连珠检测函数
+  const checkWin = useCallback((currentBoard, x, y, player) => {
+    const directions = [
+      [1, 0],   // 水平
+      [0, 1],   // 垂直
+      [1, 1],   // 主对角线       [1, -1]   // 副对角线 /
+    ];
+
+    for (const [dx, dy] of directions) {
+      let count = 1;
+      const line = [{ x, y }];
+
+      for (let step = 1; step < 5; step++) {
+        const nx = x + dx * step;
+        const ny = y + dy * step;
+        if (nx >= 0 && nx < GRID_COUNT && ny >= 0 && ny < GRID_COUNT && currentBoard[ny][nx] === player) {
+          count++;
+          line.push({ x: nx, y: ny });
+        } else {
+          break;
+        }
+      }
+
+      for (let step = 1; step < 5; step++) {
+        const nx = x - dx * step;
+        const ny = y - dy * step;
+        if (nx >= 0 && nx < GRID_COUNT && ny >= 0 && ny < GRID_COUNT && currentBoard[ny][nx] === player) {
+          count++;
+          line.push({ x: nx, y: ny });
+        } else {
+          break;
+        }
+      }
+
+      if (count >= 5) {
+        return { isWin: true, line };
+      }
+    }
+    return { isWin: false, line: null };
+  }, []);
+
+  // 5. 局势与棋型评分 (AI 启发式算法)
+  const evaluateLine = useCallback((currentBoard, x, y, dx, dy, player) => {
+    let score = 0;
+    let count = 1;
+    let emptyEnds = 0;
+
+    for (let i = 1; i < 5; i++) {
+      const nx = x + dx * i;
+      const ny = y + dy * i;
+      if (nx >= 0 && nx < GRID_COUNT && ny >= 0 && ny < GRID_COUNT) {
+        if (currentBoard[ny][nx] === player) {
+          count++;
+        } else if (currentBoard[ny][nx] === 0) {
+          emptyEnds++;
+          break;
+        } else {
+          break;
+        }
+      }
+    }
+
+    for (let i = 1; i < 5; i++) {
+      const nx = x - dx * i;
+      const ny = y - dy * i;
+      if (nx >= 0 && nx < GRID_COUNT && ny >= 0 && ny < GRID_COUNT) {
+        if (currentBoard[ny][nx] === player) {
+          count++;
+        } else if (currentBoard[ny][nx] === 0) {
+          emptyEnds++;
+          break;
+        } else {
+          break;
+        }
+      }
+    }
+
+    if (count >= 5) return 10000;
+    if (count === 4) return emptyEnds === 2 ? 2000 : 500;
+    if (count === 3) return emptyEnds === 2 ? 400 : 80;
+    if (count === 2) return emptyEnds === 2 ? 60 : 15;
+    return 2;
+  }, []);
+
+  const evaluatePosition = useCallback((currentBoard, x, y) => {
+    currentBoard[y][x] = 2;
+    if (checkWin(currentBoard, x, y, 2).isWin) {
+      currentBoard[y][x] = 0;
+      return 15000;
+    }
+
+    currentBoard[y][x] = 1;
+    if (checkWin(currentBoard, x, y, 1).isWin) {
+      currentBoard[y][x] = 0;
+      return 12000;
+    }
+    currentBoard[y][x] = 0;
+
+    let score = 0;
+    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    for (const [dx, dy] of directions) {
+      score += evaluateLine(currentBoard, x, y, dx, dy, 2) * 1.5;
+      score += evaluateLine(currentBoard, x, y, dx, dy, 1) * 1.2;
+    }
+
+    const centerDist = Math.abs(x - 7) + Math.abs(y - 7);
+    score += (14 - centerDist) * 3;
+
+    return score;
+  }, [checkWin, evaluateLine]);
+
+  // 棋局深度局势分析器 (供大模型感知真实棋盘)
+  const getBoardAnalysisDescription = (currentBoard, lastPlayerMove, aiMove, stepNum) => {
+    const pStr = lastPlayerMove ? `${colLetters[lastPlayerMove.x]}${lastPlayerMove.y + 1}` : "开局";
+    const aStr = `${colLetters[aiMove.x]}${aiMove.y + 1}`;
+
+    let playerThreats = [];
+    let aiThreats = [];
+
+    // 检测是否有连三或连四
+    for (let y = 0; y < GRID_COUNT; y++) {
+      for (let x = 0; x < GRID_COUNT; x++) {
+        if (currentBoard[y][x] === 1) {
+          [[1, 0], [0, 1], [1, 1], [1, -1]].forEach(([dx, dy]) => {
+            let c = 1;
+            for (let s = 1; s < 4; s++) {
+              let nx = x + dx * s, ny = y + dy * s;
+              if (nx >= 0 && nx < GRID_COUNT && ny >= 0 && ny < GRID_COUNT && currentBoard[ny][nx] === 1) c++;
+              else break;
+            }
+            if (c >= 3) playerThreats.push(`${colLetters[x]}${y+1}一带连成${c}子攻势`);
+          });
+        } else if (currentBoard[y][x] === 2) {
+          [[1, 0], [0, 1], [1, 1], [1, -1]].forEach(([dx, dy]) => {
+            let c = 1;
+            for (let s = 1; s < 4; s++) {
+              let nx = x + dx * s, ny = y + dy * s;
+              if (nx >= 0 && nx < GRID_COUNT && ny >= 0 && ny < GRID_COUNT && currentBoard[ny][nx] === 2) c++;
+              else break;
+            }
+            if (c >= 3) aiThreats.push(`${colLetters[x]}${y+1}一带连成${c}子`);
+          });
+        }
+      }
+    }
+
+    const threatSummary = playerThreats.length > 0
+      ? `【楼主黑棋杀气】：楼主在【${playerThreats.slice(0, 2).join('、')}】，势头正盛。`
+      : `【楼主黑棋布局】：楼主在【${pStr}】落子稳健，意图掌控中盘。`;
+
+    const aiSummary = aiThreats.length > 0
+      ? `【你（白棋）的布局】：你在【${aStr}】落子，暗中形成了【${aiThreats.slice(0, 1).join('')}】。`
+      : `【你（白棋）的布局】：你在【${aStr}】落子拦截或布设暗棋。`;
+
+    return `第 ${stepNum} 手交锋。楼主刚在【${pStr}】落子，你随即在【${aStr}】落子回应。
+${threatSummary}
+${aiSummary}`;
+  };
+
+  // 6. 密探落子与 AI 深度思考调用 (带心理战诱导)
+  const triggerAiMoveAndDialogue = useCallback(async (currentBoard, lastPlayerMove, currentHistory) => {
+    setIsAiThinking(true);
+
+    let bestScore = -1;
+    let bestMoves = [];
+
+    for (let y = 0; y < GRID_COUNT; y++) {
+      for (let x = 0; x < GRID_COUNT; x++) {
+        if (currentBoard[y][x] === 0) {
+          const score = evaluatePosition(currentBoard, x, y);
+          if (score > bestScore) {
+            bestScore = score;
+            bestMoves = [{ x, y }];
+          } else if (score === bestScore) {
+            bestMoves.push({ x, y });
+          }
+        }
+      }
+    }
+
+    let aiMove = { x: 7, y: 7 };
+    if (bestMoves.length > 0) {
+      aiMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+    }
+
+    await new Promise(r => setTimeout(r, 450));
+
+    const newBoard = currentBoard.map(row => [...row]);
+    newBoard[aiMove.y][aiMove.x] = 2; // 白棋
+    playSound('piece');
+
+    const updatedHistory = [...currentHistory, { x: aiMove.x, y: aiMove.y, player: 2 }];
+    setBoard(newBoard);
+    setMoveHistory(updatedHistory);
+    setIsAiThinking(false);
+
+    // 检查 AI 是否获胜
+    const winResult = checkWin(newBoard, aiMove.x, aiMove.y, 2);
+    if (winResult.isWin) {
+      setGameState('ai_win');
+      setWinningLine(winResult.line);
+      playSound('lose');
+    } else if (updatedHistory.length >= GRID_COUNT * GRID_COUNT) {
+      setGameState('draw');
+    } else {
+      setCurrentTurn('player');
+    }
+
+    // 🌟 触发精准针对棋盘的 AI 心理战术诱导对话
+    if (selectedChar) {
+      try {
+        const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
+        let userContext = "【主控身份】姓名:主控, 性格:沉稳, 背景:隐秘阁主";
+        try {
+          const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+          const activeId = localStorage.getItem("active_persona_id");
+          if (activeId) {
+            const activeUser = savedPersonas.find(p => p.id == activeId);
+            if (activeUser) {
+              userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
+            }
+          }
+        } catch (e) {}
+
+        const profile = selectedChar.profile || {};
+        const charContext = `【密探角色深度设定】
+姓名: ${selectedChar.name}
+性格特征: ${profile.personality || profile.description || "机敏睿智，暗藏锋芒"}
+说话口吻: ${profile.style || profile.tone || "古风自然，生动细腻"}
+习惯用语: ${profile.catchphrase || "无"}
+背景身份: ${profile.background || "绣衣楼密探"}`;
+
+        const moveStepNum = updatedHistory.length;
+        const playerCoordStr = lastPlayerMove ? `${colLetters[lastPlayerMove.x]}${lastPlayerMove.y + 1}` : "开局";
+        const aiCoordStr = `${colLetters[aiMove.x]}${aiMove.y + 1}`;
+        const boardAnalysis = getBoardAnalysisDescription(newBoard, lastPlayerMove, aiMove, moveStepNum);
+
+        const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
+${worldContext}
+${userContext}
+${charContext}
+
+【当前正在进行的场景（必须严格遵守）】：
+你正在与楼主（广陵王）在案前对坐切磋五子棋！【严禁闲聊与五子棋无关的琐事】！
+楼主执黑子，你执白子。
+${boardAnalysis}
+
+【五子棋心理战术与诱导要求（核心灵魂）】：
+1. 你必须紧紧围绕【刚才楼主落下的 ${playerCoordStr}】与【你落下的 ${aiCoordStr}】这两步棋，以及眼前的局势发表点评。
+2. 【半真半假的诱导性话语】：你的核心目的是在下棋时进行“心理战”——用看似漫不经心、真诚支招、或故作迟疑的话语，【故意把楼主的注意力引向错误的棋路，诱使楼主走入你的伏击圈或忽略真正的危机】！
+3. 例如：
+   - 假意提醒楼主去堵一个无关紧要的散子，实则暗中掩护自己在另一侧布下的暗子；
+   - 假装自己某处露出破绽，引诱楼主冒进贪功；
+   - 故作赞叹“楼主这手断位真绝”，实则诱导楼主继续追击虚招。
+4. 严格字数：20~45 字左右，短小精练，直接说出角色说的话，切勿出戏，切勿提AI。`;
+
+        const userPromptContent = `【下子战况】：楼主黑棋刚落于【${playerCoordStr}】，你白棋落在【${aiCoordStr}】（第${moveStepNum}手）。请结合这具体两步落子与棋盘局势，说一句心理战诱导台词：`;
+
+        const apiMessages = [
+          { role: "system", content: sysPrompt },
+          { role: "user", content: userPromptContent }
+        ];
+
+        if (window.sendToLLM) {
+          window.sendToLLM(
+            apiMessages,
+            null,
+            async (reply) => {
+              const cleanReply = reply.trim();
+              triggerTopBubble(cleanReply);
+              const assistantMsg = {
+                id: Date.now() + Math.random(),
+                role: 'assistant',
+                content: cleanReply,
+                timestamp: Date.now()
+              };
+              setChatHistory(prev => [...prev, assistantMsg]);
+              await GomokuChatDB.saveMessage(selectedChar.id, assistantMsg);
+            },
+            (err) => {
+              console.error("五子棋AI诱导对话失败:", err);
+              const fallbacks = [
+                `（指尖拂过【${aiCoordStr}】）楼主这手【${playerCoordStr}】下得甚巧，不过……旁侧似乎另有玄机呢。`,
+                `（抿茶轻笑）莫急着在此处追堵，我看天元之位气象更佳。`,
+                `（垂眸沉吟）这步【${aiCoordStr}】若不防，接下来可莫怪我先声夺人了。`
+              ];
+              const randomFallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+              triggerTopBubble(randomFallback);
+            }
+          );
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [evaluatePosition, checkWin, selectedChar]);
+
+  // 7. 玩家点击棋盘落子 (精确缩放映射，杜绝点击偏移)
+  const handleBoardPointer = (e) => {
+    if (gameState !== 'playing' || currentTurn !== 'player' || isAiThinking) return;
+
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX ?? (e.touches && e.touches[0]?.clientX);
+    const clientY = e.clientY ?? (e.touches && e.touches[0]?.clientY);
+
+    if (clientX === undefined || clientY === undefined) return;
+
+    // 🌟 精确计算 CSS 像素到 Canvas 内部坐标的缩放比例
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+
+    const canvasX = (clientX - rect.left) * scaleX;
+    const canvasY = (clientY - rect.top) * scaleY;
+
+    const padding = 16;
+    const availableWidth = canvas.width - padding * 2;
+    const cellSpacing = availableWidth / (GRID_COUNT - 1);
+
+    // 计算点击最近的交叉点
+    const gridX = Math.round((canvasX - padding) / cellSpacing);
+    const gridY = Math.round((canvasY - padding) / cellSpacing);
+
+    if (gridX < 0 || gridX >= GRID_COUNT || gridY < 0 || gridY >= GRID_COUNT) return;
+    if (board[gridY][gridX] !== 0) return;
+
+    // 落子成功
+    const newBoard = board.map(row => [...row]);
+    newBoard[gridY][gridX] = 1; // 黑棋
+    playSound('piece');
+
+    const updatedHistory = [...moveHistory, { x: gridX, y: gridY, player: 1 }];
+    setBoard(newBoard);
+    setMoveHistory(updatedHistory);
+
+    // 检查玩家是否获胜
+    const winResult = checkWin(newBoard, gridX, gridY, 1);
+    if (winResult.isWin) {
+      setGameState('player_win');
+      setWinningLine(winResult.line);
+      playSound('win');
+      return;
+    }
+
+    if (updatedHistory.length >= GRID_COUNT * GRID_COUNT) {
+      setGameState('draw');
+      return;
+    }
+
+    // 轮到 AI 落子
+    setCurrentTurn('ai');
+    triggerAiMoveAndDialogue(newBoard, { x: gridX, y: gridY }, updatedHistory);
+  };
+
+  // 8. 悔棋 (撤回两步：撤回AI与玩家各一步)
+  const handleUndo = () => {
+    if (moveHistory.length < 2 || isAiThinking || gameState !== 'playing') return;
+
+    const newHistory = moveHistory.slice(0, -2);
+    const newBoard = Array.from({ length: GRID_COUNT }, () => Array(GRID_COUNT).fill(0));
+    newHistory.forEach(m => {
+      newBoard[m.y][m.x] = m.player;
+    });
+
+    setBoard(newBoard);
+    setMoveHistory(newHistory);
+    setCurrentTurn('player');
+    triggerTopBubble("（轻按折扇）落子无悔……不过既是楼主所求，便让你一步又何妨？");
+  };
+
+  // 9. 重新开局
+  const restartGame = () => {
+    setBoard(Array.from({ length: GRID_COUNT }, () => Array(GRID_COUNT).fill(0)));
+    setMoveHistory([]);
+    setCurrentTurn('player');
+    setIsAiThinking(false);
+    setGameState('playing');
+    setWinningLine(null);
+    setEarnedCoins(0);
+    setHasAwarded(false);
+    triggerTopBubble("（理正衣袍）棋道万千，重整旗鼓，请楼主先行执黑。");
+  };
+
+  // 10. 金库赏金结算
+  useEffect(() => {
+    if (gameState !== 'playing' && !hasAwarded) {
+      let coins = 0;
+      if (gameState === 'player_win') {
+        coins = 15;
+        if (moveHistory.length <= 20) coins += 10;
+      } else {
+        coins = 3;
+      }
+      coins = Math.min(coins, 30);
+      setEarnedCoins(coins);
+      setHasAwarded(true);
+
+      if (coins > 0) {
+        try {
+          const currentTotal = parseInt(localStorage.getItem("farm_coins") || "0", 10);
+          const newTotal = currentTotal + coins;
+          localStorage.setItem("farm_coins", String(newTotal));
+          window.dispatchEvent(new Event("storage"));
+
+          if (typeof window.addTransactionRecord === "function") {
+            window.addTransactionRecord({
+              type: "income",
+              amount: coins,
+              title: "棋逢对手 · 对弈赏金",
+              description: `与【${selectedChar?.name || '密探'}】切磋五子棋，手顺 ${moveHistory.length} 步，战果【${gameState === 'player_win' ? '大获全胜' : '切磋暂歇'}】`,
+              time: new Date().toLocaleString()
+            });
+          }
+        } catch (e) {}
+      }
+    }
+  }, [gameState, hasAwarded, moveHistory.length, selectedChar]);
+
+  // 11. Canvas 绘制棋盘与莫兰迪果冻棋子
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    const width = canvas.width;
+    const height = canvas.height;
+
+    ctx.clearRect(0, 0, width, height);
+
+    // 棋盘温润莫兰迪背景
+    const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+    bgGrad.addColorStop(0, '#FAF7F2');
+    bgGrad.addColorStop(1, '#F3ECE2');
+    ctx.fillStyle = bgGrad;
+    ctx.fillRect(0, 0, width, height);
+
+    const padding = 16;
+    const availableWidth = width - padding * 2;
+    const cellSpacing = availableWidth / (GRID_COUNT - 1);
+
+    // 绘制格线
+    ctx.strokeStyle = 'rgba(168, 150, 135, 0.45)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i < GRID_COUNT; i++) {
+      const pos = padding + i * cellSpacing;
+
+      // 横线
+      ctx.beginPath();
+      ctx.moveTo(padding, pos);
+      ctx.lineTo(width - padding, pos);
+      ctx.stroke();
+
+      // 竖线
+      ctx.beginPath();
+      ctx.moveTo(pos, padding);
+      ctx.lineTo(pos, height - padding);
+      ctx.stroke();
+    }
+
+    // 绘制星位与天元
+    const starPoints = [
+      { x: 3, y: 3 }, { x: 11, y: 3 },
+      { x: 7, y: 7 },
+      { x: 3, y: 11 }, { x: 11, y: 11 }
+    ];
+    ctx.fillStyle = '#8C7768';
+    starPoints.forEach(pt => {
+      const px = padding + pt.x * cellSpacing;
+      const py = padding + pt.y * cellSpacing;
+      ctx.beginPath();
+      ctx.arc(px, py, 2.5, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    const pieceRadius = cellSpacing * 0.43;
+
+    // 绘制所有棋子
+    for (let y = 0; y < GRID_COUNT; y++) {
+      for (let x = 0; x < GRID_COUNT; x++) {
+        const val = board[y][x];
+        if (val === 0) continue;
+
+        const px = padding + x * cellSpacing;
+        const py = padding + y * cellSpacing;
+
+        // 阴影
+        ctx.save();
+        ctx.shadowColor = val === 1 ? 'rgba(40, 30, 25, 0.35)' : 'rgba(150, 130, 115, 0.3)';
+        ctx.shadowBlur = 5;
+        ctx.shadowOffsetY = 2;
+
+        const grad = ctx.createRadialGradient(
+          px - pieceRadius * 0.3,
+          py - pieceRadius * 0.3,
+          pieceRadius * 0.1,
+          px,
+          py,
+          pieceRadius
+        );
+
+        if (val === 1) {
+          // 黑棋 (黑玉果冻珠)
+          grad.addColorStop(0, '#5C5450');
+          grad.addColorStop(0.5, '#383230');
+          grad.addColorStop(1, '#201C1A');
+        } else {
+          // 白棋 (凝脂羊脂玉果冻珠)
+          grad.addColorStop(0, '#FFFFFF');
+          grad.addColorStop(0.6, '#F8F4ED');
+          grad.addColorStop(1, '#E2D7C7');
+        }
+
+        ctx.fillStyle = grad;
+        ctx.beginPath();
+        ctx.arc(px, py, pieceRadius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        // 晶莹微凸高光
+        ctx.fillStyle = val === 1 ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.85)';
+        ctx.beginPath();
+        ctx.arc(px - pieceRadius * 0.3, py - pieceRadius * 0.3, pieceRadius * 0.25, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 边框描边
+        ctx.strokeStyle = val === 1 ? 'rgba(255, 255, 255, 0.1)' : 'rgba(215, 200, 185, 0.6)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(px, py, pieceRadius, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    }
+
+    // 绘制最后一步标记 (光晕呼吸圈)
+    if (moveHistory.length > 0) {
+      const lastMove = moveHistory[moveHistory.length - 1];
+      const lx = padding + lastMove.x * cellSpacing;
+      const ly = padding + lastMove.y * cellSpacing;
+
+      ctx.strokeStyle = lastMove.player === 1 ? '#E09F67' : '#7AA693';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(lx, ly, pieceRadius * 0.4, 0, Math.PI * 2);
+      ctx.stroke();
+
+      ctx.fillStyle = lastMove.player === 1 ? '#E09F67' : '#7AA693';
+      ctx.beginPath();
+      ctx.arc(lx, ly, 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    // 绘制胜利连线高光
+    if (winningLine && winningLine.length >= 5) {
+      ctx.strokeStyle = '#D6724B';
+      ctx.lineWidth = 4;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      const first = winningLine[0];
+      const last = winningLine[winningLine.length - 1];
+      ctx.moveTo(padding + first.x * cellSpacing, padding + first.y * cellSpacing);
+      ctx.lineTo(padding + last.x * cellSpacing, padding + last.y * cellSpacing);
+      ctx.stroke();
+    }
+  }, [board, moveHistory, winningLine]);
+
+  // 发送小窗对弈心语
+  const handleSendCustomChat = async (msgText) => {
+    const textToSend = (msgText || chatInput).trim();
+    if (!textToSend || !selectedChar || isAiReplyingChat) return;
+
+    setChatInput('');
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      role: 'user',
+      content: textToSend,
+      timestamp: Date.now()
+    };
+    const nextMsgs = [...chatHistory, userMsg];
+    setChatHistory(nextMsgs);
+    await GomokuChatDB.saveMessage(selectedChar.id, userMsg);
+    setIsAiReplyingChat(true);
+
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
+      const profile = selectedChar.profile || {};
+      const charContext = `【密探角色】${selectedChar.name}, 性格:${profile.personality || "机敏"}, 口吻:${profile.style || "古风自然"}`;
+      const gameContext = `【棋逢对手战况】当前对弈手顺 ${moveHistory.length} 步，楼主持黑棋，你持白棋。状态：${gameState}`;
+
+      const sysPrompt = `你正在扮演【${selectedChar.name}】与楼主对坐切磋五子棋。
+${worldContext}
+${charContext}
+${gameContext}
+【心理战诱导与互动】：完全使用【${selectedChar.name}】的独特口吻，紧扣当前五子棋局，半真半假地引导或打趣楼主，25-60字左右。`;
+
+      const apiMessages = [
+        { role: "system", content: sysPrompt },
+        ...nextMsgs.slice(-6).map(m => ({ role: m.role, content: m.content }))
+      ];
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          apiMessages,
+          null,
+          async (reply) => {
+            const cleanReply = reply.trim();
+            const aiMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: cleanReply,
+              timestamp: Date.now()
+            };
+            setChatHistory(prev => [...prev, aiMsg]);
+            await GomokuChatDB.saveMessage(selectedChar.id, aiMsg);
+            triggerTopBubble(cleanReply);
+            setIsAiReplyingChat(false);
+          },
+          () => setIsAiReplyingChat(false)
+        );
+      } else {
+        setIsAiReplyingChat(false);
+      }
+    } catch (e) {
+      setIsAiReplyingChat(false);
+    }
+  };
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 260,
+        background: 'linear-gradient(180deg, #FBF9F5 0%, #F5EFEB 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: '"GuanKiapTsingKhai", "Plus Jakarta Sans", sans-serif',
+        userSelect: 'none',
+        overflow: 'hidden',
+        animation: 'fadeIn 0.25s ease-out'
+      }}
+    >
+      {/* 1. 顶部标题栏 */}
+      <div
+        style={{
+          padding: '10px 16px',
+          paddingTop: 'max(28px, env(safe-area-inset-top))',
+          background: 'rgba(255, 255, 255, 0.88)',
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 2px 10px rgba(120, 100, 90, 0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            onClick={onBack}
+            title="返回"
+            style={{ cursor: 'pointer', padding: '4px 8px', marginLeft: '-8px', display: 'flex', alignItems: 'center' }}
+          >
+            <span style={{ fontSize: '1.2rem', color: '#6A5F55' }}>←</span>
+          </div>
+          <div>
+            <div style={{ fontSize: '1.12rem', fontWeight: 'bold', color: '#4E453D', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span>棋逢对手</span>
+              <span
+                style={{
+                  fontSize: '0.68rem',
+                  background: 'linear-gradient(135deg, #F4E8DC 0%, #E8D7C5 100%)',
+                  color: '#8A5825',
+                  padding: '1px 6px',
+                  borderRadius: '8px',
+                  fontWeight: 'bold',
+                  border: '1px solid rgba(138, 88, 37, 0.2)'
+                }}
+              >
+                ♟️ 五子弈道
+              </span>
+            </div>
+          </div>
+        </div>
+
+        {/* 顶部右侧对弈密探名牌与对局状态 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            onClick={() => setShowCharModal(true)}
+            title="更换对弈密探"
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              padding: '3px 8px 3px 4px',
+              borderRadius: '20px',
+              background: 'rgba(255, 255, 255, 0.95)',
+              border: '1.5px solid #E2D5C7',
+              cursor: 'pointer',
+              boxShadow: '0 2px 5px rgba(0,0,0,0.04)'
+            }}
+          >
+            <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', background: '#EEE' }}>
+              <UniversalAvatarLoader
+                avatar={selectedChar?.avatar}
+                avatarId={selectedChar?.avatarId || selectedChar?.id}
+                name={selectedChar?.name}
+                fallbackColor={selectedChar?.avatarColor}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </div>
+            <span style={{ fontSize: '0.78rem', color: '#4E342E', fontWeight: 'bold' }}>
+              {selectedChar?.name || '密探'}
+            </span>
+            <span style={{ fontSize: '0.65rem', color: '#8A7D71' }}>▼</span>
+          </div>
+
+          <div
+            onClick={() => setShowChatHistoryModal(true)}
+            title="对弈心语记录"
+            style={{
+              width: '28px',
+              height: '28px',
+              borderRadius: '50%',
+              background: 'linear-gradient(135deg, #F0F6FF 0%, #E2EDFC 100%)',
+              border: '1.5px solid #B8D4F5',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              fontSize: '0.85rem',
+              color: '#3B6EA8'
+            }}
+          >
+            💬
+          </div>
+        </div>
+      </div>
+
+      {/* 2. 🌟 顶部微信通知风格胶囊气泡 (心理战诱导台词) */}
+      <div
+        style={{
+          width: '100%',
+          maxWidth: '340px',
+          margin: '6px auto 0 auto',
+          padding: '0 14px',
+          minHeight: '44px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0
+        }}
+      >
+        {topBubble ? (
+          <div
+            onClick={() => setShowChatHistoryModal(true)}
+            style={{
+              width: '100%',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 242, 235, 0.94) 100%)',
+              backdropFilter: 'blur(10px)',
+              border: '1.5px solid #E8DCce',
+              borderRadius: '16px',
+              padding: '6px 10px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              boxShadow: '0 4px 14px rgba(120, 100, 85, 0.12)',
+              cursor: 'pointer',
+              opacity: isBubbleExiting ? 0 : 1,
+              transform: isBubbleExiting ? 'translateY(-6px)' : 'translateY(0)',
+              transition: 'all 0.3s ease-out'
+            }}
+          >
+            <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: '#DDD' }}>
+              <UniversalAvatarLoader
+                avatar={selectedChar?.avatar}
+                avatarId={selectedChar?.avatarId || selectedChar?.id}
+                name={selectedChar?.name}
+                fallbackColor={selectedChar?.avatarColor}
+                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+              />
+            </div>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: '0.68rem', color: '#8A5825', fontWeight: 'bold', lineHeight: 1 }}>
+                {selectedChar?.name} · 弈语
+              </div>
+              <div style={{ fontSize: '0.74rem', color: '#443C35', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>
+                {topBubble.text}
+              </div>
+            </div>
+            <span style={{ fontSize: '0.65rem', color: '#A09285', flexShrink: 0 }}>💬</span>
+          </div>
+        ) : (
+          <div style={{ fontSize: '0.72rem', color: '#8A7D71', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>♟️</span>
+            <span>
+              {isAiThinking
+                ? `💭 【${selectedChar?.name || '密探'}】正捻子深思...`
+                : currentTurn === 'player'
+                ? '轮到楼主执黑落子'
+                : `轮到【${selectedChar?.name || '密探'}】执白落子`}
+            </span>
+            <span style={{ color: '#A09285' }}>（第 {moveHistory.length} 手）</span>
+          </div>
+        )}
+      </div>
+
+      {/* 3. 棋盘 Canvas 交互区域 */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2px 14px',
+          minHeight: 0,
+          overflow: 'hidden'
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '320px',
+            maxHeight: '44vh',
+            aspectRatio: '1 / 1',
+            background: 'rgba(235, 227, 219, 0.75)',
+            backdropFilter: 'blur(16px)',
+            borderRadius: '20px',
+            padding: '6px',
+            boxShadow: '0 8px 24px rgba(130, 110, 95, 0.1), inset 0 2px 6px rgba(255, 255, 255, 0.8), inset 0 -2px 6px rgba(0, 0, 0, 0.04)',
+            border: '2px solid rgba(255, 255, 255, 0.9)',
+            position: 'relative'
+          }}
+        >
+          <canvas
+            ref={canvasRef}
+            width={308}
+            height={308}
+            onPointerDown={handleBoardPointer}
+            style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '14px',
+              display: 'block',
+              touchAction: 'none',
+              cursor: currentTurn === 'player' && !isAiThinking && gameState === 'playing' ? 'pointer' : 'default'
+            }}
+          />
+        </div>
+
+        {/* 4. 底部微凸控制栏 (悔棋 + 重新开始 + 心语复盘) */}
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '320px',
+            marginTop: '8px',
+            marginBottom: 'max(8px, env(safe-area-inset-bottom))',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            gap: '8px',
+            flexShrink: 0
+          }}
+        >
+          {/* 悔棋按钮 */}
+          <button
+            onClick={handleUndo}
+            disabled={moveHistory.length < 2 || isAiThinking || gameState !== 'playing'}
+            style={{
+              flex: 1,
+              height: '38px',
+              borderRadius: '12px',
+              border: '1.5px solid rgba(255, 255, 255, 0.9)',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
+              color: moveHistory.length >= 2 && gameState === 'playing' ? '#5C4E42' : '#AAA',
+              fontSize: '0.82rem',
+              fontWeight: 'bold',
+              cursor: moveHistory.length >= 2 && gameState === 'playing' ? 'pointer' : 'not-allowed',
+              boxShadow: '0 2px 6px rgba(120, 100, 85, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px'
+            }}
+          >
+            <span>↩</span>
+            <span>悔棋</span>
+          </button>
+
+          {/* 重新开局 */}
+          <button
+            onClick={restartGame}
+            style={{
+              flex: 1,
+              height: '38px',
+              borderRadius: '12px',
+              border: '1.5px solid rgba(255, 255, 255, 0.9)',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
+              color: '#5C4E42',
+              fontSize: '0.82rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(120, 100, 85, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px'
+            }}
+          >
+            <span>🔄</span>
+            <span>重开</span>
+          </button>
+
+          {/* 对弈心语小窗 */}
+          <button
+            onClick={() => setShowChatHistoryModal(true)}
+            style={{
+              flex: 1,
+              height: '38px',
+              borderRadius: '12px',
+              border: '1.5px solid rgba(122, 166, 147, 0.5)',
+              background: 'linear-gradient(135deg, #EBF5F0 0%, #DBEDE4 100%)',
+              color: '#467B63',
+              fontSize: '0.82rem',
+              fontWeight: 'bold',
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(70, 123, 99, 0.12)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '4px'
+            }}
+          >
+            <span>💬</span>
+            <span>心语</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 5. 👥 密探选择九宫格抽屉 */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 400,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFDF9',
+              borderRadius: 24,
+              padding: 20,
+              width: '100%',
+              maxWidth: 320,
+              maxHeight: '75vh',
+              overflowY: 'auto',
+              boxShadow: '0 16px 36px rgba(0,0,0,0.2)',
+              border: '2px solid rgba(255,255,255,0.9)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ fontWeight: 'bold', fontSize: '1rem', color: '#4E342E' }}>
+                👥 选择对弈密探
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{ cursor: 'pointer', fontSize: '1.2rem', color: '#8D6E63' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {availableChars.length === 0 ? (
+              <div style={{ padding: '30px 0', textAlign: 'center', color: '#8D6E63', fontSize: '0.85rem' }}>
+                暂未在【传讯】中配置密探角色，请先前往传讯添加。
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {availableChars.map(char => {
+                  const isCur = selectedChar && String(selectedChar.id) === String(char.id);
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => {
+                        setSelectedChar(char);
+                        try {
+                          localStorage.setItem("milvus_gomoku_char_id", String(char.id));
+                        } catch (e) {}
+                        setShowCharModal(false);
+                        triggerTopBubble("（整衣入座）此番便由我陪楼主切磋一局。");
+                      }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        padding: '10px 6px',
+                        borderRadius: 16,
+                        background: isCur ? 'rgba(122, 166, 147, 0.18)' : 'rgba(240, 235, 228, 0.6)',
+                        border: isCur ? '2px solid #7AA693' : '1px solid transparent',
+                        cursor: 'pointer',
+                        position: 'relative'
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          marginBottom: 6,
+                          background: '#EAE0D5'
+                        }}
+                      >
+                        <UniversalAvatarLoader
+                          avatar={char.avatar}
+                          avatarId={char.avatarId || char.id}
+                          name={char.name}
+                          fallbackColor={char.avatarColor}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '0.8rem',
+                          fontWeight: 'bold',
+                          color: '#4E342E',
+                          textAlign: 'center',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          width: '100%'
+                        }}
+                      >
+                        {char.name}
+                      </div>
+                      {isCur && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 4,
+                            right: 4,
+                            background: '#7AA693',
+                            color: '#FFF',
+                            borderRadius: '50%',
+                            width: 16,
+                            height: 16,
+                            fontSize: '0.65rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          ✓
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 6. 💬 对弈心语与复盘小窗 (独立半屏弹窗) */}
+      {showChatHistoryModal && (
+        <div
+          onClick={() => setShowChatHistoryModal(false)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(50, 40, 35, 0.45)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 450,
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FDFBF7 0%, #F8F1E8 100%)',
+              borderTopLeftRadius: '24px',
+              borderTopRightRadius: '24px',
+              padding: '16px',
+              width: '100%',
+              maxWidth: '360px',
+              height: '65vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 -8px 24px rgba(0,0,0,0.15)',
+              borderTop: '2px solid rgba(255,255,255,0.9)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', background: '#EEE' }}>
+                  <UniversalAvatarLoader
+                    avatar={selectedChar?.avatar}
+                    avatarId={selectedChar?.avatarId || selectedChar?.id}
+                    name={selectedChar?.name}
+                    fallbackColor={selectedChar?.avatarColor}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E' }}>
+                    {selectedChar?.name || '密探'} · 对弈心语
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#8A7D71' }}>
+                    手顺 {moveHistory.length} 步 | 楼主执黑 密探执白
+                  </div>
+                </div>
+              </div>
+              <div
+                onClick={() => setShowChatHistoryModal(false)}
+                style={{
+                  width: '26px',
+                  height: '26px',
+                  borderRadius: '50%',
+                  background: 'rgba(0,0,0,0.06)',
+                  color: '#6A5F55',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '0.8rem'
+                }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {/* 对话列表 */}
+            <div
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                padding: '6px 2px'
+              }}
+            >
+              {chatHistory.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 0', color: '#A09285', fontSize: '0.8rem' }}>
+                  🍃 棋盘方寸，心语连珠。落子时【${selectedChar?.name || '密探'}】将与你即时传讯！
+                </div>
+              ) : (
+                chatHistory.map((m, idx) => {
+                  const isMe = m.role === 'user';
+                  return (
+                    <div
+                      key={m.id || idx}
+                      style={{
+                        display: 'flex',
+                        justifyContent: isMe ? 'flex-end' : 'flex-start',
+                        gap: '6px'
+                      }}
+                    >
+                      <div
+                        style={{
+                          maxWidth: '78%',
+                          padding: '8px 12px',
+                          borderRadius: '14px',
+                          fontSize: '0.82rem',
+                          lineHeight: '1.4',
+                          background: isMe ? 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)' : '#FFF',
+                          color: isMe ? '#FFF' : '#443C35',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+                          border: isMe ? 'none' : '1px solid #EDE4D8'
+                        }}
+                      >
+                        {m.content}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              {isAiReplyingChat && (
+                <div style={{ alignSelf: 'flex-start', fontSize: '0.78rem', color: '#8A7D71', padding: '4px 10px', background: '#FFF', borderRadius: '12px', border: '1px solid #EDE4D8' }}>
+                  💭 {selectedChar?.name} 正在捻子思量...
+                </div>
+              )}
+            </div>
+
+            {/* 输入框 */}
+            <div style={{ display: 'flex', gap: '6px', paddingTop: '8px', borderTop: '1px solid #EAE0D5' }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSendCustomChat();
+                }}
+                placeholder={`与 ${selectedChar?.name || '密探'} 聊聊棋局...`}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '16px',
+                  border: '1.5px solid #D8CFC4',
+                  background: '#FFF',
+                  fontSize: '0.82rem',
+                  outline: 'none'
+                }}
+              />
+              <button
+                onClick={() => handleSendCustomChat()}
+                disabled={isAiReplyingChat}
+                style={{
+                  padding: '0 14px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
+                  color: '#FFF',
+                  fontSize: '0.82rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. 结算弹窗 (金库赏金入账) */}
+      {gameState !== 'playing' && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(60, 45, 35, 0.45)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 520,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.25s ease-out'
+          }}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)',
+              borderRadius: '24px',
+              padding: '26px 22px',
+              width: '100%',
+              maxWidth: '300px',
+              textAlign: 'center',
+              boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
+              border: '2px solid rgba(255, 255, 255, 0.9)'
+            }}
+          >
+            <div style={{ fontSize: '2.5rem', marginBottom: '6px' }}>
+              {gameState === 'player_win' ? '🏆✨' : '♟️🍂'}
+            </div>
+            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#8A5825', fontWeight: 'bold' }}>
+              {gameState === 'player_win' ? '执黑大捷 · 五子连珠' : gameState === 'ai_win' ? '密探运筹 · 棋差一着' : '局势和融 · 棋逢对手'}
+            </h3>
+            <p style={{ margin: '6px 0 12px', fontSize: '0.82rem', color: '#7E6F62' }}>
+              与【{selectedChar?.name || '密探'}】对弈共 {moveHistory.length} 手
+            </p>
+
+            <div
+              style={{
+                background: 'rgba(122, 166, 147, 0.1)',
+                padding: '10px 14px',
+                borderRadius: '14px',
+                border: '1px solid rgba(122, 166, 147, 0.25)',
+                marginBottom: '14px',
+                textAlign: 'left',
+                fontSize: '0.82rem',
+                color: '#443C35'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>🎯 对局结果：</span>
+                <strong style={{ color: gameState === 'player_win' ? '#5C8A76' : '#8A5825' }}>
+                  {gameState === 'player_win' ? '楼主胜出' : gameState === 'ai_win' ? '密探胜出' : '和棋'}
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
+                <span>♟️ 总交锋手：</span>
+                <strong style={{ color: '#443C35' }}>{moveHistory.length} 步</strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #C8BDB0', paddingTop: '4px', marginTop: '4px' }}>
+                <span>🪙 金库入账：</span>
+                <strong style={{ color: '#B36B21', fontWeight: 'bold' }}>+{earnedCoins} 铢</strong>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
+              <button
+                onClick={onBack}
+                title="返回"
+                style={{
+                  width: '50px',
+                  height: '42px',
+                  borderRadius: '14px',
+                  border: '1.5px solid #D8CFC4',
+                  background: '#FFFFFF',
+                  color: '#6E6256',
+                  fontSize: '1.15rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ←
+              </button>
+              <button
+                onClick={restartGame}
+                title="再弈一局"
+                style={{
+                  flex: 1,
+                  height: '42px',
+                  borderRadius: '14px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
+                  color: '#FFFFFF',
+                  fontSize: '1.05rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(92, 138, 118, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                再弈一局
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+// ==================== 广陵消消 · 静态常量与 IndexedDB 对话库 ====================
+const MATCH3_GRID_SIZE = 8;
+
+const MATCH3_SPECIAL_TYPES = {
+  NONE: 0,
+  LINE_H: 1,
+  LINE_V: 2,
+  BOMB: 3,
+  RAINBOW: 4
+};
+
+const MATCH3_LEVEL_CONFIGS = [
+  { level: 1, targetDrops: 35, time: 60, reward: 6 },
+  { level: 2, targetDrops: 65, time: 55, reward: 10 },
+  { level: 3, targetDrops: 100, time: 50, reward: 15 },
+  { level: 4, targetDrops: 140, time: 45, reward: 20 },
+  { level: 5, targetDrops: 190, time: 40, reward: 30 }
+];
+
+const Match3ChatDB = {
+  dbName: 'milvus_match3_chat_db',
+  dbVersion: 1,
+  db: null,
+  async getDB() {
+    if (this.db) return this.db;
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.dbName, this.dbVersion);
+      request.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('chats')) {
+          db.createObjectStore('chats', { keyPath: 'charId' });
+        }
+      };
+      request.onsuccess = (e) => {
+        this.db = e.target.result;
+        resolve(this.db);
+      };
+      request.onerror = (e) => reject(e);
+    });
+  },
+  async getMessages(charId) {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction('chats', 'readonly');
+        const store = tx.objectStore('chats');
+        const req = store.get(String(charId));
+        req.onsuccess = () => resolve(req.result?.messages || []);
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      return [];
+    }
+  },
+  async saveMessage(charId, message) {
+    try {
+      const db = await this.getDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction('chats', 'readwrite');
+        const store = tx.objectStore('chats');
+        const getReq = store.get(String(charId));
+        getReq.onsuccess = () => {
+          const data = getReq.result || { charId: String(charId), messages: [] };
+          data.messages.push(message);
+          if (data.messages.length > 50) data.messages = data.messages.slice(-50);
+          store.put(data);
+          resolve();
+        };
+        getReq.onerror = () => resolve();
+      });
+    } catch (e) {}
+  }
+};
+
+// ==================== 广陵消消 · 极简晶透莫兰迪水滴三消 ====================
+const Match3GamePage = ({ onBack }) => {
+  const { useState, useEffect, useRef, useCallback } = React;
+
+  const playSound = (type = 'pop', pitch = 1) => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!window._match3AudioCtx) {
+        window._match3AudioCtx = new AudioCtx();
+      }
+      const ctx = window._match3AudioCtx;
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+
+      if (type === 'drop') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(600 * pitch, now);
+        osc.frequency.exponentialRampToValueAtTime(300 * pitch, now + 0.06);
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.06);
+      } else if (type === 'jelly') {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(450 * pitch, now);
+        osc.frequency.exponentialRampToValueAtTime(750 * pitch, now + 0.08);
+        gain.gain.setValueAtTime(0.1, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.08);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.08);
+      } else if (type === 'pop') {
+        const baseFreq = 520 * pitch;
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(baseFreq, now);
+        osc.frequency.exponentialRampToValueAtTime(baseFreq * 1.5, now + 0.1);
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.1);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(now);
+        osc.stop(now + 0.1);
+      } else if (type === 'win') {
+        [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'triangle';
+          osc.frequency.setValueAtTime(f, now + i * 0.07);
+          gain.gain.setValueAtTime(0.18, now + i * 0.07);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.07 + 0.22);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + i * 0.07);
+          osc.stop(now + i * 0.07 + 0.22);
+        });
+      } else if (type === 'over') {
+        [440, 370, 311, 261.6].forEach((f, i) => {
+          const osc = ctx.createOscillator();
+          const gain = ctx.createGain();
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(f, now + i * 0.08);
+          gain.gain.setValueAtTime(0.15, now + i * 0.08);
+          gain.gain.exponentialRampToValueAtTime(0.001, now + i * 0.08 + 0.25);
+          osc.connect(gain);
+          gain.connect(ctx.destination);
+          osc.start(now + i * 0.08);
+          osc.stop(now + i * 0.08 + 0.25);
+        });
+      }
+    } catch (e) {}
+  };
+
+  const generateMorandiPalette = useCallback((colorCount = 5) => {
+    const baseHues = [];
+    const step = 360 / colorCount;
+    const offset = Math.floor(Math.random() * 360);
+    for (let i = 0; i < colorCount; i++) {
+      baseHues.push((offset + i * step + (Math.random() * 20 - 10) + 360) % 360);
+    }
+    return baseHues.map((h, idx) => {
+      const s = 38 + Math.floor(Math.random() * 16);
+      const l = 62 + Math.floor(Math.random() * 12);
+      return {
+        id: idx,
+        hue: h,
+        main: `hsl(${h}, ${s}%, ${l}%)`,
+        light: `hsl(${h}, ${s + 10}%, ${Math.min(92, l + 16)}%)`,
+        dark: `hsl(${h}, ${s}%, ${Math.max(35, l - 18)}%)`,
+        shadow: `hsla(${h}, ${s}%, ${Math.max(25, l - 30)}%, 0.35)`
+      };
+    });
+  }, []);
+
+  const [curLevelIndex, setCurLevelIndex] = useState(0);
+  const curConfig = MATCH3_LEVEL_CONFIGS[curLevelIndex] || MATCH3_LEVEL_CONFIGS[0];
+
+  const [palette, setPalette] = useState(() => generateMorandiPalette(5));
+  const [board, setBoard] = useState([]);
+  const [selectedCell, setSelectedCell] = useState(null);
+  const [score, setScore] = useState(0);
+  const [clearedDrops, setClearedDrops] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(curConfig.time);
+  const [isPlaying, setIsPlaying] = useState(true);
+  const [isLevelCleared, setIsLevelCleared] = useState(false);
+  const [isGameOver, setIsGameOver] = useState(false);
+  const [combo, setCombo] = useState(0);
+  const [hintCells, setHintCells] = useState([]);
+  const [hintCount, setHintCount] = useState(3);
+  const [shuffleCount, setShuffleCount] = useState(2);
+  const [earnedCoins, setEarnedCoins] = useState(0);
+  const [hasSettled, setHasSettled] = useState(false);
+  const [floatingTexts, setFloatingTexts] = useState([]);
+
+  // 🌟 模式与密探角色选择 ('manual': 自己玩, 'auto': 看TA操作)
+  const [playMode, setPlayMode] = useState('manual');
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedChar, setSelectedChar] = useState(null);
+  const [showCharModal, setShowCharModal] = useState(false);
+
+  // 🌟 局内小窗系统
+  const [showInGameChat, setShowInGameChat] = useState(false);
+  const [inGameChatMsgs, setInGameChatMsgs] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isAiReplying, setIsAiReplying] = useState(false);
+  const chatScrollRef = useRef(null);
+
+  const jellyBounceRef = useRef({});
+  const isProcessingRef = useRef(false);
+  const canvasRef = useRef(null);
+  const touchStartRef = useRef(null);
+  const animFrameIdRef = useRef(null);
+
+  // 1. 加载密探角色
+  useEffect(() => {
+    const loadChars = async () => {
+      try {
+        let chars = [];
+        if (window.chatCharacterStore) {
+          chars = await window.chatCharacterStore.getAll();
+        } else {
+          chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const validChars = (chars || []).filter(c => !String(c.id).startsWith("group") && c.type !== "decor");
+        setAvailableChars(validChars);
+
+        const savedAutoCharId = localStorage.getItem("milvus_match3_char_id");
+        if (savedAutoCharId) {
+          const found = validChars.find(c => String(c.id) === String(savedAutoCharId));
+          if (found) setSelectedChar(found);
+        } else if (validChars.length > 0) {
+          setSelectedChar(validChars[0]);
+        }
+      } catch (err) {
+        console.error("加载消消乐密探角色失败:", err);
+      }
+    };
+    loadChars();
+  }, []);
+
+  // 2. 载入小窗聊天记录
+  useEffect(() => {
+    if (selectedChar?.id) {
+      Match3ChatDB.getMessages(selectedChar.id).then(msgs => {
+        setInGameChatMsgs(msgs || []);
+      });
+    }
+  }, [selectedChar]);
+
+  // 3. 自动滚动小窗到底部
+  useEffect(() => {
+    if (showInGameChat && chatScrollRef.current) {
+      chatScrollRef.current.scrollTop = chatScrollRef.current.scrollHeight;
+    }
+  }, [inGameChatMsgs, showInGameChat, isAiReplying]);
+
+  // 4. 寻找匹配
+  const findMatchesOnBoard = useCallback((currentBoard) => {
+    if (!currentBoard || currentBoard.length === 0) return [];
+    const matched = new Set();
+
+    for (let r = 0; r < MATCH3_GRID_SIZE; r++) {
+      for (let c = 0; c < MATCH3_GRID_SIZE - 2; c++) {
+        const item = currentBoard[r][c];
+        if (!item) continue;
+        const type = item.type;
+        let matchLen = 1;
+        while (c + matchLen < MATCH3_GRID_SIZE && currentBoard[r][c + matchLen]?.type === type) {
+          matchLen++;
+        }
+        if (matchLen >= 3) {
+          for (let k = 0; k < matchLen; k++) {
+            matched.add(`${r},${c + k}`);
+          }
+          c += matchLen - 1;
+        }
+      }
+    }
+
+    for (let c = 0; c < MATCH3_GRID_SIZE; c++) {
+      for (let r = 0; r < MATCH3_GRID_SIZE - 2; r++) {
+        const item = currentBoard[r][c];
+        if (!item) continue;
+        const type = item.type;
+        let matchLen = 1;
+        while (r + matchLen < MATCH3_GRID_SIZE && currentBoard[r + matchLen][c]?.type === type) {
+          matchLen++;
+        }
+        if (matchLen >= 3) {
+          for (let k = 0; k < matchLen; k++) {
+            matched.add(`${r + k},${c}`);
+          }
+          r += matchLen - 1;
+        }
+      }
+    }
+
+    return Array.from(matched).map(str => {
+      const [r, c] = str.split(',').map(Number);
+      return { r, c };
+    });
+  }, []);
+
+  // 5. 检查全盘是否存在有效解并评估分数 (供 AI 启发式代打引擎使用)
+  const findAllMovesWithScore = useCallback((currentBoard) => {
+    if (!currentBoard || currentBoard.length === 0) return [];
+    const b = currentBoard.map(row => row.map(cell => ({ ...cell })));
+    const moves = [];
+
+    for (let r = 0; r < MATCH3_GRID_SIZE; r++) {
+      for (let c = 0; c < MATCH3_GRID_SIZE; c++) {
+        // 水平
+        if (c + 1 < MATCH3_GRID_SIZE) {
+          const isSpecial1 = b[r][c]?.special !== MATCH3_SPECIAL_TYPES.NONE;
+          const isSpecial2 = b[r][c + 1]?.special !== MATCH3_SPECIAL_TYPES.NONE;
+
+          const tmp = b[r][c];
+          b[r][c] = b[r][c + 1];
+          b[r][c + 1] = tmp;
+          const matches = findMatchesOnBoard(b);
+
+          if (matches.length > 0 || (isSpecial1 && isSpecial2) || b[r][c]?.special === MATCH3_SPECIAL_TYPES.RAINBOW || b[r][c + 1]?.special === MATCH3_SPECIAL_TYPES.RAINBOW) {
+            let scoreValue = matches.length * 10;
+            if (matches.length >= 5) scoreValue += 300;
+            else if (matches.length === 4) scoreValue += 150;
+            if (isSpecial1 || isSpecial2) scoreValue += 100;
+            scoreValue += r * 4; // 偏好底部消除
+            moves.push({ r1: r, c1: c, r2: r, c2: c + 1, score: scoreValue });
+          }
+          b[r][c + 1] = b[r][c];
+          b[r][c] = tmp;
+        }
+        // 垂直
+        if (r + 1 < MATCH3_GRID_SIZE) {
+          const isSpecial1 = b[r][c]?.special !== MATCH3_SPECIAL_TYPES.NONE;
+          const isSpecial2 = b[r + 1][c]?.special !== MATCH3_SPECIAL_TYPES.NONE;
+
+          const tmp = b[r][c];
+          b[r][c] = b[r + 1][c];
+          b[r + 1][c] = tmp;
+          const matches = findMatchesOnBoard(b);
+
+          if (matches.length > 0 || (isSpecial1 && isSpecial2) || b[r][c]?.special === MATCH3_SPECIAL_TYPES.RAINBOW || b[r + 1][c]?.special === MATCH3_SPECIAL_TYPES.RAINBOW) {
+            let scoreValue = matches.length * 10;
+            if (matches.length >= 5) scoreValue += 300;
+            else if (matches.length === 4) scoreValue += 150;
+            if (isSpecial1 || isSpecial2) scoreValue += 100;
+            scoreValue += r * 4;
+            moves.push({ r1: r, c1: c, r2: r + 1, c2: c, score: scoreValue });
+          }
+          b[r + 1][c] = b[r][c];
+          b[r][c] = tmp;
+        }
+      }
+    }
+    return moves;
+  }, [findMatchesOnBoard]);
+
+  const findPossibleMove = useCallback((currentBoard) => {
+    const moves = findAllMovesWithScore(currentBoard);
+    if (moves.length === 0) return null;
+    return [{ r: moves[0].r1, c: moves[0].c1 }, { r: moves[0].r2, c: moves[0].c2 }];
+  }, [findAllMovesWithScore]);
+
+  // 6. 初始化棋盘
+  const createNewBoard = useCallback((curPalette) => {
+    let newBoard = [];
+    const palCount = curPalette.length;
+
+    let attempts = 0;
+    do {
+      newBoard = [];
+      for (let r = 0; r < MATCH3_GRID_SIZE; r++) {
+        const row = [];
+        for (let c = 0; c < MATCH3_GRID_SIZE; c++) {
+          let randType;
+          let retry = 0;
+          do {
+            randType = Math.floor(Math.random() * palCount);
+            retry++;
+          } while (
+            retry < 25 &&
+            ((c >= 2 && row[c - 1].type === randType && row[c - 2].type === randType) ||
+             (r >= 2 && newBoard[r - 1][c].type === randType && newBoard[r - 2][c].type === randType))
+          );
+          row.push({
+            type: randType,
+            special: MATCH3_SPECIAL_TYPES.NONE,
+            id: `${r}-${c}-${Math.random()}`
+          });
+        }
+        newBoard.push(row);
+      }
+      attempts++;
+    } while (attempts < 20 && (!findPossibleMove(newBoard) || findMatchesOnBoard(newBoard).length > 0));
+
+    return newBoard;
+  }, [findMatchesOnBoard, findPossibleMove]);
+
+  // 7. 启动关卡
+  const startLevel = useCallback((lvlIndex = 0) => {
+    const config = MATCH3_LEVEL_CONFIGS[lvlIndex] || MATCH3_LEVEL_CONFIGS[0];
+    setCurLevelIndex(lvlIndex);
+    const newPal = generateMorandiPalette(Math.min(7, 5 + lvlIndex));
+    setPalette(newPal);
+    const b = createNewBoard(newPal);
+    setBoard(b);
+    setClearedDrops(0);
+    setTimeLeft(config.time);
+    setIsPlaying(true);
+    setIsLevelCleared(false);
+    setIsGameOver(false);
+    setSelectedCell(null);
+    setHintCells([]);
+    setCombo(0);
+    setHintCount(3);
+    setShuffleCount(2);
+    setFloatingTexts([]);
+    jellyBounceRef.current = {};
+    isProcessingRef.current = false;
+    playSound('drop', 1);
+  }, [generateMorandiPalette, createNewBoard]);
+
+  // 只在初次加载时执行一次
+  useEffect(() => {
+    startLevel(0);
+  }, []);
+
+  // 8. 倒计时定时器
+  useEffect(() => {
+    if (!isPlaying || isGameOver || isLevelCleared) return;
+    const timer = setInterval(() => {
+      setTimeLeft(t => {
+        if (t <= 1) {
+          clearInterval(timer);
+          setIsPlaying(false);
+          setIsGameOver(true);
+          playSound('over');
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [isPlaying, isGameOver, isLevelCleared]);
+
+  const triggerFloatingText = (text, r, c, color = '#5C8A76') => {
+    const id = Date.now() + Math.random();
+    setFloatingTexts(prev => [...prev, { id, text, r, c, color }]);
+    setTimeout(() => {
+      setFloatingTexts(prev => prev.filter(item => item.id !== id));
+    }, 900);
+  };
+
+  // 9. 处理消除与重力坠落连锁 (Cascade Engine)
+  const processMatchesAndGravity = async (initialMatches, currentBoard, swapSource = null) => {
+    let curBoard = currentBoard.map(row => row.map(cell => ({ ...cell })));
+    let currentMatches = initialMatches;
+    let cascadeCombo = 0;
+
+    while (currentMatches.length > 0) {
+      cascadeCombo++;
+      setCombo(cascadeCombo);
+
+      const toRemove = new Set();
+      const newSpecialSpawns = [];
+
+      if (cascadeCombo === 1 && swapSource) {
+        if (currentMatches.length === 4) {
+          toRemove.add(`${swapSource.r},${swapSource.c}`);
+          newSpecialSpawns.push({
+            r: swapSource.r,
+            c: swapSource.c,
+            type: curBoard[swapSource.r][swapSource.c]?.type ?? 0,
+            special: Math.random() > 0.5 ? MATCH3_SPECIAL_TYPES.LINE_H : MATCH3_SPECIAL_TYPES.LINE_V
+          });
+        } else if (currentMatches.length >= 5) {
+          newSpecialSpawns.push({
+            r: swapSource.r,
+            c: swapSource.c,
+            type: curBoard[swapSource.r][swapSource.c]?.type ?? 0,
+            special: currentMatches.length >= 6 ? MATCH3_SPECIAL_TYPES.RAINBOW : MATCH3_SPECIAL_TYPES.BOMB
+          });
+        }
+      }
+
+      currentMatches.forEach(m => {
+        toRemove.add(`${m.r},${m.c}`);
+        const cell = curBoard[m.r][m.c];
+        if (cell?.special === MATCH3_SPECIAL_TYPES.LINE_H) {
+          for (let cc = 0; cc < MATCH3_GRID_SIZE; cc++) toRemove.add(`${m.r},${cc}`);
+        } else if (cell?.special === MATCH3_SPECIAL_TYPES.LINE_V) {
+          for (let rr = 0; rr < MATCH3_GRID_SIZE; rr++) toRemove.add(`${rr},${m.c}`);
+        } else if (cell?.special === MATCH3_SPECIAL_TYPES.BOMB) {
+          for (let dr = -1; dr <= 1; dr++) {
+            for (let dc = -1; dc <= 1; dc++) {
+              const nr = m.r + dr;
+              const nc = m.c + dc;
+              if (nr >= 0 && nr < MATCH3_GRID_SIZE && nc >= 0 && nc < MATCH3_GRID_SIZE) {
+                toRemove.add(`${nr},${nc}`);
+              }
+            }
+          }
+        }
+      });
+
+      const removeList = Array.from(toRemove).map(s => {
+        const [r, c] = s.split(',').map(Number);
+        return { r, c };
+      });
+
+      const pointsEarned = removeList.length * 15 * cascadeCombo;
+      setScore(s => s + pointsEarned);
+      setClearedDrops(prev => prev + removeList.length);
+
+      if (cascadeCombo >= 2) {
+        const bonusTime = cascadeCombo >= 4 ? 3 : 1;
+        setTimeLeft(t => Math.min(curConfig.time + 20, t + bonusTime));
+        triggerFloatingText(`+${bonusTime}⏱️`, removeList[0].r, removeList[0].c, '#D6724B');
+      }
+
+      triggerFloatingText(`+${removeList.length}💧`, removeList[0].r, removeList[0].c, '#467B63');
+      playSound('pop', 0.9 + cascadeCombo * 0.15);
+
+      removeList.forEach(({ r, c }) => {
+        curBoard[r][c] = null;
+      });
+
+      newSpecialSpawns.forEach(sp => {
+        curBoard[sp.r][sp.c] = {
+          type: sp.type,
+          special: sp.special,
+          id: `${sp.r}-${sp.c}-${Math.random()}`
+        };
+      });
+
+      setBoard(curBoard.map(row => [...row]));
+      await new Promise(res => setTimeout(res, 180));
+
+      const palCount = palette.length;
+      for (let c = 0; c < MATCH3_GRID_SIZE; c++) {
+        let emptyCount = 0;
+        for (let r = MATCH3_GRID_SIZE - 1; r >= 0; r--) {
+          if (curBoard[r][c] === null) {
+            emptyCount++;
+          } else if (emptyCount > 0) {
+            curBoard[r + emptyCount][c] = curBoard[r][c];
+            curBoard[r][c] = null;
+            jellyBounceRef.current[`${r + emptyCount},${c}`] = Date.now();
+          }
+        }
+        for (let r = 0; r < emptyCount; r++) {
+          curBoard[r][c] = {
+            type: Math.floor(Math.random() * palCount),
+            special: MATCH3_SPECIAL_TYPES.NONE,
+            id: `${r}-${c}-${Math.random()}`
+          };
+          jellyBounceRef.current[`${r},${c}`] = Date.now();
+        }
+      }
+
+      setBoard(curBoard.map(row => [...row]));
+      playSound('drop', 0.8 + cascadeCombo * 0.1);
+      await new Promise(res => setTimeout(res, 220));
+
+      currentMatches = findMatchesOnBoard(curBoard);
+    }
+
+    if (!findPossibleMove(curBoard)) {
+      triggerFloatingText('🔀', 3, 3, '#7AA693');
+      curBoard = createNewBoard(palette);
+      setBoard(curBoard);
+    }
+
+    isProcessingRef.current = false;
+  };
+
+  // 10. 检查是否达成当前关卡目标
+  useEffect(() => {
+    if (clearedDrops >= curConfig.targetDrops && isPlaying && !isLevelCleared && !isGameOver) {
+      setIsLevelCleared(true);
+      playSound('win');
+
+      const reward = curConfig.reward;
+      setEarnedCoins(prev => prev + reward);
+      try {
+        const currentTotal = parseInt(localStorage.getItem("farm_coins") || "0", 10);
+        const newTotal = currentTotal + reward;
+        localStorage.setItem("farm_coins", String(newTotal));
+        window.dispatchEvent(new Event("storage"));
+
+        if (typeof window.addTransactionRecord === "function") {
+          window.addTransactionRecord({
+            type: "income",
+            amount: reward,
+            title: `广陵消消 · 第${curConfig.level}关赏金`,
+            description: `达成 ${clearedDrops}/${curConfig.targetDrops} 灵珠目标，犒赏 +${reward} 铢`,
+            time: new Date().toLocaleString()
+          });
+        }
+      } catch (e) {}
+    }
+  }, [clearedDrops, curConfig, isPlaying, isLevelCleared, isGameOver]);
+
+  // 11. 执行交换逻辑
+  const performSwap = async (r1, c1, r2, c2) => {
+    if (isProcessingRef.current || isGameOver || isLevelCleared) return;
+    isProcessingRef.current = true;
+    setSelectedCell(null);
+    setHintCells([]);
+
+    jellyBounceRef.current[`${r1},${c1}`] = Date.now();
+    jellyBounceRef.current[`${r2},${c2}`] = Date.now();
+
+    const newBoard = board.map(row => row.map(cell => ({ ...cell })));
+
+    const isRainbow1 = newBoard[r1][c1]?.special === MATCH3_SPECIAL_TYPES.RAINBOW;
+    const isRainbow2 = newBoard[r2][c2]?.special === MATCH3_SPECIAL_TYPES.RAINBOW;
+
+    if (isRainbow1 || isRainbow2) {
+      playSound('jelly', 1.3);
+      const targetType = isRainbow1 ? newBoard[r2][c2]?.type : newBoard[r1][c1]?.type;
+      const matched = [];
+      for (let r = 0; r < MATCH3_GRID_SIZE; r++) {
+        for (let c = 0; c < MATCH3_GRID_SIZE; c++) {
+          if (newBoard[r][c]?.type === targetType || (r === r1 && c === c1) || (r === r2 && c === c2)) {
+            matched.push({ r, c });
+          }
+        }
+      }
+      const tmp = newBoard[r1][c1];
+      newBoard[r1][c1] = newBoard[r2][c2];
+      newBoard[r2][c2] = tmp;
+      setBoard(newBoard);
+      await processMatchesAndGravity(matched, newBoard, { r: r2, c: c2 });
+      return;
+    }
+
+    const tmp = newBoard[r1][c1];
+    newBoard[r1][c1] = newBoard[r2][c2];
+    newBoard[r2][c2] = tmp;
+    setBoard(newBoard);
+    playSound('jelly', 1.1);
+
+    const matches = findMatchesOnBoard(newBoard);
+    if (matches.length === 0) {
+      await new Promise(r => setTimeout(r, 220));
+      newBoard[r2][c2] = newBoard[r1][c1];
+      newBoard[r1][c1] = tmp;
+      setBoard(newBoard);
+      playSound('drop', 0.6);
+      isProcessingRef.current = false;
+      return;
+    }
+
+    await processMatchesAndGravity(matches, newBoard, { r: r2, c: c2 });
+  };
+
+  // 12. 🌟 密探「看TA操作」代打循环引擎
+  useEffect(() => {
+    if (playMode !== 'auto' || isGameOver || isLevelCleared || !isPlaying) return;
+
+    const autoTimer = setInterval(() => {
+      if (isProcessingRef.current) return;
+
+      const moves = findAllMovesWithScore(board);
+      if (moves.length === 0) return;
+
+      moves.sort((a, b) => b.score - a.score);
+
+      let chosenMove = moves[0];
+      if (moves.length > 1 && Math.random() < 0.3) {
+        chosenMove = moves[Math.floor(Math.random() * Math.min(3, moves.length))];
+      }
+
+      performSwap(chosenMove.r1, chosenMove.c1, chosenMove.r2, chosenMove.c2);
+    }, 720);
+
+    return () => clearInterval(autoTimer);
+  }, [playMode, board, isGameOver, isLevelCleared, isPlaying, findAllMovesWithScore]);
+
+  // 13. 玩家触控交互
+  const handlePointerDown = (e) => {
+    if (playMode === 'auto' || isProcessingRef.current || isGameOver || isLevelCleared) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const clientX = e.clientX ?? (e.touches && e.touches[0]?.clientX);
+    const clientY = e.clientY ?? (e.touches && e.touches[0]?.clientY);
+    if (clientX === undefined || clientY === undefined) return;
+
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const canvasX = (clientX - rect.left) * scaleX;
+    const canvasY = (clientY - rect.top) * scaleY;
+
+    const padding = 12;
+    const cellSize = (canvas.width - padding * 2) / MATCH3_GRID_SIZE;
+    const col = Math.floor((canvasX - padding) / cellSize);
+    const row = Math.floor((canvasY - padding) / cellSize);
+
+    if (row < 0 || row >= MATCH3_GRID_SIZE || col < 0 || col >= MATCH3_GRID_SIZE) return;
+
+    touchStartRef.current = { row, col, clientX, clientY };
+    jellyBounceRef.current[`${row},${col}`] = Date.now();
+    playSound('jelly', 1.2);
+
+    if (!selectedCell) {
+      setSelectedCell({ r: row, c: col });
+    } else {
+      const isAdjacent = (Math.abs(selectedCell.r - row) === 1 && selectedCell.c === col) ||
+                         (Math.abs(selectedCell.c - col) === 1 && selectedCell.r === row);
+
+      if (isAdjacent) {
+        const { r: r1, c: c1 } = selectedCell;
+        setSelectedCell(null);
+        performSwap(r1, c1, row, col);
+      } else if (selectedCell.r === row && selectedCell.c === col) {
+        setSelectedCell(null);
+      } else {
+        setSelectedCell({ r: row, c: col });
+      }
+    }
+  };
+
+  const handlePointerUp = (e) => {
+    if (playMode === 'auto' || !touchStartRef.current || isProcessingRef.current || isGameOver || isLevelCleared) return;
+    const start = touchStartRef.current;
+    touchStartRef.current = null;
+
+    const clientX = e.clientX ?? (e.changedTouches && e.changedTouches[0]?.clientX);
+    const clientY = e.clientY ?? (e.changedTouches && e.changedTouches[0]?.clientY);
+    if (clientX === undefined || clientY === undefined) return;
+
+    const dx = clientX - start.clientX;
+    const dy = clientY - start.clientY;
+    const threshold = 18;
+
+    if (Math.abs(dx) > threshold || Math.abs(dy) > threshold) {
+      let targetRow = start.row;
+      let targetCol = start.col;
+      if (Math.abs(dx) > Math.abs(dy)) {
+        targetCol += dx > 0 ? 1 : -1;
+      } else {
+        targetRow += dy > 0 ? 1 : -1;
+      }
+
+      if (targetRow >= 0 && targetRow < MATCH3_GRID_SIZE && targetCol >= 0 && targetCol < MATCH3_GRID_SIZE) {
+        setSelectedCell(null);
+        performSwap(start.row, start.col, targetRow, targetCol);
+      }
+    }
+  };
+
+  const useHint = () => {
+    if (hintCount <= 0 || isProcessingRef.current || isGameOver || isLevelCleared) return;
+    const move = findPossibleMove(board);
+    if (move) {
+      setHintCount(c => c - 1);
+      setHintCells(move);
+      playSound('jelly', 1.5);
+      setTimeout(() => setHintCells([]), 2800);
+    }
+  };
+
+  const useShuffle = () => {
+    if (shuffleCount <= 0 || isProcessingRef.current || isGameOver || isLevelCleared) return;
+    setShuffleCount(c => c - 1);
+    const b = createNewBoard(palette);
+    setBoard(b);
+    setSelectedCell(null);
+    setHintCells([]);
+    playSound('drop', 0.8);
+  };
+
+  // 14. 🌟 局内小窗发送聊天
+  const handleSendInGameChat = async () => {
+    const text = chatInput.trim();
+    if (!text || isAiReplying || !selectedChar) return;
+
+    setChatInput('');
+    const userMsg = {
+      id: Date.now() + Math.random(),
+      role: 'user',
+      content: text,
+      timestamp: Date.now()
+    };
+    const nextMsgs = [...inGameChatMsgs, userMsg];
+    setInGameChatMsgs(nextMsgs);
+    await Match3ChatDB.saveMessage(selectedChar.id, userMsg);
+    setIsAiReplying(true);
+
+    try {
+      const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
+      let userContext = "【主控身份】姓名:主控, 性格:沉稳, 背景:隐秘阁主";
+      try {
+        const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+        const activeId = localStorage.getItem("active_persona_id");
+        if (activeId) {
+          const activeUser = savedPersonas.find(p => p.id == activeId);
+          if (activeUser) {
+            userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
+          }
+        }
+      } catch (e) {}
+
+      const profile = selectedChar.profile || {};
+      const charContext = `【密探角色设定】
+姓名: ${selectedChar.name}
+性格特征: ${profile.personality || profile.description || "机敏沉稳"}
+说话口吻: ${profile.style || profile.tone || "古风自然，生动细腻"}
+习惯用语: ${profile.catchphrase || "无"}`;
+
+      const gameContext = `【广陵消消战况】
+- 当前关卡：第 ${curConfig.level} 关
+- 水滴进度：已收集 ${clearedDrops} / 目标 ${curConfig.targetDrops}
+- 剩余时间：${timeLeft} 秒
+- 当前模式：${playMode === 'auto' ? '你（密探）正在替楼主代打消除' : '楼主正在亲自操作消除'}`;
+
+      const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
+${worldContext}
+${userContext}
+${charContext}
+${gameContext}
+【对话要求】：你正在案前陪伴楼主玩「广陵消消」三消小游戏。完全以【${selectedChar.name}】的语气和身份，结合战况回复楼主。25~60字左右，生动自然，切勿出戏，切勿提AI。`;
+
+      const apiMessages = [
+        { role: "system", content: sysPrompt },
+        ...nextMsgs.slice(-6).map(m => ({ role: m.role, content: m.content }))
+      ];
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          apiMessages,
+          null,
+          async (reply) => {
+            const cleanReply = reply.trim();
+            const aiMsg = {
+              id: Date.now() + Math.random(),
+              role: 'assistant',
+              content: cleanReply,
+              timestamp: Date.now()
+            };
+            setInGameChatMsgs(prev => [...prev, aiMsg]);
+            await Match3ChatDB.saveMessage(selectedChar.id, aiMsg);
+            setIsAiReplying(false);
+          },
+          () => setIsAiReplying(false)
+        );
+      } else {
+        setIsAiReplying(false);
+      }
+    } catch (e) {
+      setIsAiReplying(false);
+    }
+  };
+
+  // 15. Canvas 渲染循环 (带 Q 弹果冻呼吸与微弹物理插值)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    const render = () => {
+      const width = canvas.width;
+      const height = canvas.height;
+      const now = Date.now();
+
+      ctx.clearRect(0, 0, width, height);
+
+      const bgGrad = ctx.createLinearGradient(0, 0, width, height);
+      bgGrad.addColorStop(0, '#FAF8F5');
+      bgGrad.addColorStop(1, '#F3ECE4');
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, width, height);
+
+      const padding = 12;
+      const cellSize = (width - padding * 2) / MATCH3_GRID_SIZE;
+      const baseDropRadius = cellSize * 0.38;
+
+      for (let r = 0; r < MATCH3_GRID_SIZE; r++) {
+        for (let c = 0; c < MATCH3_GRID_SIZE; c++) {
+          const cx = padding + c * cellSize + cellSize / 2;
+          const cy = padding + r * cellSize + cellSize / 2;
+
+          ctx.fillStyle = 'rgba(230, 222, 214, 0.45)';
+          ctx.beginPath();
+          ctx.arc(cx, cy, cellSize * 0.44, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      if (selectedCell) {
+        const cx = padding + selectedCell.c * cellSize + cellSize / 2;
+        const cy = padding + selectedCell.r * cellSize + cellSize / 2;
+        ctx.strokeStyle = '#7AA693';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.arc(cx, cy, cellSize * 0.46, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+
+      hintCells.forEach(cell => {
+        const cx = padding + cell.c * cellSize + cellSize / 2;
+        const cy = padding + cell.r * cellSize + cellSize / 2;
+        ctx.strokeStyle = '#E09F67';
+        ctx.lineWidth = 2.5;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.arc(cx, cy, cellSize * 0.46, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      });
+
+      for (let r = 0; r < MATCH3_GRID_SIZE; r++) {
+        for (let c = 0; c < MATCH3_GRID_SIZE; c++) {
+          const item = board[r]?.[c];
+          if (!item) continue;
+
+          const cx = padding + c * cellSize + cellSize / 2;
+          const cy = padding + r * cellSize + cellSize / 2;
+          const color = palette[item.type] || palette[0];
+
+          let scaleX = 1.0;
+          let scaleY = 1.0;
+
+          if (selectedCell && selectedCell.r === r && selectedCell.c === c) {
+            const t = now * 0.007;
+            scaleX = 1.0 + 0.12 * Math.sin(t);
+            scaleY = 1.0 - 0.12 * Math.sin(t);
+          }
+
+          const bounceTime = jellyBounceRef.current[`${r},${c}`];
+          if (bounceTime) {
+            const dt = (now - bounceTime) / 1000;
+            if (dt < 0.35) {
+              const decay = Math.exp(-dt * 9);
+              const osc = Math.cos(dt * 26);
+              const delta = 0.25 * decay * osc;
+              scaleX += delta;
+              scaleY -= delta;
+            } else {
+              delete jellyBounceRef.current[`${r},${c}`];
+            }
+          }
+
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.scale(scaleX, scaleY);
+
+          ctx.shadowColor = color.shadow;
+          ctx.shadowBlur = 6;
+          ctx.shadowOffsetY = 3;
+
+          ctx.beginPath();
+          ctx.arc(0, baseDropRadius * 0.15, baseDropRadius * 0.85, 0, Math.PI * 2);
+
+          const dropGrad = ctx.createRadialGradient(
+            -baseDropRadius * 0.25,
+            -baseDropRadius * 0.25,
+            baseDropRadius * 0.1,
+            0,
+            0,
+            baseDropRadius
+          );
+          dropGrad.addColorStop(0, color.light);
+          dropGrad.addColorStop(0.6, color.main);
+          dropGrad.addColorStop(1, color.dark);
+
+          ctx.fillStyle = dropGrad;
+          ctx.fill();
+          ctx.restore();
+
+          ctx.save();
+          ctx.translate(cx, cy);
+          ctx.scale(scaleX, scaleY);
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.75)';
+          ctx.beginPath();
+          ctx.ellipse(
+            -baseDropRadius * 0.28,
+            -baseDropRadius * 0.28,
+            baseDropRadius * 0.28,
+            baseDropRadius * 0.16,
+            -Math.PI / 4,
+            0,
+            Math.PI * 2
+          );
+          ctx.fill();
+
+          if (item.special === MATCH3_SPECIAL_TYPES.LINE_H) {
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(-baseDropRadius * 0.45, 0);
+            ctx.lineTo(baseDropRadius * 0.45, 0);
+            ctx.stroke();
+          } else if (item.special === MATCH3_SPECIAL_TYPES.LINE_V) {
+            ctx.strokeStyle = '#FFFFFF';
+            ctx.lineWidth = 2;
+            ctx.beginPath();
+            ctx.moveTo(0, -baseDropRadius * 0.45);
+            ctx.lineTo(0, baseDropRadius * 0.45);
+            ctx.stroke();
+          } else if (item.special === MATCH3_SPECIAL_TYPES.BOMB) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = `${Math.floor(cellSize * 0.35)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('💥', 0, 0);
+          } else if (item.special === MATCH3_SPECIAL_TYPES.RAINBOW) {
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = `${Math.floor(cellSize * 0.35)}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('🌈', 0, 0);
+          }
+          ctx.restore();
+        }
+      }
+
+      animFrameIdRef.current = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      if (animFrameIdRef.current) cancelAnimationFrame(animFrameIdRef.current);
+    };
+  }, [board, palette, selectedCell, hintCells]);
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 260,
+        background: 'linear-gradient(180deg, #FBF9F5 0%, #F4EFEA 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: '"GuanKiapTsingKhai", "Plus Jakarta Sans", sans-serif',
+        userSelect: 'none',
+        overflow: 'hidden',
+        animation: 'fadeIn 0.25s ease-out'
+      }}
+    >
+      {/* 1. 顶部第一栏 (返回 + 关卡/水滴/倒计时) */}
+      <div
+        style={{
+          padding: '8px 16px',
+          paddingTop: 'max(24px, env(safe-area-inset-top))',
+          background: 'rgba(255, 255, 255, 0.88)',
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 2px 10px rgba(120, 100, 90, 0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0
+        }}
+      >
+        <div
+          onClick={onBack}
+          title="←"
+          style={{ cursor: 'pointer', padding: '6px 8px', marginLeft: '-8px', display: 'flex', alignItems: 'center' }}
+        >
+          <span style={{ fontSize: '1.25rem', color: '#6A5F55' }}>←</span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: 'linear-gradient(135deg, #F5EDDF 0%, #EADDCA 100%)',
+              padding: '3px 9px',
+              borderRadius: '20px',
+              border: '1px solid rgba(218, 160, 109, 0.35)',
+              color: '#8A5825',
+              fontWeight: 'bold',
+              fontSize: '0.82rem'
+            }}
+          >
+            <span>🌟</span>
+            <span>{curConfig.level}</span>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: clearedDrops >= curConfig.targetDrops ? 'rgba(122, 166, 147, 0.25)' : 'rgba(122, 166, 147, 0.15)',
+              padding: '3px 11px',
+              borderRadius: '20px',
+              border: '1px solid rgba(122, 166, 147, 0.35)'
+            }}
+          >
+            <span style={{ fontSize: '0.85rem' }}>💧</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: '#467B63' }}>
+              {clearedDrops}/{curConfig.targetDrops}
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: timeLeft <= 10 ? 'rgba(214, 114, 75, 0.18)' : 'rgba(224, 159, 103, 0.15)',
+              padding: '3px 9px',
+              borderRadius: '20px',
+              border: timeLeft <= 10 ? '1px solid #D6724B' : '1px solid rgba(224, 159, 103, 0.3)',
+              color: timeLeft <= 10 ? '#D6724B' : '#8A5825',
+              transition: 'all 0.3s'
+            }}
+          >
+            <span style={{ fontSize: '0.8rem' }}>⏱️</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>{timeLeft}s</span>
+          </div>
+        </div>
+
+        <div style={{ width: '24px' }} />
+      </div>
+
+      {/* 2. 🌟 顶部计时下方第二栏 (密探名牌 + 看TA操作胶囊 + 局内小窗胶囊) */}
+      <div
+        style={{
+          padding: '6px 14px',
+          background: 'rgba(255, 255, 255, 0.72)',
+          backdropFilter: 'blur(8px)',
+          borderBottom: '1px solid rgba(230, 220, 210, 0.6)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: '8px',
+          flexShrink: 0
+        }}
+      >
+        {/* 密探名牌选择 */}
+        <div
+          onClick={() => setShowCharModal(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '3px 8px 3px 4px',
+            borderRadius: '16px',
+            background: 'rgba(255, 255, 255, 0.95)',
+            border: '1.2px solid #E2D5C7',
+            cursor: 'pointer',
+            boxShadow: '0 2px 4px rgba(0,0,0,0.03)'
+          }}
+        >
+          <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', background: '#EEE' }}>
+            <UniversalAvatarLoader
+              avatar={selectedChar?.avatar}
+              avatarId={selectedChar?.avatarId || selectedChar?.id}
+              name={selectedChar?.name}
+              fallbackColor={selectedChar?.avatarColor}
+              style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+            />
+          </div>
+          <span style={{ fontSize: '0.76rem', color: '#4E342E', fontWeight: 'bold' }}>
+            {selectedChar?.name || '密探'}
+          </span>
+          <span style={{ fontSize: '0.62rem', color: '#8A7D71' }}>▼</span>
+        </div>
+
+        {/* 中间：看TA操作 / 自己操作切换胶囊按钮 */}
+        <div
+          onClick={() => {
+            const nextMode = playMode === 'auto' ? 'manual' : 'auto';
+            setPlayMode(nextMode);
+            playSound('jelly', 1.4);
+          }}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '5px',
+            padding: '4px 12px',
+            borderRadius: '16px',
+            background: playMode === 'auto' ? 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)' : 'rgba(255, 255, 255, 0.95)',
+            border: playMode === 'auto' ? '1.2px solid #5C8A76' : '1.2px solid #D8CFC4',
+            color: playMode === 'auto' ? '#FFF' : '#5C4E42',
+            cursor: 'pointer',
+            boxShadow: playMode === 'auto' ? '0 3px 8px rgba(92, 138, 118, 0.25)' : '0 2px 4px rgba(0,0,0,0.03)',
+            transition: 'all 0.25s',
+            fontSize: '0.78rem',
+            fontWeight: 'bold'
+          }}
+        >
+          <span>{playMode === 'auto' ? '🤖' : '🎮'}</span>
+          <span>{playMode === 'auto' ? '看TA操作' : '自己操作'}</span>
+        </div>
+
+        {/* 右侧：局内小窗按钮 */}
+        <div
+          onClick={() => setShowInGameChat(true)}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            padding: '4px 10px',
+            borderRadius: '16px',
+            background: 'linear-gradient(135deg, #F0F6FF 0%, #E2EDFC 100%)',
+            border: '1.2px solid #B8D4F5',
+            color: '#3B6EA8',
+            cursor: 'pointer',
+            fontSize: '0.78rem',
+            fontWeight: 'bold',
+            boxShadow: '0 2px 4px rgba(59, 110, 168, 0.1)'
+          }}
+        >
+          <span>💬</span>
+          <span>局内小窗</span>
+        </div>
+      </div>
+
+      {/* 3. 倒计时水波进度条 */}
+      <div style={{ width: '100%', height: '3px', background: '#EDE4D8', flexShrink: 0, position: 'relative' }}>
+        <div
+          style={{
+            height: '100%',
+            width: `${Math.min(100, (timeLeft / curConfig.time) * 100)}%`,
+            background: timeLeft <= 10 ? 'linear-gradient(90deg, #D6724B 0%, #E09F67 100%)' : 'linear-gradient(90deg, #7AA693 0%, #A8C8BA 100%)',
+            transition: 'width 1s linear'
+          }}
+        />
+      </div>
+
+      {/* 4. 8x8 水滴 Canvas 棋盘 */}
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+          padding: '2px 14px',
+          minHeight: 0,
+          overflow: 'hidden',
+          position: 'relative'
+        }}
+      >
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '320px',
+            aspectRatio: '1 / 1',
+            background: 'rgba(235, 227, 219, 0.75)',
+            backdropFilter: 'blur(16px)',
+            borderRadius: '24px',
+            padding: '6px',
+            boxShadow: '0 8px 24px rgba(130, 110, 95, 0.1), inset 0 2px 6px rgba(255, 255, 255, 0.8), inset 0 -2px 6px rgba(0, 0, 0, 0.04)',
+            border: '2px solid rgba(255, 255, 255, 0.9)',
+            position: 'relative',
+            touchAction: 'none'
+          }}
+        >
+          <canvas
+            ref={canvasRef}
+            width={310}
+            height={310}
+            onPointerDown={handlePointerDown}
+            onPointerUp={handlePointerUp}
+            style={{
+              width: '100%',
+              height: '100%',
+              borderRadius: '18px',
+              display: 'block',
+              cursor: isGameOver || isLevelCleared || playMode === 'auto' ? 'default' : 'pointer'
+            }}
+          />
+
+          {floatingTexts.map(f => (
+            <div
+              key={f.id}
+              style={{
+                position: 'absolute',
+                left: `${(f.c / MATCH3_GRID_SIZE) * 100 + 4}%`,
+                top: `${(f.r / MATCH3_GRID_SIZE) * 100 - 5}%`,
+                color: f.color,
+                fontSize: '1.1rem',
+                fontWeight: 'bold',
+                textShadow: '0 1px 3px rgba(255,255,255,0.9)',
+                pointerEvents: 'none',
+                animation: 'floatUp 0.8s ease-out forwards',
+                zIndex: 10
+              }}
+            >
+              {f.text}
+            </div>
+          ))}
+        </div>
+
+        {/* 5. 底部道具控制栏 (纯图标设计) */}
+        <div
+          style={{
+            width: '100%',
+            maxWidth: '320px',
+            marginTop: '8px',
+            marginBottom: 'max(6px, env(safe-area-inset-bottom))',
+            display: 'flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            gap: '16px',
+            flexShrink: 0
+          }}
+        >
+          <button
+            onClick={useHint}
+            disabled={hintCount <= 0 || isGameOver || isLevelCleared}
+            title="💡"
+            style={{
+              width: '52px',
+              height: '42px',
+              borderRadius: '14px',
+              border: '1.5px solid rgba(255, 255, 255, 0.9)',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
+              color: hintCount > 0 ? '#E09F67' : '#CCC',
+              fontSize: '1.25rem',
+              cursor: hintCount > 0 ? 'pointer' : 'not-allowed',
+              boxShadow: '0 2px 6px rgba(120, 100, 85, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative'
+            }}
+          >
+            <span>💡</span>
+            <span
+              style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                background: '#E09F67',
+                color: '#FFF',
+                borderRadius: '50%',
+                width: 16,
+                height: 16,
+                fontSize: '0.62rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold'
+              }}
+            >
+              {hintCount}
+            </span>
+          </button>
+
+          <button
+            onClick={useShuffle}
+            disabled={shuffleCount <= 0 || isGameOver || isLevelCleared}
+            title="🔀"
+            style={{
+              width: '52px',
+              height: '42px',
+              borderRadius: '14px',
+              border: '1.5px solid rgba(255, 255, 255, 0.9)',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
+              color: shuffleCount > 0 ? '#7AA693' : '#CCC',
+              fontSize: '1.25rem',
+              cursor: shuffleCount > 0 ? 'pointer' : 'not-allowed',
+              boxShadow: '0 2px 6px rgba(120, 100, 85, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              position: 'relative'
+            }}
+          >
+            <span>🔀</span>
+            <span
+              style={{
+                position: 'absolute',
+                top: -4,
+                right: -4,
+                background: '#7AA693',
+                color: '#FFF',
+                borderRadius: '50%',
+                width: 16,
+                height: 16,
+                fontSize: '0.62rem',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                fontWeight: 'bold'
+              }}
+            >
+              {shuffleCount}
+            </span>
+          </button>
+
+          <button
+            onClick={() => startLevel(curLevelIndex)}
+            title="🔄"
+            style={{
+              width: '52px',
+              height: '42px',
+              borderRadius: '14px',
+              border: '1.5px solid rgba(255, 255, 255, 0.9)',
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
+              color: '#5C4E42',
+              fontSize: '1.25rem',
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(120, 100, 85, 0.08)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <span>🔄</span>
+          </button>
+        </div>
+      </div>
+
+      {/* 6. 👥 密探选择抽屉 */}
+      {showCharModal && (
+        <div
+          onClick={() => setShowCharModal(false)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(0,0,0,0.5)',
+            backdropFilter: 'blur(4px)',
+            zIndex: 400,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#FFFDF9',
+              borderRadius: 24,
+              padding: 20,
+              width: '100%',
+              maxWidth: 320,
+              maxHeight: '75vh',
+              overflowY: 'auto',
+              boxShadow: '0 16px 36px rgba(0,0,0,0.2)',
+              border: '2px solid rgba(255,255,255,0.9)'
+            }}
+          >
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <div style={{ fontWeight: 'bold', fontSize: '1rem', color: '#4E342E' }}>
+                👥 选择同行密探
+              </div>
+              <div
+                onClick={() => setShowCharModal(false)}
+                style={{ cursor: 'pointer', fontSize: '1.2rem', color: '#8D6E63' }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {availableChars.length === 0 ? (
+              <div style={{ padding: '30px 0', textAlign: 'center', color: '#8D6E63', fontSize: '0.85rem' }}>
+                暂未在【传讯】中配置密探角色，请先前往传讯添加。
+              </div>
+            ) : (
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
+                {availableChars.map(char => {
+                  const isCur = selectedChar && String(selectedChar.id) === String(char.id);
+                  return (
+                    <div
+                      key={char.id}
+                      onClick={() => {
+                        setSelectedChar(char);
+                        try {
+                          localStorage.setItem("milvus_match3_char_id", String(char.id));
+                        } catch (e) {}
+                        setShowCharModal(false);
+                      }}
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        padding: '10px 6px',
+                        borderRadius: 16,
+                        background: isCur ? 'rgba(122, 166, 147, 0.18)' : 'rgba(240, 235, 228, 0.6)',
+                        border: isCur ? '2px solid #7AA693' : '1px solid transparent',
+                        cursor: 'pointer',
+                        position: 'relative'
+                      }}
+                    >
+                      <div
+                        style={{
+                          width: 44,
+                          height: 44,
+                          borderRadius: '50%',
+                          overflow: 'hidden',
+                          marginBottom: 6,
+                          background: '#EAE0D5'
+                        }}
+                      >
+                        <UniversalAvatarLoader
+                          avatar={char.avatar}
+                          avatarId={char.avatarId || char.id}
+                          name={char.name}
+                          fallbackColor={char.avatarColor}
+                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                        />
+                      </div>
+                      <div
+                        style={{
+                          fontSize: '0.8rem',
+                          fontWeight: 'bold',
+                          color: '#4E342E',
+                          textAlign: 'center',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          width: '100%'
+                        }}
+                      >
+                        {char.name}
+                      </div>
+                      {isCur && (
+                        <div
+                          style={{
+                            position: 'absolute',
+                            top: 4,
+                            right: 4,
+                            background: '#7AA693',
+                            color: '#FFF',
+                            borderRadius: '50%',
+                            width: 16,
+                            height: 16,
+                            fontSize: '0.65rem',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 'bold'
+                          }}
+                        >
+                          ✓
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* 7. 💬 局内小窗半屏对话弹窗 */}
+      {showInGameChat && (
+        <div
+          onClick={() => setShowInGameChat(false)}
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(50, 40, 35, 0.45)',
+            backdropFilter: 'blur(5px)',
+            zIndex: 450,
+            display: 'flex',
+            alignItems: 'flex-end',
+            justifyContent: 'center',
+            animation: 'fadeIn 0.2s ease-out'
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: 'linear-gradient(180deg, #FDFBF7 0%, #F8F1E8 100%)',
+              borderTopLeftRadius: '24px',
+              borderTopRightRadius: '24px',
+              padding: '16px',
+              width: '100%',
+              maxWidth: '360px',
+              height: '65vh',
+              display: 'flex',
+              flexDirection: 'column',
+              boxShadow: '0 -8px 24px rgba(0,0,0,0.15)',
+              borderTop: '2px solid rgba(255,255,255,0.9)'
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', background: '#EEE' }}>
+                  <UniversalAvatarLoader
+                    avatar={selectedChar?.avatar}
+                    avatarId={selectedChar?.avatarId || selectedChar?.id}
+                    name={selectedChar?.name}
+                    fallbackColor={selectedChar?.avatarColor}
+                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                  />
+                </div>
+                <div>
+                  <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E' }}>
+                    {selectedChar?.name || '密探'} · 消除心语
+                  </div>
+                  <div style={{ fontSize: '0.68rem', color: '#8A7D71' }}>
+                    第 {curConfig.level} 关 | 灵珠 {clearedDrops}/{curConfig.targetDrops}
+                  </div>
+                </div>
+              </div>
+              <div
+                onClick={() => setShowInGameChat(false)}
+                style={{
+                  width: '26px',
+                  height: '26px',
+                  borderRadius: '50%',
+                  background: 'rgba(0,0,0,0.06)',
+                  color: '#6A5F55',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  cursor: 'pointer',
+                  fontWeight: 'bold',
+                  fontSize: '0.8rem'
+                }}
+              >
+                ✕
+              </div>
+            </div>
+
+            {/* 消息列表 */}
+            <div
+              ref={chatScrollRef}
+              style={{
+                flex: 1,
+                overflowY: 'auto',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                padding: '6px 2px'
+              }}
+            >
+              {inGameChatMsgs.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: '30px 0', color: '#A09285', fontSize: '0.8rem' }}>
+                  🍃 灵珠清脆，心语相通。在此可随时与【{selectedChar?.name || '密探'}】畅聊消消心得！
+                </div>
+              ) : (
+                inGameChatMsgs.map((m, idx) => {
+                  const isMe = m.role === 'user';
+                  return (
+                    <div
+                      key={m.id || idx}
+                      style={{
+                        display: 'flex',
+                        justifyContent: isMe ? 'flex-end' : 'flex-start',
+                        gap: '6px'
+                      }}
+                    >
+                      <div
+                        style={{
+                          maxWidth: '78%',
+                          padding: '8px 12px',
+                          borderRadius: '14px',
+                          fontSize: '0.82rem',
+                          lineHeight: '1.4',
+                          background: isMe ? 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)' : '#FFF',
+                          color: isMe ? '#FFF' : '#443C35',
+                          boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
+                          border: isMe ? 'none' : '1px solid #EDE4D8'
+                        }}
+                      >
+                        {m.content}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              {isAiReplying && (
+                <div style={{ alignSelf: 'flex-start', fontSize: '0.78rem', color: '#8A7D71', padding: '4px 10px', background: '#FFF', borderRadius: '12px', border: '1px solid #EDE4D8' }}>
+                  💭 {selectedChar?.name} 正在思量...
+                </div>
+              )}
+            </div>
+
+            {/* 输入栏 */}
+            <div style={{ display: 'flex', gap: '6px', paddingTop: '8px', borderTop: '1px solid #EAE0D5' }}>
+              <input
+                type="text"
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSendInGameChat();
+                }}
+                placeholder={`与 ${selectedChar?.name || '密探'} 聊聊战况...`}
+                style={{
+                  flex: 1,
+                  padding: '8px 12px',
+                  borderRadius: '16px',
+                  border: '1.5px solid #D8CFC4',
+                  background: '#FFF',
+                  fontSize: '0.82rem',
+                  outline: 'none'
+                }}
+              />
+              <button
+                onClick={handleSendInGameChat}
+                disabled={isAiReplying}
+                style={{
+                  padding: '0 14px',
+                  borderRadius: '16px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
+                  color: '#FFF',
+                  fontSize: '0.82rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer'
+                }}
+              >
+                发送
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. 🌟 关卡达成过关弹窗 */}
+      {isLevelCleared && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(60, 45, 35, 0.45)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 520,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.25s ease-out'
+          }}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)',
+              borderRadius: '24px',
+              padding: '26px 22px',
+              width: '100%',
+              maxWidth: '290px',
+              textAlign: 'center',
+              boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
+              border: '2px solid rgba(255, 255, 255, 0.9)'
+            }}
+          >
+            <div style={{ fontSize: '2.8rem', marginBottom: '6px' }}>
+              🌟✨🌟
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(122, 166, 147, 0.12)',
+                padding: '12px 14px',
+                borderRadius: '16px',
+                border: '1px solid rgba(122, 166, 147, 0.25)',
+                marginBottom: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '1.2rem' }}>💧</span>
+                <strong style={{ fontSize: '1.2rem', color: '#467B63' }}>
+                  {clearedDrops}/{curConfig.targetDrops}
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed #C8BDB0', paddingTop: '6px' }}>
+                <span style={{ fontSize: '1.2rem' }}>🪙</span>
+                <strong style={{ fontSize: '1.2rem', color: '#B36B21' }}>+{curConfig.reward}</strong>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={onBack}
+                title="←"
+                style={{
+                  width: '54px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  border: '1.5px solid #D8CFC4',
+                  background: '#FFFFFF',
+                  color: '#6E6256',
+                  fontSize: '1.3rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ←
+              </button>
+              {curLevelIndex < MATCH3_LEVEL_CONFIGS.length - 1 ? (
+                <button
+                  onClick={() => startLevel(curLevelIndex + 1)}
+                  title="▶"
+                  style={{
+                    flex: 1,
+                    height: '46px',
+                    borderRadius: '14px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
+                    color: '#FFFFFF',
+                    fontSize: '1.4rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(92, 138, 118, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  ▶
+                </button>
+              ) : (
+                <button
+                  onClick={() => startLevel(0)}
+                  title="🔄"
+                  style={{
+                    flex: 1,
+                    height: '46px',
+                    borderRadius: '14px',
+                    border: 'none',
+                    background: 'linear-gradient(135deg, #E09F67 0%, #D6724B 100%)',
+                    color: '#FFFFFF',
+                    fontSize: '1.4rem',
+                    cursor: 'pointer',
+                    boxShadow: '0 4px 12px rgba(214, 114, 75, 0.35)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center'
+                  }}
+                >
+                  🔄
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 9. 结算失败/超时弹窗 */}
+      {isGameOver && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(60, 45, 35, 0.45)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 520,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.25s ease-out'
+          }}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)',
+              borderRadius: '24px',
+              padding: '26px 22px',
+              width: '100%',
+              maxWidth: '290px',
+              textAlign: 'center',
+              boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
+              border: '2px solid rgba(255, 255, 255, 0.9)'
+            }}
+          >
+            <div style={{ fontSize: '2.8rem', marginBottom: '8px' }}>
+              ⏱️🍂
+            </div>
+
+            <div
+              style={{
+                background: 'rgba(122, 166, 147, 0.12)',
+                padding: '12px 14px',
+                borderRadius: '16px',
+                border: '1px solid rgba(122, 166, 147, 0.25)',
+                marginBottom: '16px',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px'
+              }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontSize: '1.2rem' }}>💧</span>
+                <strong style={{ fontSize: '1.2rem', color: '#467B63' }}>
+                  {clearedDrops}/{curConfig.targetDrops}
+                </strong>
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderTop: '1px dashed #C8BDB0', paddingTop: '6px' }}>
+                <span style={{ fontSize: '1.2rem' }}>🪙</span>
+                <strong style={{ fontSize: '1.2rem', color: '#B36B21' }}>+{earnedCoins}</strong>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: '12px', justifyContent: 'center' }}>
+              <button
+                onClick={onBack}
+                title="←"
+                style={{
+                  width: '54px',
+                  height: '46px',
+                  borderRadius: '14px',
+                  border: '1.5px solid #D8CFC4',
+                  background: '#FFFFFF',
+                  color: '#6E6256',
+                  fontSize: '1.3rem',
+                  cursor: 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                ←
+              </button>
+              <button
+                onClick={() => startLevel(curLevelIndex)}
+                title="🔄"
+                style={{
+                  flex: 1,
+                  height: '46px',
+                  borderRadius: '14px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
+                  color: '#FFFFFF',
+                  fontSize: '1.4rem',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(92, 138, 118, 0.35)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center'
+                }}
+              >
+                🔄
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
+// ==================== 黄巾矿工 · 物理探宝小游戏 ====================
+const YellowTurbanMinerPage = ({ onBack }) => {
+  const { useState, useEffect, useRef, useCallback } = React;
+
+  // 1. 机械键盘敲击音效合成器 (Web Audio API)
+  const playKeyboardSound = (type = 'click', pitch = 1) => {
+    try {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (!AudioCtx) return;
+      if (!window._minerAudioCtx) {
+        window._minerAudioCtx = new AudioCtx();
+      }
+      const ctx = window._minerAudioCtx;
+      if (ctx.state === 'suspended') ctx.resume();
+      const now = ctx.currentTime;
+
+      if (type === 'click') {
+        // 青轴清脆 click
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(3200 * pitch, now);
+        osc.frequency.exponentialRampToValueAtTime(800 * pitch, now + 0.025);
+
+        filter.type = 'bandpass';
+        filter.frequency.setValueAtTime(2400 * pitch, now);
+        filter.Q.setValueAtTime(3, now);
+
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.035);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.035);
+      } else if (type === 'thock') {
+        // 空格键稳重 Thock
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        const filter = ctx.createBiquadFilter();
+
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(450 * pitch, now);
+        osc.frequency.exponentialRampToValueAtTime(120 * pitch, now + 0.06);
+
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800 * pitch, now);
+
+        gain.gain.setValueAtTime(0.35, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.07);
+
+        osc.connect(filter);
+        filter.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.07);
+      } else if (type === 'bomb') {
+        // 重型敲击爆炸
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'sawtooth';
+        osc.frequency.setValueAtTime(220 * pitch, now);
+        osc.frequency.exponentialRampToValueAtTime(40, now + 0.18);
+
+        gain.gain.setValueAtTime(0.3, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.2);
+
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        osc.start(now);
+        osc.stop(now + 0.2);
+      } else if (type === 'win') {
+        // 连击键盘过关旋律
+        [1, 1.25, 1.5, 1.8, 2.0].forEach((p, i) => {
+          setTimeout(() => playKeyboardSound('click', p), i * 75);
+        });
+        setTimeout(() => playKeyboardSound('thock', 1.2), 400);
+      }
+    } catch (e) {}
+  };
+
+  // 2. 关卡无限计算器
+  const getLevelConfig = (lvl) => {
+    const target = 650 + (lvl - 1) * 700 + Math.floor(Math.pow(lvl - 1, 1.35) * 120);
+    const time = Math.max(35, 60 - Math.floor((lvl - 1) * 2));
+    return { level: lvl, targetMoney: target, timeLimit: time };
+  };
+
+  // 3. 游戏状态
+  const [level, setLevel] = useState(1);
+  const [money, setMoney] = useState(0);
+  const [targetMoney, setTargetMoney] = useState(650);
+  const [timeLeft, setTimeLeft] = useState(60);
+  const [bombs, setBombs] = useState(2);
+  const [hasDrink, setHasDrink] = useState(false); // 力量药水
+  const [hasBook, setHasBook] = useState(false);   // 鉴宝录
+  const [hasClover, setHasClover] = useState(false); // 黄天符
+
+  const [gameState, setGameState] = useState('PLAYING'); // 'PLAYING' | 'SHOP' | 'WIN' | 'GAMEOVER'
+  const [floatingScores, setFloatingScores] = useState([]);
+
+  // 自定义矿工头像
+  const [customAvatar, setCustomAvatar] = useState(() => {
+    try {
+      return localStorage.getItem('yellow_turban_miner_avatar') || null;
+    } catch (e) { return null; }
+  });
+  const fileInputRef = useRef(null);
+
+  const canvasRef = useRef(null);
+  const animIdRef = useRef(null);
+
+  // 4. 钩爪物理状态
+  const hookRef = useRef({
+    x: 160,
+    y: 48,
+    angle: 0,
+    angleSpeed: 0.032,
+    angleMin: -Math.PI * 0.42,
+    angleMax: Math.PI * 0.42,
+    length: 32,
+    baseLength: 32,
+    maxLength: 380,
+    state: 'SWINGING', // 'SWINGING' | 'SHOOTING' | 'RETRIEVING'
+    shootSpeed: 8.5,
+    pullSpeed: 7.0,
+    grabbedItem: null
+  });
+
+  const itemsRef = useRef([]);
+
+  // 5. 矿物生成算法 (根据关卡动态散布)
+  const generateItemsForLevel = useCallback((lvl, curHasBook, curHasClover) => {
+    const items = [];
+    const width = 320;
+    const height = 440;
+    const minY = 100;
+    const maxY = 410;
+
+    const createItem = (type, x, y, radius, weight, val, color, text = '') => ({
+      id: Math.random(),
+      type,
+      x,
+      y,
+      radius,
+      weight,
+      val,
+      color,
+      text,
+      dx: type === 'critter' ? (Math.random() > 0.5 ? 1.2 : -1.2) : 0
+    });
+
+    // 基础金矿
+    const goldCount = Math.max(3, 5 - Math.floor(lvl / 3));
+    for (let i = 0; i < goldCount; i++) {
+      const sizeType = Math.random();
+      const x = 30 + Math.random() * (width - 60);
+      const y = minY + Math.random() * (maxY - minY - 40);
+      if (sizeType < 0.45) {
+        items.push(createItem('gold_s', x, y, 11, 1.2, 100, '#E5B86C', '金'));
+      } else if (sizeType < 0.8) {
+        items.push(createItem('gold_m', x, y, 17, 2.8, 250, '#DAA548', '金'));
+      } else {
+        items.push(createItem('gold_l', x, y, 25, 5.8, 500, '#C99432', '大金'));
+      }
+    }
+
+    // 极品碧玉/钻石
+    const diamondCount = 1 + Math.floor(Math.random() * 2);
+    for (let i = 0; i < diamondCount; i++) {
+      const x = 25 + Math.random() * (width - 50);
+      const y = minY + 40 + Math.random() * (maxY - minY - 60);
+      const baseVal = 600;
+      const actualVal = curHasBook ? baseVal * 2 : baseVal;
+      items.push(createItem('diamond', x, y, 8, 0.4, actualVal, '#70C1B3', '💎'));
+    }
+
+    // 顽石
+    const rockCount = 2 + Math.min(5, Math.floor(lvl * 0.8));
+    for (let i = 0; i < rockCount; i++) {
+      const isBig = Math.random() > 0.5;
+      const x = 30 + Math.random() * (width - 60);
+      const y = minY + Math.random() * (maxY - minY - 40);
+      if (isBig) {
+        items.push(createItem('rock_l', x, y, 22, 6.5, 30, '#9E9488', '石'));
+      } else {
+        items.push(createItem('rock_s', x, y, 14, 3.8, 15, '#B0A79B', '石'));
+      }
+    }
+
+    // 黄巾福袋
+    const bagCount = 1 + (Math.random() > 0.4 ? 1 : 0);
+    for (let i = 0; i < bagCount; i++) {
+      const x = 30 + Math.random() * (width - 60);
+      const y = minY + Math.random() * (maxY - minY - 40);
+      items.push(createItem('bag', x, y, 14, 1.5, 0, '#E09F67', '？'));
+    }
+
+    // 雷火霹雳桶 (TNT)
+    const tntCount = Math.random() > 0.35 ? 1 : 0;
+    for (let i = 0; i < tntCount; i++) {
+      const x = 40 + Math.random() * (width - 80);
+      const y = minY + 50 + Math.random() * (maxY - minY - 80);
+      items.push(createItem('tnt', x, y, 15, 1.0, 0, '#D65A4B', '💣'));
+    }
+
+    // 穿山灵鼠 (高关卡概率出现)
+    if (lvl >= 2 && Math.random() > 0.4) {
+      items.push(createItem('critter', 50, minY + 80 + Math.random() * 120, 12, 0.8, 650, '#BCAAA4', '🐹'));
+    }
+
+    return items;
+  }, []);
+
+  // 6. 启动关卡
+  const startLevel = useCallback((lvlIndex, keepBuffs = false) => {
+    const config = getLevelConfig(lvlIndex);
+    setLevel(lvlIndex);
+    setTargetMoney(config.targetMoney);
+    setTimeLeft(config.timeLimit);
+    setGameState('PLAYING');
+
+    const curBook = keepBuffs ? hasBook : false;
+    const curClover = keepBuffs ? hasClover : false;
+    if (!keepBuffs) {
+      setHasDrink(false);
+      setHasBook(false);
+      setHasClover(false);
+    }
+
+    itemsRef.current = generateItemsForLevel(lvlIndex, curBook, curClover);
+    hookRef.current = {
+      x: 160,
+      y: 48,
+      angle: 0,
+      angleSpeed: 0.032,
+      angleMin: -Math.PI * 0.42,
+      angleMax: Math.PI * 0.42,
+      length: 32,
+      baseLength: 32,
+      maxLength: 380,
+      state: 'SWINGING',
+      shootSpeed: 8.5,
+      pullSpeed: 7.0,
+      grabbedItem: null
+    };
+
+    playKeyboardSound('thock', 1.4);
+  }, [generateItemsForLevel, hasBook, hasClover]);
+
+  useEffect(() => {
+    startLevel(1, false);
+  }, [startLevel]);
+
+  // 7. 倒计时时钟
+  useEffect(() => {
+    if (gameState !== 'PLAYING') return;
+    const timer = setInterval(() => {
+      setTimeLeft(t => {
+        if (t <= 1) {
+          clearInterval(timer);
+          // 结算
+          if (money >= targetMoney) {
+            setGameState('SHOP');
+            playKeyboardSound('win');
+          } else {
+            setGameState('GAMEOVER');
+            playKeyboardSound('thock', 0.6);
+          }
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [gameState, money, targetMoney]);
+
+  // 8. 触发飘字
+  const triggerFloatingScore = (text, x, y, color = '#E09F67') => {
+    const id = Date.now() + Math.random();
+    setFloatingScores(prev => [...prev, { id, text, x, y, color }]);
+    setTimeout(() => {
+      setFloatingScores(prev => prev.filter(f => f.id !== id));
+    }, 900);
+  };
+
+  // 9. 出钩操作
+  const handleShootHook = () => {
+    if (gameState !== 'PLAYING') return;
+    const hook = hookRef.current;
+    if (hook.state === 'SWINGING') {
+      hook.state = 'SHOOTING';
+      playKeyboardSound('click', 1.3);
+    }
+  };
+
+  // 10. 使用雷火弹炸碎当前抓取物体
+  const handleUseBomb = (e) => {
+    e?.stopPropagation();
+    if (gameState !== 'PLAYING' || bombs <= 0) return;
+    const hook = hookRef.current;
+    if (hook.state === 'RETRIEVING' && hook.grabbedItem) {
+      setBombs(b => b - 1);
+      triggerFloatingScore('💥 炸毁!', hook.x + Math.sin(hook.angle) * hook.length, hook.y + Math.cos(hook.angle) * hook.length, '#D65A4B');
+      hook.grabbedItem = null;
+      hook.pullSpeed = 10.0;
+      playKeyboardSound('bomb', 1.0);
+    }
+  };
+
+  // 11. 自定义头像上传处理
+  const handleAvatarUpload = (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const dataUrl = ev.target.result;
+      setCustomAvatar(dataUrl);
+      try {
+        localStorage.setItem('yellow_turban_miner_avatar', dataUrl);
+      } catch (err) {}
+      playKeyboardSound('click', 1.6);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  // 12. 游戏物理引擎与渲染循环 (Canvas 60FPS)
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    const render = () => {
+      const width = canvas.width;
+      const height = canvas.height;
+      const hook = hookRef.current;
+      const items = itemsRef.current;
+
+      ctx.clearRect(0, 0, width, height);
+
+      // 地底矿洞莫兰迪背景
+      const skyGrad = ctx.createLinearGradient(0, 0, 0, 70);
+      skyGrad.addColorStop(0, '#FAF7F2');
+      skyGrad.addColorStop(1, '#EDE4D8');
+      ctx.fillStyle = skyGrad;
+      ctx.fillRect(0, 0, width, 70);
+
+      const groundGrad = ctx.createLinearGradient(0, 70, 0, height);
+      groundGrad.addColorStop(0, '#E5DACB');
+      groundGrad.addColorStop(0.3, '#D8CAB7');
+      groundGrad.addColorStop(1, '#C8B8A2');
+      ctx.fillStyle = groundGrad;
+      ctx.fillRect(0, 70, width, height - 70);
+
+      // 地层分界线
+      ctx.strokeStyle = '#B3A18C';
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.moveTo(0, 70);
+      ctx.lineTo(width, 70);
+      ctx.stroke();
+
+      // 穿山甲等生物横向游走
+      items.forEach(it => {
+        if (it.dx) {
+          it.x += it.dx;
+          if (it.x <= it.radius + 10 || it.x >= width - it.radius - 10) {
+            it.dx = -it.dx;
+          }
+        }
+      });
+
+      // 物理状态更新
+      if (gameState === 'PLAYING') {
+        if (hook.state === 'SWINGING') {
+          hook.angle += hook.angleSpeed;
+          if (hook.angle > hook.angleMax) {
+            hook.angle = hook.angleMax;
+            hook.angleSpeed = -Math.abs(hook.angleSpeed);
+          } else if (hook.angle < hook.angleMin) {
+            hook.angle = hook.angleMin;
+            hook.angleSpeed = Math.abs(hook.angleSpeed);
+          }
+        } else if (hook.state === 'SHOOTING') {
+          hook.length += hook.shootSpeed;
+          const tipX = hook.x + Math.sin(hook.angle) * hook.length;
+          const tipY = hook.y + Math.cos(hook.angle) * hook.length;
+
+          // 边缘触壁判定
+          if (tipX <= 8 || tipX >= width - 8 || tipY >= height - 10) {
+            hook.state = 'RETRIEVING';
+            hook.grabbedItem = null;
+            hook.pullSpeed = 8.5;
+            playKeyboardSound('thock', 0.9);
+          } else {
+            // 碰撞判定
+            for (let i = items.length - 1; i >= 0; i--) {
+              const it = items[i];
+              const dist = Math.hypot(tipX - it.x, tipY - it.y);
+              if (dist <= it.radius + 7) {
+                // 触碰到 TNT 桶直接爆炸
+                if (it.type === 'tnt') {
+                  playKeyboardSound('bomb', 0.9);
+                  const boomX = it.x;
+                  const boomY = it.y;
+                  // 引爆周围
+                  itemsRef.current = items.filter(other => Math.hypot(other.x - boomX, other.y - boomY) > 75);
+                  triggerFloatingScore('💥 轰!!!', boomX, boomY, '#D65A4B');
+                  hook.state = 'RETRIEVING';
+                  hook.grabbedItem = null;
+                  hook.pullSpeed = 9.0;
+                  break;
+                }
+
+                // 抓取物体
+                hook.state = 'RETRIEVING';
+                hook.grabbedItem = it;
+                items.splice(i, 1);
+
+                // 计算回拉速度 (力量药水提速 1.5 倍)
+                const weightFactor = hasDrink ? it.weight * 0.45 : it.weight;
+                hook.pullSpeed = Math.max(1.6, 7.5 / (1 + weightFactor * 0.32));
+
+                playKeyboardSound('click', 1.5);
+                break;
+              }
+            }
+          }
+        } else if (hook.state === 'RETRIEVING') {
+          hook.length -= hook.pullSpeed;
+          if (hook.length <= hook.baseLength) {
+            hook.length = hook.baseLength;
+            hook.state = 'SWINGING';
+
+            // 回收结算
+            if (hook.grabbedItem) {
+              const it = hook.grabbedItem;
+              let gain = it.val;
+
+              // 福袋随机结算
+              if (it.type === 'bag') {
+                const bagRoll = Math.random();
+                if (bagRoll < 0.25) {
+                  gain = 500 + Math.floor(Math.random() * 400);
+                  triggerFloatingScore(`+${gain} 💰`, hook.x, hook.y + 40, '#E09F67');
+                } else if (bagRoll < 0.55) {
+                  setBombs(b => b + 1);
+                  triggerFloatingScore('+1 💣 雷火弹', hook.x, hook.y + 40, '#D65A4B');
+                } else if (bagRoll < 0.85) {
+                  setHasDrink(true);
+                  triggerFloatingScore('🧪 神力激增!', hook.x, hook.y + 40, '#7AA693');
+                } else {
+                  gain = 80;
+                  triggerFloatingScore(`+${gain} 铢`, hook.x, hook.y + 40, '#8A5825');
+                }
+              } else {
+                triggerFloatingScore(`+${gain} 铢`, hook.x, hook.y + 40, '#467B63');
+              }
+
+              setMoney(m => m + gain);
+              playKeyboardSound('thock', 1.6);
+              hook.grabbedItem = null;
+            }
+          }
+        }
+      }
+
+      // 绘制所有矿藏道具
+      items.forEach(it => {
+        ctx.save();
+        ctx.translate(it.x, it.y);
+
+        ctx.shadowColor = 'rgba(70, 50, 40, 0.2)';
+        ctx.shadowBlur = 5;
+        ctx.shadowOffsetY = 2;
+
+        if (it.type === 'diamond') {
+          // 晶莹钻石多边形
+          ctx.fillStyle = it.color;
+          ctx.beginPath();
+          ctx.moveTo(0, -it.radius * 1.2);
+          ctx.lineTo(it.radius * 1.1, -it.radius * 0.3);
+          ctx.lineTo(0, it.radius * 1.3);
+          ctx.lineTo(-it.radius * 1.1, -it.radius * 0.3);
+          ctx.closePath();
+          ctx.fill();
+
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 1.5;
+          ctx.stroke();
+        } else if (it.type === 'tnt') {
+          // TNT 炸药桶
+          ctx.fillStyle = it.color;
+          ctx.fillRect(-it.radius, -it.radius, it.radius * 2, it.radius * 2);
+          ctx.strokeStyle = '#FFF';
+          ctx.lineWidth = 1.2;
+          ctx.strokeRect(-it.radius, -it.radius, it.radius * 2, it.radius * 2);
+          ctx.fillStyle = '#FFF';
+          ctx.font = 'bold 10px sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText('TNT', 0, 0);
+        } else if (it.type === 'critter') {
+          // 灵鼠
+          ctx.fillStyle = it.color;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, it.radius * 1.2, it.radius * 0.8, 0, 0, Math.PI * 2);
+          ctx.fill();
+          ctx.fillStyle = '#70C1B3';
+          ctx.beginPath();
+          ctx.arc(0, -it.radius * 0.9, 5, 0, Math.PI * 2);
+          ctx.fill();
+        } else {
+          // 黄金/顽石/福袋
+          ctx.fillStyle = it.color;
+          ctx.beginPath();
+          ctx.arc(0, 0, it.radius, 0, Math.PI * 2);
+          ctx.fill();
+
+          // 琉璃高光
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.4)';
+          ctx.beginPath();
+          ctx.ellipse(-it.radius * 0.3, -it.radius * 0.3, it.radius * 0.4, it.radius * 0.25, -Math.PI / 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          if (it.text) {
+            ctx.fillStyle = '#FFF';
+            ctx.font = `bold ${Math.max(9, Math.floor(it.radius * 0.65))}px sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(it.text, 0, 1);
+          }
+        }
+        ctx.restore();
+      });
+
+      // 绘制抓取中的物体
+      const tipX = hook.x + Math.sin(hook.angle) * hook.length;
+      const tipY = hook.y + Math.cos(hook.angle) * hook.length;
+
+      if (hook.grabbedItem) {
+        const it = hook.grabbedItem;
+        ctx.save();
+        ctx.translate(tipX, tipY);
+        ctx.fillStyle = it.color;
+        ctx.beginPath();
+        ctx.arc(0, 0, it.radius, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      }
+
+      // 绘制绳索
+      ctx.strokeStyle = '#6E5540';
+      ctx.lineWidth = 2.2;
+      ctx.beginPath();
+      ctx.moveTo(hook.x, hook.y);
+      ctx.lineTo(tipX, tipY);
+      ctx.stroke();
+
+      // 绘制爪钩
+      ctx.save();
+      ctx.translate(tipX, tipY);
+      ctx.rotate(-hook.angle);
+      ctx.strokeStyle = '#4A3B32';
+      ctx.lineWidth = 3;
+
+      // 爪钩双爪
+      ctx.beginPath();
+      ctx.moveTo(-7, 0);
+      ctx.lineTo(-12, 10);
+      ctx.moveTo(7, 0);
+      ctx.lineTo(12, 10);
+      ctx.moveTo(-7, 0);
+      ctx.lineTo(7, 0);
+      ctx.stroke();
+      ctx.restore();
+
+      // 绘制顶部绞盘滑轮
+      ctx.fillStyle = '#8D7B68';
+      ctx.beginPath();
+      ctx.arc(hook.x, hook.y, 8, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = '#5A4A3A';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      animIdRef.current = requestAnimationFrame(render);
+    };
+
+    render();
+
+    return () => {
+      if (animIdRef.current) cancelAnimationFrame(animIdRef.current);
+    };
+  }, [gameState, hasDrink]);
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        inset: 0,
+        zIndex: 260,
+        background: 'linear-gradient(180deg, #FBF9F5 0%, #F4EFEA 100%)',
+        display: 'flex',
+        flexDirection: 'column',
+        fontFamily: '"GuanKiapTsingKhai", "Plus Jakarta Sans", sans-serif',
+        userSelect: 'none',
+        overflow: 'hidden',
+        animation: 'fadeIn 0.25s ease-out'
+      }}
+    >
+      {/* 隐藏的头像文件上传 input */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={handleAvatarUpload}
+      />
+
+      {/* 1. 顶部第一栏 (返回 + 关卡/金钱目标/倒计时) */}
+      <div
+        style={{
+          padding: '8px 16px',
+          paddingTop: 'max(24px, env(safe-area-inset-top))',
+          background: 'rgba(255, 255, 255, 0.92)',
+          backdropFilter: 'blur(12px)',
+          boxShadow: '0 2px 10px rgba(120, 100, 90, 0.05)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexShrink: 0
+        }}
+      >
+        <div
+          onClick={onBack}
+          title="←"
+          style={{ cursor: 'pointer', padding: '6px 8px', marginLeft: '-8px', display: 'flex', alignItems: 'center' }}
+        >
+          <span style={{ fontSize: '1.25rem', color: '#6A5F55' }}>←</span>
+        </div>
+
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: 'linear-gradient(135deg, #F5EDDF 0%, #EADDCA 100%)',
+              padding: '3px 9px',
+              borderRadius: '20px',
+              border: '1px solid rgba(218, 160, 109, 0.35)',
+              color: '#8A5825',
+              fontWeight: 'bold',
+              fontSize: '0.82rem'
+            }}
+          >
+            <span>🚩</span>
+            <span>第 {level} 关</span>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: money >= targetMoney ? 'rgba(122, 166, 147, 0.25)' : 'rgba(218, 160, 109, 0.15)',
+              padding: '3px 11px',
+              borderRadius: '20px',
+              border: money >= targetMoney ? '1px solid rgba(122, 166, 147, 0.4)' : '1px solid rgba(218, 160, 109, 0.3)'
+            }}
+          >
+            <span style={{ fontSize: '0.85rem' }}>🪙</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 'bold', color: money >= targetMoney ? '#467B63' : '#8A5825' }}>
+              {money} / {targetMoney}
+            </span>
+          </div>
+
+          <div
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              background: timeLeft <= 10 ? 'rgba(214, 114, 75, 0.18)' : 'rgba(224, 159, 103, 0.15)',
+              padding: '3px 9px',
+              borderRadius: '20px',
+              border: timeLeft <= 10 ? '1px solid #D6724B' : '1px solid rgba(224, 159, 103, 0.3)',
+              color: timeLeft <= 10 ? '#D6724B' : '#8A5825'
+            }}
+          >
+            <span style={{ fontSize: '0.8rem' }}>⏱️</span>
+            <span style={{ fontSize: '0.9rem', fontWeight: 'bold' }}>{timeLeft}s</span>
+          </div>
+        </div>
+
+        <div style={{ width: '24px' }} />
+      </div>
+
+      {/* 2. 顶部矿工萌趣剪影栏 (支持自定义上传头像) */}
+      <div
+        style={{
+          padding: '4px 16px',
+          background: '#FAF7F2',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid #E5DACB',
+          flexShrink: 0
+        }}
+      >
+        <div
+          onClick={() => fileInputRef.current?.click()}
+          title="点击上传自定义矿工形象"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '8px',
+            cursor: 'pointer',
+            padding: '3px 8px',
+            borderRadius: '16px',
+            background: 'rgba(255, 255, 255, 0.85)',
+            border: '1px dashed #C8B8A2'
+          }}
+        >
+          <div
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: '50%',
+              overflow: 'hidden',
+              background: 'linear-gradient(135deg, #E09F67 0%, #D6724B 100%)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            {customAvatar ? (
+              <img src={customAvatar} alt="miner" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+            ) : (
+              <span style={{ fontSize: '1rem' }}>👷</span>
+            )}
+          </div>
+          <span style={{ fontSize: '0.76rem', color: '#6A5F55', fontWeight: 'bold' }}>
+            {customAvatar ? '自定义头领' : '黄巾小矿工 📷'}
+          </span>
+        </div>
+
+        {/* 状态 Buff 微标签 */}
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          {hasDrink && <span title="神力加倍" style={{ fontSize: '0.95rem' }}>🧪</span>}
+          {hasBook && <span title="鉴宝翻倍" style={{ fontSize: '0.95rem' }}>📜</span>}
+          {hasClover && <span title="天运亨通" style={{ fontSize: '0.95rem' }}>🍀</span>}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '3px', color: '#D65A4B', fontSize: '0.82rem', fontWeight: 'bold' }}>
+            <span>💣</span>
+            <span>{bombs}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. 矿洞 Canvas 物理区域 (全屏触控直接出钩) */}
+      <div
+        onClick={handleShootHook}
+        style={{
+          flex: 1,
+          position: 'relative',
+          display: 'flex',
+          justifyContent: 'center',
+          alignItems: 'center',
+          cursor: 'pointer',
+          touchAction: 'none'
+        }}
+      >
+        <canvas
+          ref={canvasRef}
+          width={320}
+          height={440}
+          style={{
+            width: '100%',
+            maxWidth: '340px',
+            height: '100%',
+            display: 'block'
+          }}
+        />
+
+        {/* 飘字 */}
+        {floatingScores.map(f => (
+          <div
+            key={f.id}
+            style={{
+              position: 'absolute',
+              left: `${(f.x / 320) * 100}%`,
+              top: `${(f.y / 440) * 100}%`,
+              transform: 'translate(-50%, -50%)',
+              color: f.color,
+              fontSize: '1.2rem',
+              fontWeight: 'bold',
+              textShadow: '0 2px 4px rgba(255,255,255,0.95)',
+              pointerEvents: 'none',
+              animation: 'floatUp 0.8s ease-out forwards',
+              zIndex: 20
+            }}
+          >
+            {f.text}
+          </div>
+        ))}
+
+        {/* 4. 专属雷火弹炸药按钮 (抓取重物时高亮提示) */}
+        {hookRef.current.state === 'RETRIEVING' && hookRef.current.grabbedItem && bombs > 0 && (
+          <div
+            onClick={handleUseBomb}
+            style={{
+              position: 'absolute',
+              right: '20px',
+              bottom: '24px',
+              zIndex: 30,
+              background: 'linear-gradient(135deg, #E06757 0%, #C43D2A 100%)',
+              color: '#FFF',
+              padding: '10px 18px',
+              borderRadius: '24px',
+              boxShadow: '0 6px 18px rgba(196, 61, 42, 0.45)',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+              fontWeight: 'bold',
+              fontSize: '0.92rem',
+              cursor: 'pointer',
+              animation: 'pulse 0.8s infinite'
+            }}
+          >
+            <span>💣 引爆脱困 ({bombs})</span>
+          </div>
+        )}
+      </div>
+
+      {/* 5. 🏮 黄巾货郎补给站弹窗 (关卡达成) */}
+      {gameState === 'SHOP' && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(50, 40, 35, 0.55)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 500,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.25s ease-out'
+          }}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)',
+              borderRadius: '24px',
+              padding: '24px 20px',
+              width: '100%',
+              maxWidth: '300px',
+              textAlign: 'center',
+              boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
+              border: '2px solid rgba(255, 255, 255, 0.9)'
+            }}
+          >
+            <div style={{ fontSize: '2.4rem', marginBottom: '4px' }}>🏮✨🏮</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#4E342E', marginBottom: '4px' }}>
+              黄巾货郎 · 补给集市
+            </div>
+            <div style={{ fontSize: '0.8rem', color: '#8A7D71', marginBottom: '14px' }}>
+              当前积攒金银：<strong style={{ color: '#B36B21' }}>{money} 铢</strong>
+            </div>
+
+            {/* 道具货架 */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', marginBottom: '16px' }}>
+              <div
+                onClick={() => {
+                  if (money >= 150) {
+                    setMoney(m => m - 150);
+                    setBombs(b => b + 1);
+                    playKeyboardSound('click', 1.8);
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  borderRadius: '14px',
+                  background: 'rgba(214, 90, 75, 0.1)',
+                  border: '1px solid rgba(214, 90, 75, 0.25)',
+                  cursor: money >= 150 ? 'pointer' : 'not-allowed',
+                  opacity: money >= 150 ? 1 : 0.6
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', fontWeight: 'bold', color: '#4E342E' }}>
+                  <span>💣</span>
+                  <span>雷火弹 (+1)</span>
+                </div>
+                <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#C43D2A' }}>150 铢</span>
+              </div>
+
+              <div
+                onClick={() => {
+                  if (money >= 200 && !hasDrink) {
+                    setMoney(m => m - 200);
+                    setHasDrink(true);
+                    playKeyboardSound('click', 1.8);
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  borderRadius: '14px',
+                  background: 'rgba(122, 166, 147, 0.1)',
+                  border: '1px solid rgba(122, 166, 147, 0.25)',
+                  cursor: money >= 200 && !hasDrink ? 'pointer' : 'not-allowed',
+                  opacity: money >= 200 && !hasDrink ? 1 : 0.6
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', fontWeight: 'bold', color: '#4E342E' }}>
+                  <span>🧪</span>
+                  <span>神力丹 ({hasDrink ? '已购' : '拉力翻倍'})</span>
+                </div>
+                <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#467B63' }}>200 铢</span>
+              </div>
+
+              <div
+                onClick={() => {
+                  if (money >= 180 && !hasBook) {
+                    setMoney(m => m - 180);
+                    setHasBook(true);
+                    playKeyboardSound('click', 1.8);
+                  }
+                }}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  padding: '8px 12px',
+                  borderRadius: '14px',
+                  background: 'rgba(224, 159, 103, 0.1)',
+                  border: '1px solid rgba(224, 159, 103, 0.25)',
+                  cursor: money >= 180 && !hasBook ? 'pointer' : 'not-allowed',
+                  opacity: money >= 180 && !hasBook ? 1 : 0.6
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '0.85rem', fontWeight: 'bold', color: '#4E342E' }}>
+                  <span>📜</span>
+                  <span>鉴宝录 ({hasBook ? '已购' : '玉钻翻倍'})</span>
+                </div>
+                <span style={{ fontSize: '0.82rem', fontWeight: 'bold', color: '#8A5825' }}>180 铢</span>
+              </div>
+            </div>
+
+            <button
+              onClick={() => startLevel(level + 1, true)}
+              style={{
+                width: '100%',
+                padding: '11px',
+                borderRadius: '16px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
+                color: '#FFF',
+                fontSize: '0.95rem',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                boxShadow: '0 4px 12px rgba(92, 138, 118, 0.35)'
+              }}
+            >
+              ▶ 启程第 {level + 1} 关
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 6. 🍂 游戏结束结算弹窗 */}
+      {gameState === 'GAMEOVER' && (
+        <div
+          style={{
+            position: 'absolute',
+            inset: 0,
+            background: 'rgba(50, 40, 35, 0.55)',
+            backdropFilter: 'blur(6px)',
+            zIndex: 500,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: '20px',
+            animation: 'fadeIn 0.25s ease-out'
+          }}
+        >
+          <div
+            style={{
+              background: 'linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)',
+              borderRadius: '24px',
+              padding: '24px 20px',
+              width: '100%',
+              maxWidth: '290px',
+              textAlign: 'center',
+              boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
+              border: '2px solid rgba(255, 255, 255, 0.9)'
+            }}
+          >
+            <div style={{ fontSize: '2.6rem', marginBottom: '6px' }}>⏱️🍂</div>
+            <div style={{ fontSize: '1.15rem', fontWeight: 'bold', color: '#4E342E', marginBottom: '6px' }}>
+              气数暂竭
+            </div>
+            <div style={{ fontSize: '0.82rem', color: '#8A7D71', marginBottom: '14px' }}>
+              止步于第 {level} 关 · 筹集 {money} / {targetMoney} 铢
+            </div>
+
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                onClick={onBack}
+                style={{
+                  width: '50px',
+                  padding: '10px 0',
+                  borderRadius: '14px',
+                  border: '1.5px solid #D8CFC4',
+                  background: '#FFF',
+                  color: '#6E6256',
+                  fontSize: '1.1rem',
+                  cursor: 'pointer'
+                }}
+              >
+                ←
+              </button>
+              <button
+                onClick={() => {
+                  setMoney(0);
+                  setBombs(2);
+                  startLevel(1, false);
+                }}
+                style={{
+                  flex: 1,
+                  padding: '10px 0',
+                  borderRadius: '14px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
+                  color: '#FFF',
+                  fontSize: '0.92rem',
+                  fontWeight: 'bold',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 12px rgba(92, 138, 118, 0.35)'
+                }}
+              >
+                🔄 重新起兵
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+
 const T13TrainingPage = ({ onBack }) => {
   const { useState } = React;
   const [trainingPageNum, setTrainingPageNum] = useState(0);
@@ -58112,6 +69873,12 @@ const T13TrainingPage = ({ onBack }) => {
   const [showAgilityGame, setShowAgilityGame] = useState(false);
   const [showRowingGame, setShowRowingGame] = useState(false);
   const [showMusicGame, setShowMusicGame] = useState(false);
+  const [show2048Game, setShow2048Game] = useState(false);
+  const [showMemoryGame, setShowMemoryGame] = useState(false);
+  const [showSnakeGame, setShowSnakeGame] = useState(false);
+  const [showGomokuGame, setShowGomokuGame] = useState(false);
+  const [showGoldMiner, setShowGoldMiner] = useState(false);
+  const [showMatch3Game, setShowMatch3Game] = useState(false);
   const [tipMessage, setTipMessage] = useState(null);
 
   const showComingSoon = (name) => {
@@ -58213,7 +69980,7 @@ const T13TrainingPage = ({ onBack }) => {
             <>
               <div
                 onClick={() => setShowMusicGame(true)}
-                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s' }}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
                 onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
                 onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
                 onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
@@ -58224,11 +69991,98 @@ const T13TrainingPage = ({ onBack }) => {
                 </div>
                 <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
               </div>
+
+              <div
+                onClick={() => setShow2048Game(true)}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🧩</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>二零四八</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+
+              <div
+                onClick={() => setShowMemoryGame(true)}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #ffecd2 0%, #fcb69f 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🎴</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>记忆训练</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+
+              <div
+                onClick={() => setShowSnakeGame(true)}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #ff758c 0%, #ff7eb3 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🍖</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>东汉尼拔</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+
+              <div
+                onClick={() => setShowGomokuGame(true)}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginTop: '14px' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>♟️</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>棋逢对手</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+            </>
+          )}
+
+          {trainingPageNum === 2 && (
+            <>
+              <div
+                onClick={() => setShowMatch3Game(true)}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #ff9a9e 0%, #fecfef 99%, #fecfef 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>🍬</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>广陵消消</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
+              <div
+                onClick={() => setShowGoldMiner(true)}
+                style={{ background: '#fff', padding: '18px 20px', borderRadius: '16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 4px 12px rgba(0,0,0,0.04)', cursor: 'pointer', transition: 'transform 0.1s', marginBottom: '15px' }}
+                onPointerDown={e => e.currentTarget.style.transform = 'scale(0.98)'}
+                onPointerUp={e => e.currentTarget.style.transform = 'scale(1)'}
+                onPointerCancel={e => e.currentTarget.style.transform = 'scale(1)'}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '15px' }}>
+                  <div style={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, #f6d365 0%, #fda085 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '1.2rem' }}>⛏️</div>
+                  <span style={{ fontSize: '1.15rem', color: '#444', fontWeight: '500' }}>黄巾矿工</span>
+                </div>
+                <span style={{ color: '#ccc', fontSize: '1.2rem' }}>▶</span>
+              </div>
             </>
           )}
         </div>
 
-        {trainingPageNum < 1 && (
+        {trainingPageNum < 2 && (
           <div onClick={() => setTrainingPageNum(p => p + 1)} style={{ position: 'absolute', right: 0, top: '50%', transform: 'translateY(-50%)', padding: '20px 15px', cursor: 'pointer', zIndex: 10, fontSize: '2.5rem', color: '#aaa', userSelect: 'none' }}>›</div>
         )}
       </div>
@@ -58259,6 +70113,16 @@ const T13TrainingPage = ({ onBack }) => {
         <ArcheryGamePage onBack={() => setShowArcheryGame(false)} />
       )}
 
+      {/* 记忆训练小游戏 */}
+      {showMemoryGame && (
+        <MemoryGamePage onBack={() => setShowMemoryGame(false)} />
+      )}
+
+      {/* 东汉尼拔贪吃蛇小游戏 */}
+      {showSnakeGame && (
+        <SnakeGamePage onBack={() => setShowSnakeGame(false)} />
+      )}
+
       {/* 敏捷训练小游戏 */}
       {showAgilityGame && (
         <AgilityGamePage onBack={() => setShowAgilityGame(false)} />
@@ -58272,6 +70136,25 @@ const T13TrainingPage = ({ onBack }) => {
       {/* 音律训练小游戏 */}
       {showMusicGame && (
         <MusicGamePage onBack={() => setShowMusicGame(false)} />
+      )}
+
+      {/* 二零四八小游戏 */}
+      <Game2048Page onBack={() => setShow2048Game(false)} />
+      )}
+
+      {/* 棋逢对手五子棋小游戏 */}
+      {showGomokuGame && (
+        <GomokuGamePage onBack={() => setShowGomokuGame(false)} />
+      )}
+
+      {/* 广陵消消小游戏 */}
+      {showMatch3Game && (
+        <Match3GamePage onBack={() => setShowMatch3Game(false)} />
+      )}
+
+      {/* 黄巾矿工小游戏 */}
+      {showGoldMiner && (
+        <YellowTurbanMinerPage onBack={() => setShowGoldMiner(false)} />
       )}
     </div>
   );
@@ -65283,7 +77166,7 @@ ${chatHistoryContext}
                         border: isChar ? "none" : "1px solid #EBE6DC",
                       }}
                     >
-                      {m.text}
+                      {m.content || m.text}
                     </div>
                   </div>
                 );
@@ -66178,7 +78061,7 @@ ${playerList.map((p, idx) => `${idx + 1}. 【${p.name}】(${p.isUser ? "玩家�
     // 构建最近 10 条真实上下文，保证 AI 100% 看到全场所有人的发言
     const recentChatText = currentLog
       .slice(-12)
-      .map((m) => `【${m.sender}】: ${m.text}`)
+      .map((m) => `【${m.sender}】: ${m.content || m.text}`)
       .join("\n");
 
     const prompt = `
@@ -82570,7 +94453,7 @@ const GroupChatSettingsModal = ({
           20,
         ); // 取最近20条
         chatHistory = (res.messages || [])
-          .map((m) => `${m.sender || (m.isMe ? "用户" : "未知")}: ${m.text}`)
+          .map((m) => `${m.sender || (m.isMe ? "用户" : "未知")}: ${m.content || m.text}`)
           .join("\n");
       }
       const membersInfo = (chatData.profile?.members || [])
@@ -94758,7 +106641,7 @@ const T8MomentsPage = ({ pixabayApiKey, onNavigateChat }) => {
             6,
           );
           chatContext = history
-            .map((m) => `${m.isMe ? "我" : char.name}: ${m.text}`)
+            .map((m) => `${m.isMe ? "我" : char.name}: ${m.content || m.text}`)
             .join(" | ");
         }
         // 收集更多角色信息
@@ -116731,7 +128614,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
           .map((m) =>
             m.type === "order_card"
               ? `[用户下单: ${m.content?.itemName}]`
-              : `${m.isMe ? "我" : character.name}: ${m.text}`,
+              : `${m.isMe ? "我" : character.name}: ${m.content || m.text}`,
           )
           .join("\n");
 
@@ -116886,7 +128769,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
                   【最近对话】
                   ${messages
         .slice(-4)
-        .map((m) => `${m.isMe ? "我" : character.name}: ${m.text}`)
+        .map((m) => `${m.isMe ? "我" : character.name}: ${m.content || m.text}`)
         .join("\n")}
                   我: ${myMsg.text}
                   【指令】请结合上述页面中正在卖的商品，回复用户刚才的话。字数控制在40字以内，语气必须符合人设。直接输出回复。
@@ -116933,7 +128816,7 @@ const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
         .map((m) =>
           m.type === "order_card"
             ? `[下单了: ${m.content.itemName}]`
-            : `${m.isMe ? "我" : character.name}: ${m.text}`,
+            : `${m.isMe ? "我" : character.name}: ${m.content || m.text}`,
         )
         .join(" | ");
 
