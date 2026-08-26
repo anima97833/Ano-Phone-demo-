@@ -97513,6 +97513,18 @@ ${groupMemoriesText}
             content: `【系统事件：${m.time || ""} 曾发起语音通话，通话时长 ${m.durationText || m.durationStr || m.content?.durationStr || "00:00"}（通话已结束）`
           };
         }
+        if (m.type === "role_red_packet") {
+          return {
+            role: "assistant",
+            content: `【系统事件】我向广陵王发送了一份五铢钱红包，金额为【${m.content?.amountStr || `${m.content?.amount} 铢`}】，附言为：“${m.content?.blessing || "一点心意"}”。${m.content?.status === "claimed" ? "（广陵王已拆开并领受了这份红包）" : "（红包待领取）"}`
+          };
+        }
+        if (m.type === "role_gift") {
+          return {
+            role: "assistant",
+            content: `【系统事件】我向广陵王赠送了一份心意礼物/点心外卖：【${m.content?.itemName}】，附言为：“${m.content?.blessing || "特赠此物"}”。${m.content?.status === "opened" ? "（广陵王已欢喜收下并存入行囊）" : "（礼物待收下）"}`
+          };
+        }
         if (m.type === "red_packet") {
           return {
             role: m.isMe ? "user" : "assistant",
@@ -97625,6 +97637,50 @@ ${groupMemoriesText}
           pendingMsgs.push({
             text: `某位群成员修改你的昵称为"${newNick}"`,
             type: "narration"
+          });
+        }
+        // 角色主动发红包
+        const redPacketRegex = /\[发红包\s*[:：]\s*(\d+)\s*(?:[\|｜,，]\s*(.*?))?\]/;
+        const rpMatch = cleanReply.match(redPacketRegex);
+        if (rpMatch) {
+          cleanReply = cleanReply.replace(rpMatch[0], "").trim();
+          const amount = parseInt(rpMatch[1]) || 100;
+          const blessing = (rpMatch[2] || "一点心意，愿君欢喜").trim();
+          pendingMsgs.push({
+            id: Date.now() + Math.random(),
+            type: "role_red_packet",
+            isMe: false,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            content: {
+              amount: amount,
+              amountStr: `${amount} 铢`,
+              blessing: blessing,
+              status: "unclaimed",
+              senderName: chatData?.name || "名士",
+              senderAvatar: chatData?.avatar || chatData?.profile?.avatar || ""
+            }
+          });
+        }
+
+        // 角色主动赠送礼物 / 点心外卖
+        const giftRegex = /\[(?:送礼物|赠送礼物|点外卖|送外卖)\s*[:：]\s*([^\|｜\]]+?)\s*(?:[\|｜,，]\s*(.*?))?\]/;
+        const giftMatch = cleanReply.match(giftRegex);
+        if (giftMatch) {
+          cleanReply = cleanReply.replace(giftMatch[0], "").trim();
+          const itemName = (giftMatch[1] || "心意礼物").trim();
+          const blessing = (giftMatch[2] || "见字如面，特赠此物").trim();
+          pendingMsgs.push({
+            id: Date.now() + Math.random() + 1,
+            type: "role_gift",
+            isMe: false,
+            time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }),
+            content: {
+              itemName: itemName,
+              blessing: blessing,
+              status: "unopened",
+              senderName: chatData?.name || "名士",
+              senderAvatar: chatData?.avatar || chatData?.profile?.avatar || ""
+            }
           });
         }
         const groupNameMatch = cleanReply.match(/\[修改群名:(.*?)\]/);
@@ -97769,12 +97825,13 @@ ${groupMemoriesText}
         if (pendingMsgs.length > 0) {
           pendingMsgs.forEach((msg, idx) => {
             newAiMsgs.push({
-              id: Date.now() + Math.random() + idx,
-              text: msg.text,
+              id: msg.id || (Date.now() + Math.random() + idx),
+              text: msg.text || "",
               type: msg.type,
-              isMe: false,
+              content: msg.content || null,
+              isMe: typeof msg.isMe === "boolean" ? msg.isMe : false,
               tap: true,
-              time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
+              time: msg.time || (new Date()).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit"
               })
@@ -101009,7 +101066,7 @@ ${groupMemoriesText}
                             }}>
                               <span style={{ fontSize: "11px", color: "rgba(255,255,255,0.8)" }}>已送达荷包</span>
                               <span style={{ fontSize: "16px", fontWeight: "900", color: "#FFE082", fontFamily: "monospace" }}>
-                                {msg.content?.amountStr || `${msg.content?.amount} 铢`}
+                                {msg.content?.amountStr || (msg.content?.amount ? `${msg.content.amount} 铢` : "100 铢")}
                               </span>
                             </div>
                           </div>

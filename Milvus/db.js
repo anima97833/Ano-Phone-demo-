@@ -1217,7 +1217,7 @@ const chatHistoryStore = {
     });
   },
 
-  // 批量保存聊天消息
+  // 批量保存聊天消息 (安全增量更新，杜绝误删未加载历史)
   saveMessages: async (characterId, messages) => {
     const db = await openDB();
     return new Promise((resolve, reject) => {
@@ -1229,28 +1229,30 @@ const chatHistoryStore = {
       const index = store.index("by_character");
       const range = IDBKeyRange.only(characterId);
 
-      // 1. 先删除该角色的所有旧消息
-      const deleteRequest = index.openCursor(range);
-      let deleteCount = 0;
-      let deleteError = null;
+      const newMsgMap = new Map();
+      (messages || []).forEach(m => {
+        if (m && m.id) newMsgMap.set(String(m.id), m);
+      });
 
-      deleteRequest.onsuccess = (event) => {
+      const cursorRequest = index.openCursor(range);
+      cursorRequest.onsuccess = (event) => {
         const cursor = event.target.result;
         if (cursor) {
-          const deleteMsgRequest = cursor.delete();
-          deleteMsgRequest.onsuccess = () => {
-            deleteCount++;
-            cursor.continue();
-          };
-          deleteMsgRequest.onerror = () => {
-            deleteError = "删除旧消息失败";
-            cursor.continue();
-          };
+          const existingMsg = cursor.value;
+          const existingId = String(existingMsg.id);
+          // 若当前消息被用户明确删除，则从数据库中删除
+          if (!newMsgMap.has(existingId)) {
+            cursor.delete();
+          }
+          cursor.continue();
         } else {
-          // 2. 旧消息删除完成后，保存新消息
-          let saveCount = 0;
-          let saveError = null;
-
+          // 写入/更新当前传入的所有消息
+          if (!messages || messages.length === 0) {
+            resolve();
+            return;
+          }
+          let count = 0;
+          let hasError = false;
           messages.forEach((message) => {
             const messageWithCharacterId = {
               ...message,
@@ -1258,34 +1260,51 @@ const chatHistoryStore = {
             };
             const request = store.put(messageWithCharacterId);
             request.onsuccess = () => {
-              saveCount++;
-              if (saveCount === messages.length) {
-                if (deleteError || saveError) {
-                  reject(deleteError || saveError);
-                } else {
-                  resolve();
-                }
+              count++;
+              if (count === messages.length && !hasError) {
+                resolve();
               }
             };
             request.onerror = () => {
-              saveError = "批量保存聊天消息失败";
-              saveCount++;
-              if (saveCount === messages.length) {
-                reject(saveError);
+              if (!hasError) {
+                hasError = true;
+                reject("批量保存聊天消息失败");
               }
             };
           });
         }
       };
+      cursorRequest.onerror = () => {
+        reject("查询并保存聊天消息失败");
+      };
+    });
+  },
 
-      deleteRequest.onerror = () => {
-        reject("删除旧消息失败");
+  // 获取全部聊天历史 (无截断)
+  getAllMessages: async (characterId) => {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORES.CHAT_HISTORY, "readonly");
+      const store = transaction.objectStore(STORES.CHAT_HISTORY);
+      const index = store.index("by_character");
+      const range = IDBKeyRange.only(characterId);
+      const request = index.getAll(range);
+
+      request.onsuccess = () => {
+        const msgs = (request.result || []).sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+        resolve({
+          messages: msgs,
+          totalCount: msgs.length
+        });
+      };
+      request.onerror = () => {
+        reject("获取全部聊天历史失败");
       };
     });
   },
 
   // 分页获取聊天历史
-  getMessages: async (characterId, page = 1, pageSize = 50) => {
+  getMessages: async (characterId, page = 1, pageSize = 999999) => {
     const db = await openDB();
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(STORES.CHAT_HISTORY, "readonly");
