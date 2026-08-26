@@ -290,6 +290,480 @@ window.resolveAvatarUrl = async (avatarOrId, fallback = "") => {
   return fallback;
 };
 
+// ==================== 头像来源选择器组件 (AvatarSourcePicker) ====================
+const AvatarSourcePicker = ({ open, onClose, onLocalSelect, onUrlConfirm }) => {
+  const [mode, setMode] = React.useState("local");
+  const [urlValue, setUrlValue] = React.useState("");
+  const [urlError, setUrlError] = React.useState("");
+  const [isChecking, setIsChecking] = React.useState(false);
+  const fileInputRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (open) {
+      setMode("local");
+      setUrlValue("");
+      setUrlError("");
+      setIsChecking(false);
+    }
+  }, [open]);
+
+  if (!open) return null;
+
+  const handleUrlSubmit = async (event) => {
+    event.preventDefault();
+    const url = urlValue.trim();
+    if (!url || isChecking) return;
+
+    try {
+      const parsed = new URL(url);
+      if (!/^https?:$/.test(parsed.protocol)) throw new Error("invalid protocol");
+    } catch (error) {
+      setUrlError("请输入有效的图片 URL");
+      return;
+    }
+
+    setIsChecking(true);
+    setUrlError("");
+    try {
+      await new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = resolve;
+        image.onerror = reject;
+        image.src = url;
+      });
+      await onUrlConfirm(url);
+      onClose();
+    } catch (error) {
+      setUrlError("图片无法加载，请检查 URL");
+    } finally {
+      setIsChecking(false);
+    }
+  };
+
+  const handleLocalChange = (event) => {
+    const file = event.target.files && event.target.files[0];
+    event.target.value = "";
+    if (!file) return;
+    onLocalSelect(file);
+    onClose();
+  };
+
+  return (
+    <div className="avatar-source-picker-mask" onClick={onClose}>
+      <div
+        className="avatar-source-picker"
+        role="dialog"
+        aria-modal="true"
+        aria-label="选择头像来源"
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div className="avatar-source-header">
+          <span>选择头像来源</span>
+          <button type="button" className="avatar-source-close" onClick={onClose} aria-label="关闭">
+            ×
+          </button>
+        </div>
+        <div className="avatar-source-tabs">
+          <button
+            type="button"
+            className={`avatar-source-tab${mode === "local" ? " active" : ""}`}
+            onClick={() => {
+              setMode("local");
+              setUrlError("");
+            }}
+          >
+            本地上传
+          </button>
+          <button
+            type="button"
+            className={`avatar-source-tab${mode === "url" ? " active" : ""}`}
+            onClick={() => {
+              setMode("url");
+              setUrlError("");
+            }}
+          >
+            URL
+          </button>
+        </div>
+
+        {mode === "local" ? (
+          <>
+            <button
+              type="button"
+              className="avatar-local-upload-area"
+              onClick={() => fileInputRef.current && fileInputRef.current.click()}
+            >
+              <span className="avatar-local-upload-icon">＋</span>
+              <span>点击上传图片</span>
+            </button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept="image/*"
+              onChange={handleLocalChange}
+              style={{ display: "none" }}
+            />
+          </>
+        ) : (
+          <form className="avatar-url-form" onSubmit={handleUrlSubmit} noValidate>
+            <input
+              type="url"
+              className="avatar-url-input"
+              value={urlValue}
+              onChange={(event) => {
+                setUrlValue(event.target.value);
+                setUrlError("");
+              }}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") handleUrlSubmit(event);
+              }}
+              placeholder="https://example.com/avatar.jpg"
+              autoFocus
+            />
+            {urlError && <div className="avatar-url-error">{urlError}</div>}
+            <button type="submit" className="avatar-url-confirm" disabled={isChecking || !urlValue.trim()}>
+              {isChecking ? "检查中..." : "确定"}
+            </button>
+          </form>
+        )}
+      </div>
+    </div>
+  );
+};
+
+
+
+// ==================== 表情包批量导入引擎 (EmojiBatchImporter) ====================
+const createEmojiImportId = () =>
+  `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
+const parseImageUrlLines = (text) =>
+  text.split(/\r?\n/).flatMap((line) => {
+    const matches = line.match(/https?:\/\/\S+/gi) || [];
+    if (matches.length === 0) return [];
+
+    const url = matches[matches.length - 1];
+    try {
+      const parsed = new URL(url);
+      if (!/^https?:$/.test(parsed.protocol)) return [];
+    } catch (error) {
+      return [];
+    }
+
+    return [{ name: line.slice(0, line.lastIndexOf(url)).trim(), url }];
+  });
+
+const readEmojiFile = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = () => reject(reader.error || new Error("图片读取失败"));
+    reader.readAsDataURL(file);
+  });
+
+const importLocalImage = async (file) => {
+  if (file.type && !file.type.startsWith("image/")) {
+    throw new Error(`不支持的文件类型：${file.type}`);
+  }
+  const url = await readEmojiFile(file);
+  await window.emojiStore.save({
+    id: createEmojiImportId(),
+    url,
+    timestamp: Date.now(),
+  });
+};
+
+const importLocalImages = async (files, onProgress) => {
+  let success = 0;
+  let failed = 0;
+  for (let index = 0; index < files.length; index += 1) {
+    onProgress(index + 1, files.length);
+    try {
+      await importLocalImage(files[index]);
+      success += 1;
+    } catch (error) {
+      failed += 1;
+      console.error("导入本地图片失败:", files[index]?.name, error);
+    }
+  }
+  return { success, failed };
+};
+
+const importRemoteImage = async ({ name, url }) => {
+  const parsed = new URL(url);
+  if (!/^https?:$/.test(parsed.protocol)) throw new Error("无效图片链接");
+  await window.emojiStore.save({
+    id: createEmojiImportId(),
+    name,
+    url,
+    timestamp: Date.now(),
+  });
+};
+
+const importRemoteImages = async (items, onProgress) => {
+  let success = 0;
+  let failed = 0;
+  for (let index = 0; index < items.length; index += 1) {
+    onProgress(index + 1, items.length);
+    try {
+      await importRemoteImage(items[index]);
+      success += 1;
+    } catch (error) {
+      failed += 1;
+      console.error("导入网络图片失败:", items[index]?.url, error);
+    }
+  }
+  return { success, failed };
+};
+
+const EmojiBatchImporter = ({ onBack, onImported }) => {
+  const [urlText, setUrlText] = React.useState("");
+  const [isImporting, setIsImporting] = React.useState(false);
+  const [importStatus, setImportStatus] = React.useState("");
+  const fileInputRef = React.useRef(null);
+  const validUrls = parseImageUrlLines(urlText);
+  const h = React.createElement;
+
+  const cardStyle = {
+    background: "#fff",
+    padding: "14px 16px",
+    borderRadius: "12px",
+    boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
+  };
+  const actionButtonStyle = (enabled, background) => ({
+    padding: "9px 18px",
+    background: enabled ? background : "#ccc",
+    color: "white",
+    border: "none",
+    borderRadius: "16px",
+    cursor: enabled ? "pointer" : "not-allowed",
+    fontSize: "13px",
+    fontWeight: "bold",
+    flexShrink: 0,
+  });
+
+  const refreshEmojis = async () => {
+    const emojis = await window.emojiStore.getAll();
+    onImported(emojis.sort((a, b) => b.timestamp - a.timestamp));
+  };
+
+  const handleLocalSelect = async (event) => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    if (files.length === 0 || isImporting) return;
+
+    setIsImporting(true);
+    setImportStatus(`正在导入 0 / ${files.length}`);
+    try {
+      const result = await importLocalImages(files, (current, total) => {
+        setImportStatus(`正在导入 ${current} / ${total}`);
+      });
+      await refreshEmojis();
+      setImportStatus(
+        result.failed
+          ? `成功 ${result.success} 张，失败 ${result.failed} 张`
+          : `成功导入 ${result.success} 张图片`,
+      );
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  const handleRemoteImport = async () => {
+    if (validUrls.length === 0 || isImporting) return;
+
+    setIsImporting(true);
+    setImportStatus(`正在添加 0 / ${validUrls.length}`);
+    try {
+      const result = await importRemoteImages(validUrls, (current, total) => {
+        setImportStatus(`正在添加 ${current} / ${total}`);
+      });
+      await refreshEmojis();
+      if (result.success > 0) setUrlText("");
+      setImportStatus(
+        result.failed
+          ? `成功 ${result.success} 条，失败 ${result.failed} 条`
+          : `成功添加 ${result.success} 个链接`,
+      );
+    } finally {
+      setIsImporting(false);
+    }
+  };
+
+  return h(
+    "div",
+    {
+      style: {
+        flex: 1,
+        minHeight: 0,
+        padding: "14px 16px 18px",
+        display: "flex",
+        flexDirection: "column",
+        gap: "12px",
+        overflowY: "auto",
+      },
+    },
+    h(
+      "div",
+      { style: { display: "flex", alignItems: "center", gap: "10px" } },
+      h(
+        "button",
+        {
+          type: "button",
+          onClick: onBack,
+          style: {
+            padding: 0,
+            border: "none",
+            background: "transparent",
+            color: "#8c917b",
+            cursor: "pointer",
+            fontWeight: "bold",
+          },
+        },
+        "‹ 返回相册",
+      ),
+      h(
+        "strong",
+        { style: { color: "#5a5f4d", fontSize: "15px" } },
+        "批量导入图片",
+      ),
+    ),
+    importStatus &&
+      h(
+        "div",
+        {
+          role: "status",
+          "aria-live": "polite",
+          style: {
+            padding: "8px 12px",
+            borderRadius: "10px",
+            background: "rgba(168,200,186,0.18)",
+            color: "#5a5f4d",
+            fontSize: "13px",
+          },
+        },
+        importStatus,
+      ),
+    h(
+      "section",
+      { style: cardStyle },
+      h(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "12px",
+            flexWrap: "wrap",
+          },
+        },
+        h(
+          "div",
+          { style: { color: "#5a5f4d", fontSize: "14px", fontWeight: "bold" } },
+          "从本地相册导入：",
+        ),
+        h(
+          "button",
+          {
+            type: "button",
+            disabled: isImporting,
+            onClick: () => fileInputRef.current?.click(),
+            style: actionButtonStyle(!isImporting, "#A8C8BA"),
+          },
+          isImporting ? "正在导入…" : "+ 选择图片",
+        ),
+        h("input", {
+          ref: fileInputRef,
+          type: "file",
+          accept: "image/*",
+          multiple: true,
+          disabled: isImporting,
+          onChange: handleLocalSelect,
+          style: { display: "none" },
+        }),
+      ),
+      h(
+        "div",
+        { style: { marginTop: "8px", color: "#8c917b", fontSize: "12px" } },
+        "支持同时选择多张图片，一次批量导入",
+      ),
+    ),
+    h(
+      "section",
+      { style: cardStyle },
+      h(
+        "div",
+        { style: { color: "#5a5f4d", fontSize: "14px", fontWeight: "bold" } },
+        "使用网络图片链接添加：",
+      ),
+      h(
+        "div",
+        {
+          style: {
+            margin: "7px 0 9px",
+            color: "#8c917b",
+            fontSize: "12px",
+            lineHeight: 1.5,
+          },
+        },
+        "每行一条：直接贴链接，或填写“描述 + 空格 + 链接”",
+      ),
+      h("textarea", {
+        value: urlText,
+        disabled: isImporting,
+        onChange: (event) => setUrlText(event.target.value),
+        placeholder:
+          "https://example.com/image.jpg\n一起晒太阳 https://example.com/photo.jpg",
+        rows: 4,
+        style: {
+          width: "100%",
+          minHeight: "88px",
+          padding: "10px 12px",
+          boxSizing: "border-box",
+          border: "1px solid rgba(214,114,75,0.3)",
+          borderRadius: "12px",
+          outline: "none",
+          resize: "vertical",
+          fontSize: "13px",
+          lineHeight: 1.5,
+          background: "#fdfaf8",
+          color: "#5a5f4d",
+          overflowWrap: "anywhere",
+        },
+      }),
+      h(
+        "div",
+        {
+          style: {
+            marginTop: "10px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "10px",
+            flexWrap: "wrap",
+          },
+        },
+        h(
+          "span",
+          { style: { color: "#8c917b", fontSize: "12px" } },
+          `已识别 ${validUrls.length} 个有效链接`,
+        ),
+        h(
+          "button",
+          {
+            type: "button",
+            disabled: validUrls.length === 0 || isImporting,
+            onClick: handleRemoteImport,
+            style: actionButtonStyle(validUrls.length > 0 && !isImporting, "#d6724b"),
+          },
+          isImporting ? "正在导入…" : `添加 ${validUrls.length} 个链接`,
+        ),
+      ),
+    ),
+  );
+};
+
 // ==================== 钱包与交易全局记录系统 ====================
 window.addTransactionRecord = (type, amount, source) => {
   try {
@@ -65361,8 +65835,7 @@ const GomokuGamePage = ({ onBack }) => {
   const GRID_COUNT = 15;
   const colLetters = "ABCDEFGHIJKLMNO";
 
-  // 播放落子与胜负音效
-  const playSound = (type = 'piece') => {
+  const playSound = (type = "piece") => {
     try {
       const AudioCtx = window.AudioContext || window.webkitAudioContext;
       if (!AudioCtx) return;
@@ -65370,13 +65843,13 @@ const GomokuGamePage = ({ onBack }) => {
         window._gomokuAudioCtx = new AudioCtx();
       }
       const ctx = window._gomokuAudioCtx;
-      if (ctx.state === 'suspended') ctx.resume();
+      if (ctx.state === "suspended") ctx.resume();
       const now = ctx.currentTime;
 
-      if (type === 'piece') {
+      if (type === "piece") {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = 'sine';
+        osc.type = "sine";
         osc.frequency.setValueAtTime(587.33, now);
         osc.frequency.exponentialRampToValueAtTime(329.63, now + 0.08);
         gain.gain.setValueAtTime(0.18, now);
@@ -65385,11 +65858,11 @@ const GomokuGamePage = ({ onBack }) => {
         gain.connect(ctx.destination);
         osc.start(now);
         osc.stop(now + 0.08);
-      } else if (type === 'win') {
+      } else if (type === "win") {
         [523.25, 659.25, 783.99, 1046.5].forEach((freq, idx) => {
           const osc = ctx.createOscillator();
           const gain = ctx.createGain();
-          osc.type = 'triangle';
+          osc.type = "triangle";
           osc.frequency.setValueAtTime(freq, now + idx * 0.09);
           gain.gain.setValueAtTime(0.2, now + idx * 0.09);
           gain.gain.exponentialRampToValueAtTime(0.001, now + idx * 0.09 + 0.2);
@@ -65398,10 +65871,10 @@ const GomokuGamePage = ({ onBack }) => {
           osc.start(now + idx * 0.09);
           osc.stop(now + idx * 0.09 + 0.2);
         });
-      } else if (type === 'lose') {
+      } else if (type === "lose") {
         const osc = ctx.createOscillator();
         const gain = ctx.createGain();
-        osc.type = 'sawtooth';
+        osc.type = "sawtooth";
         osc.frequency.setValueAtTime(220, now);
         osc.frequency.exponentialRampToValueAtTime(110, now + 0.35);
         gain.gain.setValueAtTime(0.15, now);
@@ -65414,33 +65887,30 @@ const GomokuGamePage = ({ onBack }) => {
     } catch (e) {}
   };
 
-  // 棋盘数据 (0: 空, 1: 玩家黑棋, 2: 密探白棋)
   const [board, setBoard] = useState(() => Array.from({ length: GRID_COUNT }, () => Array(GRID_COUNT).fill(0)));
-  const [moveHistory, setMoveHistory] = useState([]); // [{ x, y, player }]
-  const [currentTurn, setCurrentTurn] = useState('player'); // 'player' (1) | 'ai' (2)
+  const [moveHistory, setMoveHistory] = useState([]);
+  const [currentTurn, setCurrentTurn] = useState("player");
   const [isAiThinking, setIsAiThinking] = useState(false);
-  const [gameState, setGameState] = useState('playing'); // 'playing' | 'player_win' | 'ai_win' | 'draw'
-  const [winningLine, setWinningLine] = useState(null); // [{x, y}, ...]
+  const [gameState, setGameState] = useState("playing");
+  const [winningLine, setWinningLine] = useState(null);
   const [earnedCoins, setEarnedCoins] = useState(0);
   const [hasAwarded, setHasAwarded] = useState(false);
 
-  // 密探角色列表与当前对弈密探
   const [availableChars, setAvailableChars] = useState([]);
   const [selectedChar, setSelectedChar] = useState(null);
   const [showCharModal, setShowCharModal] = useState(false);
 
-  // 顶部微信通知风格气泡
-  const [topBubble, setTopBubble] = useState(null); // { text, time }
+  const [topBubble, setTopBubble] = useState(null);
   const [isBubbleExiting, setIsBubbleExiting] = useState(false);
   const [showChatHistoryModal, setShowChatHistoryModal] = useState(false);
   const [chatHistory, setChatHistory] = useState([]);
-  const [chatInput, setChatInput] = useState('');
+  const [chatInput, setChatInput] = useState("");
   const [isAiReplyingChat, setIsAiReplyingChat] = useState(false);
+  const [isAiReplying, setIsAiReplying] = useState(false);
   const bubbleTimerRef = useRef(null);
 
   const canvasRef = useRef(null);
 
-  // 1. 加载密探角色列表
   useEffect(() => {
     const loadChars = async () => {
       try {
@@ -65450,12 +65920,12 @@ const GomokuGamePage = ({ onBack }) => {
         } else {
           chars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
         }
-        const validChars = (chars || []).filter(c => !String(c.id).startsWith("group") && c.type !== "decor");
+        const validChars = (chars || []).filter((c) => !String(c.id).startsWith("group") && c.type !== "decor");
         setAvailableChars(validChars);
 
         const savedCharId = localStorage.getItem("milvus_gomoku_char_id");
         if (savedCharId) {
-          const found = validChars.find(c => String(c.id) === String(savedCharId));
+          const found = validChars.find((c) => String(c.id) === String(savedCharId));
           if (found) setSelectedChar(found);
         } else if (validChars.length > 0) {
           setSelectedChar(validChars[0]);
@@ -65467,21 +65937,21 @@ const GomokuGamePage = ({ onBack }) => {
     loadChars();
   }, []);
 
-  // 2. 加载当前密探历史对话
   useEffect(() => {
     if (selectedChar?.id) {
-      GomokuChatDB.getMessages(selectedChar.id).then(msgs => {
+      GomokuChatDB.getMessages(selectedChar.id).then((msgs) => {
         setChatHistory(msgs || []);
       });
     }
   }, [selectedChar]);
 
-  // 3. 气泡展示工具函数
   const triggerTopBubble = (text) => {
     if (!text) return;
     if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+    setIsAiReplying(false);
+    setIsAiThinking(false);
     setIsBubbleExiting(false);
-    setTopBubble({ text, time: Date.now() });
+    setTopBubble({ isThinking: false, text, time: Date.now() });
 
     bubbleTimerRef.current = setTimeout(() => {
       setIsBubbleExiting(true);
@@ -65489,15 +65959,15 @@ const GomokuGamePage = ({ onBack }) => {
         setTopBubble(null);
         setIsBubbleExiting(false);
       }, 300);
-    }, 8500);
+    }, 9000);
   };
 
-  // 4. 五子连珠检测函数
   const checkWin = useCallback((currentBoard, x, y, player) => {
     const directions = [
-      [1, 0],   // 水平
-      [0, 1],   // 垂直
-      [1, 1],   // 主对角线       [1, -1]   // 副对角线 /
+      [1, 0],
+      [0, 1],
+      [1, 1],
+      [1, -1]
     ];
 
     for (const [dx, dy] of directions) {
@@ -65533,7 +66003,6 @@ const GomokuGamePage = ({ onBack }) => {
     return { isWin: false, line: null };
   }, []);
 
-  // 5. 局势与棋型评分 (AI 启发式算法)
   const evaluateLine = useCallback((currentBoard, x, y, dx, dy, player) => {
     let score = 0;
     let count = 1;
@@ -65576,34 +66045,41 @@ const GomokuGamePage = ({ onBack }) => {
     return 2;
   }, []);
 
-  const evaluatePosition = useCallback((currentBoard, x, y) => {
-    currentBoard[y][x] = 2;
-    if (checkWin(currentBoard, x, y, 2).isWin) {
+  const evaluatePosition = useCallback(
+    (currentBoard, x, y) => {
+      currentBoard[y][x] = 2;
+      if (checkWin(currentBoard, x, y, 2).isWin) {
+        currentBoard[y][x] = 0;
+        return 15000;
+      }
+
+      currentBoard[y][x] = 1;
+      if (checkWin(currentBoard, x, y, 1).isWin) {
+        currentBoard[y][x] = 0;
+        return 12000;
+      }
       currentBoard[y][x] = 0;
-      return 15000;
-    }
 
-    currentBoard[y][x] = 1;
-    if (checkWin(currentBoard, x, y, 1).isWin) {
-      currentBoard[y][x] = 0;
-      return 12000;
-    }
-    currentBoard[y][x] = 0;
+      let score = 0;
+      const directions = [
+        [1, 0],
+        [0, 1],
+        [1, 1],
+        [1, -1]
+      ];
+      for (const [dx, dy] of directions) {
+        score += evaluateLine(currentBoard, x, y, dx, dy, 2) * 1.5;
+        score += evaluateLine(currentBoard, x, y, dx, dy, 1) * 1.2;
+      }
 
-    let score = 0;
-    const directions = [[1, 0], [0, 1], [1, 1], [1, -1]];
-    for (const [dx, dy] of directions) {
-      score += evaluateLine(currentBoard, x, y, dx, dy, 2) * 1.5;
-      score += evaluateLine(currentBoard, x, y, dx, dy, 1) * 1.2;
-    }
+      const centerDist = Math.abs(x - 7) + Math.abs(y - 7);
+      score += (14 - centerDist) * 3;
 
-    const centerDist = Math.abs(x - 7) + Math.abs(y - 7);
-    score += (14 - centerDist) * 3;
+      return score;
+    },
+    [checkWin, evaluateLine]
+  );
 
-    return score;
-  }, [checkWin, evaluateLine]);
-
-  // 棋局深度局势分析器 (供大模型感知真实棋盘)
   const getBoardAnalysisDescription = (currentBoard, lastPlayerMove, aiMove, stepNum) => {
     const pStr = lastPlayerMove ? `${colLetters[lastPlayerMove.x]}${lastPlayerMove.y + 1}` : "开局";
     const aStr = `${colLetters[aiMove.x]}${aiMove.y + 1}`;
@@ -65611,125 +66087,140 @@ const GomokuGamePage = ({ onBack }) => {
     let playerThreats = [];
     let aiThreats = [];
 
-    // 检测是否有连三或连四
     for (let y = 0; y < GRID_COUNT; y++) {
       for (let x = 0; x < GRID_COUNT; x++) {
         if (currentBoard[y][x] === 1) {
-          [[1, 0], [0, 1], [1, 1], [1, -1]].forEach(([dx, dy]) => {
+          [
+            [1, 0],
+            [0, 1],
+            [1, 1],
+            [1, -1]
+          ].forEach(([dx, dy]) => {
             let c = 1;
             for (let s = 1; s < 4; s++) {
-              let nx = x + dx * s, ny = y + dy * s;
+              let nx = x + dx * s,
+                ny = y + dy * s;
               if (nx >= 0 && nx < GRID_COUNT && ny >= 0 && ny < GRID_COUNT && currentBoard[ny][nx] === 1) c++;
               else break;
             }
-            if (c >= 3) playerThreats.push(`${colLetters[x]}${y+1}一带连成${c}子攻势`);
+            if (c >= 3) playerThreats.push(`${colLetters[x]}${y + 1}一带连成${c}子攻势`);
           });
         } else if (currentBoard[y][x] === 2) {
-          [[1, 0], [0, 1], [1, 1], [1, -1]].forEach(([dx, dy]) => {
+          [
+            [1, 0],
+            [0, 1],
+            [1, 1],
+            [1, -1]
+          ].forEach(([dx, dy]) => {
             let c = 1;
             for (let s = 1; s < 4; s++) {
-              let nx = x + dx * s, ny = y + dy * s;
+              let nx = x + dx * s,
+                ny = y + dy * s;
               if (nx >= 0 && nx < GRID_COUNT && ny >= 0 && ny < GRID_COUNT && currentBoard[ny][nx] === 2) c++;
               else break;
             }
-            if (c >= 3) aiThreats.push(`${colLetters[x]}${y+1}一带连成${c}子`);
+            if (c >= 3) aiThreats.push(`${colLetters[x]}${y + 1}一带连成${c}子`);
           });
         }
       }
     }
 
-    const threatSummary = playerThreats.length > 0
-      ? `【楼主黑棋杀气】：楼主在【${playerThreats.slice(0, 2).join('、')}】，势头正盛。`
-      : `【楼主黑棋布局】：楼主在【${pStr}】落子稳健，意图掌控中盘。`;
+    const threatSummary =
+      playerThreats.length > 0
+        ? `【楼主黑棋杀气】：楼主在【${playerThreats.slice(0, 2).join("、")}】，势头正盛。`
+        : `【楼主黑棋布局】：楼主在【${pStr}】落子稳健，意图掌控中盘。`;
 
-    const aiSummary = aiThreats.length > 0
-      ? `【你（白棋）的布局】：你在【${aStr}】落子，暗中形成了【${aiThreats.slice(0, 1).join('')}】。`
-      : `【你（白棋）的布局】：你在【${aStr}】落子拦截或布设暗棋。`;
+    const aiSummary =
+      aiThreats.length > 0
+        ? `【你（白棋）的布局】：你在【${aStr}】落子，暗中形成了【${aiThreats.slice(0, 1).join("")}】。`
+        : `【你（白棋）的布局】：你在【${aStr}】落子拦截或布设暗棋。`;
 
     return `第 ${stepNum} 手交锋。楼主刚在【${pStr}】落子，你随即在【${aStr}】落子回应。
 ${threatSummary}
 ${aiSummary}`;
   };
 
-  // 6. 密探落子与 AI 深度思考调用 (带心理战诱导)
-  const triggerAiMoveAndDialogue = useCallback(async (currentBoard, lastPlayerMove, currentHistory) => {
-    setIsAiThinking(true);
+  const triggerAiMoveAndDialogue = useCallback(
+    async (currentBoard, lastPlayerMove, currentHistory) => {
+      setIsAiThinking(true);
+      setIsAiReplying(true);
+      if (bubbleTimerRef.current) clearTimeout(bubbleTimerRef.current);
+      setIsBubbleExiting(false);
+      setTopBubble({ isThinking: true, time: Date.now() });
 
-    let bestScore = -1;
-    let bestMoves = [];
+      let bestScore = -1;
+      let bestMoves = [];
 
-    for (let y = 0; y < GRID_COUNT; y++) {
-      for (let x = 0; x < GRID_COUNT; x++) {
-        if (currentBoard[y][x] === 0) {
-          const score = evaluatePosition(currentBoard, x, y);
-          if (score > bestScore) {
-            bestScore = score;
-            bestMoves = [{ x, y }];
-          } else if (score === bestScore) {
-            bestMoves.push({ x, y });
+      for (let y = 0; y < GRID_COUNT; y++) {
+        for (let x = 0; x < GRID_COUNT; x++) {
+          if (currentBoard[y][x] === 0) {
+            const score = evaluatePosition(currentBoard, x, y);
+            if (score > bestScore) {
+              bestScore = score;
+              bestMoves = [{ x, y }];
+            } else if (score === bestScore) {
+              bestMoves.push({ x, y });
+            }
           }
         }
       }
-    }
 
-    let aiMove = { x: 7, y: 7 };
-    if (bestMoves.length > 0) {
-      aiMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
-    }
+      let aiMove = { x: 7, y: 7 };
+      if (bestMoves.length > 0) {
+        aiMove = bestMoves[Math.floor(Math.random() * bestMoves.length)];
+      }
 
-    await new Promise(r => setTimeout(r, 450));
+      await new Promise((r) => setTimeout(r, 450));
 
-    const newBoard = currentBoard.map(row => [...row]);
-    newBoard[aiMove.y][aiMove.x] = 2; // 白棋
-    playSound('piece');
+      const newBoard = currentBoard.map((row) => [...row]);
+      newBoard[aiMove.y][aiMove.x] = 2;
+      playSound("piece");
 
-    const updatedHistory = [...currentHistory, { x: aiMove.x, y: aiMove.y, player: 2 }];
-    setBoard(newBoard);
-    setMoveHistory(updatedHistory);
-    setIsAiThinking(false);
+      const updatedHistory = [...currentHistory, { x: aiMove.x, y: aiMove.y, player: 2 }];
+      setBoard(newBoard);
+      setMoveHistory(updatedHistory);
+      setIsAiThinking(false);
 
-    // 检查 AI 是否获胜
-    const winResult = checkWin(newBoard, aiMove.x, aiMove.y, 2);
-    if (winResult.isWin) {
-      setGameState('ai_win');
-      setWinningLine(winResult.line);
-      playSound('lose');
-    } else if (updatedHistory.length >= GRID_COUNT * GRID_COUNT) {
-      setGameState('draw');
-    } else {
-      setCurrentTurn('player');
-    }
+      const winResult = checkWin(newBoard, aiMove.x, aiMove.y, 2);
+      if (winResult.isWin) {
+        setGameState("ai_win");
+        setWinningLine(winResult.line);
+        playSound("lose");
+      } else if (updatedHistory.length >= GRID_COUNT * GRID_COUNT) {
+        setGameState("draw");
+      } else {
+        setCurrentTurn("player");
+      }
 
-    // 🌟 触发精准针对棋盘的 AI 心理战术诱导对话
-    if (selectedChar) {
-      try {
-        const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
-        let userContext = "【主控身份】姓名:主控, 性格:沉稳, 背景:隐秘阁主";
+      if (selectedChar) {
         try {
-          const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
-          const activeId = localStorage.getItem("active_persona_id");
-          if (activeId) {
-            const activeUser = savedPersonas.find(p => p.id == activeId);
-            if (activeUser) {
-              userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
+          const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "无特定背景";
+          let userContext = "【主控身份】姓名:主控, 性格:沉稳, 背景:隐秘阁主";
+          try {
+            const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+            const activeId = localStorage.getItem("active_persona_id");
+            if (activeId) {
+              const activeUser = savedPersonas.find((p) => p.id == activeId);
+              if (activeUser) {
+                userContext = `【主控身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "未知"}, 背景:${activeUser.background || "未知"}`;
+              }
             }
-          }
-        } catch (e) {}
+          } catch (e) {}
 
-        const profile = selectedChar.profile || {};
-        const charContext = `【密探角色深度设定】
+          const profile = selectedChar.profile || {};
+          const charContext = `【密探角色深度设定】
 姓名: ${selectedChar.name}
 性格特征: ${profile.personality || profile.description || "机敏睿智，暗藏锋芒"}
 说话口吻: ${profile.style || profile.tone || "古风自然，生动细腻"}
 习惯用语: ${profile.catchphrase || "无"}
 背景身份: ${profile.background || "绣衣楼密探"}`;
 
-        const moveStepNum = updatedHistory.length;
-        const playerCoordStr = lastPlayerMove ? `${colLetters[lastPlayerMove.x]}${lastPlayerMove.y + 1}` : "开局";
-        const aiCoordStr = `${colLetters[aiMove.x]}${aiMove.y + 1}`;
-        const boardAnalysis = getBoardAnalysisDescription(newBoard, lastPlayerMove, aiMove, moveStepNum);
+          const moveStepNum = updatedHistory.length;
+          const playerCoordStr = lastPlayerMove ? `${colLetters[lastPlayerMove.x]}${lastPlayerMove.y + 1}` : "开局";
+          const aiCoordStr = `${colLetters[aiMove.x]}${aiMove.y + 1}`;
+          const boardAnalysis = getBoardAnalysisDescription(newBoard, lastPlayerMove, aiMove, moveStepNum);
 
-        const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
+          const sysPrompt = `你是一个沉浸式古风角色扮演AI。你正在扮演【${selectedChar.name}】。
 ${worldContext}
 ${userContext}
 ${charContext}
@@ -65748,50 +66239,58 @@ ${boardAnalysis}
    - 故作赞叹“楼主这手断位真绝”，实则诱导楼主继续追击虚招。
 4. 严格字数：20~45 字左右，短小精练，直接说出角色说的话，切勿出戏，切勿提AI。`;
 
-        const userPromptContent = `【下子战况】：楼主黑棋刚落于【${playerCoordStr}】，你白棋落在【${aiCoordStr}】（第${moveStepNum}手）。请结合这具体两步落子与棋盘局势，说一句心理战诱导台词：`;
+          const userPromptContent = `【下子战况】：楼主黑棋刚落于【${playerCoordStr}】，你白棋落在【${aiCoordStr}】（第${moveStepNum}手）。请结合这具体两步落子与棋盘局势，说一句心理战诱导台词：`;
 
-        const apiMessages = [
-          { role: "system", content: sysPrompt },
-          { role: "user", content: userPromptContent }
-        ];
+          const apiMessages = [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPromptContent }
+          ];
 
-        if (window.sendToLLM) {
-          window.sendToLLM(
-            apiMessages,
-            null,
-            async (reply) => {
-              const cleanReply = reply.trim();
-              triggerTopBubble(cleanReply);
-              const assistantMsg = {
-                id: Date.now() + Math.random(),
-                role: 'assistant',
-                content: cleanReply,
-                timestamp: Date.now()
-              };
-              setChatHistory(prev => [...prev, assistantMsg]);
-              await GomokuChatDB.saveMessage(selectedChar.id, assistantMsg);
-            },
-            (err) => {
-              console.error("五子棋AI诱导对话失败:", err);
-              const fallbacks = [
-                `（指尖拂过【${aiCoordStr}】）楼主这手【${playerCoordStr}】下得甚巧，不过……旁侧似乎另有玄机呢。`,
-                `（抿茶轻笑）莫急着在此处追堵，我看天元之位气象更佳。`,
-                `（垂眸沉吟）这步【${aiCoordStr}】若不防，接下来可莫怪我先声夺人了。`
-              ];
-              const randomFallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
-              triggerTopBubble(randomFallback);
-            }
-          );
+          if (window.sendToLLM) {
+            window.sendToLLM(
+              apiMessages,
+              null,
+              async (reply) => {
+                setIsAiReplying(false);
+                setIsAiThinking(false);
+                const cleanReply = (reply || "").trim();
+                triggerTopBubble(cleanReply);
+                const assistantMsg = {
+                  id: Date.now() + Math.random(),
+                  role: "assistant",
+                  content: cleanReply,
+                  timestamp: Date.now()
+                };
+                setChatHistory((prev) => [...prev, assistantMsg]);
+                await GomokuChatDB.saveMessage(selectedChar.id, assistantMsg);
+              },
+              (err) => {
+                setIsAiReplying(false);
+                setIsAiThinking(false);
+                console.error("五子棋AI诱导对话失败:", err);
+                const fallbacks = [
+                  `（指尖拂过【${aiCoordStr}】）楼主这手【${playerCoordStr}】下得甚巧，不过……旁侧似乎另有玄机呢。`,
+                  `（抿茶轻笑）莫急着在此处追堵，我看天元之位气象更佳。`,
+                  `（垂眸沉吟）这步【${aiCoordStr}】若不防，接下来可莫怪我先声夺人了。`
+                ];
+                const randomFallback = fallbacks[Math.floor(Math.random() * fallbacks.length)];
+                triggerTopBubble(randomFallback);
+              }
+            );
+          } else {
+            setIsAiReplying(false);
+            setIsAiThinking(false);
+          }
+        } catch (e) {
+          console.error(e);
         }
-      } catch (e) {
-        console.error(e);
       }
-    }
-  }, [evaluatePosition, checkWin, selectedChar]);
+    },
+    [evaluatePosition, checkWin, selectedChar]
+  );
 
-  // 7. 玩家点击棋盘落子 (精确缩放映射，杜绝点击偏移)
   const handleBoardPointer = (e) => {
-    if (gameState !== 'playing' || currentTurn !== 'player' || isAiThinking) return;
+    if (gameState !== "playing" || currentTurn !== "player" || isAiThinking) return;
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -65801,7 +66300,6 @@ ${boardAnalysis}
 
     if (clientX === undefined || clientY === undefined) return;
 
-    // 🌟 精确计算 CSS 像素到 Canvas 内部坐标的缩放比例
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
 
@@ -65812,75 +66310,68 @@ ${boardAnalysis}
     const availableWidth = canvas.width - padding * 2;
     const cellSpacing = availableWidth / (GRID_COUNT - 1);
 
-    // 计算点击最近的交叉点
     const gridX = Math.round((canvasX - padding) / cellSpacing);
     const gridY = Math.round((canvasY - padding) / cellSpacing);
 
     if (gridX < 0 || gridX >= GRID_COUNT || gridY < 0 || gridY >= GRID_COUNT) return;
     if (board[gridY][gridX] !== 0) return;
 
-    // 落子成功
-    const newBoard = board.map(row => [...row]);
-    newBoard[gridY][gridX] = 1; // 黑棋
-    playSound('piece');
+    const newBoard = board.map((row) => [...row]);
+    newBoard[gridY][gridX] = 1;
+    playSound("piece");
 
     const updatedHistory = [...moveHistory, { x: gridX, y: gridY, player: 1 }];
     setBoard(newBoard);
     setMoveHistory(updatedHistory);
 
-    // 检查玩家是否获胜
     const winResult = checkWin(newBoard, gridX, gridY, 1);
     if (winResult.isWin) {
-      setGameState('player_win');
+      setGameState("player_win");
       setWinningLine(winResult.line);
-      playSound('win');
+      playSound("win");
       return;
     }
 
     if (updatedHistory.length >= GRID_COUNT * GRID_COUNT) {
-      setGameState('draw');
+      setGameState("draw");
       return;
     }
 
-    // 轮到 AI 落子
-    setCurrentTurn('ai');
+    setCurrentTurn("ai");
     triggerAiMoveAndDialogue(newBoard, { x: gridX, y: gridY }, updatedHistory);
   };
 
-  // 8. 悔棋 (撤回两步：撤回AI与玩家各一步)
   const handleUndo = () => {
-    if (moveHistory.length < 2 || isAiThinking || gameState !== 'playing') return;
+    if (moveHistory.length < 2 || isAiThinking || gameState !== "playing") return;
 
     const newHistory = moveHistory.slice(0, -2);
     const newBoard = Array.from({ length: GRID_COUNT }, () => Array(GRID_COUNT).fill(0));
-    newHistory.forEach(m => {
+    newHistory.forEach((m) => {
       newBoard[m.y][m.x] = m.player;
     });
 
     setBoard(newBoard);
     setMoveHistory(newHistory);
-    setCurrentTurn('player');
+    setCurrentTurn("player");
     triggerTopBubble("（轻按折扇）落子无悔……不过既是楼主所求，便让你一步又何妨？");
   };
 
-  // 9. 重新开局
   const restartGame = () => {
     setBoard(Array.from({ length: GRID_COUNT }, () => Array(GRID_COUNT).fill(0)));
     setMoveHistory([]);
-    setCurrentTurn('player');
+    setCurrentTurn("player");
     setIsAiThinking(false);
-    setGameState('playing');
+    setGameState("playing");
     setWinningLine(null);
     setEarnedCoins(0);
     setHasAwarded(false);
     triggerTopBubble("（理正衣袍）棋道万千，重整旗鼓，请楼主先行执黑。");
   };
 
-  // 10. 金库赏金结算
   useEffect(() => {
-    if (gameState !== 'playing' && !hasAwarded) {
+    if (gameState !== "playing" && !hasAwarded) {
       let coins = 0;
-      if (gameState === 'player_win') {
+      if (gameState === "player_win") {
         coins = 15;
         if (moveHistory.length <= 20) coins += 10;
       } else {
@@ -65902,7 +66393,7 @@ ${boardAnalysis}
               type: "income",
               amount: coins,
               title: "棋逢对手 · 对弈赏金",
-              description: `与【${selectedChar?.name || '密探'}】切磋五子棋，手顺 ${moveHistory.length} 步，战果【${gameState === 'player_win' ? '大获全胜' : '切磋暂歇'}】`,
+              description: `与【${selectedChar?.name || "密探"}】切磋五子棋，手顺 ${moveHistory.length} 步，战果【${gameState === "player_win" ? "大获全胜" : "切磋暂歇"}】`,
               time: new Date().toLocaleString()
             });
           }
@@ -65911,20 +66402,18 @@ ${boardAnalysis}
     }
   }, [gameState, hasAwarded, moveHistory.length, selectedChar]);
 
-  // 11. Canvas 绘制棋盘与莫兰迪果冻棋子
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     const width = canvas.width;
     const height = canvas.height;
 
     ctx.clearRect(0, 0, width, height);
 
-    // 棋盘温润莫兰迪背景
     const bgGrad = ctx.createLinearGradient(0, 0, width, height);
-    bgGrad.addColorStop(0, '#FAF7F2');
-    bgGrad.addColorStop(1, '#F3ECE2');
+    bgGrad.addColorStop(0, "#FAF7F2");
+    bgGrad.addColorStop(1, "#F3ECE2");
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, width, height);
 
@@ -65932,33 +66421,31 @@ ${boardAnalysis}
     const availableWidth = width - padding * 2;
     const cellSpacing = availableWidth / (GRID_COUNT - 1);
 
-    // 绘制格线
-    ctx.strokeStyle = 'rgba(168, 150, 135, 0.45)';
+    ctx.strokeStyle = "rgba(168, 150, 135, 0.45)";
     ctx.lineWidth = 1;
     for (let i = 0; i < GRID_COUNT; i++) {
       const pos = padding + i * cellSpacing;
 
-      // 横线
       ctx.beginPath();
       ctx.moveTo(padding, pos);
       ctx.lineTo(width - padding, pos);
       ctx.stroke();
 
-      // 竖线
       ctx.beginPath();
       ctx.moveTo(pos, padding);
       ctx.lineTo(pos, height - padding);
       ctx.stroke();
     }
 
-    // 绘制星位与天元
     const starPoints = [
-      { x: 3, y: 3 }, { x: 11, y: 3 },
+      { x: 3, y: 3 },
+      { x: 11, y: 3 },
       { x: 7, y: 7 },
-      { x: 3, y: 11 }, { x: 11, y: 11 }
+      { x: 3, y: 11 },
+      { x: 11, y: 11 }
     ];
-    ctx.fillStyle = '#8C7768';
-    starPoints.forEach(pt => {
+    ctx.fillStyle = "#8C7768";
+    starPoints.forEach((pt) => {
       const px = padding + pt.x * cellSpacing;
       const py = padding + pt.y * cellSpacing;
       ctx.beginPath();
@@ -65968,7 +66455,6 @@ ${boardAnalysis}
 
     const pieceRadius = cellSpacing * 0.43;
 
-    // 绘制所有棋子
     for (let y = 0; y < GRID_COUNT; y++) {
       for (let x = 0; x < GRID_COUNT; x++) {
         const val = board[y][x];
@@ -65977,9 +66463,8 @@ ${boardAnalysis}
         const px = padding + x * cellSpacing;
         const py = padding + y * cellSpacing;
 
-        // 阴影
         ctx.save();
-        ctx.shadowColor = val === 1 ? 'rgba(40, 30, 25, 0.35)' : 'rgba(150, 130, 115, 0.3)';
+        ctx.shadowColor = val === 1 ? "rgba(40, 30, 25, 0.35)" : "rgba(150, 130, 115, 0.3)";
         ctx.shadowBlur = 5;
         ctx.shadowOffsetY = 2;
 
@@ -65993,15 +66478,13 @@ ${boardAnalysis}
         );
 
         if (val === 1) {
-          // 黑棋 (黑玉果冻珠)
-          grad.addColorStop(0, '#5C5450');
-          grad.addColorStop(0.5, '#383230');
-          grad.addColorStop(1, '#201C1A');
+          grad.addColorStop(0, "#5C5450");
+          grad.addColorStop(0.5, "#383230");
+          grad.addColorStop(1, "#201C1A");
         } else {
-          // 白棋 (凝脂羊脂玉果冻珠)
-          grad.addColorStop(0, '#FFFFFF');
-          grad.addColorStop(0.6, '#F8F4ED');
-          grad.addColorStop(1, '#E2D7C7');
+          grad.addColorStop(0, "#FFFFFF");
+          grad.addColorStop(0.6, "#F8F4ED");
+          grad.addColorStop(1, "#E2D7C7");
         }
 
         ctx.fillStyle = grad;
@@ -66010,14 +66493,12 @@ ${boardAnalysis}
         ctx.fill();
         ctx.restore();
 
-        // 晶莹微凸高光
-        ctx.fillStyle = val === 1 ? 'rgba(255, 255, 255, 0.28)' : 'rgba(255, 255, 255, 0.85)';
+        ctx.fillStyle = val === 1 ? "rgba(255, 255, 255, 0.28)" : "rgba(255, 255, 255, 0.85)";
         ctx.beginPath();
         ctx.arc(px - pieceRadius * 0.3, py - pieceRadius * 0.3, pieceRadius * 0.25, 0, Math.PI * 2);
         ctx.fill();
 
-        // 边框描边
-        ctx.strokeStyle = val === 1 ? 'rgba(255, 255, 255, 0.1)' : 'rgba(215, 200, 185, 0.6)';
+        ctx.strokeStyle = val === 1 ? "rgba(255, 255, 255, 0.1)" : "rgba(215, 200, 185, 0.6)";
         ctx.lineWidth = 1;
         ctx.beginPath();
         ctx.arc(px, py, pieceRadius, 0, Math.PI * 2);
@@ -66025,29 +66506,27 @@ ${boardAnalysis}
       }
     }
 
-    // 绘制最后一步标记 (光晕呼吸圈)
     if (moveHistory.length > 0) {
       const lastMove = moveHistory[moveHistory.length - 1];
       const lx = padding + lastMove.x * cellSpacing;
       const ly = padding + lastMove.y * cellSpacing;
 
-      ctx.strokeStyle = lastMove.player === 1 ? '#E09F67' : '#7AA693';
+      ctx.strokeStyle = lastMove.player === 1 ? "#E09F67" : "#7AA693";
       ctx.lineWidth = 2;
       ctx.beginPath();
       ctx.arc(lx, ly, pieceRadius * 0.4, 0, Math.PI * 2);
       ctx.stroke();
 
-      ctx.fillStyle = lastMove.player === 1 ? '#E09F67' : '#7AA693';
+      ctx.fillStyle = lastMove.player === 1 ? "#E09F67" : "#7AA693";
       ctx.beginPath();
       ctx.arc(lx, ly, 2, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // 绘制胜利连线高光
     if (winningLine && winningLine.length >= 5) {
-      ctx.strokeStyle = '#D6724B';
+      ctx.strokeStyle = "#D6724B";
       ctx.lineWidth = 4;
-      ctx.lineCap = 'round';
+      ctx.lineCap = "round";
       ctx.beginPath();
       const first = winningLine[0];
       const last = winningLine[winningLine.length - 1];
@@ -66057,15 +66536,14 @@ ${boardAnalysis}
     }
   }, [board, moveHistory, winningLine]);
 
-  // 发送小窗对弈心语
   const handleSendCustomChat = async (msgText) => {
     const textToSend = (msgText || chatInput).trim();
     if (!textToSend || !selectedChar || isAiReplyingChat) return;
 
-    setChatInput('');
+    setChatInput("");
     const userMsg = {
       id: Date.now() + Math.random(),
-      role: 'user',
+      role: "user",
       content: textToSend,
       timestamp: Date.now()
     };
@@ -66088,7 +66566,7 @@ ${gameContext}
 
       const apiMessages = [
         { role: "system", content: sysPrompt },
-        ...nextMsgs.slice(-6).map(m => ({ role: m.role, content: m.content }))
+        ...nextMsgs.slice(-6).map((m) => ({ role: m.role, content: m.content }))
       ];
 
       if (window.sendToLLM) {
@@ -66099,11 +66577,11 @@ ${gameContext}
             const cleanReply = reply.trim();
             const aiMsg = {
               id: Date.now() + Math.random(),
-              role: 'assistant',
+              role: "assistant",
               content: cleanReply,
               timestamp: Date.now()
             };
-            setChatHistory(prev => [...prev, aiMsg]);
+            setChatHistory((prev) => [...prev, aiMsg]);
             await GomokuChatDB.saveMessage(selectedChar.id, aiMsg);
             triggerTopBubble(cleanReply);
             setIsAiReplyingChat(false);
@@ -66118,736 +66596,852 @@ ${gameContext}
     }
   };
 
-  return (
-    <div
-      style={{
-        position: 'absolute',
+  return React.createElement(
+    "div",
+    {
+      style: {
+        position: "absolute",
         inset: 0,
         zIndex: 260,
-        background: 'linear-gradient(180deg, #FBF9F5 0%, #F5EFEB 100%)',
-        display: 'flex',
-        flexDirection: 'column',
+        background: "linear-gradient(180deg, #FBF9F5 0%, #F5EFEB 100%)",
+        display: "flex",
+        flexDirection: "column",
         fontFamily: '"GuanKiapTsingKhai", "Plus Jakarta Sans", sans-serif',
-        userSelect: 'none',
-        overflow: 'hidden',
-        animation: 'fadeIn 0.25s ease-out'
-      }}
-    >
-      {/* 1. 顶部标题栏 */}
-      <div
-        style={{
-          padding: '10px 16px',
-          paddingTop: 'max(28px, env(safe-area-inset-top))',
-          background: 'rgba(255, 255, 255, 0.88)',
-          backdropFilter: 'blur(12px)',
-          boxShadow: '0 2px 10px rgba(120, 100, 90, 0.05)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
+        userSelect: "none",
+        overflow: "hidden",
+        animation: "fadeIn 0.25s ease-out"
+      }
+    },
+
+    // 1. 顶部标题栏
+    React.createElement(
+      "div",
+      {
+        style: {
+          padding: "10px 16px",
+          paddingTop: "max(28px, env(safe-area-inset-top))",
+          background: "rgba(255, 255, 255, 0.88)",
+          backdropFilter: "blur(12px)",
+          boxShadow: "0 2px 10px rgba(120, 100, 90, 0.05)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
           flexShrink: 0
-        }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div
-            onClick={onBack}
-            title="返回"
-            style={{ cursor: 'pointer', padding: '4px 8px', marginLeft: '-8px', display: 'flex', alignItems: 'center' }}
-          >
-            <span style={{ fontSize: '1.2rem', color: '#6A5F55' }}>←</span>
-          </div>
-          <div>
-            <div style={{ fontSize: '1.12rem', fontWeight: 'bold', color: '#4E453D', letterSpacing: '0.5px', display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span>棋逢对手</span>
-              <span
-                style={{
-                  fontSize: '0.68rem',
-                  background: 'linear-gradient(135deg, #F4E8DC 0%, #E8D7C5 100%)',
-                  color: '#8A5825',
-                  padding: '1px 6px',
-                  borderRadius: '8px',
-                  fontWeight: 'bold',
-                  border: '1px solid rgba(138, 88, 37, 0.2)'
-                }}
-              >
-                ♟️ 五子弈道
-              </span>
-            </div>
-          </div>
-        </div>
+        }
+      },
+      React.createElement(
+        "div",
+        { style: { display: "flex", alignItems: "center", gap: "8px" } },
+        React.createElement(
+          "div",
+          {
+            onClick: onBack,
+            title: "返回",
+            style: { cursor: "pointer", padding: "4px 8px", marginLeft: "-8px", display: "flex", alignItems: "center" }
+          },
+          React.createElement("span", { style: { fontSize: "1.2rem", color: "#6A5F55" } }, "←")
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement(
+            "div",
+            { style: { fontSize: "1.12rem", fontWeight: "bold", color: "#4E453D", letterSpacing: "0.5px", display: "flex", alignItems: "center", gap: 6 } },
+            React.createElement("span", null, "棋逢对手"),
+            React.createElement(
+              "span",
+              {
+                style: {
+                  fontSize: "0.68rem",
+                  background: "linear-gradient(135deg, #F4E8DC 0%, #E8D7C5 100%)",
+                  color: "#8A5825",
+                  padding: "1px 6px",
+                  borderRadius: "8px",
+                  fontWeight: "bold",
+                  border: "1px solid rgba(138, 88, 37, 0.2)"
+                }
+              },
+              "♟️ 五子弈道"
+            )
+          )
+        )
+      ),
 
-        {/* 顶部右侧对弈密探名牌与对局状态 */}
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <div
-            onClick={() => setShowCharModal(true)}
-            title="更换对弈密探"
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: '6px',
-              padding: '3px 8px 3px 4px',
-              borderRadius: '20px',
-              background: 'rgba(255, 255, 255, 0.95)',
-              border: '1.5px solid #E2D5C7',
-              cursor: 'pointer',
-              boxShadow: '0 2px 5px rgba(0,0,0,0.04)'
-            }}
-          >
-            <div style={{ width: 22, height: 22, borderRadius: '50%', overflow: 'hidden', background: '#EEE' }}>
-              <UniversalAvatarLoader
-                avatar={selectedChar?.avatar}
-                avatarId={selectedChar?.avatarId || selectedChar?.id}
-                name={selectedChar?.name}
-                fallbackColor={selectedChar?.avatarColor}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            </div>
-            <span style={{ fontSize: '0.78rem', color: '#4E342E', fontWeight: 'bold' }}>
-              {selectedChar?.name || '密探'}
-            </span>
-            <span style={{ fontSize: '0.65rem', color: '#8A7D71' }}>▼</span>
-          </div>
-
-          <div
-            onClick={() => setShowChatHistoryModal(true)}
-            title="对弈心语记录"
-            style={{
-              width: '28px',
-              height: '28px',
-              borderRadius: '50%',
-              background: 'linear-gradient(135deg, #F0F6FF 0%, #E2EDFC 100%)',
-              border: '1.5px solid #B8D4F5',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              color: '#3B6EA8'
-            }}
-          >
-            💬
-          </div>
-        </div>
-      </div>
-
-      {/* 2. 🌟 顶部微信通知风格胶囊气泡 (心理战诱导台词) */}
-      <div
-        style={{
-          width: '100%',
-          maxWidth: '340px',
-          margin: '6px auto 0 auto',
-          padding: '0 14px',
-          minHeight: '44px',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          flexShrink: 0
-        }}
-      >
-        {topBubble ? (
-          <div
-            onClick={() => setShowChatHistoryModal(true)}
-            style={{
-              width: '100%',
-              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.96) 0%, rgba(248, 242, 235, 0.94) 100%)',
-              backdropFilter: 'blur(10px)',
-              border: '1.5px solid #E8DCce',
-              borderRadius: '16px',
-              padding: '6px 10px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 14px rgba(120, 100, 85, 0.12)',
-              cursor: 'pointer',
-              opacity: isBubbleExiting ? 0 : 1,
-              transform: isBubbleExiting ? 'translateY(-6px)' : 'translateY(0)',
-              transition: 'all 0.3s ease-out'
-            }}
-          >
-            <div style={{ width: 26, height: 26, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: '#DDD' }}>
-              <UniversalAvatarLoader
-                avatar={selectedChar?.avatar}
-                avatarId={selectedChar?.avatarId || selectedChar?.id}
-                name={selectedChar?.name}
-                fallbackColor={selectedChar?.avatarColor}
-                style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-              />
-            </div>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ fontSize: '0.68rem', color: '#8A5825', fontWeight: 'bold', lineHeight: 1 }}>
-                {selectedChar?.name} · 弈语
-              </div>
-              <div style={{ fontSize: '0.74rem', color: '#443C35', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', marginTop: '2px' }}>
-                {topBubble.text}
-              </div>
-            </div>
-            <span style={{ fontSize: '0.65rem', color: '#A09285', flexShrink: 0 }}>💬</span>
-          </div>
-        ) : (
-          <div style={{ fontSize: '0.72rem', color: '#8A7D71', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <span>♟️</span>
-            <span>
-              {isAiThinking
-                ? `💭 【${selectedChar?.name || '密探'}】正捻子深思...`
-                : currentTurn === 'player'
-                ? '轮到楼主执黑落子'
-                : `轮到【${selectedChar?.name || '密探'}】执白落子`}
-            </span>
-            <span style={{ color: '#A09285' }}>（第 {moveHistory.length} 手）</span>
-          </div>
-        )}
-      </div>
-
-      {/* 3. 棋盘 Canvas 交互区域 */}
-      <div
-        style={{
-          flex: 1,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: '2px 14px',
-          minHeight: 0,
-          overflow: 'hidden'
-        }}
-      >
-        <div
-          style={{
-            width: '100%',
-            maxWidth: '320px',
-            maxHeight: '44vh',
-            aspectRatio: '1 / 1',
-            background: 'rgba(235, 227, 219, 0.75)',
-            backdropFilter: 'blur(16px)',
-            borderRadius: '20px',
-            padding: '6px',
-            boxShadow: '0 8px 24px rgba(130, 110, 95, 0.1), inset 0 2px 6px rgba(255, 255, 255, 0.8), inset 0 -2px 6px rgba(0, 0, 0, 0.04)',
-            border: '2px solid rgba(255, 255, 255, 0.9)',
-            position: 'relative'
-          }}
-        >
-          <canvas
-            ref={canvasRef}
-            width={308}
-            height={308}
-            onPointerDown={handleBoardPointer}
-            style={{
-              width: '100%',
-              height: '100%',
-              borderRadius: '14px',
-              display: 'block',
-              touchAction: 'none',
-              cursor: currentTurn === 'player' && !isAiThinking && gameState === 'playing' ? 'pointer' : 'default'
-            }}
-          />
-        </div>
-
-        {/* 4. 底部微凸控制栏 (悔棋 + 重新开始 + 心语复盘) */}
-        <div
-          style={{
-            width: '100%',
-            maxWidth: '320px',
-            marginTop: '8px',
-            marginBottom: 'max(8px, env(safe-area-inset-bottom))',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: '8px',
-            flexShrink: 0
-          }}
-        >
-          {/* 悔棋按钮 */}
-          <button
-            onClick={handleUndo}
-            disabled={moveHistory.length < 2 || isAiThinking || gameState !== 'playing'}
-            style={{
-              flex: 1,
-              height: '38px',
-              borderRadius: '12px',
-              border: '1.5px solid rgba(255, 255, 255, 0.9)',
-              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
-              color: moveHistory.length >= 2 && gameState === 'playing' ? '#5C4E42' : '#AAA',
-              fontSize: '0.82rem',
-              fontWeight: 'bold',
-              cursor: moveHistory.length >= 2 && gameState === 'playing' ? 'pointer' : 'not-allowed',
-              boxShadow: '0 2px 6px rgba(120, 100, 85, 0.08)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px'
-            }}
-          >
-            <span>↩</span>
-            <span>悔棋</span>
-          </button>
-
-          {/* 重新开局 */}
-          <button
-            onClick={restartGame}
-            style={{
-              flex: 1,
-              height: '38px',
-              borderRadius: '12px',
-              border: '1.5px solid rgba(255, 255, 255, 0.9)',
-              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)',
-              color: '#5C4E42',
-              fontSize: '0.82rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(120, 100, 85, 0.08)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px'
-            }}
-          >
-            <span>🔄</span>
-            <span>重开</span>
-          </button>
-
-          {/* 对弈心语小窗 */}
-          <button
-            onClick={() => setShowChatHistoryModal(true)}
-            style={{
-              flex: 1,
-              height: '38px',
-              borderRadius: '12px',
-              border: '1.5px solid rgba(122, 166, 147, 0.5)',
-              background: 'linear-gradient(135deg, #EBF5F0 0%, #DBEDE4 100%)',
-              color: '#467B63',
-              fontSize: '0.82rem',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              boxShadow: '0 2px 6px rgba(70, 123, 99, 0.12)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              gap: '4px'
-            }}
-          >
-            <span>💬</span>
-            <span>心语</span>
-          </button>
-        </div>
-      </div>
-
-      {/* 5. 👥 密探选择九宫格抽屉 */}
-      {showCharModal && (
-        <div
-          onClick={() => setShowCharModal(false)}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            backdropFilter: 'blur(4px)',
-            zIndex: 400,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            animation: 'fadeIn 0.2s ease-out'
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: '#FFFDF9',
-              borderRadius: 24,
-              padding: 20,
-              width: '100%',
-              maxWidth: 320,
-              maxHeight: '75vh',
-              overflowY: 'auto',
-              boxShadow: '0 16px 36px rgba(0,0,0,0.2)',
-              border: '2px solid rgba(255,255,255,0.9)'
-            }}
-          >
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
-              <div style={{ fontWeight: 'bold', fontSize: '1rem', color: '#4E342E' }}>
-                👥 选择对弈密探
-              </div>
-              <div
-                onClick={() => setShowCharModal(false)}
-                style={{ cursor: 'pointer', fontSize: '1.2rem', color: '#8D6E63' }}
-              >
-                ✕
-              </div>
-            </div>
-
-            {availableChars.length === 0 ? (
-              <div style={{ padding: '30px 0', textAlign: 'center', color: '#8D6E63', fontSize: '0.85rem' }}>
-                暂未在【传讯】中配置密探角色，请先前往传讯添加。
-              </div>
-            ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10 }}>
-                {availableChars.map(char => {
-                  const isCur = selectedChar && String(selectedChar.id) === String(char.id);
-                  return (
-                    <div
-                      key={char.id}
-                      onClick={() => {
-                        setSelectedChar(char);
-                        try {
-                          localStorage.setItem("milvus_gomoku_char_id", String(char.id));
-                        } catch (e) {}
-                        setShowCharModal(false);
-                        triggerTopBubble("（整衣入座）此番便由我陪楼主切磋一局。");
-                      }}
-                      style={{
-                        display: 'flex',
-                        flexDirection: 'column',
-                        alignItems: 'center',
-                        padding: '10px 6px',
-                        borderRadius: 16,
-                        background: isCur ? 'rgba(122, 166, 147, 0.18)' : 'rgba(240, 235, 228, 0.6)',
-                        border: isCur ? '2px solid #7AA693' : '1px solid transparent',
-                        cursor: 'pointer',
-                        position: 'relative'
-                      }}
-                    >
-                      <div
-                        style={{
-                          width: 44,
-                          height: 44,
-                          borderRadius: '50%',
-                          overflow: 'hidden',
-                          marginBottom: 6,
-                          background: '#EAE0D5'
-                        }}
-                      >
-                        <UniversalAvatarLoader
-                          avatar={char.avatar}
-                          avatarId={char.avatarId || char.id}
-                          name={char.name}
-                          fallbackColor={char.avatarColor}
-                          style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                        />
-                      </div>
-                      <div
-                        style={{
-                          fontSize: '0.8rem',
-                          fontWeight: 'bold',
-                          color: '#4E342E',
-                          textAlign: 'center',
-                          whiteSpace: 'nowrap',
-                          overflow: 'hidden',
-                          textOverflow: 'ellipsis',
-                          width: '100%'
-                        }}
-                      >
-                        {char.name}
-                      </div>
-                      {isCur && (
-                        <div
-                          style={{
-                            position: 'absolute',
-                            top: 4,
-                            right: 4,
-                            background: '#7AA693',
-                            color: '#FFF',
-                            borderRadius: '50%',
-                            width: 16,
-                            height: 16,
-                            fontSize: '0.65rem',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 'bold'
-                          }}
-                        >
-                          ✓
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
-
-      {/* 6. 💬 对弈心语与复盘小窗 (独立半屏弹窗) */}
-      {showChatHistoryModal && (
-        <div
-          onClick={() => setShowChatHistoryModal(false)}
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(50, 40, 35, 0.45)',
-            backdropFilter: 'blur(5px)',
-            zIndex: 450,
-            display: 'flex',
-            alignItems: 'flex-end',
-            justifyContent: 'center',
-            animation: 'fadeIn 0.2s ease-out'
-          }}
-        >
-          <div
-            onClick={(e) => e.stopPropagation()}
-            style={{
-              background: 'linear-gradient(180deg, #FDFBF7 0%, #F8F1E8 100%)',
-              borderTopLeftRadius: '24px',
-              borderTopRightRadius: '24px',
-              padding: '16px',
-              width: '100%',
-              maxWidth: '360px',
-              height: '65vh',
-              display: 'flex',
-              flexDirection: 'column',
-              boxShadow: '0 -8px 24px rgba(0,0,0,0.15)',
-              borderTop: '2px solid rgba(255,255,255,0.9)'
-            }}
-          >
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                <div style={{ width: '32px', height: '32px', borderRadius: '50%', overflow: 'hidden', background: '#EEE' }}>
-                  <UniversalAvatarLoader
-                    avatar={selectedChar?.avatar}
-                    avatarId={selectedChar?.avatarId || selectedChar?.id}
-                    name={selectedChar?.name}
-                    fallbackColor={selectedChar?.avatarColor}
-                    style={{ width: '100%', height: '100%', objectFit: 'cover' }}
-                  />
-                </div>
-                <div>
-                  <div style={{ fontSize: '0.92rem', fontWeight: 'bold', color: '#4E342E' }}>
-                    {selectedChar?.name || '密探'} · 对弈心语
-                  </div>
-                  <div style={{ fontSize: '0.68rem', color: '#8A7D71' }}>
-                    手顺 {moveHistory.length} 步 | 楼主执黑 密探执白
-                  </div>
-                </div>
-              </div>
-              <div
-                onClick={() => setShowChatHistoryModal(false)}
-                style={{
-                  width: '26px',
-                  height: '26px',
-                  borderRadius: '50%',
-                  background: 'rgba(0,0,0,0.06)',
-                  color: '#6A5F55',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  cursor: 'pointer',
-                  fontWeight: 'bold',
-                  fontSize: '0.8rem'
-                }}
-              >
-                ✕
-              </div>
-            </div>
-
-            {/* 对话列表 */}
-            <div
-              style={{
-                flex: 1,
-                overflowY: 'auto',
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '8px',
-                padding: '6px 2px'
-              }}
-            >
-              {chatHistory.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: '30px 0', color: '#A09285', fontSize: '0.8rem' }}>
-                  🍃 棋盘方寸，心语连珠。落子时【${selectedChar?.name || '密探'}】将与你即时传讯！
-                </div>
-              ) : (
-                chatHistory.map((m, idx) => {
-                  const isMe = m.role === 'user';
-                  return (
-                    <div
-                      key={m.id || idx}
-                      style={{
-                        display: 'flex',
-                        justifyContent: isMe ? 'flex-end' : 'flex-start',
-                        gap: '6px'
-                      }}
-                    >
-                      <div
-                        style={{
-                          maxWidth: '78%',
-                          padding: '8px 12px',
-                          borderRadius: '14px',
-                          fontSize: '0.82rem',
-                          lineHeight: '1.4',
-                          background: isMe ? 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)' : '#FFF',
-                          color: isMe ? '#FFF' : '#443C35',
-                          boxShadow: '0 2px 6px rgba(0,0,0,0.05)',
-                          border: isMe ? 'none' : '1px solid #EDE4D8'
-                        }}
-                      >
-                        {m.content}
-                      </div>
-                    </div>
-                  );
+      React.createElement(
+        "div",
+        { style: { display: "flex", alignItems: "center", gap: "8px" } },
+        React.createElement(
+          "div",
+          {
+            onClick: () => setShowCharModal(true),
+            title: "更换对弈密探",
+            style: {
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+              padding: "3px 8px 3px 4px",
+              borderRadius: "20px",
+              background: "rgba(255, 255, 255, 0.95)",
+              border: "1.5px solid #E2D5C7",
+              cursor: "pointer",
+              boxShadow: "0 2px 5px rgba(0,0,0,0.04)"
+            }
+          },
+          React.createElement(
+            "div",
+            { style: { width: 22, height: 22, borderRadius: "50%", overflow: "hidden", background: "#EEE" } },
+            typeof UniversalAvatarLoader === "function"
+              ? React.createElement(UniversalAvatarLoader, {
+                  avatar: selectedChar?.avatar,
+                  avatarId: selectedChar?.avatarId || selectedChar?.id,
+                  name: selectedChar?.name,
+                  fallbackColor: selectedChar?.avatarColor,
+                  style: { width: "100%", height: "100%", objectFit: "cover" }
                 })
-              )}
-              {isAiReplyingChat && (
-                <div style={{ alignSelf: 'flex-start', fontSize: '0.78rem', color: '#8A7D71', padding: '4px 10px', background: '#FFF', borderRadius: '12px', border: '1px solid #EDE4D8' }}>
-                  💭 {selectedChar?.name} 正在捻子思量...
-                </div>
-              )}
-            </div>
+              : React.createElement("span", { style: { fontSize: "0.8rem" } }, "👤")
+          ),
+          React.createElement(
+            "span",
+            { style: { fontSize: "0.78rem", color: "#4E342E", fontWeight: "bold" } },
+            selectedChar?.name || "密探"
+          ),
+          React.createElement("span", { style: { fontSize: "0.65rem", color: "#8A7D71" } }, "▼")
+        ),
+        React.createElement(
+          "div",
+          {
+            onClick: () => setShowChatHistoryModal(true),
+            title: "对弈心语记录",
+            style: {
+              width: "28px",
+              height: "28px",
+              borderRadius: "50%",
+              background: "linear-gradient(135deg, #F0F6FF 0%, #E2EDFC 100%)",
+              border: "1.5px solid #B8D4F5",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              fontSize: "0.85rem",
+              color: "#3B6EA8"
+            }
+          },
+          "💬"
+        )
+      )
+    ),
 
-            {/* 输入框 */}
-            <div style={{ display: 'flex', gap: '6px', paddingTop: '8px', borderTop: '1px solid #EAE0D5' }}>
-              <input
-                type="text"
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSendCustomChat();
-                }}
-                placeholder={`与 ${selectedChar?.name || '密探'} 聊聊棋局...`}
-                style={{
+    // 2. 🌟 顶部微信通知风格气泡 (心理战诱导台词 & 沉浸思考动画)
+    React.createElement(
+      "div",
+      {
+        style: {
+          width: "100%",
+          maxWidth: "340px",
+          margin: "6px auto 0 auto",
+          padding: "0 14px",
+          minHeight: "44px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          flexShrink: 0
+        }
+      },
+      (topBubble?.text && !topBubble?.isThinking)
+        ? React.createElement(
+            "div",
+            {
+              onClick: () => setShowChatHistoryModal(true),
+              style: {
+                width: "100%",
+                background: "linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(248, 242, 235, 0.95) 100%)",
+                backdropFilter: "blur(10px)",
+                border: "1.5px solid #E8DCce",
+                borderRadius: "16px",
+                padding: "6px 12px",
+                display: "flex",
+                alignItems: "center",
+                gap: "10px",
+                boxShadow: "0 4px 14px rgba(120, 100, 85, 0.12)",
+                cursor: "pointer",
+                opacity: isBubbleExiting ? 0 : 1,
+                transform: isBubbleExiting ? "translateY(-6px)" : "translateY(0)",
+                transition: "all 0.3s ease-out"
+              }
+            },
+            React.createElement(
+              "div",
+              { style: { width: 28, height: 28, borderRadius: "50%", overflow: "hidden", flexShrink: 0, background: "#DDD" } },
+              typeof UniversalAvatarLoader === "function"
+                ? React.createElement(UniversalAvatarLoader, {
+                    avatar: selectedChar?.avatar,
+                    avatarId: selectedChar?.avatarId || selectedChar?.id,
+                    name: selectedChar?.name,
+                    fallbackColor: selectedChar?.avatarColor,
+                    style: { width: "100%", height: "100%", objectFit: "cover" }
+                  })
+                : React.createElement("span", { style: { fontSize: "0.8rem" } }, "👤")
+            ),
+            React.createElement(
+              "div",
+              { style: { flex: 1, minWidth: 0 } },
+              React.createElement(
+                "div",
+                { style: { fontSize: "0.82rem", color: "#4E342E", lineHeight: "1.35", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } },
+                topBubble.text
+              )
+            ),
+            React.createElement("span", { style: { fontSize: "0.75rem", color: "#B0A294" } }, "›")
+          )
+        : (topBubble?.isThinking || isAiReplying || isAiThinking)
+          ? React.createElement(
+              "div",
+              {
+                onClick: () => setShowChatHistoryModal(true),
+                style: {
+                  width: "100%",
+                  background: "linear-gradient(135deg, rgba(255, 255, 255, 0.98) 0%, rgba(253, 245, 238, 0.95) 100%)",
+                  backdropFilter: "blur(10px)",
+                  border: "1.5px solid #E89A6C",
+                  borderRadius: "16px",
+                  padding: "6px 12px",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                  boxShadow: "0 4px 15px rgba(214, 114, 75, 0.22)",
+                  cursor: "pointer",
+                  opacity: isBubbleExiting ? 0 : 1,
+                  transform: isBubbleExiting ? "translateY(-6px)" : "translateY(0)",
+                  transition: "all 0.3s ease-out"
+                }
+              },
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    width: 28,
+                    height: 28,
+                    borderRadius: "50%",
+                    overflow: "hidden",
+                    flexShrink: 0,
+                    background: "#DDD",
+                    border: "1.5px solid #D6724B",
+                    boxShadow: "0 0 8px rgba(214, 114, 75, 0.45)"
+                  }
+                },
+                typeof UniversalAvatarLoader === "function"
+                  ? React.createElement(UniversalAvatarLoader, {
+                      avatar: selectedChar?.avatar,
+                      avatarId: selectedChar?.avatarId || selectedChar?.id,
+                      name: selectedChar?.name,
+                      fallbackColor: selectedChar?.avatarColor,
+                      style: { width: "100%", height: "100%", objectFit: "cover" }
+                    })
+                  : React.createElement("span", { style: { fontSize: "0.8rem" } }, "👤")
+              ),
+              React.createElement(
+                "div",
+                { style: { flex: 1, display: "flex", alignItems: "center", gap: "6px", fontSize: "0.82rem", color: "#B85630", fontWeight: "bold" } },
+                React.createElement("span", null, `💭 ${selectedChar?.name || "密探"} 正在沉吟棋路`),
+                React.createElement(
+                  "span",
+                  { style: { display: "inline-flex", gap: "3px", alignItems: "center", marginLeft: "2px" } },
+                  React.createElement("span", { style: { width: 5, height: 5, borderRadius: "50%", background: "#D6724B", animation: "bounceDot 1s infinite 0s", display: "inline-block" } }),
+                  React.createElement("span", { style: { width: 5, height: 5, borderRadius: "50%", background: "#D6724B", animation: "bounceDot 1s infinite 0.2s", display: "inline-block" } }),
+                  React.createElement("span", { style: { width: 5, height: 5, borderRadius: "50%", background: "#D6724B", animation: "bounceDot 1s infinite 0.4s", display: "inline-block" } })
+                )
+              ),
+              React.createElement("span", { style: { fontSize: "0.75rem", color: "#B0A294" } }, "›")
+            )
+          : null
+    ),
+
+    // 3. 棋盘 Canvas 交互区域 (带 onPointerDown 精确触控)
+    React.createElement(
+      "div",
+      {
+        style: {
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "2px 14px",
+          minHeight: 0,
+          overflow: "hidden"
+        }
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            width: "100%",
+            maxWidth: "320px",
+            maxHeight: "44vh",
+            aspectRatio: "1 / 1",
+            background: "rgba(235, 227, 219, 0.75)",
+            backdropFilter: "blur(16px)",
+            borderRadius: "20px",
+            padding: "6px",
+            boxShadow: "0 8px 24px rgba(130, 110, 95, 0.1), inset 0 2px 6px rgba(255, 255, 255, 0.8), inset 0 -2px 6px rgba(0, 0, 0, 0.04)",
+            border: "2px solid rgba(255, 255, 255, 0.9)",
+            position: "relative"
+          }
+        },
+        React.createElement("canvas", {
+          ref: canvasRef,
+          width: 308,
+          height: 308,
+          onPointerDown: handleBoardPointer,
+          style: {
+            width: "100%",
+            height: "100%",
+            borderRadius: "14px",
+            display: "block",
+            touchAction: "none",
+            cursor: currentTurn === "player" && !isAiThinking && gameState === "playing" ? "pointer" : "default"
+          }
+        })
+      ),
+
+      // 4. 底部微凸控制栏 (悔棋 + 重新开始 + 心语复盘)
+      React.createElement(
+        "div",
+        {
+          style: {
+            width: "100%",
+            maxWidth: "320px",
+            marginTop: "8px",
+            marginBottom: "max(8px, env(safe-area-inset-bottom))",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            gap: "8px",
+            flexShrink: 0
+          }
+        },
+        React.createElement(
+          "button",
+          {
+            onClick: handleUndo,
+            disabled: moveHistory.length < 2 || isAiThinking || gameState !== "playing",
+            style: {
+              flex: 1,
+              height: "38px",
+              borderRadius: "12px",
+              border: "1.5px solid rgba(255, 255, 255, 0.9)",
+              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)",
+              color: moveHistory.length >= 2 && gameState === "playing" ? "#5C4E42" : "#AAA",
+              fontSize: "0.82rem",
+              fontWeight: "bold",
+              cursor: moveHistory.length >= 2 && gameState === "playing" ? "pointer" : "not-allowed",
+              boxShadow: "0 2px 6px rgba(120, 100, 85, 0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "4px"
+            }
+          },
+          React.createElement("span", null, "↩"),
+          React.createElement("span", null, "悔棋")
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: restartGame,
+            style: {
+              flex: 1,
+              height: "38px",
+              borderRadius: "12px",
+              border: "1.5px solid rgba(255, 255, 255, 0.9)",
+              background: "linear-gradient(135deg, rgba(255, 255, 255, 0.95) 0%, rgba(245, 238, 230, 0.85) 100%)",
+              color: "#5C4E42",
+              fontSize: "0.82rem",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(120, 100, 85, 0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "4px"
+            }
+          },
+          React.createElement("span", null, "🔄"),
+          React.createElement("span", null, "重开")
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: () => setShowChatHistoryModal(true),
+            style: {
+              flex: 1,
+              height: "38px",
+              borderRadius: "12px",
+              border: "1.5px solid rgba(122, 166, 147, 0.5)",
+              background: "linear-gradient(135deg, #EBF5F0 0%, #DBEDE4 100%)",
+              color: "#467B63",
+              fontSize: "0.82rem",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 2px 6px rgba(70, 123, 99, 0.12)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "4px"
+            }
+          },
+          React.createElement("span", null, "💬"),
+          React.createElement("span", null, "心语")
+        )
+      )
+    ),
+
+    // 5. 👥 密探选择九宫格抽屉
+    showCharModal
+      ? React.createElement(
+          "div",
+          {
+            onClick: () => setShowCharModal(false),
+            style: {
+              position: "absolute",
+              inset: 0,
+              background: "rgba(0,0,0,0.5)",
+              backdropFilter: "blur(4px)",
+              zIndex: 400,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+              animation: "fadeIn 0.2s ease-out"
+            }
+          },
+          React.createElement(
+            "div",
+            {
+              onClick: (e) => e.stopPropagation(),
+              style: {
+                background: "#FFFDF9",
+                borderRadius: 24,
+                padding: 20,
+                width: "100%",
+                maxWidth: 320,
+                maxHeight: "75vh",
+                overflowY: "auto",
+                boxShadow: "0 16px 36px rgba(0,0,0,0.2)",
+                border: "2px solid rgba(255,255,255,0.9)"
+              }
+            },
+            React.createElement(
+              "div",
+              { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 } },
+              React.createElement("div", { style: { fontWeight: "bold", fontSize: "1rem", color: "#4E342E" } }, "👥 选择对弈密探"),
+              React.createElement("div", { onClick: () => setShowCharModal(false), style: { cursor: "pointer", fontSize: "1.2rem", color: "#8D6E63" } }, "✕")
+            ),
+            availableChars.length === 0
+              ? React.createElement("div", { style: { padding: "30px 0", textAlign: "center", color: "#8D6E63", fontSize: "0.85rem" } }, "暂未在【传讯】中配置密探角色，请先前往传讯添加。")
+              : React.createElement(
+                  "div",
+                  { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10 } },
+                  availableChars.map((char) => {
+                    const isCur = selectedChar && String(selectedChar.id) === String(char.id);
+                    return React.createElement(
+                      "div",
+                      {
+                        key: char.id,
+                        onClick: () => {
+                          setSelectedChar(char);
+                          try {
+                            localStorage.setItem("milvus_gomoku_char_id", String(char.id));
+                          } catch (e) {}
+                          setShowCharModal(false);
+                          triggerTopBubble("（整衣入座）此番便由我陪楼主切磋一局。");
+                        },
+                        style: {
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          padding: "10px 6px",
+                          borderRadius: 16,
+                          background: isCur ? "rgba(122, 166, 147, 0.18)" : "rgba(240, 235, 228, 0.6)",
+                          border: isCur ? "2px solid #7AA693" : "1px solid transparent",
+                          cursor: "pointer",
+                          position: "relative"
+                        }
+                      },
+                      React.createElement(
+                        "div",
+                        {
+                          style: {
+                            width: 44,
+                            height: 44,
+                            borderRadius: "50%",
+                            overflow: "hidden",
+                            marginBottom: 6,
+                            background: "#EAE0D5"
+                          }
+                        },
+                        typeof UniversalAvatarLoader === "function"
+                          ? React.createElement(UniversalAvatarLoader, {
+                              avatar: char.avatar,
+                              avatarId: char.avatarId || char.id,
+                              name: char.name,
+                              fallbackColor: char.avatarColor,
+                              style: { width: "100%", height: "100%", objectFit: "cover" }
+                            })
+                          : React.createElement("span", { style: { fontSize: "1.2rem" } }, "👤")
+                      ),
+                      React.createElement(
+                        "div",
+                        {
+                          style: {
+                            fontSize: "0.8rem",
+                            fontWeight: "bold",
+                            color: "#4E342E",
+                            textAlign: "center",
+                            whiteSpace: "nowrap",
+                            overflow: "hidden",
+                            textOverflow: "ellipsis",
+                            width: "100%"
+                          }
+                        },
+                        char.name
+                      ),
+                      isCur
+                        ? React.createElement(
+                            "div",
+                            {
+                              style: {
+                                position: "absolute",
+                                top: 4,
+                                right: 4,
+                                background: "#7AA693",
+                                color: "#FFF",
+                                borderRadius: "50%",
+                                width: 16,
+                                height: 16,
+                                fontSize: "0.65rem",
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                fontWeight: "bold"
+                              }
+                            },
+                            "✓"
+                          )
+                        : null
+                    );
+                  })
+                )
+          )
+        )
+      : null,
+
+    // 6. 💬 对弈心语与复盘小窗 (独立半屏弹窗)
+    showChatHistoryModal
+      ? React.createElement(
+          "div",
+          {
+            onClick: () => setShowChatHistoryModal(false),
+            style: {
+              position: "absolute",
+              inset: 0,
+              background: "rgba(50, 40, 35, 0.45)",
+              backdropFilter: "blur(5px)",
+              zIndex: 450,
+              display: "flex",
+              alignItems: "flex-end",
+              justifyContent: "center",
+              animation: "fadeIn 0.2s ease-out"
+            }
+          },
+          React.createElement(
+            "div",
+            {
+              onClick: (e) => e.stopPropagation(),
+              style: {
+                background: "linear-gradient(180deg, #FDFBF7 0%, #F8F1E8 100%)",
+                borderTopLeftRadius: "24px",
+                borderTopRightRadius: "24px",
+                padding: "16px",
+                width: "100%",
+                maxWidth: "360px",
+                height: "65vh",
+                display: "flex",
+                flexDirection: "column",
+                boxShadow: "0 -8px 24px rgba(0,0,0,0.15)",
+                borderTop: "2px solid rgba(255,255,255,0.9)"
+              }
+            },
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" } },
+              React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "8px" } },
+                React.createElement(
+                  "div",
+                  { style: { width: "32px", height: "32px", borderRadius: "50%", overflow: "hidden", background: "#EEE" } },
+                  typeof UniversalAvatarLoader === "function"
+                    ? React.createElement(UniversalAvatarLoader, {
+                        avatar: selectedChar?.avatar,
+                        avatarId: selectedChar?.avatarId || selectedChar?.id,
+                        name: selectedChar?.name,
+                        fallbackColor: selectedChar?.avatarColor,
+                        style: { width: "100%", height: "100%", objectFit: "cover" }
+                      })
+                    : React.createElement("span", { style: { fontSize: "1rem" } }, "👤")
+                ),
+                React.createElement(
+                  "div",
+                  null,
+                  React.createElement("div", { style: { fontSize: "0.92rem", fontWeight: "bold", color: "#4E342E" } }, `${selectedChar?.name || "密探"} · 对弈心语`),
+                  React.createElement("div", { style: { fontSize: "0.68rem", color: "#8A7D71" } }, `手顺 ${moveHistory.length} 步 | 楼主执黑 密探执白`)
+                )
+              ),
+              React.createElement(
+                "div",
+                {
+                  onClick: () => setShowChatHistoryModal(false),
+                  style: {
+                    width: "26px",
+                    height: "26px",
+                    borderRadius: "50%",
+                    background: "rgba(0,0,0,0.06)",
+                    color: "#6A5F55",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    cursor: "pointer",
+                    fontWeight: "bold",
+                    fontSize: "0.8rem"
+                  }
+                },
+                "✕"
+              )
+            ),
+            React.createElement(
+              "div",
+              {
+                style: {
                   flex: 1,
-                  padding: '8px 12px',
-                  borderRadius: '16px',
-                  border: '1.5px solid #D8CFC4',
-                  background: '#FFF',
-                  fontSize: '0.82rem',
-                  outline: 'none'
-                }}
-              />
-              <button
-                onClick={() => handleSendCustomChat()}
-                disabled={isAiReplyingChat}
-                style={{
-                  padding: '0 14px',
-                  borderRadius: '16px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
-                  color: '#FFF',
-                  fontSize: '0.82rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer'
-                }}
-              >
-                发送
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 7. 结算弹窗 (金库赏金入账) */}
-      {gameState !== 'playing' && (
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            background: 'rgba(60, 45, 35, 0.45)',
-            backdropFilter: 'blur(6px)',
-            zIndex: 520,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            padding: '20px',
-            animation: 'fadeIn 0.25s ease-out'
-          }}
-        >
-          <div
-            style={{
-              background: 'linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)',
-              borderRadius: '24px',
-              padding: '26px 22px',
-              width: '100%',
-              maxWidth: '300px',
-              textAlign: 'center',
-              boxShadow: '0 16px 40px rgba(0, 0, 0, 0.2)',
-              border: '2px solid rgba(255, 255, 255, 0.9)'
-            }}
-          >
-            <div style={{ fontSize: '2.5rem', marginBottom: '6px' }}>
-              {gameState === 'player_win' ? '🏆✨' : '♟️🍂'}
-            </div>
-            <h3 style={{ margin: 0, fontSize: '1.25rem', color: '#8A5825', fontWeight: 'bold' }}>
-              {gameState === 'player_win' ? '执黑大捷 · 五子连珠' : gameState === 'ai_win' ? '密探运筹 · 棋差一着' : '局势和融 · 棋逢对手'}
-            </h3>
-            <p style={{ margin: '6px 0 12px', fontSize: '0.82rem', color: '#7E6F62' }}>
-              与【{selectedChar?.name || '密探'}】对弈共 {moveHistory.length} 手
-            </p>
-
-            <div
-              style={{
-                background: 'rgba(122, 166, 147, 0.1)',
-                padding: '10px 14px',
-                borderRadius: '14px',
-                border: '1px solid rgba(122, 166, 147, 0.25)',
-                marginBottom: '14px',
-                textAlign: 'left',
-                fontSize: '0.82rem',
-                color: '#443C35'
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                <span>🎯 对局结果：</span>
-                <strong style={{ color: gameState === 'player_win' ? '#5C8A76' : '#8A5825' }}>
-                  {gameState === 'player_win' ? '楼主胜出' : gameState === 'ai_win' ? '密探胜出' : '和棋'}
-                </strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '3px' }}>
-                <span>♟️ 总交锋手：</span>
-                <strong style={{ color: '#443C35' }}>{moveHistory.length} 步</strong>
-              </div>
-              <div style={{ display: 'flex', justifyContent: 'space-between', borderTop: '1px dashed #C8BDB0', paddingTop: '4px', marginTop: '4px' }}>
-                <span>🪙 金库入账：</span>
-                <strong style={{ color: '#B36B21', fontWeight: 'bold' }}>+{earnedCoins} 铢</strong>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center' }}>
-              <button
-                onClick={onBack}
-                title="返回"
-                style={{
-                  width: '50px',
-                  height: '42px',
-                  borderRadius: '14px',
-                  border: '1.5px solid #D8CFC4',
-                  background: '#FFFFFF',
-                  color: '#6E6256',
-                  fontSize: '1.15rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                ←
-              </button>
-              <button
-                onClick={restartGame}
-                title="再弈一局"
-                style={{
+                  overflowY: "auto",
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "8px",
+                  padding: "6px 2px"
+                }
+              },
+              chatHistory.length === 0
+                ? React.createElement("div", { style: { textAlign: "center", padding: "30px 0", color: "#A09285", fontSize: "0.8rem" } }, `🍃 棋盘方寸，心语连珠。落子时【${selectedChar?.name || "密探"}】将与你即时传讯！`)
+                : chatHistory.map((m, idx) => {
+                    const isMe = m.role === "user";
+                    return React.createElement(
+                      "div",
+                      {
+                        key: m.id || idx,
+                        style: {
+                          display: "flex",
+                          justifyContent: isMe ? "flex-end" : "flex-start",
+                          gap: "6px"
+                        }
+                      },
+                      React.createElement(
+                        "div",
+                        {
+                          style: {
+                            maxWidth: "78%",
+                            padding: "8px 12px",
+                            borderRadius: "14px",
+                            fontSize: "0.82rem",
+                            lineHeight: "1.4",
+                            background: isMe ? "linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)" : "#FFF",
+                            color: isMe ? "#FFF" : "#443C35",
+                            boxShadow: "0 2px 6px rgba(0,0,0,0.05)",
+                            border: isMe ? "none" : "1px solid #EDE4D8"
+                          }
+                        },
+                        m.content
+                      )
+                    );
+                  }),
+              isAiReplyingChat
+                ? React.createElement("div", { style: { alignSelf: "flex-start", fontSize: "0.78rem", color: "#8A7D71", padding: "4px 10px", background: "#FFF", borderRadius: "12px", border: "1px solid #EDE4D8" } }, `💭 ${selectedChar?.name} 正在捻子思量...`)
+                : null
+            ),
+            React.createElement(
+              "div",
+              { style: { display: "flex", gap: "6px", paddingTop: "8px", borderTop: "1px solid #EAE0D5" } },
+              React.createElement("input", {
+                type: "text",
+                value: chatInput,
+                onChange: (e) => setChatInput(e.target.value),
+                onKeyDown: (e) => {
+                  if (e.key === "Enter") handleSendCustomChat();
+                },
+                placeholder: `与 ${selectedChar?.name || "密探"} 聊聊棋局...`,
+                style: {
                   flex: 1,
-                  height: '42px',
-                  borderRadius: '14px',
-                  border: 'none',
-                  background: 'linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)',
-                  color: '#FFFFFF',
-                  fontSize: '1.05rem',
-                  fontWeight: 'bold',
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 12px rgba(92, 138, 118, 0.35)',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center'
-                }}
-              >
-                再弈一局
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+                  padding: "8px 12px",
+                  borderRadius: "16px",
+                  border: "1.5px solid #D8CFC4",
+                  background: "#FFF",
+                  fontSize: "0.82rem",
+                  outline: "none"
+                }
+              }),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => handleSendCustomChat(),
+                  disabled: isAiReplyingChat,
+                  style: {
+                    padding: "0 14px",
+                    borderRadius: "16px",
+                    border: "none",
+                    background: "linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)",
+                    color: "#FFF",
+                    fontSize: "0.82rem",
+                    fontWeight: "bold",
+                    cursor: "pointer"
+                  }
+                },
+                "发送"
+              )
+            )
+          )
+        )
+      : null,
+
+    // 7. 结算弹窗 (金库赏金入账)
+    gameState !== "playing"
+      ? React.createElement(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              inset: 0,
+              background: "rgba(60, 45, 35, 0.45)",
+              backdropFilter: "blur(6px)",
+              zIndex: 520,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              padding: "20px",
+              animation: "fadeIn 0.25s ease-out"
+            }
+          },
+          React.createElement(
+            "div",
+            {
+              style: {
+                background: "linear-gradient(135deg, #FFFDF9 0%, #FAF4EC 100%)",
+                borderRadius: "24px",
+                padding: "26px 22px",
+                width: "100%",
+                maxWidth: "300px",
+                textAlign: "center",
+                boxShadow: "0 16px 40px rgba(0, 0, 0, 0.2)",
+                border: "2px solid rgba(255, 255, 255, 0.9)"
+              }
+            },
+            React.createElement("div", { style: { fontSize: "2.5rem", marginBottom: "6px" } }, gameState === "player_win" ? "🏆✨" : "♟️🍂"),
+            React.createElement(
+              "h3",
+              { style: { margin: 0, fontSize: "1.25rem", color: "#8A5825", fontWeight: "bold" } },
+              gameState === "player_win" ? "执黑大捷 · 五子连珠" : gameState === "ai_win" ? "密探运筹 · 棋差一着" : "局势和融 · 棋逢对手"
+            ),
+            React.createElement(
+              "p",
+              { style: { margin: "6px 0 12px", fontSize: "0.82rem", color: "#7E6F62" } },
+              `与【${selectedChar?.name || "密探"}】对弈共 ${moveHistory.length} 手`
+            ),
+            React.createElement(
+              "div",
+              {
+                style: {
+                  background: "rgba(122, 166, 147, 0.1)",
+                  padding: "10px 14px",
+                  borderRadius: "14px",
+                  border: "1px solid rgba(122, 166, 147, 0.25)",
+                  marginBottom: "14px",
+                  textAlign: "left",
+                  fontSize: "0.82rem",
+                  color: "#443C35"
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { display: "flex", justifyContent: "space-between", marginBottom: "3px" } },
+                React.createElement("span", null, "🎯 对局结果："),
+                React.createElement("strong", { style: { color: gameState === "player_win" ? "#5C8A76" : "#8A5825" } }, gameState === "player_win" ? "楼主胜出" : gameState === "ai_win" ? "密探胜出" : "和棋")
+              ),
+              React.createElement(
+                "div",
+                { style: { display: "flex", justifyContent: "space-between", marginBottom: "3px" } },
+                React.createElement("span", null, "♟️ 总交锋手："),
+                React.createElement("strong", { style: { color: "#443C35" } }, `${moveHistory.length} 步`)
+              ),
+              React.createElement(
+                "div",
+                { style: { display: "flex", justifyContent: "space-between", borderTop: "1px dashed #C8BDB0", paddingTop: "4px", marginTop: "4px" } },
+                React.createElement("span", null, "🪙 金库入账："),
+                React.createElement("strong", { style: { color: "#B36B21", fontWeight: "bold" } }, `+${earnedCoins} 铢`)
+              )
+            ),
+            React.createElement(
+              "div",
+              { style: { display: "flex", gap: "10px", justifyContent: "center" } },
+              React.createElement(
+                "button",
+                {
+                  onClick: onBack,
+                  title: "返回",
+                  style: {
+                    width: "50px",
+                    height: "42px",
+                    borderRadius: "14px",
+                    border: "1.5px solid #D8CFC4",
+                    background: "#FFFFFF",
+                    color: "#6E6256",
+                    fontSize: "1.15rem",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }
+                },
+                "←"
+              ),
+              React.createElement(
+                "button",
+                {
+                  onClick: restartGame,
+                  title: "再弈一局",
+                  style: {
+                    flex: 1,
+                    height: "42px",
+                    borderRadius: "14px",
+                    border: "none",
+                    background: "linear-gradient(135deg, #7AA693 0%, #5C8A76 100%)",
+                    color: "#FFFFFF",
+                    fontSize: "1.05rem",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    boxShadow: "0 4px 12px rgba(92, 138, 118, 0.35)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }
+                },
+                "再弈一局"
+              )
+            )
+          )
+        )
+      : null
   );
 };
-
 
 // ==================== 广陵消消 · 静态常量与 IndexedDB 对话库 ====================
 const MATCH3_GRID_SIZE = 8;
@@ -68799,7 +69393,6 @@ ${gameContext}
   );
 };
 
-
 // ==================== 黄巾矿工 · 物理探宝小游戏 ====================
 const YellowTurbanMinerPage = ({ onBack }) => {
   const { useState, useEffect, useRef, useCallback } = React;
@@ -70139,7 +70732,8 @@ const T13TrainingPage = ({ onBack }) => {
       )}
 
       {/* 二零四八小游戏 */}
-      <Game2048Page onBack={() => setShow2048Game(false)} />
+      {show2048Game && (
+        <Game2048Page onBack={() => setShow2048Game(false)} />
       )}
 
       {/* 棋逢对手五子棋小游戏 */}
@@ -91522,11 +92116,11 @@ const T8ImportPersonaModal = ({ isOpen, onClose, onImport }) => {
 
 // [修改] T8 人物创建/编辑模态框 (支持自定义头像和回显)
 const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
-  const fileInputRef = React.useRef(null);
   const docQuickInputRef = React.useRef(null);
   const [showJsonImportModal, setShowJsonImportModal] = React.useState(false);
   const [showDocsModal, setShowDocsModal] = React.useState(false);
   const [docImportLoading, setDocImportLoading] = React.useState(false);
+  const [showAvatarPicker, setShowAvatarPicker] = React.useState(false);
 
   // [新增] 识别当前传入的数据是否为群聊
   const isGroup =
@@ -91607,15 +92201,18 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
 
   if (!isOpen) return null;
 
-  const handleImageUpload = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setFormData((prev) => ({ ...prev, avatar: reader.result }));
-      };
-      reader.readAsDataURL(file);
+  const applyAvatar = async (avatar) => {
+    setFormData((prev) => ({ ...prev, avatar }));
+    if (isGroup && onSave) {
+      await onSave({ ...formData, avatar }, true);
     }
+  };
+
+  const handleImageUpload = (file) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => applyAvatar(reader.result);
+    reader.readAsDataURL(file);
   };
 
   // 从 Doc / TXT 文档快速导入并自动填充人物设定
@@ -91778,7 +92375,13 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
             }}
           >
             {/* [新增功能 1] 群头像支持用户上传更改 */}
-            <label
+            <div
+              role="button"
+              tabIndex="0"
+              onClick={() => setShowAvatarPicker(true)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") setShowAvatarPicker(true);
+              }}
               style={{
                 position: "relative",
                 cursor: "pointer",
@@ -91852,31 +92455,7 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
                   <circle cx="12" cy="13" r="4"></circle>
                 </svg>
               </div>
-              {/* 隐藏的上传选择器 */}
-              <input
-                type="file"
-                accept="image/*"
-                style={{ display: "none" }}
-                onChange={(e) => {
-                  const file = e.target.files[0];
-                  if (file) {
-                    const reader = new FileReader();
-                    reader.onloadend = () => {
-                      const base64Data = reader.result;
-                      setFormData((prev) => ({
-                        ...prev,
-                        avatar: base64Data,
-                      }));
-                      // 读取完成后，通过 onSave 立即执行保存，keepOpen 传入 true 保持窗口开启
-                      if (onSave) {
-                        onSave({ ...formData, avatar: base64Data }, true);
-                      }
-                    };
-                    reader.readAsDataURL(file);
-                  }
-                }}
-              />
-            </label>
+            </div>
 
             {/* [新增功能 2] 群聊名称支持用户输入更改 */}
             <input
@@ -92030,7 +92609,7 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
               }}
             >
               <div
-                onClick={() => fileInputRef.current.click()}
+                onClick={() => setShowAvatarPicker(true)}
                 style={{
                   width: "80px",
                   height: "80px",
@@ -92084,13 +92663,6 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
                   <span style={{ fontSize: "10px", color: "white" }}>修改</span>
                 </div>
               </div>
-              <input
-                type="file"
-                ref={fileInputRef}
-                onChange={handleImageUpload}
-                accept="image/*"
-                style={{ display: "none" }}
-              />
             </div>
 
             {/* ================= 快速导入工具栏 (JSON 角色卡 & Doc 长篇设定) ================= */}
@@ -92381,6 +92953,13 @@ const T8CreateModal = ({ isOpen, onClose, onSave, initialData }) => {
         isOpen={showJsonImportModal}
         onClose={() => setShowJsonImportModal(false)}
         onImport={handleJsonImportToForm}
+      />
+
+      <AvatarSourcePicker
+        open={showAvatarPicker}
+        onClose={() => setShowAvatarPicker(false)}
+        onLocalSelect={handleImageUpload}
+        onUrlConfirm={applyAvatar}
       />
 
       {/* 嵌套在创建弹窗中的文档管理弹窗 */}
@@ -101483,186 +102062,17 @@ ${docContext}
                   )}
 
                   {/* 添加新表情模式 */}
+                  {/* 添加新表情模式 */}
                   {emojiTab === "add" && (
-                    <div
-                      style={{
-                        flex: 1,
-                        padding: "16px 20px",
-                        display: "flex",
-                        flexDirection: "column",
-                        gap: "20px",
-                      }}
-                    >
-                      <div
-                        style={{
-                          display: "flex",
-                          alignItems: "center",
-                          gap: "8px",
-                          color: "#8c917b",
-                          cursor: "pointer",
-                          width: "fit-content",
-                          fontWeight: "bold",
-                        }}
-                        onClick={() => setEmojiTab("list")}
-                      >
-                        <svg
-                          width="18"
-                          height="18"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2.5"
-                        >
-                          <polyline points="15 18 9 12 15 6"></polyline>
-                        </svg>
-                        返回相册
-                      </div>
-
-                      {/* 本地上传 */}
-                      <div
-                        style={{
-                          display: "flex",
-                          gap: "12px",
-                          alignItems: "center",
-                          background: "#fff",
-                          padding: "12px 16px",
-                          borderRadius: "12px",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "14px",
-                            color: "#5a5f4d",
-                            fontWeight: "bold",
-                            flex: 1,
-                          }}
-                        >
-                          从本地相册导入：
-                        </div>
-                        <button
-                          onClick={() =>
-                            document.getElementById("emoji-file-upload").click()
-                          }
-                          style={{
-                            padding: "8px 20px",
-                            background: "#A8C8BA",
-                            color: "white",
-                            border: "none",
-                            borderRadius: "20px",
-                            cursor: "pointer",
-                            fontSize: "13px",
-                            fontWeight: "bold",
-                            boxShadow: "0 4px 10px rgba(168,200,186,0.3)",
-                          }}
-                        >
-                          + 选择图片
-                        </button>
-                        <input
-                          id="emoji-file-upload"
-                          type="file"
-                          accept="image/*"
-                          style={{ display: "none" }}
-                          onChange={(e) => {
-                            const file = e.target.files[0];
-                            if (file) {
-                              const reader = new FileReader();
-                              reader.onload = async (event) => {
-                                const newEmoji = {
-                                  id: Date.now().toString(),
-                                  url: event.target.result,
-                                  timestamp: Date.now(),
-                                };
-                                await window.emojiStore.save(newEmoji);
-                                setSavedEmojis((prev) => [newEmoji, ...prev]);
-                                setEmojiTab("list");
-                                alert("表情导入成功！");
-                              };
-                              reader.readAsDataURL(file);
-                            }
-                            e.target.value = "";
-                          }}
-                        />
-                      </div>
-
-                      {/* URL 添加 */}
-                      <div
-                        style={{
-                          display: "flex",
-                          flexDirection: "column",
-                          gap: "10px",
-                          background: "#fff",
-                          padding: "16px",
-                          borderRadius: "12px",
-                          boxShadow: "0 2px 6px rgba(0,0,0,0.03)",
-                        }}
-                      >
-                        <div
-                          style={{
-                            fontSize: "14px",
-                            color: "#5a5f4d",
-                            fontWeight: "bold",
-                          }}
-                        >
-                          使用网络图片链接添加：
-                        </div>
-                        <div style={{ display: "flex", gap: "10px" }}>
-                          <input
-                            type="text"
-                            placeholder="请粘贴以 http 开头的图片链接"
-                            value={newEmojiUrl}
-                            onChange={(e) => setNewEmojiUrl(e.target.value)}
-                            style={{
-                              flex: 1,
-                              padding: "10px 14px",
-                              border: "1px solid rgba(214,114,75,0.3)",
-                              borderRadius: "12px",
-                              outline: "none",
-                              fontSize: "13px",
-                              background: "#fdfaf8",
-                            }}
-                          />
-                          <button
-                            onClick={async () => {
-                              if (
-                                !newEmojiUrl.trim() ||
-                                !newEmojiUrl.startsWith("http")
-                              )
-                                return alert("请输入正确的图片链接");
-                              const newEmoji = {
-                                id: Date.now().toString(),
-                                url: newEmojiUrl.trim(),
-                                timestamp: Date.now(),
-                              };
-                              await window.emojiStore.save(newEmoji);
-                              setSavedEmojis((prev) => [newEmoji, ...prev]);
-                              setNewEmojiUrl("");
-                              setEmojiTab("list");
-                              alert("表情获取成功！");
-                            }}
-                            style={{
-                              padding: "10px 20px",
-                              background: "#d6724b",
-                              color: "white",
-                              border: "none",
-                              borderRadius: "12px",
-                              cursor: "pointer",
-                              fontSize: "13px",
-                              fontWeight: "bold",
-                              boxShadow: "0 4px 10px rgba(214,114,75,0.3)",
-                            }}
-                          >
-                            吸纳
-                          </button>
-                        </div>
-                      </div>
-                    </div>
+                    <EmojiBatchImporter
+                      onBack={() => setEmojiTab("list")}
+                      onImported={setSavedEmojis}
+                    />
                   )}
                 </div>
               )}
               {/* ================== 面板代码结束 ================== */}
 
-              {/* ================== [新增] 微信风格底部群聊工具面板 ================== */}
               {showToolPanel && isGroupChat && (
                 <div
                   style={{
