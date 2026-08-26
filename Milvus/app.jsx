@@ -466,8 +466,10 @@ const importLocalImage = async (file) => {
     throw new Error(`不支持的文件类型：${file.type}`);
   }
   const url = await readEmojiFile(file);
+  const rawFileName = file.name ? file.name.replace(/\.[^/.]+$/, "").trim() : "";
   await window.emojiStore.save({
     id: createEmojiImportId(),
+    name: rawFileName || "趣味表情包",
     url,
     timestamp: Date.now(),
   });
@@ -97543,19 +97545,31 @@ ${groupMemoriesText}
             text: m.text,
             content: m.content ? m.content.length > 100 ? m.content.substring(0, 100) + "..." : m.content : null
           });
+          const rawLabel = (m.text && !m.text.startsWith("data:") && !m.text.startsWith("http"))
+            ? m.text.replace(/^[《〈【\[\s]+|[》〉】\]\s]+$/g, "").replace(/^表情包[:：]?\s*/, "").trim()
+            : "";
+          const isUserSender = m.isMe;
+          const memePrompt = rawLabel
+            ? `【用户向你发送了一张表情包，配图文字与主题为：“${rawLabel}”】（请直接针对用户发来“${rawLabel}”的态度和意图进行第一人称生动对话与接梗互动，严禁像机器人一样向用户描述画面！）`
+            : `（[表情包图片] 用户发来一张表情包与你互动。请以第一人称口吻直接对用户发表情包的态度或意图做出真实生动的对话反应，严禁描述画面，严禁出现“这个表情包里是…”、“画面显示…”等机器人说辞！）`;
+
           if (m.content && (m.content.startsWith("http") || m.content.startsWith("data:image"))) {
             console.log("图片格式有效，转换为多模态格式");
             return {
-              role: m.isMe ? "user" : "assistant",
+              role: isUserSender ? "user" : "assistant",
               content: [
                 { type: "image_url", image_url: { url: m.content } },
                 {
                   type: "text",
-                  text: `【这是一张${m.isMe ? "我" : "你"}发送的图片/表情包，请仔细观察画面内容并直接对该画面的动作、文字或情绪进行代入感极强的回复。不要回答"收到了一张图片"等废话】：${m.text || "[图片/表情包]"}`
+                  text: isUserSender ? memePrompt : `（名士发送了表情包：“${rawLabel || "表情包"}”）`
                 }
               ]
             };
           }
+          return {
+            role: isUserSender ? "user" : "assistant",
+            content: isUserSender ? memePrompt : `（名士发送了表情包：“${rawLabel || "表情包"}”）`
+          };
         }
         const isGroupItem = String(chatData?.id).startsWith("group_chat") || chatData?.type === "group";
         let contentStr = m.text || "";
