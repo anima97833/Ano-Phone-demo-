@@ -1079,7 +1079,8 @@
       defaultEnabled: true,
       handler: async (args, context) => {
         const charName = context?.character || "名士";
-        const title = (args.title || "《手绘草图》").trim();
+        const rawTitle = (args.title || "手绘草图").trim();
+        const title = rawTitle.replace(/^[《〈【\s]+|[》〉】\s]+$/g, "").trim() || "手绘草图";
         let rawSvg = (args.svgContent || "").trim();
         const strokeColor = args.strokeColor || "#3d3b38";
         const duration = args.duration || 3.0;
@@ -1090,15 +1091,15 @@
         // 1. 清洗 Markdown 标记
         rawSvg = rawSvg.replace(/```(?:xml|svg)?/gi, "").replace(/```/g, "").trim();
 
-        // 2. 规范化 SVG 根标签，强制注入标准 xmlns 命名空间以保证 100% 浏览器兼容
+        // 2. 规范化 SVG 根标签，强制注入标准 xmlns 命名空间与 viewBox
         if (!rawSvg.includes("<svg")) {
-          rawSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 400 300" width="100%" height="100%">${rawSvg}</svg>`;
+          rawSvg = `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" viewBox="0 0 400 300" width="100%" height="auto">${rawSvg}</svg>`;
         } else {
           if (!/xmlns\s*=\s*["'][^"']*["']/i.test(rawSvg)) {
-            rawSvg = rawSvg.replace(/<svg/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
+            rawSvg = rawSvg.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ');
           }
           if (!/viewBox\s*=/i.test(rawSvg)) {
-            rawSvg = rawSvg.replace(/<svg/i, '<svg viewBox="0 0 400 300"');
+            rawSvg = rawSvg.replace(/<svg\b/i, '<svg viewBox="0 0 400 300" ');
           }
         }
 
@@ -1141,12 +1142,51 @@
         `;
 
         // 包装为带动画类名的 SVG
-        let animatedSvg = rawSvg.replace(/<svg([^>]*)>/i, `<svg$1 class="ao3-sketch-${sketchId}">` + animCss);
+        let animatedSvg = rawSvg.replace(/<svg([^>]*)>/i, `<svgname: "draw_handdrawn_sketch",
+      displayName: "手绘线稿与动效简笔画 (Stroke Animation)",
+      icon: "ph-pen-nib-straight",
+      category: "艺术与工坊",
+      description: "当主公要求角色“画个草图”、“画个简笔画”、“手绘一张图”、“画个线稿”、“示意图”、“手绘头像/小物件”，或角色想要现场运笔为画作一笔一划勾勒线条时调用。此工具接收结构化矢量图形/SVG代码，并自动生成具有真实手绘质感、从第一笔画到最后一笔实时逐渐勾勒成形的动态矢量线稿卡片。",
+      inputSchema: {
+        type: "object",
+        properties: {
+          title: {
+            type: "string",
+            description: "线稿/画作的雅致标题，例如'《绣衣楼密室平面图》'、'《手绘小猫像》'、'《兰草折枝图》'"
+          },
+          svgContent: {
+            type: "string",
+            description: "完整的标准 SVG 矢量图形代码字符串。必须包含 viewBox=\"0 0 400 300\" 及各类 path、circle、line、rect、text 等图形元素，绘制内容细腻工整，富有手绘美感。"
+          },
+          strokeColor: {
+            type: "string",
+            description: "线条主色调 HEX 码，如 '#3d3b38' (古墨色), '#990000' (朱砂红), '#5e6756' (竹青色), '#b38243' (藤黄色)，默认 '#3d3b38'"
+          },
+          duration: {
+            type: "number",
+            description: "一笔一划绘制完成的总时长秒数，通常为 2.5 到 4.0 秒，默认为 3.0"
+          },
+          description: {
+            type: "string",
+            description: "名士对此幅手绘线稿/画作的题跋与心意解说"
+          }
+        },
+        required: ["title", "svgContent"]
+      },
+      defaultEnabled: true,
+      handler: async (args, context) => { class="ao3-sketch-${sketchId}">` + animCss);
 
-        // 转换为安全标准的 Base64 Data URL (确保 100% 不损坏)
+        // 安全的 UTF-8 Base64 编码
         let svgDataUrl = "";
         try {
-          const encoded = btoa(unescape(encodeURIComponent(animatedSvg)));
+          const utf8Base64 = (str) => {
+            try {
+              return btoa(encodeURIComponent(str).replace(/%([0-9A-F]{2})/g, (m, p) => String.fromCharCode('0x' + p)));
+            } catch (e) {
+              return btoa(unescape(encodeURIComponent(str)));
+            }
+          };
+          const encoded = utf8Base64(animatedSvg);
           svgDataUrl = `data:image/svg+xml;base64,${encoded}`;
         } catch (e) {
           svgDataUrl = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(animatedSvg)}`;
@@ -1163,7 +1203,7 @@
           if (!Array.isArray(dynData.paintings)) dynData.paintings = [];
           dynData.paintings.unshift({
             id: sketchId,
-            title: title,
+            title: `《${title}》`,
             imageUrl: svgDataUrl,
             prompt: title,
             style: "handdrawn_vector",
@@ -1174,27 +1214,28 @@
           localStorage.setItem(cacheKey, JSON.stringify(dynData));
         } catch (e) { }
 
-        // 广播画作生成事件
+        // 广播画作生成事件并保存全局状态
         try {
           window.__lastMcpGeneratedImage = {
             imageUrl: svgDataUrl,
-            title: title,
+            svgContent: animatedSvg,
+            title: `《${title}》`,
             character: charName,
             timestamp: Date.now(),
-            isVectorSketch: true,
-            svgContent: animatedSvg
+            isVectorSketch: true
           };
           window.dispatchEvent(new CustomEvent("mcp_image_generated", {
-            detail: { imageUrl: svgDataUrl, title, character: charName, timestamp: Date.now() }
+            detail: { imageUrl: svgDataUrl, svgContent: animatedSvg, title: `《${title}》`, character: charName, timestamp: Date.now() }
           }));
         } catch (e) { }
 
         return {
           status: "success",
           sketchId: sketchId,
-          title: title,
+          title: `《${title}》`,
           imageUrl: svgDataUrl,
-          note: `手绘线稿画卷已在画纸上落笔成形！请在对白中向主公呈递这幅手绘作品，并在回复末尾附上标签 [生成图片: 《${title}》]，系统会自动在传讯气泡中为您实时逐笔绘制并直接呈现这幅手绘作品图片！`
+          svgContent: animatedSvg,
+          note: `手绘线稿画卷已在画纸上落笔成形！已为主公绘制完成《${title}》。请在对白中向主公呈递这幅手绘作品，并在回复末尾附上标签 [生成图片: 《${title}》]，系统会自动在传讯气泡中为您实时逐笔绘制并直接呈现这幅手绘作品！`
         };
       }
     },
@@ -1934,7 +1975,7 @@
           const img = window.__lastMcpGeneratedImage;
           const hasImageTag = /\[\s*(?:生成图片|画图|生图|草图|手绘|简笔画|图片|图\s*片|photo|image|draw|img)\s*[:：]/i.test(finalReply);
           if (!hasImageTag) {
-            finalReply = `${finalReply}\n[生成图片: ${img.title || img.prompt || "手绘画卷"}]`;
+            finalReply = `${finalReply}\n[生成图片: ${(img.title || img.prompt || "手绘画卷").replace(/^[《〈【\s]+|[》〉】\s]+$/g, "").trim() ? '《' + (img.title || img.prompt || "手绘画卷").replace(/^[《〈【\s]+|[》〉】\s]+$/g, "").trim() + '》' : '《手绘画卷》'}]`;
           }
         }
 

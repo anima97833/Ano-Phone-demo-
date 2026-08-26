@@ -53164,7 +53164,7 @@ ${isAuto ? `
     }
   };
 
-  const displayCharacterSprite = (playMode === 'auto' && selectedChar && selectedChar.avatar) ? selectedChar.avatar : charImg;
+  const displayCharacterSprite = charImg || DEFAULT_CHAR_IMG;
 
   return (
     <div
@@ -53224,6 +53224,11 @@ ${isAuto ? `
           }}>
             <img
               src={displayCharacterSprite}
+              onError={(e) => {
+                if (e.target.src !== DEFAULT_CHAR_IMG) {
+                  e.target.src = DEFAULT_CHAR_IMG;
+                }
+              }}
               style={{
                 width: '100%', height: '100%', objectFit: 'contain',
                 transform: isCharging ? 'translateY(-2px)' : 'none',
@@ -54533,9 +54538,6 @@ const CujuGamePage = ({ onBack }) => {
   const handleSelectAutoChar = (char) => {
     setSelectedChar(char);
     localStorage.setItem("cuju_game_auto_char_id", char.id);
-    if (char.avatar) {
-      setAvatarImg(char.avatar);
-    }
     setShowCharModal(false);
   };
 
@@ -54678,7 +54680,7 @@ ${isAuto ? `
     }
   };
 
-  const displayAvatar = (playMode === 'auto' && selectedChar && selectedChar.avatar) ? selectedChar.avatar : avatarImg;
+  const displayAvatar = avatarImg || DEFAULT_AVATAR_IMG;
 
   return (
     <div
@@ -54802,14 +54804,13 @@ ${isAuto ? `
 
       {/* 底部 Footer UI */}
       <div style={{ position: 'absolute', bottom: '4%', left: 0, right: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', pointerEvents: 'none', zIndex: 10 }}>
-        <div style={{ position: 'relative', pointerEvents: 'auto' }}>
-          <img
-            src={displayAvatar}
-            onClick={() => setShowSkinModal(true)}
-            style={{ width: 60, height: 60, borderRadius: '50%', border: '3px solid #fff', boxShadow: '0 4px 8px rgba(0,0,0,0.2)', marginBottom: 6, objectFit: 'cover', cursor: 'pointer' }}
-            title="点击更换蹴鞠皮肤"
-          />
-          <span style={{ position: 'absolute', right: -4, bottom: 6, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '9px', padding: '1px 5px', borderRadius: 8 }}>换皮</span>
+        <div
+          onClick={() => setShowSkinModal(true)}
+          style={{ position: 'relative', pointerEvents: 'auto', width: 60, height: 60, borderRadius: '50%', border: '3px solid #fff', boxShadow: '0 4px 8px rgba(0,0,0,0.2)', marginBottom: 6, overflow: 'hidden', cursor: 'pointer', background: '#fff' }}
+          title="点击更换蹴鞠皮肤"
+        >
+          <UniversalAvatarLoader avatar={displayAvatar} name="角色" fallbackColor="#8D6E63" />
+          <span style={{ position: 'absolute', right: 0, bottom: 0, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: '9px', padding: '1px 5px', borderRadius: '4px 0 0 0', zIndex: 5 }}>换皮</span>
         </div>
         <div style={{ color: '#2C3528', fontSize: '1.02rem', fontWeight: 'bold', textShadow: '0 1px 3px rgba(255,255,255,0.8)', marginBottom: 2 }}>
           还有 <span style={{ color: retries <= 2 ? '#D32F2F' : '#388E3C' }}>{retries}</span> 次踢球机会
@@ -56108,10 +56109,6 @@ const ArcheryGamePage = ({ onBack }) => {
   const handleSelectAutoChar = async (char) => {
     setSelectedChar(char);
     localStorage.setItem("archery_game_auto_char_id", char.id);
-    if (char.avatar) {
-      const realUrl = await window.resolveAvatarUrl(char.avatar, char.avatar);
-      setArcherAvatar(realUrl);
-    }
     setShowCharModal(false);
   };
 
@@ -56256,7 +56253,7 @@ ${isAuto ? `
     }
   };
 
-  const displayAvatar = (playMode === 'auto' && selectedChar && selectedChar.avatar) ? selectedChar.avatar : archerAvatar;
+  const displayAvatar = archerAvatar || DEFAULT_ARCHER_AVATAR;
 
   return (
     <div
@@ -97377,17 +97374,23 @@ ${docContext}
             if (isAiImageRequest && typeof window.generateAIImage === "function") {
               console.log("检测到 AI 文生图请求，Prompt:", imagePromptToProcess);
               try {
+                const mcpSvgData = window.__lastMcpGeneratedImage?.svgContent || null;
                 const generatedImageUrl = await window.generateAIImage(imagePromptToProcess);
                 if (generatedImageUrl) {
                   msgIdCounter++;
                   let safeDisplayName = imagePromptToProcess;
-                  if (typeof safeDisplayName === "string" && (safeDisplayName.startsWith("data:") || safeDisplayName.startsWith("http"))) {
-                    safeDisplayName = "手绘画卷";
+                  if (typeof safeDisplayName === "string") {
+                    safeDisplayName = safeDisplayName.replace(/^[《〈【\s]+|[》〉】\s]+$/g, "").trim();
+                    if (safeDisplayName.startsWith("data:") || safeDisplayName.startsWith("http") || !safeDisplayName) {
+                      safeDisplayName = "手绘画卷";
+                    }
                   }
+                  const formattedTitle = safeDisplayName ? `《${safeDisplayName}》` : "《手绘画卷》";
                   newAiMsgs.push({
                     id: msgIdCounter,
-                    text: safeDisplayName,
+                    text: formattedTitle,
                     content: generatedImageUrl,
+                    svgContent: mcpSvgData || (typeof generatedImageUrl === "string" && generatedImageUrl.startsWith("data:image/svg+xml") ? generatedImageUrl : null),
                     type: "image",
                     isMe: false,
                     time: new Date().toLocaleTimeString([], {
@@ -100638,98 +100641,140 @@ ${docContext}
                               </div>
                             ))}
                           </div>
-                        ) : msg.type === "image" ? (
-                          <div style={{ position: "relative", maxWidth: "260px" }}>
-                            <div
-                              style={{
-                                borderRadius: "14px",
-                                overflow: "hidden",
-                                backgroundColor: "#faf7f2",
-                                border: "1px solid rgba(180, 160, 130, 0.25)",
-                                boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
-                                padding: "4px",
-                                transition: "transform 0.2s ease, box-shadow 0.2s ease"
-                              }}
-                            >
-                              <img
-                                src={
-                                  (() => {
-                                    const raw = msg.content;
-                                    if (raw && typeof raw === "string" && raw.startsWith("data:image/svg+xml")) {
-                                      if (raw.includes(";utf8,") || raw.includes(";charset=utf-8,")) {
-                                        try {
-                                          let clean = decodeURIComponent(raw.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
-                                          if (!clean.includes("xmlns=")) {
-                                            clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
-                                          }
-                                          return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
-                                        } catch (e) {
-                                          return raw;
-                                        }
-                                      }
-                                    }
-                                    return raw;
-                                  })()
+                                                ) : msg.type === "image" ? (
+                          (() => {
+                            let svgHtml = null;
+                            const rawContent = msg.svgContent || msg.content || "";
+                            if (typeof rawContent === "string") {
+                              if (rawContent.startsWith("<svg") && rawContent.includes("</svg>")) {
+                                svgHtml = rawContent;
+                              } else if (rawContent.startsWith("data:image/svg+xml")) {
+                                try {
+                                  if (rawContent.includes(";base64,")) {
+                                    const b64 = rawContent.split(";base64,")[1];
+                                    const binary = atob(b64);
+                                    const bytes = new Uint8Array(binary.length);
+                                    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+                                    svgHtml = new TextDecoder("utf-8").decode(bytes);
+                                  } else {
+                                    svgHtml = decodeURIComponent(rawContent.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
+                                  }
+                                } catch (e) {
+                                  try {
+                                    svgHtml = decodeURIComponent(escape(atob(rawContent.split(";base64,")[1] || "")));
+                                  } catch(e2) {}
                                 }
-                                alt={msg.text && !msg.text.startsWith("data:") ? msg.text : "手绘画卷"}
-                                style={{
-                                  width: "100%",
-                                  maxHeight: "320px",
-                                  borderRadius: "10px",
-                                  display: "block",
-                                  objectFit: "contain",
-                                  cursor: "pointer",
-                                  backgroundColor: "#fff"
-                                }}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  let targetUrl = msg.content;
-                                  if (targetUrl && typeof targetUrl === "string" && targetUrl.startsWith("data:image/svg+xml")) {
-                                    try {
-                                      let clean = decodeURIComponent(targetUrl.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
-                                      if (!clean.includes("xmlns=")) {
-                                        clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
-                                      }
-                                      targetUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
-                                    } catch (e) {}
-                                  }
-                                  if (targetUrl) {
-                                    try {
-                                      const win = window.open();
-                                      if (win) {
-                                        win.document.write(`<body style="margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;"><img style="max-width:95vw;max-height:95vh;object-fit:contain;" src="${targetUrl}" /></body>`);
-                                      }
-                                    } catch(e) {}
-                                  }
-                                }}
-                                onError={(e) => {
-                                  const raw = msg.content;
-                                  if (raw && typeof raw === "string" && raw.includes("data:image/svg+xml")) {
-                                    try {
-                                      let clean = decodeURIComponent(raw.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
-                                      if (!clean.includes("xmlns=")) {
-                                        clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
-                                      }
-                                      e.target.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
-                                    } catch(err){}
-                                  }
-                                }}
-                              />
-                              {msg.text && !msg.text.startsWith("data:") && (
+                              }
+                            }
+
+                            if (svgHtml && svgHtml.includes("<svg")) {
+                              if (!/xmlns\s*=\s*["'][^"']*["']/i.test(svgHtml)) {
+                                svgHtml = svgHtml.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" ');
+                              }
+                              if (!/viewBox\s*=/i.test(svgHtml)) {
+                                svgHtml = svgHtml.replace(/<svg\b/i, '<svg viewBox="0 0 400 300" ');
+                              }
+                              if (!/width\s*=/i.test(svgHtml)) {
+                                svgHtml = svgHtml.replace(/<svg\b/i, '<svg width="100%" height="auto" ');
+                              }
+                            }
+
+                            const displayTitle = (() => {
+                              let t = msg.text || "";
+                              if (!t || t.startsWith("data:") || t.startsWith("http")) return "《手绘画卷》";
+                              t = t.replace(/^[《〈【\s]+|[》〉】\s]+$/g, "").trim();
+                              return t ? `《${t}》` : "《手绘画卷》";
+                            })();
+
+                            return (
+                              <div style={{ position: "relative", maxWidth: "260px" }}>
                                 <div
                                   style={{
-                                    fontSize: "11px",
-                                    color: "#7a6e5d",
-                                    textAlign: "center",
-                                    padding: "4px 6px 2px",
-                                    fontFamily: "serif, sans-serif"
+                                    borderRadius: "14px",
+                                    overflow: "hidden",
+                                    backgroundColor: "#faf7f2",
+                                    border: "1px solid rgba(180, 160, 130, 0.25)",
+                                    boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
+                                    padding: "6px",
+                                    transition: "transform 0.2s ease, box-shadow 0.2s ease"
                                   }}
                                 >
-                                  {msg.text}
+                                  {svgHtml ? (
+                                    <div
+                                      style={{
+                                        width: "100%",
+                                        maxHeight: "320px",
+                                        borderRadius: "10px",
+                                        backgroundColor: "#fff",
+                                        display: "flex",
+                                        alignItems: "center",
+                                        justifyContent: "center",
+                                        cursor: "pointer",
+                                        overflow: "hidden"
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        try {
+                                          const win = window.open();
+                                          if (win) {
+                                            win.document.write(`<body style="margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;padding:20px;box-sizing:border-box;"><div style="width:90vw;max-width:800px;background:#faf7f2;padding:20px;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,0.5);">${svgHtml}</div></body>`);
+                                          }
+                                        } catch(e) {}
+                                      }}
+                                      dangerouslySetInnerHTML={{ __html: svgHtml }}
+                                    />
+                                  ) : (
+                                    <img
+                                      src={msg.content}
+                                      alt={displayTitle}
+                                      style={{
+                                        width: "100%",
+                                        maxHeight: "320px",
+                                        borderRadius: "10px",
+                                        display: "block",
+                                        objectFit: "contain",
+                                        cursor: "pointer",
+                                        backgroundColor: "#fff"
+                                      }}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (msg.content) {
+                                          try {
+                                            const win = window.open();
+                                            if (win) {
+                                              win.document.write(`<body style="margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;"><img style="max-width:95vw;max-height:95vh;object-fit:contain;" src="${msg.content}" /></body>`);
+                                            }
+                                          } catch(e) {}
+                                        }
+                                      }}
+                                      onError={(e) => {
+                                        console.warn("图片加载失败:", msg.content);
+                                        e.target.style.display = "none";
+                                        if (e.target.nextSibling && e.target.nextSibling.classList && e.target.nextSibling.classList.contains("img-fallback-box")) return;
+                                        const fb = document.createElement("div");
+                                        fb.className = "img-fallback-box";
+                                        fb.style.cssText = "padding:20px 12px;text-align:center;background:#f5f0eb;border-radius:8px;color:#8c7e6c;font-size:12px;";
+                                        fb.innerHTML = `<div style="font-size:24px;margin-bottom:4px;">🖼️</div><div>${displayTitle}</div><div style="font-size:10px;opacity:0.7;margin-top:4px;">(画卷装裱中或网络受限)</div>`;
+                                        e.target.parentNode.insertBefore(fb, e.target);
+                                      }}
+                                    />
+                                  )}
+                                  <div
+                                    style={{
+                                      fontSize: "11px",
+                                      color: "#7a6e5d",
+                                      textAlign: "center",
+                                      padding: "5px 6px 2px",
+                                      fontFamily: "serif, sans-serif",
+                                      letterSpacing: "0.5px"
+                                    }}
+                                  >
+                                    {displayTitle}
+                                  </div>
                                 </div>
-                              )}
-                            </div>
-                          </div>
+                              </div>
+                            );
+                          })()
                         ) : msg.type === "voice" ? (
                           msg.showText ? (
                             <div
@@ -121223,6 +121268,62 @@ const LockScreenSettingsModal = ({ config, onChange, onClose, onReset }) => {
 };
 
 
+const DEFAULT_APP_ICONS = [
+  { label: "天气", color: "#85C9D9", icon: "cloud-sun", iconImage: "" },
+  { label: "论坛", color: "#C9C9C1", icon: "palette", iconImage: "" },
+  { label: "设置", color: "#C9C9C1", icon: "settings", iconImage: "" },
+  { label: "日历", color: "#F2B6B6", icon: "calendar", iconImage: "" },
+  {
+    label: "传讯",
+    color: "#85C9D9",
+    icon: "message-circle",
+    iconImage: "",
+  },
+  {
+    label: "阅读",
+    color: "#9DC9A2",
+    icon: "edit-3",
+    actionId: "reader",
+    iconImage: "",
+  },
+  {
+    label: "太疾驰",
+    color: "#D9D4B8",
+    icon: "zap",
+    actionId: "t12",
+    iconImage: "",
+  },
+  {
+    label: "绣衣楼",
+    color: "#F2D06B",
+    icon: "home",
+    actionId: "t11",
+    iconImage: "",
+  },
+  {
+    label: "情侣空间",
+    color: "#E0E0E0",
+    icon: "heart",
+    actionId: "t9",
+    iconImage: "",
+  },
+  { label: "音乐", color: "#85C9D9", icon: "music", iconImage: "" },
+  {
+    label: "游戏",
+    color: "#F2B6B6",
+    icon: "gamepad-2",
+    actionId: "t13",
+    iconImage: "",
+  },
+  {
+    label: "杏林济生",
+    color: "#D1D1D1",
+    icon: "plus-square",
+    actionId: "t10",
+    iconImage: "",
+  },
+];
+
 // ==================== [修改] 主题设置页面组件 (支持图标图片上传) ====================
 
 const ThemeSettingsPage = ({
@@ -121389,10 +121490,24 @@ const ThemeSettingsPage = ({
           <div
             style={{
               ...styles.bgPreview,
-              backgroundImage: currentBg ? `url(${currentBg})` : "none",
+              position: "relative",
+              overflow: "hidden",
             }}
             onClick={() => fileInputRef.current.click()}
           >
+            {currentBg && (
+              <div
+                style={{
+                  position: "absolute",
+                  inset: 0,
+                  backgroundImage: `url(${currentBg})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  pointerEvents: "none",
+                  zIndex: 0,
+                }}
+              />
+            )}
             {!currentBg && (
               <div
                 style={{
@@ -121401,6 +121516,8 @@ const ThemeSettingsPage = ({
                   left: "50%",
                   transform: "translate(-50%,-50%)",
                   color: "#999",
+                  zIndex: 1,
+                  opacity: 1,
                 }}
               >
                 点击上传图片
@@ -121411,12 +121528,15 @@ const ThemeSettingsPage = ({
                 style={{
                   position: "absolute",
                   bottom: 0,
-                  width: "100%",
-                  background: "rgba(0,0,0,0.4)",
+                  left: 0,
+                  right: 0,
+                  background: "rgba(0,0,0,0.6)",
                   color: "#fff",
                   fontSize: "12px",
                   padding: "4px",
                   textAlign: "center",
+                  zIndex: 1,
+                  opacity: 1,
                 }}
               >
                 点击更换
@@ -121430,6 +121550,7 @@ const ThemeSettingsPage = ({
             style={{ display: "none" }}
             onChange={handleBgUpload}
           />
+
           {currentBg && (
             <button
               onClick={() => onUpdateBg("")}
@@ -121473,7 +121594,7 @@ const ThemeSettingsPage = ({
         </div>
 
         {/* 3. 图标自定义 */}
-        <div style={styles.sectionTitle}>图标个性化 (图片/颜色)</div>
+        <div style={styles.sectionTitle}>图标个性化 (名称/图片)</div>
         <div style={{ ...styles.card, padding: "8px 16px" }}>
           {currentIcons.map((item, index) => (
             <div key={index} style={styles.iconRow}>
@@ -121527,24 +121648,14 @@ const ThemeSettingsPage = ({
                 </div>
               </div>
 
-              <div style={{ display: "flex", alignItems: "center" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                 <input
-                  value={item.label}
+                  value={(item.label && item.label.trim()) ? item.label : (DEFAULT_APP_ICONS[index] ? DEFAULT_APP_ICONS[index].label : "")}
                   onChange={(e) =>
                     handleIconChange(index, "label", e.target.value)
                   }
                   style={styles.input}
-                  placeholder="标签"
-                />
-                {/* 颜色选择器 */}
-                <input
-                  type="color"
-                  value={item.color}
-                  onChange={(e) =>
-                    handleIconChange(index, "color", e.target.value)
-                  }
-                  style={styles.colorInput}
-                  title="背景颜色"
+                  placeholder={DEFAULT_APP_ICONS[index] ? DEFAULT_APP_ICONS[index].label : "标签"}
                 />
                 {/* 图片上传按钮 */}
                 <div
@@ -129854,10 +129965,11 @@ const MasterApp = () => {
   // [新增] 主题设置相关状态
   const [isThemeSettingsOpen, setIsThemeSettingsOpen] = useState(false);
   const [homeBg, setHomeBg] = useState("");
+
   const [themeMode, setThemeMode] = useState("light");
 
   // [修改] 定义默认图标数据 (包含 iconImage 字段)
-  const DEFAULT_ICONS = [
+  const DEFAULT_ICONS = DEFAULT_APP_ICONS || [
     { label: "天气", color: "#85C9D9", icon: "cloud-sun", iconImage: "" },
     { label: "论坛", color: "#C9C9C1", icon: "palette", iconImage: "" },
     { label: "设置", color: "#C9C9C1", icon: "settings", iconImage: "" },
@@ -129930,7 +130042,23 @@ const MasterApp = () => {
         // 加载图标配置
         const savedIcons = await dbManager.get("app_icons_config");
         if (savedIcons) {
-          setAppIcons(JSON.parse(savedIcons));
+          try {
+            const parsed = JSON.parse(savedIcons);
+            if (Array.isArray(parsed)) {
+              const merged = DEFAULT_APP_ICONS.map((def, idx) => {
+                const saved = parsed[idx];
+                if (!saved) return def;
+                return {
+                  ...def,
+                  ...saved,
+                  label: (saved.label && saved.label.trim()) ? saved.label : def.label
+                };
+              });
+              setAppIcons(merged);
+            }
+          } catch (e) {
+            console.error("Error loading app icons:", e);
+          }
         }
 
         // 加载背景与壁纸
@@ -129954,6 +130082,7 @@ const MasterApp = () => {
         if (savedBg) {
           setHomeBg(savedBg);
         }
+
 
         // 加载主题模式
         const savedTheme = await dbManager.get("app_theme_mode");
@@ -130023,6 +130152,8 @@ const MasterApp = () => {
       console.error("Failed to save background to IndexedDB:", error);
     }
   };
+
+
 
   // [新增] 处理主题模式更新 (简单的滤镜模拟深色模式)
   const handleUpdateTheme = async (mode) => {
@@ -132216,7 +132347,7 @@ const MasterApp = () => {
                     fontWeight: homeBg ? "bold" : "500",
                   }}
                 >
-                  {item.label}
+                  {(item.label && item.label.trim()) ? item.label : (DEFAULT_APP_ICONS[i] ? DEFAULT_APP_ICONS[i].label : "")}
                 </span>
               </div>
             ))}
