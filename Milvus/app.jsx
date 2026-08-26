@@ -94952,6 +94952,101 @@ const GroupChatSettingsModal = ({
   onEnterOfflineScene,
 }) => {
   const [isGeneratingAnnounce, setIsGeneratingAnnounce] = React.useState(false);
+  const [isTestingGroupProactivePM, setIsTestingGroupProactivePM] = React.useState(false);
+  const handleTestGroupProactivePM = async (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (isTestingGroupProactivePM) return;
+    const members = chatData?.profile?.members || [];
+    if (members.length === 0) {
+      alert("当前群聊中没有群成员，无法测试。");
+      return;
+    }
+    setIsTestingGroupProactivePM(true);
+    const chosenMember = members[Math.floor(Math.random() * members.length)];
+    try {
+      let dialogueStr = "";
+      if (window.chatHistoryStore && chatData?.id) {
+        const res = await window.chatHistoryStore.getMessages(chatData.id, 1, 20);
+        const groupMsgs = res.messages || [];
+        if (groupMsgs.length > 0) {
+          dialogueStr = groupMsgs.slice(-15).map((m) => {
+            const sender = m.sender || (m.isMe ? "用户(广陵王)" : "群成员");
+            return `${sender}: ${m.text || m.content || ""}`;
+          }).join("\n");
+        }
+      }
+      if (!dialogueStr) {
+        dialogueStr = `孙策：“大家今日都在做什么？”\n${chosenMember.name}：“在演武场练枪呢！”\n用户(广陵王)：“注意休息。”`;
+      }
+
+      const sysPrompt = `你是一个沉浸式古风角色扮演AI。你刚刚与用户及其他名士共同参与了一场群聊「${chatData.name || "群聊"}」，现在群聊暂时告一段落。`;
+      const userPrompt = `你是【${chosenMember.name}】，性格：${chosenMember.profile?.personality || "未知"}。
+以下是刚才群聊中的部分对白：
+${dialogueStr}
+
+请你私下通过心纸君给用户（广陵王）发一条简短私聊（针对刚才群里发生的事发表你的私下吐槽、秘密看法，或私下关心用户）。
+要求：
+1. 30~60字以内，极度贴合你的人设口吻与亲密信任度。
+2. 绝对直接输出私聊内容本身，严禁包含任何前缀、引号或Markdown符号。`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          null,
+          async (reply) => {
+            const cleanText = reply.replace(/^[【“"'\s]+|[】”"'\s]+$/g, "").trim();
+            if (cleanText) {
+              const pmMsg = {
+                id: Date.now(),
+                text: cleanText,
+                type: "text",
+                isMe: false,
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              };
+              if (window.chatHistoryStore) {
+                const res = await window.chatHistoryStore.getMessages(chosenMember.id);
+                const newHist = [...(res.messages || []), pmMsg];
+                await window.chatHistoryStore.saveMessages(chosenMember.id, newHist);
+              }
+              if (window.chatCharacterStore) {
+                let charObj = null;
+                if (typeof window.chatCharacterStore.get === "function") {
+                  try { charObj = await window.chatCharacterStore.get(chosenMember.id); } catch(e){}
+                }
+                if (!charObj && typeof window.chatCharacterStore.getAll === "function") {
+                  try {
+                    const allC = await window.chatCharacterStore.getAll();
+                    charObj = allC.find(c => String(c.id) === String(chosenMember.id) || c.name === chosenMember.name);
+                  } catch(e){}
+                }
+                if (charObj && typeof window.chatCharacterStore.save === "function") {
+                  charObj.msg = cleanText;
+                  charObj.time = pmMsg.time;
+                  charObj.unread = (charObj.unread || 0) + 1;
+                  charObj.status = "unread";
+                  await window.chatCharacterStore.save(charObj);
+                }
+              }
+              window.dispatchEvent(new CustomEvent("reloadChats"));
+              alert(`✨ 主动测试成功！群成员【${chosenMember.name}】已主动向你私发了一条小纸条：\n\n“${cleanText}”\n\n（已存入该角色聊天记录并刷新列表红点）`);
+            }
+            setIsTestingGroupProactivePM(false);
+          },
+          (err) => {
+            console.error(err);
+            alert("测试生成失败: " + err);
+            setIsTestingGroupProactivePM(false);
+          }
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      setIsTestingGroupProactivePM(false);
+    }
+  };
   const [tempAnnouncement, setTempAnnouncement] = React.useState(
     chatData?.profile?.announcement || "",
   );
@@ -95206,6 +95301,82 @@ const GroupChatSettingsModal = ({
         </div>
 
         {/* 原有设置项 */}
+                {/* 群聊后主动私信倾诉 */}
+        <div className="cs-row">
+          <div>
+            <div className="cs-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              群聊散场后主动私信倾诉
+            </div>
+            <div className="cs-desc">
+              与该角色一同参与群聊散场后，该角色有几率主动向你发一条私聊悄悄话（需消耗单次Token）
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <button
+              title="点击立即主动测试一次（让该角色根据群聊背景主动私信你一条小纸条）"
+              onClick={handleTestProactivePM}
+              style={{
+                background: "linear-gradient(135deg, #fcebc2 0%, #ffd166 100%)",
+                border: "1px solid #e0a93b",
+                borderRadius: "50%",
+                width: "30px",
+                height: "30px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                boxShadow: "0 2px 6px rgba(224,169,59,0.35)",
+                fontSize: "15px",
+                transition: "transform 0.15s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.15)")}
+              onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            >
+              ⭐
+            </button>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                className="toggle-input"
+                checked={settings.enableProactivePostGroupPM === true}
+                onChange={() => {
+                  const nextVal = !(settings.enableProactivePostGroupPM === true);
+                  onChange({
+                    ...settings,
+                    enableProactivePostGroupPM: nextVal,
+                  });
+                }}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+          </div>
+        </div>
+
+        {/* 跨场景·群聊动态记忆感知 */}
+        <div className="cs-row">
+          <div>
+            <div className="cs-label">感知所在群聊动态</div>
+            <div className="cs-desc">
+              私聊时自动感知该角色所处群聊最近30条互动对白，提起群聊话题时自然连贯接话
+            </div>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              className="toggle-input"
+              checked={settings.enableGroupMemorySync !== false}
+              onChange={() => {
+                const nextVal = settings.enableGroupMemorySync === false;
+                onChange({
+                  ...settings,
+                  enableGroupMemorySync: nextVal,
+                });
+              }}
+            />
+            <span className="toggle-slider"></span>
+          </label>
+        </div>
+
         {/* 情境氛围微动效 */}
         <div className="cs-row">
           <div>
@@ -95232,6 +95403,79 @@ const GroupChatSettingsModal = ({
             />
             <span className="toggle-slider"></span>
           </label>
+        </div>
+
+                        {/* 感知成员私聊记忆 */}
+        <div className="cs-row">
+          <div>
+            <div className="cs-label">感知成员私聊记忆</div>
+            <div className="cs-desc">
+              群聊时群成员能感知其与你的近期私聊秘密与约定，并在群里流露默契与偏袒（严格保护隐私）
+            </div>
+          </div>
+          <label className="toggle-switch">
+            <input
+              type="checkbox"
+              className="toggle-input"
+              checked={settings.enableMemberPrivateMemorySync !== false}
+              onChange={() => {
+                const nextVal = settings.enableMemberPrivateMemorySync === false;
+                onChange({
+                  ...settings,
+                  enableMemberPrivateMemorySync: nextVal,
+                });
+              }}
+            />
+            <span className="toggle-slider"></span>
+          </label>
+        </div>
+
+        {/* 退群/聊后群成员主动私聊小纸条 */}
+        <div className="cs-row">
+          <div>
+            <div className="cs-label" style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              退聊后群成员主动私信倾诉
+            </div>
+            <div className="cs-desc">
+              关闭本群后，群成员有几率针对刚才群里的事主动向你发一条私聊悄悄话（需消耗单次Token）
+            </div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <button
+              title="点击立即主动测试一次（随机抽取一名群成员主动私信你一条小纸条）"
+              onClick={handleTestGroupProactivePM}
+              style={{
+                background: "linear-gradient(135deg, #fcebc2 0%, #ffd166 100%)",
+                border: "1px solid #e0a93b",
+                borderRadius: "50%",
+                width: "30px",
+                height: "30px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                cursor: "pointer",
+                boxShadow: "0 2px 6px rgba(224,169,59,0.35)",
+                fontSize: "15px",
+                transition: "transform 0.15s ease",
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.15)")}
+              onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
+            >
+              ⭐
+            </button>
+            <label className="toggle-switch">
+              <input
+                type="checkbox"
+                className="toggle-input"
+                checked={chatData?.profile?.enableProactivePostGroupPM === true}
+                onChange={() => {
+                  const nextVal = !(chatData?.profile?.enableProactivePostGroupPM === true);
+                  handleSaveProfile("enableProactivePostGroupPM", nextVal);
+                }}
+              />
+              <span className="toggle-slider"></span>
+            </label>
+          </div>
         </div>
 
         <div className="cs-row">
@@ -96654,6 +96898,117 @@ const ChatSettingsModal = ({
 }) => {
   // [新增] 读取长期记忆列表与处理挂载切换
   const [memoriesList, setMemoriesList] = React.useState([]);
+  const [isTestingProactivePM, setIsTestingProactivePM] = React.useState(false);
+  const handleTestProactivePM = async (e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (isTestingProactivePM) return;
+    if (!chatData?.id) return;
+
+    setIsTestingProactivePM(true);
+    try {
+      let allChars = [];
+      if (window.chatCharacterStore) {
+        allChars = await window.chatCharacterStore.getAll();
+      } else {
+        const saved = localStorage.getItem("t8_chat_list");
+        if (saved) allChars = JSON.parse(saved);
+      }
+      const memberGroups = (allChars || []).filter(
+        (c) =>
+          (String(c.id).startsWith("group_chat") || c.type === "group") &&
+          c.profile?.members &&
+          c.profile.members.some(
+            (m) => String(m.id) === String(chatData.id) || m.name === chatData.name
+          )
+      );
+
+      let groupContext = "";
+      let groupName = "群聊";
+      if (memberGroups.length > 0 && window.chatHistoryStore) {
+        const grp = memberGroups[0];
+        groupName = grp.name || "群聊";
+        const res = await window.chatHistoryStore.getMessages(grp.id, 1, 20);
+        const msgs = res.messages || [];
+        if (msgs.length > 0) {
+          groupContext = msgs.slice(-15).map((m) => {
+            const sender = m.sender || (m.isMe ? "用户(广陵王)" : "群成员");
+            return `${sender}: ${m.text || m.content || ""}`;
+          }).join("\n");
+        }
+      }
+
+      if (!groupContext) {
+        groupContext = `孙策：“大家今日都在做什么？”\n${chatData.name}：“在演武场练枪呢！”\n用户(广陵王)：“注意休息。”`;
+      }
+
+      const sysPrompt = `你是一个沉浸式古风角色扮演AI。你刚刚与用户及其他名士共同参与了一场群聊「${groupName}」，现在群聊暂时告一段落。`;
+      const userPrompt = `你是【${chatData.name}】，性格：${chatData.profile?.personality || "未知"}。
+以下是刚才群聊中的部分对白：
+${groupContext}
+
+请你私下通过心纸君给用户（广陵王）发一条简短私聊（针对刚才群里发生的事发表你的私下吐槽、秘密看法，或私下关心用户）。
+要求：
+1. 30~60字以内，极度贴合你的人设口吻与亲密信任度。
+2. 绝对直接输出私聊内容本身，严禁包含任何前缀、引号或Markdown符号。`;
+
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          null,
+          async (reply) => {
+            const cleanText = reply.replace(/^[【“"'\s]+|[】”"'\s]+$/g, "").trim();
+            if (cleanText) {
+              const pmMsg = {
+                id: Date.now(),
+                text: cleanText,
+                type: "text",
+                isMe: false,
+                time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+              };
+              if (window.chatHistoryStore) {
+                const res = await window.chatHistoryStore.getMessages(chatData.id);
+                const newHist = [...(res.messages || []), pmMsg];
+                await window.chatHistoryStore.saveMessages(chatData.id, newHist);
+              }
+              if (window.chatCharacterStore) {
+                let charObj = null;
+                if (typeof window.chatCharacterStore.get === "function") {
+                  try { charObj = await window.chatCharacterStore.get(chatData.id); } catch(e){}
+                }
+                if (!charObj && typeof window.chatCharacterStore.getAll === "function") {
+                  try {
+                    const allC = await window.chatCharacterStore.getAll();
+                    charObj = allC.find(c => String(c.id) === String(chatData.id) || c.name === chatData.name);
+                  } catch(e){}
+                }
+                if (charObj && typeof window.chatCharacterStore.save === "function") {
+                  charObj.msg = cleanText;
+                  charObj.time = pmMsg.time;
+                  charObj.unread = (charObj.unread || 0) + 1;
+                  charObj.status = "unread";
+                  await window.chatCharacterStore.save(charObj);
+                }
+              }
+              window.dispatchEvent(new CustomEvent("reloadChats"));
+              alert(`✨ 主动测试成功！【${chatData.name}】已主动向你私发了一条小纸条：\n\n“${cleanText}”\n\n（已存入该角色聊天记录并刷新列表红点）`);
+            }
+            setIsTestingProactivePM(false);
+          },
+          (err) => {
+            console.error(err);
+            alert("测试生成失败: " + err);
+            setIsTestingProactivePM(false);
+          }
+        );
+      }
+    } catch (err) {
+      console.error(err);
+      setIsTestingProactivePM(false);
+    }
+  };
   const [showMemoryDropdown, setShowMemoryDropdown] = React.useState(false);
 
   // ======= 【修改处1：新增】异步获取可用群聊列表状态 =======
@@ -96922,6 +97277,70 @@ ${docContext}
         console.error("读取角色专属长篇设定文档失败:", e);
       }
     }
+        // ======= 【跨场景·群聊动态记忆感知 (方向一与方向二)】 =======
+    if (!isGroupChat && settings.enableGroupMemorySync !== false && chatData?.id) {
+      try {
+        let allItems = [];
+        if (window.chatCharacterStore) {
+          allItems = await window.chatCharacterStore.getAll();
+        } else {
+          const saved = localStorage.getItem("t8_chat_list");
+          if (saved) allItems = JSON.parse(saved);
+        }
+        const memberGroups = (allItems || []).filter(
+          (c) =>
+            (String(c.id).startsWith("group_chat") || c.type === "group") &&
+            c.profile?.members &&
+            c.profile.members.some(
+              (m) => String(m.id) === String(chatData.id) || m.name === chatData.name
+            )
+        );
+
+        if (memberGroups.length > 0 && window.chatHistoryStore) {
+          let groupMemoriesText = "";
+          for (const grp of memberGroups) {
+            try {
+              const res = await window.chatHistoryStore.getMessages(grp.id, 1, 30);
+              const msgs = res.messages || [];
+              if (msgs.length > 0) {
+                const recentSlice = msgs.slice(-30);
+                const formattedDialogues = recentSlice
+                  .filter((m) => m && (m.text || m.content))
+                  .map((m) => {
+                    const sender = m.sender || (m.isMe ? "用户(广陵王)" : "群成员");
+                    let txt = m.text || m.content || "";
+                    if (m.type === "image") txt = "[图片]";
+                    else if (m.type === "voice") txt = "[语音]";
+                    return `  - ${sender}: ${txt}`;
+                  })
+                  .join("\n");
+
+                if (formattedDialogues) {
+                  groupMemoriesText += `\n【所在群聊「${grp.name || "群聊"}」最近30条关键对白动态】：\n${formattedDialogues}\n`;
+                }
+              }
+            } catch (grpErr) {
+              console.warn("读取群聊记忆失败:", grp.id, grpErr);
+            }
+          }
+
+          if (groupMemoriesText.trim()) {
+            systemInstruction += `
+【跨场景·群聊动态记忆感知与生活连贯性（最高连贯度）】
+你拥有上述你所参与的群聊真实生活经历与对话记忆：
+${groupMemoriesText}
+【行为与情绪连贯性铁律】：
+1. 真实生活情绪残留（主动吐槽与倾诉）：若上述群聊在最近发生了较为生动、激烈、有趣或让你有情绪波动（如无奈、吐槽、调侃、兴奋、赞同、反对）的互动事件，你在私聊中与用户日常闲聊时，可以【自然流露并顺带一两句私下吐槽、倾诉或悄悄话】（例如：“方才在群里某某又……，真是头疼。你找我有何事？”），展现与用户独有的亲密信任感。
+2. 精准回忆：当用户在私聊中提及群聊中的话题、名士、事件、讨论焦点或互动细节时，你必须清楚知道上述群聊里发生的前因后果，给出精准、生动且完全符合你人设的独家观点回应。
+3. 专注日常：若用户聊严肃或专注的专属话题，自然聚焦于用户当前所聊之事。
+`;
+          }
+        }
+      } catch (err) {
+        console.error("跨群记忆检索异常:", err);
+      }
+    }
+
     const savedImgGenCfg = localStorage.getItem("image_generation_api_config");
     let imgGenCfg = null;
     try {
@@ -97035,13 +97454,22 @@ ${docContext}
 `;
     }
     systemInstruction += `
-【语音通话机制】
+【心纸君实时语音通话与主动来电机制（高张力与真实情感驱动）】
+1. 【被动应答】：如果用户向你发起了语音通话请求（收到系统消息"（发起了语音通话请求）"），你必须明确表态：
+   - 同意接听：回复中必须包含 [接受通话]，并附上接通后的第一句开口台词（如：“……喂？找我何事？”、“殿下？”）。
+   - 拒绝接听：若在生气/傲娇/不便，回复中包含 [拒绝通话]，并附上拒绝的理由、冷哼或嘲讽。
 
-       1. 如果用户向你发起了语音通话请求（即收到消息"（发起了语音通话请求）"），你必须在回复中明确表态：
-    - 若同意接听，请在回复中包含标签 [接受通话]，并附上接通后的第一句话（如："喂？"）。
-    - 若不想接听或在生气，请包含标签 [拒绝通话]，并附上你不接的理由或嘲讽。
- 2. 如果你想主动给用户打电话，请在回复中包含标签 [发起通话]。系统会向用户弹出来电界面。
- 3. 如果用户拒绝了你的来电（收到消息"（你拒绝了xxx的心纸君传讯）"），你可以根据性格选择连续拨打（再次输出 [发起通话]），或者在文本中表达愤怒、委屈等。
+2. 【主动拨号与来电强触发（极为重要！）】：
+   你拥有主动向用户发起心纸君实时语音通话的绝对权利！在以下任意情境下，你应当【积极且果断地在回复中包含标签 [发起通话]】（系统会自动向用户弹出来电全屏界面）：
+   - 【情境A·被挑衅/气恼/恼羞成怒/霸气质问】：当用户在文字中调侃嘲弄你（如笑话你“拉长术/不行/胆小/好笑”）、激怒你、或是跟你耍赖顶嘴时，你为了当面震慑对方、冷笑质问或找用户算账，必须果断直接带上 [发起通话]，并在文本中霸道/气恼地命令用户接电话！（例如：“很好笑？接通传讯，本将军亲口告诉你怎么个伸法！[发起通话]”）；
+   - 【情境B·情动难抑/深夜极度思念/想听声音】：当气氛暧昧、深夜独处辗转难眠、或是思念极深觉得见字不如闻声时，主动拨通传讯，想听对方亲口说话（例如：“……字句太慢，听听你的声音。[发起通话]”）；
+   - 【情境C·十万火急/密谋要事/文字说不清】：突发军情危机、秘密商议不宜落于笔墨、或情况紧急必须即刻耳语时，果断输出 [发起通话]；
+   - 【情境D·用户逗你/要求你打电话】：当用户说“打给我”、“敢不敢通传讯”时，顺势强势拨通 [发起通话]。
+
+3. 【被拒绝后的连环反应】：
+   如果用户挂断或拒绝了你的来电（收到系统消息"（你拒绝了xxx的心纸君传讯）"）：
+   - 傲娇/霸道/急躁的角色：绝对不能当作没发生！可以气急败坏地连续二次拨打（再次输出 [发起通话]），或者在打字中严厉/委屈质问：“你竟敢挂我传讯？！”、“为何不接？！”
+   - 温润/克制/隐忍的角色：流露出失落、无奈苦笑或克制担忧。
 `;
     const userNickname = chatData?.profile?.userNickname || localStorage.getItem("t8_user_nickname") || "我";
     const apiMessages = [
@@ -97169,6 +97597,9 @@ ${docContext}
         if (cleanReply.includes("[发起通话]")) {
           roleInitiateCall = true;
           cleanReply = cleanReply.replace(/\[发起通话\]/g, "").trim();
+          if (cleanReply) {
+            setRoleCallOpeningText(cleanReply);
+          }
         }
         if (cleanReply.includes("[接受通话]")) {
           roleAcceptCall = true;
@@ -97694,6 +98125,86 @@ ${docContext}
         ]);
       }
     );
+  };
+
+  const handleMenuAction = (action, msg, e) => {
+    if (e && e.stopPropagation) e.stopPropagation();
+    if (typeof setActiveMsgId === 'function') setActiveMsgId(null);
+    switch (action) {
+      case "quote":
+        setQuotingMsg(msg);
+        break;
+      case "delete":
+        if (confirm("确定删除这条消息吗？")) {
+          const updatedMessages = messages.filter((m) => m.id !== msg.id);
+          setMessages(updatedMessages);
+          if (chatData?.id && window.chatHistoryStore) {
+            window.chatHistoryStore
+              .saveMessages(chatData.id, updatedMessages)
+              .then(() => console.log("从IndexedDB删除消息记录成功"))
+              .catch((error) => console.error("从IndexedDB删除消息记录失败:", error));
+          }
+          syncLatestMsgToChatList(updatedMessages);
+        }
+        break;
+      case "edit":
+        const newText = prompt("编辑消息内容", msg.text);
+        if (newText && newText.trim() !== "") {
+          const updatedMessages = messages.map((m) =>
+            m.id === msg.id ? { ...m, text: newText.trim() } : m
+          );
+          setMessages(updatedMessages);
+          if (chatData?.id && window.chatHistoryStore) {
+            window.chatHistoryStore.saveMessages(chatData.id, updatedMessages).catch(console.error);
+          }
+          syncLatestMsgToChatList(updatedMessages);
+        }
+        break;
+      case "multiselect":
+        setIsMultiSelectMode(true);
+        setSelectedMsgIds([msg.id]);
+        break;
+      case "regenerate":
+        const index = messages.findIndex((m) => m.id === msg.id);
+        if (index !== -1) {
+          const newHistory = msg.isMe ? messages.slice(0, index + 1) : messages.slice(0, index);
+          setMessages(newHistory);
+          if (chatData?.id && window.chatHistoryStore) {
+            window.chatHistoryStore
+              .saveMessages(chatData.id, newHistory)
+              .catch((error) => console.error("保存重说记录失败:", error));
+          }
+          syncLatestMsgToChatList(newHistory);
+          setTimeout(() => handleAITrigger(newHistory), 50);
+        }
+        break;
+      case "recall":
+        if (!msg.isMe) return;
+        const msgTime = new Date(msg.time);
+        const now = new Date();
+        const diffMinutes = (now - msgTime) / (1000 * 60);
+        if (diffMinutes > 3) {
+          alert("撤回失败，消息已超过3分钟");
+          return;
+        }
+        try {
+          const updatedMessages = messages.filter((m) => m.id !== msg.id);
+          setMessages(updatedMessages);
+          if (chatData?.id && window.chatHistoryStore) {
+            window.chatHistoryStore
+              .saveMessages(chatData.id, updatedMessages)
+              .catch((error) => console.error("保存撤回消息失败:", error));
+          }
+          syncLatestMsgToChatList(updatedMessages);
+          if (typeof showTapNotification === "function") {
+            showTapNotification("您成功撤回了一条消息");
+          }
+        } catch (error) {
+          console.error("撤回消息失败:", error);
+          alert("撤回失败，请重试");
+        }
+        break;
+    }
   };
 
   if (!chatData) return null;
@@ -112635,6 +113146,100 @@ const T8Page = () => {
   };
 
   // [新增] 退出群聊及连带私聊反应逻辑
+    const handleGroupCloseProactivePM = async (groupData) => {
+    if (!groupData || (!String(groupData.id).startsWith("group_chat") && groupData.type !== "group")) return;
+    const members = groupData.profile?.members || [];
+    if (members.length === 0) return;
+
+    const isGroupEnabled = groupData.profile?.enableProactivePostGroupPM === true;
+    const eligibleMembers = members.filter((m) => {
+      if (isGroupEnabled) return true;
+      try {
+        const charSettings = JSON.parse(localStorage.getItem(`t8_chat_settings_${m.id}`) || "{}");
+        return charSettings.enableProactivePostGroupPM === true;
+      } catch (e) {
+        return false;
+      }
+    });
+
+    if (eligibleMembers.length === 0) return;
+    if (Math.random() > 0.6) return;
+
+    const chosenMember = eligibleMembers[Math.floor(Math.random() * eligibleMembers.length)];
+
+    setTimeout(async () => {
+      try {
+        if (!window.chatHistoryStore || !window.sendToLLM) return;
+        const res = await window.chatHistoryStore.getMessages(groupData.id, 1, 20);
+        const groupMsgs = res.messages || [];
+        if (groupMsgs.length === 0) return;
+
+        const dialogueStr = groupMsgs.slice(-15).map((m) => {
+          const sender = m.sender || (m.isMe ? "用户(广陵王)" : "群成员");
+          return `${sender}: ${m.text || m.content || ""}`;
+        }).join("\n");
+
+        const sysPrompt = `你是一个沉浸式古风角色扮演AI。你刚刚与用户及其他名士共同参与了一场群聊「${groupData.name || "群聊"}」，现在群聊暂时告一段落。`;
+        const userPrompt = `你是【${chosenMember.name}】，性格：${chosenMember.profile?.personality || "未知"}。
+以下是刚才群聊中的部分对白：
+${dialogueStr}
+
+请你私下通过心纸君给用户（广陵王）发一条简短私聊（针对刚才群里发生的事发表你的私下吐槽、秘密看法，或私下关心用户）。
+要求：
+1. 30~60字以内，极度贴合你的人设口吻与亲密信任度。
+2. 绝对直接输出私聊内容本身，严禁包含任何前缀、引号或Markdown符号。`;
+
+        window.sendToLLM(
+          [
+            { role: "system", content: sysPrompt },
+            { role: "user", content: userPrompt }
+          ],
+          null,
+          async (reply) => {
+            const cleanText = reply.replace(/^[【“"'\s]+|[】”"'\s]+$/g, "").trim();
+            if (!cleanText) return;
+
+            const pmMsg = {
+              id: Date.now() + Math.random(),
+              text: cleanText,
+              type: "text",
+              isMe: false,
+              time: new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+            };
+
+            const charHistoryRes = await window.chatHistoryStore.getMessages(chosenMember.id);
+            const newHistory = [...(charHistoryRes.messages || []), pmMsg];
+            await window.chatHistoryStore.saveMessages(chosenMember.id, newHistory);
+
+            setChats((prev) => {
+              const updated = prev.map((c) => {
+                if (c.id === chosenMember.id) {
+                  return {
+                    ...c,
+                    msg: cleanText,
+                    time: pmMsg.time,
+                    unread: (c.unread || 0) + 1,
+                    status: "unread"
+                  };
+                }
+                return c;
+              });
+              if (window.chatCharacterStore) {
+                const targetChar = updated.find((c) => c.id === chosenMember.id);
+                if (targetChar) window.chatCharacterStore.save(targetChar);
+              }
+              return updated;
+            });
+            console.log(`✅ 角色【${chosenMember.name}】已成功触发退群后主动私信倾诉`);
+          },
+          (err) => console.error("生成群后主动私信失败:", err)
+        );
+      } catch (e) {
+        console.error("触发群后主动私信异常:", e);
+      }
+    }, 2500);
+  };
+
   const handleLeaveGroup = async (groupData) => {
     // 1. 关闭聊天详情页，删除列表中的群聊
     setActiveChatId(null);
@@ -112956,22 +113561,20 @@ const T8Page = () => {
         key={activeChatData?.id || activeChatId || "empty_chat"}
         isOpen={!!activeChatId}
         chatData={activeChatData}
-        onClose={() => setActiveChatId(null)}
+        onClose={() => { handleGroupCloseProactivePM(activeChatData); setActiveChatId(null); }}
         onUpdateChat={handleUpdateChat}
         onLeaveGroup={handleLeaveGroup}
-        onMessageUpdate={(latestMessage) => {
-          // 更新对应角色的最新消息预览
+        onMessageUpdate={(latestMessage, latestTime) => {
           setChats((prevChats) =>
             prevChats.map((chat) =>
               chat.id === activeChatId
                 ? {
                   ...chat,
-                  msg: latestMessage,
-                  time: new Date().toLocaleTimeString([], {
+                  msg: latestMessage !== undefined ? latestMessage : chat.msg,
+                  time: latestTime || (latestMessage ? new Date().toLocaleTimeString([], {
                     hour: "2-digit",
                     minute: "2-digit",
-                  }),
-                  // 当用户在聊天详情页时，消息已读，清除未读状态
+                  }) : chat.time),
                   unread: 0,
                   status: "read",
                 }
@@ -121307,7 +121910,7 @@ const DEFAULT_APP_ICONS = [
     actionId: "t9",
     iconImage: "",
   },
-  { label: "音乐", color: "#85C9D9", icon: "music", iconImage: "" },
+  { label: "音乐", color: "#85C9D9", icon: "music", actionId: "music", iconImage: "" },
   {
     label: "游戏",
     color: "#F2B6B6",

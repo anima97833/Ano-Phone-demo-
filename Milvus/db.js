@@ -1093,6 +1093,22 @@ async function migrateUserData() {
 
 // 聊天角色存储操作
 const chatCharacterStore = {
+  // 获取单个聊天角色
+  get: async (id) => {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(
+        STORES.CHAT_CHARACTERS,
+        "readonly",
+      );
+      const store = transaction.objectStore(STORES.CHAT_CHARACTERS);
+      const request = store.get(id);
+
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject("获取聊天角色失败");
+    });
+  },
+
   // 获取所有聊天角色
   getAll: async () => {
     const db = await openDB();

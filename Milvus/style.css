@@ -2258,10 +2258,13 @@
         background: #fff;
         border-radius: 15px;
         display: flex;
+        flex-direction: column;
         align-items: center;
         justify-content: center;
         box-shadow: 0 4px 10px rgba(0, 0, 0, 0.05);
         touch-action: none;
+        cursor: pointer;
+        user-select: none;
       }
 
       .planted-seed {
@@ -12799,5 +12802,83 @@
   40% {
     transform: translateY(-5px);
     opacity: 1;
+  }
+}
+
+/* 团建活动与全局通用弹窗动效 */
+@keyframes sheetSlideUp {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes modalFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes modalPopIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slideUpSheet {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes sheetSlideUp {
+  0% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes modalFadeIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes modalPopIn {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
   }
 }
