@@ -51448,29 +51448,136 @@ const T13FortunePage = ({ onBack }) => {
 };
 
 // T13 献帝晴雨表页面组件 (增强版：支持文字编辑、传信互动及AI状态推演)
-const T13EmperorPage = ({ onBack }) => {
-  const { useState, useEffect, useRef } = React;
+// ==================== IndexedDB 献帝密奏卷宗数据库 ====================
+const EMPEROR_DB_NAME = "emperor_barometer_db";
+const EMPEROR_DB_VERSION = 1;
+const EMPEROR_STORE = "secret_letters";
 
-  // 1. 状态管理
-  const [stats, setStats] = useState({
-    mood: 30,
-    energy: 80,
-    patience: 60,
-    puppet: 90,
+const openEmperorDB = () => {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(EMPEROR_DB_NAME, EMPEROR_DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(EMPEROR_STORE)) {
+        db.createObjectStore(EMPEROR_STORE, { keyPath: "id" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
   });
-  const [inputText, setInputText] = useState("");
-  const [displayText, setDisplayText] = useState(
-    "点击此处，在此输入想对献帝说的话...",
+};
+
+const saveEmperorLetter = async (record) => {
+  try {
+    const db = await openEmperorDB();
+    const tx = db.transaction(EMPEROR_STORE, "readwrite");
+    tx.objectStore(EMPEROR_STORE).put(record);
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch (e) {
+    console.error("Save emperor letter error:", e);
+    return false;
+  }
+};
+
+const getAllEmperorLetters = async () => {
+  try {
+    const db = await openEmperorDB();
+    const tx = db.transaction(EMPEROR_STORE, "readonly");
+    const req = tx.objectStore(EMPEROR_STORE).getAll();
+    return new Promise((resolve) => {
+      req.onsuccess = () => {
+        const list = req.result || [];
+        list.sort((a, b) => b.id - a.id);
+        resolve(list);
+      };
+      req.onerror = () => resolve([]);
+    });
+  } catch (e) {
+    console.error("Get emperor letters error:", e);
+    return [];
+  }
+};
+
+const deleteEmperorLetter = async (id) => {
+  try {
+    const db = await openEmperorDB();
+    const tx = db.transaction(EMPEROR_STORE, "readwrite");
+    tx.objectStore(EMPEROR_STORE).delete(id);
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch (e) {
+    console.error("Delete emperor letter error:", e);
+    return false;
+  }
+};
+
+// ==================== T13 献帝晴雨表组件 (升级方向一：名士深度羁绊+密奏手札卷宗) ====================
+const T13EmperorPage = ({ onBack }) => {
+  const { useState: useState2, useEffect: useEffect2, useRef: useRef2 } = React;
+
+  // 1. 状态数值 (持久化在 localStorage)
+  const [stats, setStats] = useState2(() => {
+    try {
+      const saved = localStorage.getItem("t13_emperor_stats");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      mood: 30,
+      energy: 80,
+      patience: 60,
+      puppet: 90
+    };
+  });
+
+  const [inputText, setInputText] = useState2("");
+  const [displayText, setDisplayText] = useState2(
+    "点击此处，在此输入想对献帝说的话..."
   );
-  const [isEditing, setIsEditing] = useState(false);
-  const [showCharSelect, setShowCharSelect] = useState(false);
-  const [characters, setCharacters] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showFeedModal, setShowFeedModal] = useState(false);
-  const [emperorAvatar, setEmperorAvatar] = useState(() => {
+  const [isEditing, setIsEditing] = useState2(false);
+  const [showCharSelect, setShowCharSelect] = useState2(false);
+  const [characters, setCharacters] = useState2([]);
+  const [isLoading, setIsLoading] = useState2(false);
+  const [loadingMessenger, setLoadingMessenger] = useState2("");
+  const [loadingSeconds, setLoadingSeconds] = useState2(0);
+  const loadingTimerRef = useRef2(null);
+
+  const [showFeedModal, setShowFeedModal] = useState2(false);
+  const [showHistoryModal, setShowHistoryModal] = useState2(false);
+  const [letterHistory, setLetterHistory] = useState2([]);
+
+  const [emperorAvatar, setEmperorAvatar] = useState2(() => {
     return localStorage.getItem("t13_emperor_avatar") || "";
   });
-  const fileInputRef = useRef(null);
+  const fileInputRef = useRef2(null);
+
+  // 刷新密奏历史
+  const refreshLetters = async () => {
+    const list = await getAllEmperorLetters();
+    setLetterHistory(list);
+  };
+
+  // 计时器效果
+  useEffect2(() => {
+    if (isLoading) {
+      setLoadingSeconds(0);
+      loadingTimerRef.current = setInterval(() => {
+        setLoadingSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (loadingTimerRef.current) {
+        clearInterval(loadingTimerRef.current);
+        loadingTimerRef.current = null;
+      }
+    }
+    return () => {
+      if (loadingTimerRef.current) clearInterval(loadingTimerRef.current);
+    };
+  }, [isLoading]);
 
   const handleAvatarUpload = (e) => {
     const file = e.target.files[0];
@@ -51489,86 +51596,73 @@ const T13EmperorPage = ({ onBack }) => {
     }
   };
 
-  // --- 新增：政局与饼图动态状态 ---
-  const [politicalNews, setPoliticalNews] = useState([]);
-  const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
-  const [isGeneratingNews, setIsGeneratingNews] = useState(false);
-  const [pieData, setPieData] = useState([33, 33, 34]); // [中立, 曹, 反曹] 的百分比
+  // --- 政局与饼图动态状态 ---
+  const [politicalNews, setPoliticalNews] = useState2([]);
+  const [currentNewsIndex, setCurrentNewsIndex] = useState2(0);
+  const [isGeneratingNews, setIsGeneratingNews] = useState2(false);
+  const [pieData, setPieData] = useState2([33, 33, 34]);
 
-  // 更新饼图比例
   const applyPieChange = (change) => {
     if (!change) return;
     setPieData((prev) => {
       let newNeutral = Math.max(0, prev[0] + (change.neutral || 0));
       let newCao = Math.max(0, prev[1] + (change.cao || 0));
       let newAntiCao = Math.max(0, prev[2] + (change.antiCao || 0));
-
       const sum = newNeutral + newCao + newAntiCao;
       if (sum === 0) return [33, 33, 34];
-
-      // 归一化为 100%
       newNeutral = Math.round((newNeutral / sum) * 100);
       newCao = Math.round((newCao / sum) * 100);
       newAntiCao = 100 - newNeutral - newCao;
-
       return [newNeutral, newCao, newAntiCao];
     });
   };
 
-  // 点击红点：调用 AI 获取情报或播放下一条
   const handleRedDotClick = async () => {
     if (isGeneratingNews) return;
-
-    // 如果还有未读的情报，则展示下一条并更新饼图
-    if (
-      politicalNews.length > 0 &&
-      currentNewsIndex < politicalNews.length - 1
-    ) {
+    if (politicalNews.length > 0 && currentNewsIndex < politicalNews.length - 1) {
       const nextIndex = currentNewsIndex + 1;
       setCurrentNewsIndex(nextIndex);
       applyPieChange(politicalNews[nextIndex].pieChange);
       return;
     }
-
-    // 否则重新调用 AI 获取最新的 3-5 条情报
     setIsGeneratingNews(true);
     try {
       const worldContext = window.getWorldBookContext
         ? await window.getWorldBookContext()
         : "无特定背景";
-
-      const sysPrompt = "你是一个三国时期的情报分析AI。";
+      const sysPrompt = "你是一个精通东汉三国天下大势、派系博弈与情报分析的AI参谋。";
       const userPrompt = `
-                                                                                                                                  【世界设定】
-                                                                                                                                  ${worldContext}
+【世界设定】
+${worldContext}
 
-                                                                                                                                  【当前派系占比】
-                                                                                                                                  中立：${pieData[0]}%，曹派：${pieData[1]}%，反曹派：${pieData[2]}%
+【当前派系占比】
+中立：${pieData[0]}%，曹派：${pieData[1]}%，反曹派：${pieData[2]}%
 
-                                                                                                                                  【任务】
-                                                                                                                                  请生成3到5条最近发生的政局变动情报（包括但不限于某处征兵、起义、落败、曹操那边的消息等）。
-                                                                                                                                  每条情报评估对当前派系占比的影响（正数为增加，负数为减少）。
+【任务】
+请生成3到5条最近发生的政局变动情报（包括但不限于某处征兵、起义、落败、曹操那边的消息等）。
+每条情报评估对当前派系占比的影响（正数为增加，负数为减少）。
 
-                                                                                                                                  【要求】
-                                                                                                                                  严格返回 JSON 数组格式，直接以 [ 开头，不要包含 Markdown 代码块（如 \`\`\`json）：
-                                                                                                                                  [
-                                                                                                                                    {
-                                                                                                                                      "text": "情报内容描述，约20-40字，要真实有代入感",
-                                                                                                                                      "pieChange": { "neutral": 变动数值, "cao": 变动数值, "antiCao": 变动数值 }
-                                                                                                                                    }
-                                                                                                                                  ]
-                                                                                                                                `;
-
+【要求】
+严格返回 JSON 数组格式，直接以 [ 开头，不要包含 Markdown 代码块（如 \`\`\`json）：
+[
+  {
+    "text": "情报内容描述，约20-40字，要真实有代入感",
+    "pieChange": { "neutral": 变动数值, "cao": 变动数值, "antiCao": 变动数值 }
+  }
+]
+`;
       if (window.sendToLLM) {
         window.sendToLLM(
           [
             { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
+            { role: "user", content: userPrompt }
           ],
           null,
           (reply) => {
             try {
-              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
+              const data = window.safeParseJSONArray
+                ? window.safeParseJSONArray(reply)
+                : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length > 0) {
                 setPoliticalNews(data);
                 setCurrentNewsIndex(0);
@@ -51587,7 +51681,7 @@ const T13EmperorPage = ({ onBack }) => {
             console.error(err);
             alert("情报获取失败，请检查 API 设置。");
             setIsGeneratingNews(false);
-          },
+          }
         );
       } else {
         alert("未找到 API 接口，请刷新重试！");
@@ -51599,8 +51693,8 @@ const T13EmperorPage = ({ onBack }) => {
     }
   };
 
-  // 2. 加载可用角色列表
-  useEffect(() => {
+  // 2. 加载可用角色列表与历史卷宗
+  useEffect2(() => {
     const loadChars = async () => {
       let allChars = [];
       try {
@@ -51609,9 +51703,8 @@ const T13EmperorPage = ({ onBack }) => {
         } else {
           allChars = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
         }
-        // 过滤掉群组和装饰组件
         const validChars = allChars.filter(
-          (c) => !String(c.id).startsWith("group") && c.type !== "decor",
+          (c) => !String(c.id).startsWith("group") && c.type !== "decor"
         );
         setCharacters(validChars);
       } catch (e) {
@@ -51619,9 +51712,48 @@ const T13EmperorPage = ({ onBack }) => {
       }
     };
     loadChars();
+    refreshLetters();
   }, []);
 
-  // 3. 点击传信按钮，检查文本并调出角色选择弹窗
+  // 获取名士24小时真实聊天记录
+  const getChar24hChat = async (charName, charId) => {
+    let msgs = [];
+    try {
+      if (window.chatHistoryStore) {
+        if (charId) {
+          const res = await window.chatHistoryStore.getMessages(charId, 1, 80);
+          if (res?.messages?.length) msgs = res.messages;
+        }
+        if (msgs.length === 0 && charName) {
+          const res = await window.chatHistoryStore.getMessages(charName, 1, 80);
+          if (res?.messages?.length) msgs = res.messages;
+        }
+      }
+      if (msgs.length === 0) {
+        const raw =
+          localStorage.getItem(`t8_chat_history_${charName}`) ||
+          (charId ? localStorage.getItem(`t8_chat_history_${charId}`) : null);
+        if (raw) msgs = JSON.parse(raw) || [];
+      }
+    } catch (e) {}
+
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    let recent = msgs.filter((m) => {
+      const ts =
+        m.timestamp || (typeof m.id === "number" && m.id > 1600000000000 ? m.id : null);
+      return ts ? ts >= oneDayAgo : false;
+    });
+    if (recent.length === 0 && msgs.length > 0) {
+      recent = msgs.slice(-15);
+    }
+    if (recent.length > 0) {
+      return recent
+        .map((m) => `${m.isMe ? "玩家" : charName}: ${m.text || m.content || ""}`)
+        .join("；\n");
+    }
+    return "暂无近期传讯互动";
+  };
+
   const handleSendLetter = () => {
     if (!inputText.trim()) {
       alert("请先在下方的白框内输入想传给献帝的话！");
@@ -51630,140 +51762,186 @@ const T13EmperorPage = ({ onBack }) => {
     setShowCharSelect(true);
   };
 
-  // 4. 处理投喂功能
   const handleFeed = (type) => {
     setShowFeedModal(false);
-
-    // 根据选择的类型更新状态
+    let newStats;
     if (type === "food") {
-      // 美食：增加心情和体力，稍微增加忍耐，减少傀儡值
-      setStats((prev) => ({
-        mood: Math.min(100, prev.mood + 15),
-        energy: Math.min(100, prev.energy + 20),
-        patience: Math.min(100, prev.patience + 5),
-        puppet: Math.max(0, prev.puppet - 10),
-      }));
+      newStats = {
+        mood: Math.min(100, stats.mood + 15),
+        energy: Math.min(100, stats.energy + 20),
+        patience: Math.min(100, stats.patience + 5),
+        puppet: Math.max(0, stats.puppet - 10)
+      };
       setDisplayText("献帝吃了美食，心情大好，体力恢复了不少！");
     } else if (type === "poison") {
-      // 毒物：减少心情和体力，减少忍耐，增加傀儡值
-      setStats((prev) => ({
-        mood: Math.max(0, prev.mood - 20),
-        energy: Math.max(0, prev.energy - 15),
-        patience: Math.max(0, prev.patience - 10),
-        puppet: Math.min(100, prev.puppet + 15),
-      }));
+      newStats = {
+        mood: Math.max(0, stats.mood - 20),
+        energy: Math.max(0, stats.energy - 15),
+        patience: Math.max(0, stats.patience - 10),
+        puppet: Math.min(100, stats.puppet + 15)
+      };
       setDisplayText("献帝吃了毒物，感到不适，精神更加萎靡...");
+    }
+    if (newStats) {
+      setStats(newStats);
+      try {
+        localStorage.setItem("t13_emperor_stats", JSON.stringify(newStats));
+      } catch (e) {}
     }
   };
 
-  // 4. 选择角色并触发 AI 生成
+  // 4. 方向一核心：选择名士，注入全部深度人设与近24h聊天，推演真假口信并存入IndexedDB
   const handleCharSelect = async (char) => {
     setShowCharSelect(false);
     setIsLoading(true);
-    setDisplayText(`正在由【${char.name}】前去传信中，请稍候...`);
+    setLoadingMessenger(char.name);
+    setDisplayText(`正在由【${char.name}】潜入许县深宫传信中，请稍候...`);
 
     try {
-      // 获取各种上下文信息
+      // 1. 世界书设定
       const worldContext = window.getWorldBookContext
         ? await window.getWorldBookContext()
-        : "";
+        : "无特定背景";
+
+      // 2. 用户身份
       let userContext = "";
+      let userName = "广陵王";
       try {
         const savedPersonas = JSON.parse(
-          localStorage.getItem("user_personas") || "[]",
+          localStorage.getItem("user_personas") || "[]"
         );
         const activeId = localStorage.getItem("active_persona_id");
+        let activeUser = null;
         if (activeId) {
-          const activeUser = savedPersonas.find((p) => p.id == activeId);
-          if (activeUser) {
-            userContext = `【用户身份】姓名:${activeUser.name}, 性格:${activeUser.personality || "无"}, 背景:${activeUser.background || "无"}`;
-          }
+          activeUser = savedPersonas.find((p) => p.id == activeId);
         }
-      } catch (e) { }
+        if (!activeUser && savedPersonas.length > 0) {
+          activeUser = savedPersonas[0];
+        }
+        if (activeUser) {
+          userName = activeUser.name || "广陵王";
+          userContext = `【用户身份设定】\n- 姓名：${activeUser.name}\n- 性格与背景：${activeUser.personality || "绣衣楼主"} / ${activeUser.background || "掌控广陵机要"}\n- 详细特质：${activeUser.description || activeUser.appearance || "未详"}`;
+        }
+      } catch (e) {}
 
-      const profile = char.profile || {};
-      const charContext = `【传信角色设定】\n姓名:${char.name}\n性别:${profile.gender || "未知"}\nMBTI:${profile.mbti || "无"}\n星座:${profile.constellation || "无"}\n性格:${profile.personality || "无"}\n背景:${profile.background || "无"}\n说话风格:${profile.style || "无"}`;
+      // 3. 传信名士深度人设与24小时真实聊天
+      const fullProfile =
+        typeof getFullCharacterSetting === "function"
+          ? await getFullCharacterSetting(char.name, char.id)
+          : char.profile?.personality || "";
+      const chat24h = await getChar24hChat(char.name, char.id);
 
-      // 构建系统提示与请求 Prompt
-      const sysPrompt = "你是一个沉浸式角色扮演AI及游戏状态推演器。";
+      const charContext = `
+【传信使者身份与深度人设库全部设定】：
+- 姓名：${char.name}
+- 角色配置库全部人设背景：
+${fullProfile || "言行举止严格符合人物在三国乱世中的性格特质与背景立场"}
+- 与玩家近24小时真实传讯互动与关系基调：
+${chat24h || "暂无近期传讯互动"}
+`;
+
+      const sysPrompt =
+        "你是一个精通东汉末年深宫暗战、广陵天下大势、多角色心理博弈与状态推演的AI大师。";
       const userPrompt = `
-                                                ${worldContext}
-                                                ${userContext}
-                                                ${charContext}
+${worldContext ? `【世界书设定】\n${worldContext}\n` : ""}
+${userContext ? `${userContext}\n` : ""}
+${charContext}
 
-                                                【当前背景】
-                                                东汉末年，汉献帝刘协被曹操挟持在许县，处境艰难。用户写了一段话想传给汉献帝，并委托你扮演的角色去传信。
+【当前深宫局势】
+东汉末年建安年间，汉献帝刘协被曹操挟持于许县深宫，处于极度压抑、被严密监控与傀儡状态。
+玩家【${userName}】秘密修书一封，暗中委托【${char.name}】潜入深宫，将密信送达汉献帝手中。
 
-                                                【用户想传给汉献帝的话】
-                                                ${inputText}
+【玩家想传给汉献帝的密信内容】
+${inputText}
 
-                                                【任务要求】
-                                                请结合上述所有设定，完成以下两个任务：
-                                                1. 评估用户的这句话对汉献帝产生的影响。包括心情、体力、忍耐、傀儡的变化（数值请在 -10 到 10 之间取整数）。
-                                                2. 以委托角色【${char.name}】的身份，给用户带回口信汇报情况。
-                                                注意：
-                                                a. 回复的口吻必须严格符合该角色的设定和说话方式！
-                                                b. 角色捎回的口信不一定准确，完全可能为了自身利益、阵营或私人感情，说假话、隐瞒真相甚至故意曲解献帝的反应。
-                                                c. 严格返回 JSON 对象，不要附加任何 Markdown 格式、额外文字或代码块符号（如 \`\`\`json）。格式如下：
-                                                {
-                                                  "moodChange": 0,
-                                                  "energyChange": 0,
-                                                  "patienceChange": 0,
-                                                  "puppetChange": 0,
-                                                  "reply": "角色的回复口信"
-                                                }
-                                                `;
+【推演任务与多重人设立场铁律】
+请结合献帝当前处境，以及信使【${char.name}】的【深度人设、行事作风、政治立场、与玩家近24小时聊天关系】：
+1. 评估献帝读到这封信后的内心震荡与状态变化：
+   - moodChange (心情变化: -10 到 10)
+   - energyChange (体力精神变化: -10 到 10)
+   - patienceChange (隐忍耐力变化: -10 到 10)
+   - puppetChange (被曹操掌控的傀儡感变化: -10 到 10)
+2. 以【${char.name}】的视角与第一人称口吻，向玩家呈递带信回执：
+   - 必须极具【${char.name}】独特的语言口癖、行事风格与性格特点；
+   - 充分呼应信使与玩家近 24 小时聊天的情感基调；
+   - 【关键特色】：信使捎回的口信不一定绝对真实客观！信使完全可能为了自身利益、阵营倾向、私人情感或对玩家的独占/试探/保护欲，而有所隐瞒、夸大甚至故意曲解献帝的反应；
+   - 描写潜入深宫、面见献帝时的惊险细节或献帝的隐秘微表情。
 
-      // 调用全局 LLM 服务
+【输出格式严格要求】
+必须严格返回纯 JSON 对象，不要附加任何 Markdown 格式或代码块符号（如 \`\`\`json）：
+{
+  "moodChange": 整数(-10到10),
+  "energyChange": 整数(-10到10),
+  "patienceChange": 整数(-10到10),
+  "puppetChange": 整数(-10到10),
+  "reply": "信使以第一人称向玩家汇报的专属口信（生动细腻，符合人设）"
+}
+`;
+
       if (window.sendToLLM) {
         window.sendToLLM(
           [
             { role: "system", content: sysPrompt },
-            { role: "user", content: userPrompt },
+            { role: "user", content: userPrompt }
           ],
           null,
-          (reply) => {
+          async (reply) => {
             try {
-              // 提取并解析 JSON
-              const cleanJson = reply.replace(/```json|```/g, "").trim();
-              const data = JSON.parse(cleanJson);
+              let data = null;
+              const cleaned = reply.replace(/```json|```/g, "").trim();
+              try {
+                data = JSON.parse(cleaned);
+              } catch (err) {
+                const match = reply.match(/\{[\s\S]*\}/);
+                if (match) data = JSON.parse(match[0]);
+              }
+              if (!data) throw new Error("数据格式解析失败");
 
-              // 更新四个维度的值，确保在 0-100 之间
-              // 增加基础变化值，使状态变化更加明显
-              const scaleFactor = 2; // 增加变化幅度的倍数
-              setStats((prev) => ({
+              const scaleFactor = 2;
+              const newStats = {
                 mood: Math.max(
                   0,
-                  Math.min(
-                    100,
-                    prev.mood + (data.moodChange || 0) * scaleFactor,
-                  ),
+                  Math.min(100, stats.mood + (data.moodChange || 0) * scaleFactor)
                 ),
                 energy: Math.max(
                   0,
-                  Math.min(
-                    100,
-                    prev.energy + (data.energyChange || 0) * scaleFactor,
-                  ),
+                  Math.min(100, stats.energy + (data.energyChange || 0) * scaleFactor)
                 ),
                 patience: Math.max(
                   0,
-                  Math.min(
-                    100,
-                    prev.patience + (data.patienceChange || 0) * scaleFactor,
-                  ),
+                  Math.min(100, stats.patience + (data.patienceChange || 0) * scaleFactor)
                 ),
                 puppet: Math.max(
                   0,
-                  Math.min(
-                    100,
-                    prev.puppet + (data.puppetChange || 0) * scaleFactor,
-                  ),
-                ),
-              }));
+                  Math.min(100, stats.puppet + (data.puppetChange || 0) * scaleFactor)
+                )
+              };
 
-              // 更新白色显示框的内容
-              setDisplayText(`【${char.name}的带信回执】：\n\n${data.reply}`);
+              setStats(newStats);
+              try {
+                localStorage.setItem("t13_emperor_stats", JSON.stringify(newStats));
+              } catch (e) {}
+
+              const replyText = `【${char.name}的带信回执】：\n\n${data.reply}`;
+              setDisplayText(replyText);
+
+              // 存入 IndexedDB 密奏卷宗
+              const record = {
+                id: Date.now(),
+                timeStr: new Date().toLocaleString(),
+                messengerName: char.name,
+                userLetter: inputText,
+                reply: data.reply,
+                statChanges: {
+                  mood: (data.moodChange || 0) * scaleFactor,
+                  energy: (data.energyChange || 0) * scaleFactor,
+                  patience: (data.patienceChange || 0) * scaleFactor,
+                  puppet: (data.puppetChange || 0) * scaleFactor
+                },
+                snapshotStats: newStats
+              };
+              await saveEmperorLetter(record);
+              refreshLetters();
             } catch (e) {
               console.error("AI 响应解析失败", e, reply);
               setDisplayText("信件在途中遭遇盘查丢失了，解析失败，请重试。");
@@ -51773,9 +51951,9 @@ const T13EmperorPage = ({ onBack }) => {
           },
           (err) => {
             console.error(err);
-            setDisplayText("信使在路上迷路了，请检查网络或API设置");
+            setDisplayText("信使在路上遭遇阻截，请检查网络或API设置");
             setIsLoading(false);
-          },
+          }
         );
       } else {
         alert("未找到 API 接口，请刷新重试！");
@@ -51788,31 +51966,52 @@ const T13EmperorPage = ({ onBack }) => {
     }
   };
 
+  // 从历史卷宗中载入回看
+  const handleViewHistoryItem = (item) => {
+    setDisplayText(`【${item.messengerName}的往期带信回执 (${item.timeStr})】：\n\n${item.reply}`);
+    setShowHistoryModal(false);
+  };
+
+  // 删除单条历史密奏
+  const handleDeleteLetter = async (id, e) => {
+    e.stopPropagation();
+    if (confirm("确定要销毁这卷深宫密奏吗？")) {
+      await deleteEmperorLetter(id);
+      refreshLetters();
+    }
+  };
+
   const statLabels = [
     { label: "心情", key: "mood" },
     { label: "体力", key: "energy" },
     { label: "忍耐值", key: "patience" },
-    { label: "傀儡值", key: "puppet" },
+    { label: "傀儡值", key: "puppet" }
   ];
 
-  return (
-    <div className="emperor-bg fade-in">
-      {/* 顶部清晰返回导航栏 */}
-      <div
-        style={{
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    { className: "emperor-bg fade-in" },
+    /* 顶部清晰返回导航栏 + 密奏卷宗按钮 */
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
           padding: "16px 20px 8px",
           width: "100%",
           zIndex: 100,
-          position: "relative",
-        }}
-      >
-        <div
-          className="back-btn active-press"
-          onClick={onBack}
-          style={{
+          position: "relative"
+        }
+      },
+      /* 返回按钮 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: "back-btn active-press",
+          onClick: onBack,
+          style: {
             width: "36px",
             height: "36px",
             borderRadius: "50%",
@@ -51822,112 +52021,193 @@ const T13EmperorPage = ({ onBack }) => {
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            cursor: "pointer",
-          }}
-        >
-          <iconify-icon
-            icon="line-md:arrow-left"
-            style={{ fontSize: "20px", color: "#5a5f4d" }}
-          ></iconify-icon>
-        </div>
-        <div
-          style={{
+            cursor: "pointer"
+          }
+        },
+        /* @__PURE__ */ React.createElement("iconify-icon", {
+          icon: "line-md:arrow-left",
+          style: { fontSize: "20px", color: "#5a5f4d" }
+        })
+      ),
+      /* 标题 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
             fontSize: "16px",
             fontWeight: "bold",
             color: "#5a5f4d",
-            letterSpacing: "1px",
-          }}
-        >
-          献帝晴雨表
-        </div>
-        <div style={{ width: "36px" }}></div>
-      </div>
-
-      {/* 顶部数值与头像区 */}
-      <div className="emperor-header">
-        <input
-          type="file"
-          ref={fileInputRef}
-          accept="image/*"
-          style={{ display: "none" }}
-          onChange={handleAvatarUpload}
-        />
-        <div
-          className="emperor-avatar-box active-press"
-          onClick={() => fileInputRef.current && fileInputRef.current.click()}
-          title="点击更换献帝头像"
-        >
-          {emperorAvatar ? (
-            <img src={emperorAvatar} className="emperor-avatar-img" alt="献帝头像" />
-          ) : (
-            <svg
-              viewBox="0 0 24 24"
-              style={{ width: "50px", height: "50px", fill: "#ffffff", display: "block" }}
-            >
-              <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
-            </svg>
-          )}
-        </div>
-        <div className="emperor-stats">
-          {statLabels.map(({ label, key }) => (
-            <div className="stat-item" key={label}>
-              <span style={{ minWidth: "48px" }}>{label}</span>
-              <div className="stat-bar-container">
-                <div
-                  className="stat-bar-fill"
-                  style={{ width: `${stats[key]}%` }}
-                ></div>
-              </div>
-            </div>
-          ))}
-        </div>
-      </div>
-
-      {/* 动作按钮区 */}
-      <div className="emperor-actions">
-        <div className="action-btns">
-          <button className="ebtn" onClick={() => setShowFeedModal(true)}>
-            投喂
-          </button>
-          <button className="ebtn" onClick={handleSendLetter}>
-            传信
-          </button>
-        </div>
-        <div className="traffic-lights">
-          <div className="light" style={{ backgroundColor: "#FF6B6B" }}></div>
-          <div className="light" style={{ backgroundColor: "#FFD93D" }}></div>
-          <div className="light" style={{ backgroundColor: "#95B8A3" }}></div>
-        </div>
-      </div>
-
-      {/* 中间的圆角矩形内容输入与展示区 */}
-      <div
-        className="emperor-dialog"
-        style={{
+            letterSpacing: "1px"
+          }
+        },
+        "献帝晴雨表"
+      ),
+      /* 密奏手札按钮 */
+      /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            refreshLetters();
+            setShowHistoryModal(true);
+          },
+          style: {
+            padding: "6px 12px",
+            borderRadius: "16px",
+            border: "1px solid #8c917b",
+            background: "rgba(255, 255, 255, 0.9)",
+            color: "#5a5f4d",
+            fontSize: "12px",
+            fontWeight: "bold",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.06)"
+          }
+        },
+        /* @__PURE__ */ React.createElement("span", null, "📜 密奏手札"),
+        letterHistory.length > 0 &&
+          /* @__PURE__ */ React.createElement(
+            "span",
+            {
+              style: {
+                backgroundColor: "#d6724b",
+                color: "#fff",
+                borderRadius: "10px",
+                padding: "1px 6px",
+                fontSize: "10px",
+                fontWeight: "bold"
+              }
+            },
+            letterHistory.length
+          )
+      )
+    ),
+    /* 顶部数值与头像区 */
+    /* @__PURE__ */ React.createElement(
+      "div",
+      { className: "emperor-header" },
+      /* @__PURE__ */ React.createElement("input", {
+        type: "file",
+        ref: fileInputRef,
+        accept: "image/*",
+        style: { display: "none" },
+        onChange: handleAvatarUpload
+      }),
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: "emperor-avatar-box active-press",
+          onClick: () => fileInputRef.current && fileInputRef.current.click(),
+          title: "点击更换献帝头像"
+        },
+        emperorAvatar
+          ? /* @__PURE__ */ React.createElement("img", {
+              src: emperorAvatar,
+              className: "emperor-avatar-img",
+              alt: "献帝头像"
+            })
+          : /* @__PURE__ */ React.createElement(
+              "svg",
+              {
+                viewBox: "0 0 24 24",
+                style: { width: "50px", height: "50px", fill: "#ffffff", display: "block" }
+              },
+              /* @__PURE__ */ React.createElement("path", {
+                d: "M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"
+              })
+            )
+      ),
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { className: "emperor-stats" },
+        statLabels.map(({ label, key }) =>
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { className: "stat-item", key: label },
+            /* @__PURE__ */ React.createElement(
+              "span",
+              { style: { minWidth: "48px" } },
+              label
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { className: "stat-bar-container" },
+              /* @__PURE__ */ React.createElement("div", {
+                className: "stat-bar-fill",
+                style: { width: `${stats[key]}%` }
+              })
+            )
+          )
+        )
+      )
+    ),
+    /* 动作按钮区 */
+    /* @__PURE__ */ React.createElement(
+      "div",
+      { className: "emperor-actions" },
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { className: "action-btns" },
+        /* @__PURE__ */ React.createElement(
+          "button",
+          { className: "ebtn", onClick: () => setShowFeedModal(true) },
+          "投喂"
+        ),
+        /* @__PURE__ */ React.createElement(
+          "button",
+          { className: "ebtn", onClick: handleSendLetter },
+          "传信"
+        )
+      ),
+      /* 三色小灯 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { className: "traffic-lights" },
+        /* @__PURE__ */ React.createElement("div", {
+          className: "light",
+          style: { backgroundColor: "#FF6B6B" }
+        }),
+        /* @__PURE__ */ React.createElement("div", {
+          className: "light",
+          style: { backgroundColor: "#FFD93D" }
+        }),
+        /* @__PURE__ */ React.createElement("div", {
+          className: "light",
+          style: { backgroundColor: "#95B8A3" }
+        })
+      )
+    ),
+    /* 中间的圆角矩形内容输入与展示区 */
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "emperor-dialog",
+        style: {
           padding: "15px",
           overflowY: "auto",
           position: "relative",
-          cursor: isEditing ? "text" : "pointer",
-        }}
-        onClick={() => {
+          cursor: isEditing ? "text" : "pointer"
+        },
+        onClick: () => {
           if (!isEditing && !isLoading) setIsEditing(true);
-        }}
-      >
-        {isEditing ? (
-          <textarea
-            autoFocus
-            value={inputText}
-            onChange={(e) => setInputText(e.target.value)}
-            onBlur={() => {
+        }
+      },
+      isEditing
+        ? /* @__PURE__ */ React.createElement("textarea", {
+            autoFocus: true,
+            value: inputText,
+            onChange: (e) => setInputText(e.target.value),
+            onBlur: () => {
               setIsEditing(false);
               if (inputText.trim()) {
                 setDisplayText(inputText);
               } else {
                 setDisplayText("点击此处，在此输入想对献帝说的话...");
               }
-            }}
-            placeholder="写下你想对他说的话..."
-            style={{
+            },
+            placeholder: "写下你想对他说的话...",
+            style: {
               width: "100%",
               height: "100%",
               border: "none",
@@ -51936,170 +52216,197 @@ const T13EmperorPage = ({ onBack }) => {
               fontSize: "15px",
               color: "#5A5F4D",
               fontFamily: "inherit",
-              background: "transparent",
-            }}
-          />
-        ) : (
-          <div
-            style={{
-              fontSize: "15px",
-              color: "#5A5F4D",
-              whiteSpace: "pre-wrap",
-              lineHeight: "1.5",
-            }}
-          >
-            {displayText}
-          </div>
-        )}
-      </div>
-
-      {/* 底部区 */}
-      <div className="emperor-footer">
-        {/* 动态饼图 */}
-        <div
-          className="pie-chart"
-          style={{
+              background: "transparent"
+            }
+          })
+        : /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              style: {
+                fontSize: "15px",
+                color: "#5A5F4D",
+                whiteSpace: "pre-wrap",
+                lineHeight: "1.5"
+              }
+            },
+            displayText
+          )
+    ),
+    /* 底部区 */
+    /* @__PURE__ */ React.createElement(
+      "div",
+      { className: "emperor-footer" },
+      /* 动态饼图 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: "pie-chart",
+          style: {
             background: `conic-gradient(
-                                                                                                                                        #fff 0% ${pieData[0]}%,
-                                                                                                                                        #ff6b6b ${pieData[0]}% ${pieData[0] + pieData[1]}%,
-                                                                                                                                        #8fa99d ${pieData[0] + pieData[1]}% 100%
-                                                                                                                                      )`,
-          }}
-        >
-          <span
-            className="pie-label"
-            style={{
+              #fff 0% ${pieData[0]}%,
+              #ff6b6b ${pieData[0]}% ${pieData[0] + pieData[1]}%,
+              #8fa99d ${pieData[0] + pieData[1]}% 100%
+            )`
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "span",
+          {
+            className: "pie-label",
+            style: {
               top: 15,
               left: 15,
               color: "#333",
-              textShadow: "0 0 2px #fff",
-            }}
-          >
-            中立 {pieData[0]}%
-          </span>
-          <span
-            className="pie-label"
-            style={{
+              textShadow: "0 0 2px #fff"
+            }
+          },
+          "中立 ",
+          pieData[0],
+          "%"
+        ),
+        /* @__PURE__ */ React.createElement(
+          "span",
+          {
+            className: "pie-label",
+            style: {
               top: 45,
               right: 5,
               color: "#fff",
               fontSize: "13px",
-              textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-            }}
-          >
-            曹 {pieData[1]}%
-          </span>
-          <span
-            className="pie-label"
-            style={{
+              textShadow: "0 1px 2px rgba(0,0,0,0.5)"
+            }
+          },
+          "曹 ",
+          pieData[1],
+          "%"
+        ),
+        /* @__PURE__ */ React.createElement(
+          "span",
+          {
+            className: "pie-label",
+            style: {
               bottom: 15,
               left: 20,
               color: "#fff",
-              textShadow: "0 1px 2px rgba(0,0,0,0.5)",
-            }}
-          >
-            反曹 {pieData[2]}%
-          </span>
-        </div>
-
-        {/* 情报信息展示框 */}
-        <div
-          className="info-box"
-          style={{
+              textShadow: "0 1px 2px rgba(0,0,0,0.5)"
+            }
+          },
+          "反曹 ",
+          pieData[2],
+          "%"
+        )
+      ),
+      /* 情报信息展示框 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: "info-box",
+          style: {
             padding: "10px 12px",
             fontSize: "12px",
             color: "#5A5F4D",
             overflowY: "auto",
             display: "flex",
             alignItems: "center",
-            lineHeight: "1.5",
-          }}
-        >
-          {isGeneratingNews ? (
-            <div style={{ textAlign: "center", width: "100%" }}>
-              <iconify-icon
-                icon="line-md:loading-twotone-loop"
-                style={{ fontSize: "20px", color: "#8fa99d" }}
-              ></iconify-icon>
-              <div style={{ marginTop: "4px", color: "#8fa99d" }}>
-                探听变局中...
-              </div>
-            </div>
-          ) : politicalNews.length > 0 ? (
-            <div style={{ width: "100%", animation: "fadeIn 0.5s ease" }}>
-              <div
-                style={{
-                  fontWeight: "bold",
-                  marginBottom: "4px",
-                  color: "#d6724b",
+            lineHeight: "1.5"
+          }
+        },
+        isGeneratingNews
+          ? /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { textAlign: "center", width: "100%" } },
+              /* @__PURE__ */ React.createElement("iconify-icon", {
+                icon: "line-md:loading-twotone-loop",
+                style: { fontSize: "20px", color: "#8fa99d" }
+              }),
+              /* @__PURE__ */ React.createElement(
+                "div",
+                { style: { marginTop: "4px", color: "#8fa99d" } },
+                "探听变局中..."
+              )
+            )
+          : politicalNews.length > 0
+          ? /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { width: "100%", animation: "fadeIn 0.5s ease" } },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                {
+                  style: {
+                    fontWeight: "bold",
+                    marginBottom: "4px",
+                    color: "#d6724b",
+                    fontSize: "13px"
+                  }
+                },
+                "天下大势 (",
+                currentNewsIndex + 1,
+                "/",
+                politicalNews.length,
+                ")"
+              ),
+              /* @__PURE__ */ React.createElement(
+                "div",
+                { style: { letterSpacing: "0.5px" } },
+                politicalNews[currentNewsIndex].text
+              )
+            )
+          : /* @__PURE__ */ React.createElement(
+              "div",
+              {
+                style: {
+                  textAlign: "center",
+                  width: "100%",
+                  color: "#8fa99d",
                   fontSize: "13px",
-                }}
-              >
-                天下大势 ({currentNewsIndex + 1}/{politicalNews.length})
-              </div>
-              <div style={{ letterSpacing: "0.5px" }}>
-                {politicalNews[currentNewsIndex].text}
-              </div>
-            </div>
-          ) : (
-            <div
-              style={{
-                textAlign: "center",
-                width: "100%",
-                color: "#8fa99d",
-                fontSize: "13px",
-                fontWeight: "bold",
-              }}
-            >
-              点击红点，
-              <br />
-              探听政局变动
-            </div>
-          )}
-        </div>
-
-        {/* 触发红点 - 仅用于获取新情报 */}
-        <div
-          className="red-dot"
-          onClick={() => {
-            if (
-              politicalNews.length === 0 ||
-              currentNewsIndex === politicalNews.length - 1
-            ) {
-              handleRedDotClick();
-            }
-          }}
-          style={{
-            cursor: "pointer",
-            transition:
-              "transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
-            boxShadow: "0 2px 8px rgba(255, 107, 107, 0.5)",
-          }}
-          onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.2)")}
-          onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-          onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.9)")}
-          onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1.2)")}
-        ></div>
-
-        {/* 前后键按钮 - 用于切换情报 */}
-        <div
-          style={{
+                  fontWeight: "bold"
+                }
+              },
+              "点击红点，",
+              /* @__PURE__ */ React.createElement("br", null),
+              "探听政局变动"
+            )
+      ),
+      /* 触发红点 */
+      /* @__PURE__ */ React.createElement("div", {
+        className: "red-dot",
+        onClick: () => {
+          if (
+            politicalNews.length === 0 ||
+            currentNewsIndex === politicalNews.length - 1
+          ) {
+            handleRedDotClick();
+          }
+        },
+        style: {
+          cursor: "pointer",
+          transition: "transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+          boxShadow: "0 2px 8px rgba(255, 107, 107, 0.5)"
+        }
+      }),
+      /* 前后键按钮 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
             display: "flex",
             flexDirection: "column",
             gap: "5px",
-            marginTop: "10px",
-          }}
-        >
-          <button
-            onClick={() => {
+            marginTop: "10px"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: () => {
               if (politicalNews.length > 0 && currentNewsIndex > 0) {
                 const prevIndex = currentNewsIndex - 1;
                 setCurrentNewsIndex(prevIndex);
                 applyPieChange(politicalNews[prevIndex].pieChange);
               }
-            }}
-            disabled={politicalNews.length === 0 || currentNewsIndex === 0}
-            style={{
+            },
+            disabled: politicalNews.length === 0 || currentNewsIndex === 0,
+            style: {
               width: "24px",
               height: "24px",
               borderRadius: "50%",
@@ -52120,13 +52427,15 @@ const T13EmperorPage = ({ onBack }) => {
               alignItems: "center",
               justifyContent: "center",
               fontSize: "12px",
-              padding: 0,
-            }}
-          >
-            ↑
-          </button>
-          <button
-            onClick={() => {
+              padding: 0
+            }
+          },
+          "↑"
+        ),
+        /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: () => {
               if (
                 politicalNews.length > 0 &&
                 currentNewsIndex < politicalNews.length - 1
@@ -52135,47 +52444,104 @@ const T13EmperorPage = ({ onBack }) => {
                 setCurrentNewsIndex(nextIndex);
                 applyPieChange(politicalNews[nextIndex].pieChange);
               }
-            }}
-            disabled={
+            },
+            disabled:
               politicalNews.length === 0 ||
-              currentNewsIndex === politicalNews.length - 1
-            }
-            style={{
+              currentNewsIndex === politicalNews.length - 1,
+            style: {
               width: "24px",
               height: "24px",
               borderRadius: "50%",
               border: "1px solid #8c917b",
               background:
                 politicalNews.length > 0 &&
-                  currentNewsIndex < politicalNews.length - 1
+                currentNewsIndex < politicalNews.length - 1
                   ? "#fff"
                   : "rgba(255,255,255,0.5)",
               color:
                 politicalNews.length > 0 &&
-                  currentNewsIndex < politicalNews.length - 1
+                currentNewsIndex < politicalNews.length - 1
                   ? "#8c917b"
                   : "rgba(140,145,123,0.5)",
               cursor:
                 politicalNews.length > 0 &&
-                  currentNewsIndex < politicalNews.length - 1
+                currentNewsIndex < politicalNews.length - 1
                   ? "pointer"
                   : "not-allowed",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
               fontSize: "12px",
-              padding: 0,
-            }}
-          >
-            ↓
-          </button>
-        </div>
-      </div>
-
-      {/* 选择传信角色弹窗 */}
-      {showCharSelect && (
-        <div
-          style={{
+              padding: 0
+            }
+          },
+          "↓"
+        )
+      )
+    ),
+    /* 传信中沉浸式计时加载状态 */
+    isLoading &&
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.65)",
+            backdropFilter: "blur(8px)",
+            WebkitBackdropFilter: "blur(8px)",
+            zIndex: 1100,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "16px",
+            color: "#FFFFFF"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              width: "70px",
+              height: "70px",
+              borderRadius: "50%",
+              border: "3px solid rgba(255, 255, 255, 0.2)",
+              borderTopColor: "#d6724b",
+              animation: "spin 1.2s linear infinite",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }
+          },
+          /* @__PURE__ */ React.createElement("span", { style: { fontSize: "28px" } }, "✉️")
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { fontSize: "16px", fontWeight: "bold", color: "#f2efde" } },
+          `【${loadingMessenger}】正潜入许县深宫传信...`
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              backgroundColor: "rgba(255, 255, 255, 0.15)",
+              padding: "4px 14px",
+              borderRadius: "20px",
+              fontSize: "13px",
+              color: "#FFAA85",
+              fontWeight: "bold"
+            }
+          },
+          `⏱️ 已用时：${loadingSeconds} 秒`
+        )
+      ),
+    /* 选择传信角色弹窗 */
+    showCharSelect &&
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
             position: "fixed",
             top: 0,
             left: 0,
@@ -52185,238 +52551,456 @@ const T13EmperorPage = ({ onBack }) => {
             zIndex: 1000,
             display: "flex",
             alignItems: "center",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            style={{
+            justifyContent: "center"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
               background: "#f2efde",
               borderRadius: "16px",
               padding: "20px",
-              width: "80%",
-              maxWidth: "300px",
-              maxHeight: "70vh",
+              width: "85%",
+              maxWidth: "340px",
+              maxHeight: "75vh",
               overflowY: "auto",
-            }}
-          >
-            <div
-              style={{
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              style: {
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "15px",
-              }}
-            >
-              <h3 style={{ margin: 0, fontSize: "16px", color: "#8c917b" }}>
-                请选择为您传信的角色
-              </h3>
-              <button
-                onClick={() => setShowCharSelect(false)}
-                style={{
+                marginBottom: "15px"
+              }
+            },
+            /* @__PURE__ */ React.createElement(
+              "h3",
+              { style: { margin: 0, fontSize: "16px", color: "#5A5F4D" } },
+              "请选择密信使者"
+            ),
+            /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onClick: () => setShowCharSelect(false),
+                style: {
                   background: "none",
                   border: "none",
                   fontSize: "20px",
                   cursor: "pointer",
-                  color: "#8c917b",
-                }}
-              >
-                ×
-              </button>
-            </div>
-            <div
-              style={{
+                  color: "#8c917b"
+                }
+              },
+              "×"
+            )
+          ),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              style: {
                 display: "grid",
                 gridTemplateColumns: "repeat(2, 1fr)",
-                gap: "12px",
-              }}
-            >
-              {characters.length > 0 ? (
-                characters.map((char) => (
-                  <div
-                    key={char.id}
-                    onClick={() => handleCharSelect(char)}
-                    style={{
-                      padding: "12px",
-                      background: "#fff",
-                      borderRadius: "12px",
-                      cursor: "pointer",
-                      border: "1px solid #e0e0e0",
+                gap: "12px"
+              }
+            },
+            characters.length > 0
+              ? characters.map((char) =>
+                  /* @__PURE__ */ React.createElement(
+                    "div",
+                    {
+                      key: char.id,
+                      onClick: () => handleCharSelect(char),
+                      style: {
+                        padding: "12px 10px",
+                        background: "#fff",
+                        borderRadius: "12px",
+                        cursor: "pointer",
+                        border: "1px solid #e0e0e0",
+                        textAlign: "center",
+                        boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
+                        transition: "all 0.2s ease"
+                      }
+                    },
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          fontSize: "14px",
+                          fontWeight: "bold",
+                          color: "#5A5F4D",
+                          marginBottom: "4px"
+                        }
+                      },
+                      char.name
+                    ),
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          fontSize: "11px",
+                          color: "#8c917b",
+                          whiteSpace: "nowrap",
+                          overflow: "hidden",
+                          textOverflow: "ellipsis"
+                        }
+                      },
+                      char.profile?.personality?.substring(0, 10) || "阵营名士"
+                    )
+                  )
+                )
+              : /* @__PURE__ */ React.createElement(
+                  "div",
+                  {
+                    style: {
+                      gridColumn: "1 / -1",
                       textAlign: "center",
-                      boxShadow: "0 2px 5px rgba(0,0,0,0.05)",
-                    }}
-                  >
-                    <div
-                      style={{
-                        fontSize: "14px",
-                        fontWeight: "bold",
-                        color: "#5A5F4D",
-                        marginBottom: "4px",
-                      }}
-                    >
-                      {char.name}
-                    </div>
-                    <div style={{ fontSize: "12px", color: "#999" }}>
-                      {char.profile?.personality?.substring(0, 8) || "无设定"}
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div
-                  style={{
-                    gridColumn: "1 / -1",
-                    textAlign: "center",
-                    padding: "20px",
-                    color: "#999",
-                    fontSize: "13px",
-                  }}
-                >
-                  暂无可用角色，请先去传讯页面添加
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* 传信中 Loading 遮罩 */}
-      {isLoading && (
-        <div
-          style={{
-            position: "fixed",
-            top: 0,
-            left: 0,
-            right: 0,
-            bottom: 0,
-            background: "rgba(0,0,0,0.4)",
-            zIndex: 2000,
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "center",
-            backdropFilter: "blur(2px)",
-          }}
-        >
-          <div
-            style={{
-              color: "#fff",
-              fontSize: "16px",
-              display: "flex",
-              alignItems: "center",
-              gap: "10px",
-              background: "rgba(0,0,0,0.6)",
-              padding: "15px 25px",
-              borderRadius: "12px",
-            }}
-          >
-            <iconify-icon
-              icon="line-md:loading-twotone-loop"
-              style={{ fontSize: "24px" }}
-            ></iconify-icon>
-            信使前往许县中...
-          </div>
-        </div>
-      )}
-
-      {/* 投喂弹窗 */}
-      {showFeedModal && (
-        <div
-          style={{
+                      padding: "20px",
+                      color: "#999",
+                      fontSize: "13px"
+                    }
+                  },
+                  "暂无可派遣名士"
+                )
+          )
+        )
+      ),
+    /* 投喂弹窗 */
+    showFeedModal &&
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
             position: "fixed",
             top: 0,
             left: 0,
             right: 0,
             bottom: 0,
             background: "rgba(0,0,0,0.5)",
-            zIndex: 1500,
+            zIndex: 1000,
             display: "flex",
-            alignItems: "flex-end",
-            justifyContent: "center",
-          }}
-        >
-          <div
-            style={{
+            alignItems: "center",
+            justifyContent: "center"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
               background: "#f2efde",
-              borderRadius: "20px 20px 0 0",
-              padding: "30px 20px",
-              width: "100%",
-              maxHeight: "300px",
-              animation: "slideUp 0.3s ease-out",
-              boxShadow: "0 -10px 30px rgba(0,0,0,0.1)",
-            }}
-          >
-            <h3
-              style={{
-                margin: 0,
-                fontSize: "18px",
-                color: "#8c917b",
-                marginBottom: "20px",
-                textAlign: "center",
-              }}
-            >
-              选择投喂物品
-            </h3>
-            <div
-              style={{
+              borderRadius: "16px",
+              padding: "20px",
+              width: "80%",
+              maxWidth: "280px",
+              textAlign: "center",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.3)"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "h3",
+            { style: { margin: "0 0 15px 0", fontSize: "16px", color: "#5A5F4D" } },
+            "请选择投喂之物"
+          ),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              style: {
                 display: "flex",
-                flexDirection: "column",
-                gap: "15px",
-              }}
-            >
-              <button
-                onClick={() => handleFeed("food")}
-                style={{
-                  padding: "15px",
+                gap: "12px",
+                justifyContent: "center",
+                marginBottom: "15px"
+              }
+            },
+            /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onClick: () => handleFeed("food"),
+                style: {
+                  flex: 1,
+                  padding: "12px 10px",
                   background: "#95B8A3",
-                  color: "white",
+                  color: "#fff",
                   border: "none",
-                  borderRadius: "12px",
-                  fontSize: "16px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 10px rgba(149, 184, 163, 0.3)",
-                }}
-              >
-                🥘 美食佳肴
-              </button>
-              <button
-                onClick={() => handleFeed("poison")}
-                style={{
-                  padding: "15px",
-                  background: "#FF6B6B",
-                  color: "white",
-                  border: "none",
-                  borderRadius: "12px",
-                  fontSize: "16px",
-                  fontWeight: "bold",
-                  cursor: "pointer",
-                  boxShadow: "0 4px 10px rgba(255, 107, 107, 0.3)",
-                }}
-              >
-                ☠️ 毒物
-              </button>
-              <button
-                onClick={() => setShowFeedModal(false)}
-                style={{
-                  padding: "10px",
-                  background: "none",
-                  color: "#8c917b",
-                  border: "1px solid #8c917b",
                   borderRadius: "12px",
                   fontSize: "14px",
+                  fontWeight: "bold",
                   cursor: "pointer",
-                  marginTop: "10px",
-                }}
-              >
-                取消
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-    </div>
+                  boxShadow: "0 2px 5px rgba(0,0,0,0.1)"
+                }
+              },
+              "🍲 美食"
+            ),
+            /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onClick: () => handleFeed("poison"),
+                style: {
+                  flex: 1,
+                  padding: "12px 10px",
+                  background: "#FF6B6B",
+                  color: "#fff",
+                  border: "none",
+                  borderRadius: "12px",
+                  fontSize: "14px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 5px rgba(0,0,0,0.1)"
+                }
+              },
+              "☠️ 毒物"
+            )
+          ),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => setShowFeedModal(false),
+              style: {
+                background: "none",
+                border: "none",
+                color: "#8c917b",
+                fontSize: "13px",
+                cursor: "pointer",
+                padding: "6px"
+              }
+            },
+            "取消"
+          )
+        )
+      ),
+    /* 方向一：往期深宫密奏手札卷宗抽屉 Modal */
+    showHistoryModal &&
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.6)",
+            backdropFilter: "blur(10px)",
+            WebkitBackdropFilter: "blur(10px)",
+            zIndex: 1200,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              width: "100%",
+              maxWidth: "500px",
+              maxHeight: "80vh",
+              backgroundColor: "#f2efde",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              padding: "24px 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+              animation: "slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
+              boxShadow: "0 -10px 40px rgba(0,0,0,0.3)"
+            }
+          },
+          /* 卷宗标题栏 */
+          /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderBottom: "1px solid rgba(140, 145, 123, 0.3)",
+                paddingBottom: "12px"
+              }
+            },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "8px" } },
+              /* @__PURE__ */ React.createElement(
+                "span",
+                { style: { fontSize: "17px", fontWeight: "bold", color: "#5A5F4D" } },
+                "📜 深宫往来密奏手札"
+              ),
+              /* @__PURE__ */ React.createElement(
+                "span",
+                {
+                  style: {
+                    fontSize: "11px",
+                    backgroundColor: "rgba(140, 145, 123, 0.2)",
+                    padding: "2px 8px",
+                    borderRadius: "10px",
+                    color: "#5A5F4D",
+                    fontWeight: "bold"
+                  }
+                },
+                `共 ${letterHistory.length} 卷`
+              )
+            ),
+            /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                onClick: () => setShowHistoryModal(false),
+                style: {
+                  background: "none",
+                  border: "none",
+                  color: "#5A5F4D",
+                  fontSize: "22px",
+                  cursor: "pointer"
+                }
+              },
+              "✕"
+            )
+          ),
+          /* 密奏卷宗列表 */
+          /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              style: {
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                overflowY: "auto",
+                maxHeight: "60vh",
+                paddingRight: "4px"
+              }
+            },
+            letterHistory.length === 0
+              ? /* @__PURE__ */ React.createElement(
+                  "div",
+                  {
+                    style: {
+                      textAlign: "center",
+                      padding: "40px 20px",
+                      color: "#8c917b",
+                      fontSize: "13px"
+                    }
+                  },
+                  "深宫静默，暂无往来密奏。派遣名士传信后将收录于此~"
+                )
+              : letterHistory.map((item) =>
+                  /* @__PURE__ */ React.createElement(
+                    "div",
+                    {
+                      key: item.id,
+                      onClick: () => handleViewHistoryItem(item),
+                      style: {
+                        backgroundColor: "#FFFFFF",
+                        border: "1px solid #e0dfd5",
+                        borderRadius: "14px",
+                        padding: "14px 16px",
+                        cursor: "pointer",
+                        display: "flex",
+                        flexDirection: "column",
+                        gap: "8px",
+                        boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                        transition: "all 0.2s"
+                      }
+                    },
+                    /* 头部使者与时间 */
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "space-between",
+                          alignItems: "center"
+                        }
+                      },
+                      /* @__PURE__ */ React.createElement(
+                        "div",
+                        { style: { display: "flex", gap: "6px", alignItems: "center" } },
+                        /* @__PURE__ */ React.createElement(
+                          "span",
+                          {
+                            style: {
+                              fontSize: "11px",
+                              fontWeight: "bold",
+                              padding: "2px 8px",
+                              borderRadius: "8px",
+                              backgroundColor: "rgba(214, 114, 75, 0.15)",
+                              color: "#d6724b"
+                            }
+                          },
+                          `✉️ 使者：${item.messengerName}`
+                        ),
+                        /* @__PURE__ */ React.createElement(
+                          "span",
+                          { style: { fontSize: "11px", color: "#8c917b" } },
+                          item.timeStr
+                        )
+                      ),
+                      /* 删除按钮 */
+                      /* @__PURE__ */ React.createElement(
+                        "button",
+                        {
+                          onClick: (e) => handleDeleteLetter(item.id, e),
+                          style: {
+                            background: "none",
+                            border: "none",
+                            color: "#999",
+                            fontSize: "12px",
+                            cursor: "pointer",
+                            padding: "2px 6px"
+                          }
+                        },
+                        "🗑️"
+                      )
+                    ),
+                    /* 玩家密信内容 */
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          fontSize: "13px",
+                          color: "#5A5F4D",
+                          fontWeight: "bold",
+                          lineHeight: "1.4"
+                        }
+                      },
+                      `【我的密信】：${item.userLetter}`
+                    ),
+                    /* 使者汇报摘要 */
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          fontSize: "12px",
+                          color: "#777",
+                          lineHeight: "1.4",
+                          display: "-webkit-box",
+                          WebkitLineClamp: 2,
+                          WebkitBoxOrient: "vertical",
+                          overflow: "hidden"
+                        }
+                      },
+                      `【回执】：${item.reply}`
+                    ),
+                    /* 底部操作 */
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          display: "flex",
+                          justifyContent: "flex-end",
+                          fontSize: "11px",
+                          color: "#d6724b",
+                          fontWeight: "bold"
+                        }
+                      },
+                      "点击载入主屏查阅 ➔"
+                    )
+                  )
+                )
+          )
+        )
+      )
   );
 };
 
-// T13 通灵赌坊页面组件
 const T13GamblingPage = ({ onBack }) => {
   return (
     <div className="tg-bg fade-in" onClick={onBack}>
@@ -73790,18 +74374,216 @@ const StarChartPage = ({ onBack }) => {
   );
 };
 
+// ==================== IndexedDB 蝴蝶效应历史卷宗数据库 ====================
+const BUTTERFLY_DB_NAME = "butterfly_effect_db";
+const BUTTERFLY_DB_VERSION = 1;
+const BUTTERFLY_STORE = "simulations";
+
+const openButterflyDB = () => {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(BUTTERFLY_DB_NAME, BUTTERFLY_DB_VERSION);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(BUTTERFLY_STORE)) {
+        db.createObjectStore(BUTTERFLY_STORE, { keyPath: "id" });
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+};
+
+const saveButterflyHistory = async (record) => {
+  try {
+    const db = await openButterflyDB();
+    const tx = db.transaction(BUTTERFLY_STORE, "readwrite");
+    tx.objectStore(BUTTERFLY_STORE).put(record);
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch (e) {
+    console.error("Save butterfly history to indexedDB error:", e);
+    return false;
+  }
+};
+
+const getAllButterflyHistory = async () => {
+  try {
+    const db = await openButterflyDB();
+    const tx = db.transaction(BUTTERFLY_STORE, "readonly");
+    const req = tx.objectStore(BUTTERFLY_STORE).getAll();
+    return new Promise((resolve) => {
+      req.onsuccess = () => {
+        const list = req.result || [];
+        list.sort((a, b) => b.id - a.id);
+        resolve(list);
+      };
+      req.onerror = () => resolve([]);
+    });
+  } catch (e) {
+    console.error("Get butterfly history error:", e);
+    return [];
+  }
+};
+
+const deleteButterflyHistory = async (id) => {
+  try {
+    const db = await openButterflyDB();
+    const tx = db.transaction(BUTTERFLY_STORE, "readwrite");
+    tx.objectStore(BUTTERFLY_STORE).delete(id);
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch (e) {
+    console.error("Delete butterfly history error:", e);
+    return false;
+  }
+};
+
 // ==================== T13 蝴蝶效应页面组件 ====================
 
 const ButterflyEffectPage = ({ onBack }) => {
-  const { useState } = React;
-
-  // 状态管理
+  const { useState, useEffect, useRef } = React;
+  const [butterflyMode, setButterflyMode] = useState(
+    localStorage.getItem("butterfly_mode") || "standalone"
+  );
   const [inputText, setInputText] = useState("");
   const [isEditing, setIsEditing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [effectData, setEffectData] = useState([]); // 存储所有节点生成的推演数据
   const [selectedDot, setSelectedDot] = useState(null); // 当前选中的圆点数据
   const [showModal, setShowModal] = useState(false); // 控制卡片显示
+
+  // 加载计时与动态提示
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const timerRef = useRef(null);
+
+  // 方向三：往期档案库抽屉与列表
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [historyList, setHistoryList] = useState([]);
+
+  // 联动模式：角色选择与上下文状态
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedCharIds, setSelectedCharIds] = useState(["user"]);
+  const [activeUserName, setActiveUserName] = useState("我");
+
+  // 刷新历史档案列表
+  const refreshHistory = async () => {
+    const list = await getAllButterflyHistory();
+    setHistoryList(list);
+  };
+
+  useEffect(() => {
+    // 1. 获取当前玩家身份名称
+    try {
+      const savedPersonas = JSON.parse(
+        localStorage.getItem("user_personas") || "[]"
+      );
+      const activeId = localStorage.getItem("active_persona_id");
+      let activeUser = null;
+      if (activeId) {
+        activeUser = savedPersonas.find((p) => p.id == activeId);
+      }
+      if (!activeUser && savedPersonas.length > 0) {
+        activeUser = savedPersonas[0];
+      }
+      if (activeUser?.name) {
+        setActiveUserName(activeUser.name);
+      }
+    } catch (e) {}
+
+    // 2. 加载传讯名士列表
+    const loadChars = async () => {
+      try {
+        let list = [];
+        if (window.chatCharacterStore) {
+          list = await window.chatCharacterStore.getAll();
+        } else {
+          list = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const valid = (list || []).filter(
+          (c) => !String(c.id).startsWith("group") && c.type !== "decor"
+        );
+        setAvailableChars(valid);
+      } catch (e) {}
+    };
+    loadChars();
+
+    // 3. 加载 IndexedDB 历史推演
+    refreshHistory();
+  }, []);
+
+  // 计时器效果
+  useEffect(() => {
+    if (isGenerating) {
+      setElapsedSeconds(0);
+      timerRef.current = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    } else {
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+        timerRef.current = null;
+      }
+    }
+    return () => {
+      if (timerRef.current) clearInterval(timerRef.current);
+    };
+  }, [isGenerating]);
+
+  const switchMode = (m) => {
+    setButterflyMode(m);
+    try {
+      localStorage.setItem("butterfly_mode", m);
+    } catch (e) {}
+  };
+
+  const toggleSelectChar = (id) => {
+    setSelectedCharIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  // 获取名士24小时真实聊天记录
+  const getChar24hChat = async (charName, charId) => {
+    let msgs = [];
+    try {
+      if (window.chatHistoryStore) {
+        if (charId) {
+          const res = await window.chatHistoryStore.getMessages(charId, 1, 80);
+          if (res?.messages?.length) msgs = res.messages;
+        }
+        if (msgs.length === 0 && charName) {
+          const res = await window.chatHistoryStore.getMessages(charName, 1, 80);
+          if (res?.messages?.length) msgs = res.messages;
+        }
+      }
+      if (msgs.length === 0) {
+        const raw =
+          localStorage.getItem(`t8_chat_history_${charName}`) ||
+          (charId ? localStorage.getItem(`t8_chat_history_${charId}`) : null);
+        if (raw) msgs = JSON.parse(raw) || [];
+      }
+    } catch (e) {}
+
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    let recent = msgs.filter((m) => {
+      const ts =
+        m.timestamp || (typeof m.id === "number" && m.id > 1600000000000 ? m.id : null);
+      return ts ? ts >= oneDayAgo : false;
+    });
+    if (recent.length === 0 && msgs.length > 0) {
+      recent = msgs.slice(-15);
+    }
+    if (recent.length > 0) {
+      return recent
+        .map((m) => `${m.isMe ? "玩家" : charName}: ${m.text || m.content || ""}`)
+        .join("；\n");
+    }
+    return "暂无近期传讯互动";
+  };
 
   // 莫兰迪色值
   const colors = {
@@ -73850,29 +74632,27 @@ const ButterflyEffectPage = ({ onBack }) => {
     setEffectData([]); // 清空旧数据
 
     try {
-      // 获取世界书设定
-      const worldContext = window.getWorldBookContext
-        ? await window.getWorldBookContext()
-        : "无特定背景设定";
+      let sysPrompt = "";
+      let userPrompt = "";
+      let involvedNamesForHistory = [];
 
-      const sysPrompt = "你是一个精通东汉历史、蝴蝶效应推演及人性洞察的大师。";
-      const userPrompt = `
-                        【世界设定】
-                        ${worldContext}
+      if (butterflyMode === "standalone") {
+        // 独立模式：不带世界书设定，支持现代、科幻、日常与全题材因果推演
+        sysPrompt = "你是一个精通混沌理论、蝴蝶效应推演与万物因果逻辑的大师。";
+        userPrompt = `
+                        【推演模式】：自由独立模式（不依赖特定世界书或历史背景）
 
                         【起源事件】
                         ${inputText}
 
                         【推演任务】
-                        基于上述起源，严格符合东汉史实推演蝴蝶效应的16个事件节点。
+                        请以起源事件为原点，遵循纯粹的因果涟漪与蝴蝶效应，严格推演 16 个事件节点：
                         - 节点 15 是【转折点】：好坏都会经历的一环，直接承接起源事件，它是分歧的共同连接点。
-                        - 节点 0,1,2,3,11,12,13,14 是【好结局线】：从左到右依次递进 (0->1->2->3->11->12->13->14)，后一个事件必须和前一个事件有关联，开端承接转折点15，最终导向一个相对圆满或给人希望的结局。
+                        - 节点 0,1,2,3,11,12,13,14 是【好结局线】：从左到右依次递进 (0->1->2->3->11->12->13->14)，后一个事件必须和前一个事件有关联，开端承接转折点15，最终导向一个相对圆满、破局或充满希望的结局。
                         - 节点 4,5,6,7,8,9,10 是【坏结局线】：从左到右依次递进 (4->5->6->7->8->9->10)，后一个事件必须和前一个事件有关联，开端承接转折点15，最终导向一个残缺、悲惨或混乱的结局。
 
-                        【重要提示】
-                        - 事件可以是日常生活中的小事，也可以是大格局或重大历史事件
-                        - 注重细节和真实感，让事件更贴近普通人的生活
-                        - 保持东汉时期的背景设定。
+                        【题材与风格】：
+                        完全根据玩家输入的起源事件题材（现代都市、科幻未来、古代江湖、日常生活、哲学假设或奇幻世界）自由演进，不受特定朝代约束，注重层层因果链条的严密性与逻辑真实感！
 
                         【输出格式严格要求】
                         必须返回一个长度严格为 16 的纯 JSON 数组，数组对象的 id 必须是从 0 到 15。
@@ -73880,13 +74660,101 @@ const ButterflyEffectPage = ({ onBack }) => {
                         数组每个对象的结构如下：
                         {
                           "id": 数字索引(0-15),
-                          "name": "事件关联人（或物品）的姓名",
-                          "identity": "关联人的身份",
-                          "content": "事件具体内容（3到5句话，层层递进）",
-                          "original": "原本走向（若起源未发生，本来的日常轨迹）",
+                          "name": "事件关联人（或核心关键物品/组织）的名字",
+                          "identity": "关联人或对象的身份标签",
+                          "content": "事件具体内容（3到5句话，因果层层递进）",
+                          "original": "原本走向（若起源事件未发生，本来的日常轨迹）",
                           "svgHtml": "一段表示此事件的简单几何SVG代码，宽高视口为 viewBox='0 0 100 100'，颜色建议符合该节点氛围，代码中可以加点行内CSS交互效果"
                         }
                         `;
+      } else {
+        // 联动模式：深度引入【开启的世界书条目】+【玩家身份配置】+【选中名士全部深度人设】+【24h真实聊天互动】
+        const worldContext = window.getWorldBookContext
+          ? await window.getWorldBookContext()
+          : "无特定背景设定";
+
+        // 1. 用户身份配置
+        let userPersonaPrompt = "";
+        if (selectedCharIds.includes("user")) {
+          try {
+            const savedPersonas = JSON.parse(
+              localStorage.getItem("user_personas") || "[]"
+            );
+            const activeId = localStorage.getItem("active_persona_id");
+            let activeUser = null;
+            if (activeId) {
+              activeUser = savedPersonas.find((p) => p.id == activeId);
+            }
+            if (!activeUser && savedPersonas.length > 0) {
+              activeUser = savedPersonas[0];
+            }
+            if (activeUser) {
+              userPersonaPrompt = `【玩家（我）在设置中的身份配置】：\n- 姓名：${activeUser.name}\n- 身份背景：${activeUser.identity || activeUser.background || "广陵王/绣衣楼主"}\n- 性格特质：${activeUser.personality || "性格立体"}\n- 详细外貌与特质：${activeUser.description || activeUser.appearance || "未详"}\n`;
+            }
+          } catch (e) {}
+        }
+
+        // 2. 提取勾选的传讯角色深度设定与近24h聊天
+        const selectedCharObjs = availableChars.filter((c) =>
+          selectedCharIds.includes(c.id)
+        );
+        let charsPromptParts = [];
+        for (const char of selectedCharObjs) {
+          const charName = char.name || char.profile?.name || "名士";
+          // 深度人设 (来自 getFullCharacterSetting)
+          const fullProfile = typeof getFullCharacterSetting === "function"
+            ? await getFullCharacterSetting(charName, char.id)
+            : "";
+          // 24小时真实聊天
+          const chat24h = await getChar24hChat(charName, char.id);
+          charsPromptParts.push(`【关联名士：${charName}】\n1. 角色配置库中的全部深度设定：\n${fullProfile || "性格鲜明，言行符合人物身份与背景"}\n2. 与玩家近24小时真实聊天记录：\n${chat24h || "暂无近期传讯互动"}`);
+        }
+        const charsContext = charsPromptParts.join("\n\n--------------------\n\n");
+
+        involvedNamesForHistory = [
+          selectedCharIds.includes("user") ? `我(${activeUserName})` : null,
+          ...selectedCharObjs.map((c) => c.name || c.profile?.name)
+        ].filter(Boolean);
+
+        sysPrompt = "你是一个精通东汉历史、广陵天下局势、多角色人际心理羁绊、蝴蝶效应推演及人性洞察的大师。";
+        userPrompt = `
+                        【推演模式】：世界设定与角色深度联动模式
+
+                        【世界设定（设置-世界书设置中开启的条目）】
+                        ${worldContext}
+
+                        ${userPersonaPrompt ? `${userPersonaPrompt}\n` : ""}
+                        ${charsContext ? `【推演涉及的关键名士（传讯角色配置库深度设定与近24h聊天）】：\n${charsContext}\n` : ""}
+
+                        【起源事件】
+                        ${inputText}
+
+                        【推演任务与多角色互动铁律】
+                        基于上述起源事件，结合涉及角色【${involvedNamesForHistory.join("、") || "相关人物"}】的【世界设定、身份配置、深度人设口吻、以及近24小时真实互动历史与羁绊】：
+                        请推演该起源事件在这些人之间引发的 16 个蝴蝶效应事件节点：
+                        - 节点 15 是【转折点】：好坏都会经历的一环，直接承接起源事件，它是分歧的共同连接点。
+                        - 节点 0,1,2,3,11,12,13,14 是【好结局线】：从左到右依次递进 (0->1->2->3->11->12->13->14)，后一个事件必须和前一个事件有关联，开端承接转折点15，看各方如何通过智慧、坦白、化解误会或机缘巧合，最终导向一个相对圆满、破局或充满希望的结局。
+                        - 节点 4,5,6,7,8,9,10 是【坏结局线】：从左到右依次递进 (4->5->6->7->8->9->10)，后一个事件必须和前一个事件有关联，开端承接转折点15，看猜忌、冲突激化、性格弱点碰撞如何一步步导致惨烈、失控、流血或悲剧收场。
+
+                        【多角色交互与人设还原要求】
+                        1. 深度还原涉及名士的性格特质与说话行事风格（如张飞的暴烈刚直粗中有细、张绣的敏感多疑与军阀决断、孙策的霸道热烈少年意气、袁基的温润优雅与腹黑谋局、左慈的玄微深邃等）；
+                        2. 充分呼应玩家的身份配置与近 24 小时聊天的情感基调；
+                        3. 注重因果关系的戏剧张力与情节真实感。
+
+                        【输出格式严格要求】
+                        必须返回一个长度严格为 16 的纯 JSON 数组，数组对象的 id 必须是从 0 到 15。
+                        请绝对不要包含 Markdown 代码块（如 \`\`\`json ），直接以 [ 开始，] 结尾。
+                        数组每个对象的结构如下：
+                        {
+                          "id": 数字索引(0-15),
+                          "name": "事件关联人（或物品/事件核心）的名字",
+                          "identity": "关联人的身份标签（如：宛城军阀 / 蜀汉猛将 / 绣衣楼主等）",
+                          "content": "事件具体内容（3到5句话，描写生动，因果层层递进）",
+                          "original": "原本走向（若起源事件未发生，本来的日常轨迹）",
+                          "svgHtml": "一段表示此事件的简单几何SVG代码，宽高视口为 viewBox='0 0 100 100'，颜色建议符合该节点氛围，代码中可以加点行内CSS交互效果"
+                        }
+                        `;
+      }
 
       if (window.sendToLLM) {
         window.sendToLLM(
@@ -73895,14 +74763,27 @@ const ButterflyEffectPage = ({ onBack }) => {
             { role: "user", content: userPrompt },
           ],
           null,
-          (reply) => {
+          async (reply) => {
             try {
-              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
+              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/\`\`\`json|\`\`\`/g, "").trim());
               if (Array.isArray(data) && data.length === 16) {
                 // 将数据通过 id 排序以便匹配
                 data.sort((a, b) => a.id - b.id);
                 setEffectData(data);
-                alert("蝴蝶效应推演完成！\n请点击页面上的圆点查看命运分歧。");
+
+                // 方向三：存入 IndexedDB 历史卷宗
+                const record = {
+                  id: Date.now(),
+                  timeStr: new Date().toLocaleString(),
+                  mode: butterflyMode,
+                  origin: inputText,
+                  involved: involvedNamesForHistory,
+                  nodes: data
+                };
+                await saveButterflyHistory(record);
+                refreshHistory();
+
+                alert("蝴蝶效应推演完成并已收录于卷宗！\n请点击页面上的圆点查看命运分歧。");
               } else {
                 throw new Error("返回的数组长度不足或结构异常");
               }
@@ -73943,6 +74824,37 @@ const ButterflyEffectPage = ({ onBack }) => {
     }
   };
 
+  // 从历史卷宗载入推演
+  const loadHistoryItem = (item) => {
+    setEffectData(item.nodes || []);
+    setInputText(item.origin || "");
+    setButterflyMode(item.mode || "standalone");
+    setShowHistoryModal(false);
+    alert(`已回溯并载入卷宗：${item.origin}`);
+  };
+
+  // 删除历史卷宗
+  const handleDeleteHistory = async (id, e) => {
+    e.stopPropagation();
+    if (confirm("确定要销毁这卷推演手札吗？")) {
+      await deleteButterflyHistory(id);
+      refreshHistory();
+    }
+  };
+
+  const placeholderText =
+    butterflyMode === "standalone"
+      ? "输入任意起源（现代/科幻/日常/脑洞），扇动命运的翅膀..."
+      : "输入东汉/广陵命运分歧假设，推演天下暗河波澜...";
+
+  // 动态加载状态文字
+  const getLoadingStatusText = () => {
+    if (elapsedSeconds < 4) return "正在凝聚因果原点，读取世界设定与人物生平...";
+    if (elapsedSeconds < 8) return "正在推演好坏因果分歧，勾勒命运分歧网络...";
+    if (elapsedSeconds < 14) return "正在编织16个命运节点与几何意象...";
+    return "天机浩渺，正在完成最后的命运收束...";
+  };
+
   return (
     <div
       className="butterfly-effect-overlay open"
@@ -73960,22 +74872,140 @@ const ButterflyEffectPage = ({ onBack }) => {
         overflow: "hidden",
       }}
     >
-      {/* 顶部返回按钮 */}
+      {/* 顶部导航栏：模式切换 + 卷宗档案 + 关闭 */}
       <div
-        className="be-back-btn"
-        onClick={onBack}
         style={{
           position: "absolute",
-          top: "40px",
-          right: "25px",
-          color: "#ffffff",
-          fontSize: "24px",
-          cursor: "pointer",
-          opacity: 0.8,
+          top: "35px",
+          left: "20px",
+          right: "20px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
           zIndex: 20,
         }}
       >
-        ✕
+        {/* 模式切换双态胶囊开关 */}
+        <div
+          style={{
+            display: "inline-flex",
+            backgroundColor: "rgba(255, 255, 255, 0.08)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            border: "1px solid rgba(255, 255, 255, 0.15)",
+            borderRadius: "20px",
+            padding: "3px",
+            gap: "3px",
+            boxShadow: "0 4px 15px rgba(0, 0, 0, 0.35)",
+          }}
+        >
+          <button
+            onClick={() => switchMode("standalone")}
+            style={{
+              padding: "5px 12px",
+              borderRadius: "16px",
+              border: "none",
+              fontSize: "12px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+              backgroundColor: butterflyMode === "standalone" ? "#FF9B9B" : "transparent",
+              color: butterflyMode === "standalone" ? "#1A1A1A" : "rgba(255, 255, 255, 0.65)",
+              boxShadow: butterflyMode === "standalone" ? "0 2px 8px rgba(255, 155, 155, 0.5)" : "none",
+            }}
+          >
+            🌐 自由独立
+          </button>
+          <button
+            onClick={() => switchMode("linked")}
+            style={{
+              padding: "5px 12px",
+              borderRadius: "16px",
+              border: "none",
+              fontSize: "12px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              transition: "all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+              backgroundColor: butterflyMode === "linked" ? "#D6724B" : "transparent",
+              color: butterflyMode === "linked" ? "#FFFFFF" : "rgba(255, 255, 255, 0.65)",
+              boxShadow: butterflyMode === "linked" ? "0 2px 8px rgba(214, 114, 75, 0.5)" : "none",
+            }}
+          >
+            🏛️ 世界联动
+          </button>
+        </div>
+
+        {/* 右侧功能组：历史卷宗按钮 + 关闭按钮 */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
+          {/* 卷宗档案库按钮 */}
+          <button
+            onClick={() => {
+              refreshHistory();
+              setShowHistoryModal(true);
+            }}
+            style={{
+              padding: "6px 12px",
+              borderRadius: "16px",
+              border: "1px solid rgba(255, 255, 255, 0.15)",
+              backgroundColor: "rgba(255, 255, 255, 0.08)",
+              backdropFilter: "blur(10px)",
+              WebkitBackdropFilter: "blur(10px)",
+              color: "#FFFFFF",
+              fontSize: "12px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "4px",
+              transition: "all 0.2s ease",
+            }}
+          >
+            <span>📜 卷宗档案</span>
+            {historyList.length > 0 && (
+              <span
+                style={{
+                  backgroundColor: "#FF9B9B",
+                  color: "#1A1A1A",
+                  borderRadius: "10px",
+                  padding: "1px 6px",
+                  fontSize: "10px",
+                  fontWeight: "bold",
+                }}
+              >
+                {historyList.length}
+              </span>
+            )}
+          </button>
+
+          {/* 关闭返回按钮 */}
+          <div
+            className="be-back-btn"
+            onClick={onBack}
+            style={{
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              backgroundColor: "rgba(255, 255, 255, 0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              color: "#ffffff",
+              fontSize: "18px",
+              cursor: "pointer",
+              opacity: 0.85,
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              transition: "all 0.2s",
+            }}
+          >
+            ✕
+          </div>
+        </div>
       </div>
 
       {/* 圆点排列舞台 */}
@@ -74020,24 +75050,134 @@ const ButterflyEffectPage = ({ onBack }) => {
         ))}
       </div>
 
+      {/* 联动模式下：角色多选托盘 */}
+      {butterflyMode === "linked" && (
+        <div
+          style={{
+            position: "absolute",
+            bottom: "152px",
+            width: "86%",
+            maxWidth: "430px",
+            backgroundColor: "rgba(22, 22, 22, 0.8)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            borderRadius: "16px",
+            padding: "8px 12px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "6px",
+            boxShadow: "0 6px 20px rgba(0,0,0,0.45)",
+            zIndex: 25,
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              fontSize: "11px",
+              color: "rgba(255, 255, 255, 0.65)",
+            }}
+          >
+            <span>🎭 勾选参与推演的角色（联动人设与24h聊天）：</span>
+            <span style={{ color: "#D6724B", fontWeight: "bold" }}>
+              已选 {selectedCharIds.length} 位
+            </span>
+          </div>
+          <div
+            style={{
+              display: "flex",
+              gap: "6px",
+              overflowX: "auto",
+              paddingBottom: "4px",
+              scrollbarWidth: "none",
+            }}
+          >
+            {/* 玩家自己 */}
+            <div
+              onClick={() => toggleSelectChar("user")}
+              style={{
+                padding: "4px 10px",
+                borderRadius: "12px",
+                fontSize: "11px",
+                fontWeight: "bold",
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                whiteSpace: "nowrap",
+                backgroundColor: selectedCharIds.includes("user")
+                  ? "rgba(255, 155, 155, 0.25)"
+                  : "rgba(255, 255, 255, 0.06)",
+                border: selectedCharIds.includes("user")
+                  ? "1.5px solid #FF9B9B"
+                  : "1px solid rgba(255, 255, 255, 0.1)",
+                color: selectedCharIds.includes("user")
+                  ? "#FFB4B4"
+                  : "rgba(255, 255, 255, 0.7)",
+                transition: "all 0.2s",
+              }}
+            >
+              <span>👑 我</span>
+              {activeUserName ? `(${activeUserName})` : ""}
+              {selectedCharIds.includes("user") ? "✓" : ""}
+            </div>
+            {/* 传讯角色列表 */}
+            {availableChars.map((c) => {
+              const isSelected = selectedCharIds.includes(c.id);
+              const name = c.name || c.profile?.name || "名士";
+              return (
+                <div
+                  key={c.id}
+                  onClick={() => toggleSelectChar(c.id)}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "12px",
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    gap: "4px",
+                    whiteSpace: "nowrap",
+                    backgroundColor: isSelected
+                      ? "rgba(214, 114, 75, 0.3)"
+                      : "rgba(255, 255, 255, 0.06)",
+                    border: isSelected
+                      ? "1.5px solid #D6724B"
+                      : "1px solid rgba(255, 255, 255, 0.1)",
+                    color: isSelected ? "#FFAA85" : "rgba(255, 255, 255, 0.7)",
+                    transition: "all 0.2s",
+                  }}
+                >
+                  {name}
+                  {isSelected ? "✓" : ""}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* 底部虚线输入和发送按钮 */}
       <div
         style={{
           position: "absolute",
-          bottom: "100px",
+          bottom: "90px",
           display: "flex",
           alignItems: "center",
           gap: "10px",
-          width: "80%",
-          maxWidth: "400px",
+          width: "86%",
+          maxWidth: "430px",
         }}
       >
         <div
           style={{
             flex: 1,
-            borderBottom: "3px dashed white",
+            borderBottom: "3px dashed rgba(255,255,255,0.85)",
             position: "relative",
-            height: "30px",
+            height: "32px",
           }}
         >
           {isEditing ? (
@@ -74056,7 +75196,7 @@ const ButterflyEffectPage = ({ onBack }) => {
                 textAlign: "center",
                 position: "absolute",
                 bottom: "-5px",
-                fontSize: "16px",
+                fontSize: "15px",
                 fontFamily: "inherit",
               }}
             />
@@ -74073,12 +75213,15 @@ const ButterflyEffectPage = ({ onBack }) => {
                 alignItems: "flex-end",
                 justifyContent: "center",
                 paddingBottom: "5px",
-                fontSize: "15px",
-                opacity: inputText ? 1 : 0.6,
+                fontSize: "14px",
+                opacity: inputText ? 1 : 0.65,
                 fontFamily: "inherit",
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+                textOverflow: "ellipsis",
               }}
             >
-              {inputText || "在此输入起源，扇动命运的翅膀..."}
+              {inputText || placeholderText}
             </div>
           )}
         </div>
@@ -74091,7 +75234,9 @@ const ButterflyEffectPage = ({ onBack }) => {
             height: "42px",
             backgroundColor:
               inputText.trim() && !isGenerating
-                ? "#FF9B9B"
+                ? butterflyMode === "standalone"
+                  ? "#FF9B9B"
+                  : "#D6724B"
                 : "rgba(255, 155, 155, 0.3)",
             borderRadius: "50%",
             cursor:
@@ -74120,7 +75265,330 @@ const ButterflyEffectPage = ({ onBack }) => {
         </div>
       </div>
 
-      {/* 弹出的卡片层 */}
+      {/* 加载中沉浸式遮罩与计时器 */}
+      {isGenerating && (
+        <div
+          style={{
+            position: "absolute",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.8)",
+            backdropFilter: "blur(16px)",
+            WebkitBackdropFilter: "blur(16px)",
+            zIndex: 300,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "20px",
+            animation: "fadeIn 0.3s ease",
+          }}
+        >
+          {/* 发光动态光环与蝴蝶 */}
+          <div
+            style={{
+              position: "relative",
+              width: "100px",
+              height: "100px",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+            }}
+          >
+            {/* 旋转光圈 */}
+            <div
+              style={{
+                position: "absolute",
+                inset: 0,
+                borderRadius: "50%",
+                border: "3px solid transparent",
+                borderTopColor: "#FF9B9B",
+                borderRightColor: "#D6724B",
+                animation: "spin 1.5s linear infinite",
+              }}
+            />
+            <span style={{ fontSize: "36px" }}>🦋</span>
+          </div>
+
+          {/* 标题与计时 */}
+          <div
+            style={{
+              textAlign: "center",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px",
+            }}
+          >
+            <div
+              style={{
+                fontSize: "18px",
+                fontWeight: "bold",
+                color: "#FFFFFF",
+                letterSpacing: "1px",
+              }}
+            >
+              命运暗河推演中...
+            </div>
+            {/* 实时计时牌 */}
+            <div
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                backgroundColor: "rgba(255, 255, 255, 0.1)",
+                padding: "4px 14px",
+                borderRadius: "20px",
+                border: "1px solid rgba(255, 255, 255, 0.2)",
+                fontSize: "13px",
+                color: "#FFB4B4",
+                fontWeight: "bold",
+              }}
+            >
+              <span>⏱️ 已推演：</span>
+              <span>{elapsedSeconds} 秒</span>
+            </div>
+            {/* 动态推演阶段提示语 */}
+            <div
+              style={{
+                fontSize: "12px",
+                color: "rgba(255, 255, 255, 0.65)",
+                maxWidth: "280px",
+                lineHeight: "1.5",
+                marginTop: "4px",
+              }}
+            >
+              {getLoadingStatusText()}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 方向三：往期推演卷宗档案库 Modal */}
+      {showHistoryModal && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            backgroundColor: "rgba(0, 0, 0, 0.75)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            zIndex: 400,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "500px",
+              maxHeight: "80vh",
+              backgroundColor: "rgba(24, 24, 24, 0.98)",
+              borderTopLeftRadius: "24px",
+              borderTopRightRadius: "24px",
+              border: "1px solid rgba(255, 255, 255, 0.12)",
+              borderBottom: "none",
+              padding: "24px 20px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "16px",
+              animation:
+                "slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
+              color: "#FFFFFF",
+            }}
+          >
+            {/* 卷宗标题栏 */}
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                borderBottom: "1px solid rgba(255, 255, 255, 0.1)",
+                paddingBottom: "12px",
+              }}
+            >
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "17px",
+                    fontWeight: "bold",
+                    letterSpacing: "1px",
+                  }}
+                >
+                  📜 蝴蝶效应 · 往期推演卷宗
+                </span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    backgroundColor: "rgba(255, 255, 255, 0.1)",
+                    padding: "2px 8px",
+                    borderRadius: "10px",
+                    color: "rgba(255,255,255,0.7)",
+                  }}
+                >
+                  共 {historyList.length} 卷
+                </span>
+              </div>
+              <button
+                onClick={() => setShowHistoryModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#FFFFFF",
+                  fontSize: "22px",
+                  cursor: "pointer",
+                  opacity: 0.7,
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 卷宗列表 */}
+            <div
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                overflowY: "auto",
+                maxHeight: "60vh",
+                paddingRight: "4px",
+              }}
+            >
+              {historyList.length === 0 ? (
+                <div
+                  style={{
+                    textAlign: "center",
+                    padding: "40px 20px",
+                    color: "rgba(255, 255, 255, 0.4)",
+                    fontSize: "13px",
+                  }}
+                >
+                  暂无往期卷宗手札。输入起源并推演后，将自动存入此案卷库~
+                </div>
+              ) : (
+                historyList.map((item) => (
+                  <div
+                    key={item.id}
+                    onClick={() => loadHistoryItem(item)}
+                    style={{
+                      backgroundColor: "rgba(255, 255, 255, 0.05)",
+                      border: "1px solid rgba(255, 255, 255, 0.1)",
+                      borderRadius: "14px",
+                      padding: "14px 16px",
+                      cursor: "pointer",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "8px",
+                      transition: "all 0.2s",
+                    }}
+                  >
+                    {/* 头部标签与时间 */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                      }}
+                    >
+                      <div
+                        style={{
+                          display: "flex",
+                          gap: "6px",
+                          alignItems: "center",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            fontWeight: "bold",
+                            padding: "2px 8px",
+                            borderRadius: "8px",
+                            backgroundColor:
+                              item.mode === "linked"
+                                ? "rgba(214, 114, 75, 0.3)"
+                                : "rgba(255, 155, 155, 0.25)",
+                            color:
+                              item.mode === "linked" ? "#FFAA85" : "#FFB4B4",
+                            border:
+                              item.mode === "linked"
+                                ? "1px solid #D6724B"
+                                : "1px solid #FF9B9B",
+                          }}
+                        >
+                          {item.mode === "linked" ? "🏛️ 联动" : "🌐 独立"}
+                        </span>
+                        {item.involved && item.involved.length > 0 && (
+                          <span
+                            style={{
+                              fontSize: "11px",
+                              color: "rgba(255,255,255,0.7)",
+                            }}
+                          >
+                            🎭 {item.involved.join("、")}
+                          </span>
+                        )}
+                      </div>
+                      {/* 删除按钮 */}
+                      <button
+                        onClick={(e) => handleDeleteHistory(item.id, e)}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "rgba(255,255,255,0.4)",
+                          fontSize: "12px",
+                          cursor: "pointer",
+                          padding: "2px 6px",
+                        }}
+                      >
+                        🗑️
+                      </button>
+                    </div>
+
+                    {/* 起源内容 */}
+                    <div
+                      style={{
+                        fontSize: "14px",
+                        fontWeight: "bold",
+                        color: "rgba(255,255,255,0.9)",
+                        lineHeight: "1.4",
+                      }}
+                    >
+                      {item.origin}
+                    </div>
+
+                    {/* 底部时间与节点信息 */}
+                    <div
+                      style={{
+                        display: "flex",
+                        justifyContent: "space-between",
+                        alignItems: "center",
+                        fontSize: "11px",
+                        color: "rgba(255,255,255,0.4)",
+                      }}
+                    >
+                      <span>{item.timeStr || "推演记录"}</span>
+                      <span
+                        style={{ color: "#FF9B9B", fontWeight: "bold" }}
+                      >
+                        ✨ 点击回溯载入星盘 ➔
+                      </span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 弹出的单个圆点卡片层 */}
       {showModal && selectedDot && (
         <div
           style={{
@@ -74128,18 +75596,21 @@ const ButterflyEffectPage = ({ onBack }) => {
             bottom: 0,
             left: 0,
             right: 0,
-            background: "rgba(30, 30, 30, 0.95)",
-            backdropFilter: "blur(12px)",
+            background: "rgba(25, 25, 25, 0.95)",
+            backdropFilter: "blur(14px)",
+            WebkitBackdropFilter: "blur(14px)",
             borderTopLeftRadius: "24px",
             borderTopRightRadius: "24px",
             padding: "30px 24px",
-            boxShadow: "0 -10px 40px rgba(0,0,0,0.5)",
+            boxShadow: "0 -10px 40px rgba(0,0,0,0.6)",
             zIndex: 100,
             animation:
               "slideUp 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards",
             color: "#fff",
             maxHeight: "85vh",
             overflowY: "auto",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            borderBottom: "none",
           }}
         >
           <div
@@ -74218,102 +75689,90 @@ const ButterflyEffectPage = ({ onBack }) => {
 
           <div
             style={{
-              background: "rgba(255,255,255,0.08)",
-              padding: "16px",
-              borderRadius: "12px",
-              marginBottom: "16px",
-              borderLeft: "4px solid #FF9B9B",
+              display: "flex",
+              flexDirection: "column",
+              gap: "15px",
+              lineHeight: 1.6,
+              fontSize: "14px",
             }}
           >
             <div
               style={{
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.5)",
-                marginBottom: "8px",
-                fontWeight: "bold",
+                backgroundColor: "rgba(255, 255, 255, 0.05)",
+                padding: "16px",
+                borderRadius: "12px",
+                borderLeft: `4px solid ${
+                  selectedDot.type === "好结局"
+                    ? "#FFFFFF"
+                    : selectedDot.type === "坏结局"
+                      ? "#A0A0A0"
+                      : "#FF9B9B"
+                }`,
               }}
             >
-              事件内容
+              <div
+                style={{
+                  fontWeight: "bold",
+                  marginBottom: "6px",
+                  color: "rgba(255,255,255,0.8)",
+                }}
+              >
+                【命运分歧事件】
+              </div>
+              <div>{selectedDot.content}</div>
             </div>
-            <div
-              style={{
-                fontSize: "14px",
-                lineHeight: "1.7",
-                letterSpacing: "1px",
-                color: "rgba(255,255,255,0.95)",
-              }}
-            >
-              {selectedDot.content}
-            </div>
-          </div>
 
-          <div
-            style={{
-              background: "rgba(255,255,255,0.05)",
-              padding: "16px",
-              borderRadius: "12px",
-              marginBottom: "24px",
-              borderLeft: "4px solid #A0A0A0",
-            }}
-          >
             <div
               style={{
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.5)",
-                marginBottom: "8px",
-                fontWeight: "bold",
+                backgroundColor: "rgba(255, 255, 255, 0.02)",
+                padding: "16px",
+                borderRadius: "12px",
               }}
             >
-              原本走向
+              <div
+                style={{
+                  fontWeight: "bold",
+                  marginBottom: "6px",
+                  color: "rgba(255,255,255,0.5)",
+                }}
+              >
+                【原本日常轨迹】
+              </div>
+              <div style={{ color: "rgba(255,255,255,0.6)" }}>
+                {selectedDot.original}
+              </div>
             </div>
-            <div
-              style={{
-                fontSize: "13px",
-                lineHeight: "1.7",
-                color: "rgba(255,255,255,0.7)",
-              }}
-            >
-              {selectedDot.original}
-            </div>
-          </div>
 
-          <div
-            style={{
-              textAlign: "center",
-              marginTop: "10px",
-              paddingBottom: "20px",
-            }}
-          >
-            <div
-              style={{
-                fontSize: "12px",
-                color: "rgba(255,255,255,0.4)",
-                marginBottom: "12px",
-                letterSpacing: "2px",
-              }}
-            >
-              - 象形之意 -
-            </div>
-            <div
-              style={{
-                width: "100px",
-                height: "100px",
-                margin: "0 auto",
-                background: "rgba(0,0,0,0.4)",
-                borderRadius: "16px",
-                padding: "15px",
-                boxShadow: "inset 0 0 10px rgba(0,0,0,0.5)",
-                cursor: "pointer",
-                transition: "transform 0.3s ease",
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.transform = "scale(1.1)")
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.transform = "scale(1)")
-              }
-              dangerouslySetInnerHTML={{ __html: selectedDot.svgHtml }}
-            />
+            {selectedDot.svgHtml && (
+              <div
+                style={{
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: "center",
+                  marginTop: "10px",
+                }}
+              >
+                <div
+                  dangerouslySetInnerHTML={{ __html: selectedDot.svgHtml }}
+                  style={{
+                    width: "80px",
+                    height: "80px",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: "11px",
+                    color: "rgba(255,255,255,0.4)",
+                    marginTop: "6px",
+                  }}
+                >
+                  命运几何意象
+                </span>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -74321,49 +75780,588 @@ const ButterflyEffectPage = ({ onBack }) => {
   );
 };
 
-// ------------------- (插入位置6: const MasterApp = () => { 上方定义组件) -------------------
 
 const SandTablePage = ({ onBack }) => {
-  const [elements, setElements] = React.useState([]);
-  const [navCollapsed, setNavCollapsed] = React.useState(false);
-  const [scale, setScale] = React.useState(1);
-  const [lastDistance, setLastDistance] = React.useState(0);
-  const [selectedElement, setSelectedElement] = React.useState(null);
-  const [showWriteModal, setShowWriteModal] = React.useState(false);
-  const [writeContent, setWriteContent] = React.useState("");
+  const { useState, useEffect, useRef } = React;
 
-  // --- 新增推演系统状态 ---
-  const [simulationSteps, setSimulationSteps] = React.useState([]);
-  const [currentStep, setCurrentStep] = React.useState(-1);
-  const [showSimulationModal, setShowSimulationModal] = React.useState(false);
-  const [isSimulating, setIsSimulating] = React.useState(false);
-  const [simulationModalCollapsed, setSimulationModalCollapsed] =
-    React.useState(false);
+  // --- 沙盘核心状态 ---
+  const [elements, setElements] = useState([]);
+  const [navCollapsed, setNavCollapsed] = useState(false);
+  const [scale, setScale] = useState(1);
+  const [lastDistance, setLastDistance] = useState(0);
+  const [selectedElement, setSelectedElement] = useState(null);
+  const [showWriteModal, setShowWriteModal] = useState(false);
+  const [writeContent, setWriteContent] = useState("");
+
+  // --- 推演系统状态 ---
+  const [simulationSteps, setSimulationSteps] = useState([]);
+  const [currentStep, setCurrentStep] = useState(-1);
+  const [showSimulationModal, setShowSimulationModal] = useState(false);
+  const [isSimulating, setIsSimulating] = useState(false);
+  const [simulationModalCollapsed, setSimulationModalCollapsed] = useState(false);
 
   // --- 沙盘拖动状态 ---
-  const [isDragging, setIsDragging] = React.useState(false);
-  const [dragStart, setDragStart] = React.useState({ x: 0, y: 0 });
-  const [sandboxPosition, setSandboxPosition] = React.useState({
-    x: 0,
-    y: 0,
-  });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState({ x: 0, y: 0 });
+  const [sandboxPosition, setSandboxPosition] = useState({ x: 0, y: 0 });
 
-  // 新增状态
-  const [isGenerating, setIsGenerating] = React.useState(false);
-  const [inventory, setInventory] = React.useState([]); // 底部物品栏数据
-  const [detailItem, setDetailItem] = React.useState(null); // 当前查看详情的物品
-  const [isConnecting, setIsConnecting] = React.useState(false); // 是否处于连接模式
-  const [connections, setConnections] = React.useState([]); // 连接关系数组
-  const [showConnections, setShowConnections] = React.useState(true); // 是否显示连接线
+  // --- 物品栏与连线 ---
+  const [isGenerating, setIsGenerating] = useState(false);
+  const [inventory, setInventory] = useState([]);
+  const [detailItem, setDetailItem] = useState(null);
+  const [isConnecting, setIsConnecting] = useState(false);
+  const [connections, setConnections] = useState([]);
+  const [showConnections, setShowConnections] = useState(true);
 
-  // 添加物品到沙盘（同时扣除库存）
+  // --- 蝴蝶效应同款：随军名士参谋席与玩家身份配置 ---
+  const [availableChars, setAvailableChars] = useState([]);
+  const [selectedCharIds, setSelectedCharIds] = useState(["user"]);
+  const [activeUserName, setActiveUserName] = useState("我");
+  const [activeUserObj, setActiveUserObj] = useState(null);
+
+  // --- 战局存读档与《军机战报》导出状态 ---
+  const [currentSaveId, setCurrentSaveId] = useState(null);
+  const [savedSandTables, setSavedSandTables] = useState([]);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isExportingImage, setIsExportingImage] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const toastTimerRef = useRef(null);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(""), 2800);
+  };
+
+  // --- 初始化：加载玩家身份配置、传讯名士列表与沙盘存档 ---
+  useEffect(() => {
+    // 1. 获取玩家在身份配置库中的设定
+    try {
+      const savedPersonas = JSON.parse(
+        localStorage.getItem("user_personas") || "[]"
+      );
+      const activeId = localStorage.getItem("active_persona_id");
+      let activeUser = null;
+      if (activeId) {
+        activeUser = savedPersonas.find((p) => p.id == activeId);
+      }
+      if (!activeUser && savedPersonas.length > 0) {
+        activeUser = savedPersonas[0];
+      }
+      if (activeUser) {
+        setActiveUserObj(activeUser);
+        setActiveUserName(activeUser.name || "我");
+      }
+    } catch (e) {}
+
+    // 2. 加载传讯录名士列表
+    const loadChars = async () => {
+      try {
+        let list = [];
+        if (window.chatCharacterStore) {
+          list = await window.chatCharacterStore.getAll();
+        } else {
+          list = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+        }
+        const valid = (list || []).filter(
+          (c) => !String(c.id).startsWith("group") && c.type !== "decor"
+        );
+        setAvailableChars(valid);
+      } catch (e) {}
+    };
+    loadChars();
+
+    // 3. 加载 IndexedDB 沙盘历史存档
+    const loadSavedSandTables = async () => {
+      try {
+        if (window.openDB) {
+          const db = await window.openDB();
+          const tx = db.transaction("user_settings", "readonly");
+          const store = tx.objectStore("user_settings");
+          const req = store.get("sandtable_saves");
+          req.onsuccess = () => {
+            if (Array.isArray(req.result?.value) && req.result.value.length > 0) {
+              setSavedSandTables(req.result.value);
+              return;
+            }
+          };
+        }
+      } catch (e) {}
+      try {
+        const local = JSON.parse(localStorage.getItem("sandtable_saves") || "[]");
+        if (Array.isArray(local) && local.length > 0) {
+          setSavedSandTables(local);
+        }
+      } catch (e) {}
+    };
+    loadSavedSandTables();
+  }, []);
+
+  // 切换随军名士选中状态
+  const toggleSelectChar = (id) => {
+    setSelectedCharIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
+    );
+  };
+
+  // 提取名士近24小时真实聊天记录
+  const getChar24hChat = async (charName, charId) => {
+    let msgs = [];
+    try {
+      if (window.chatHistoryStore) {
+        if (charId) {
+          const res = await window.chatHistoryStore.getMessages(charId, 1, 80);
+          if (res?.messages?.length) msgs = res.messages;
+        }
+        if (msgs.length === 0 && charName) {
+          const res = await window.chatHistoryStore.getMessages(charName, 1, 80);
+          if (res?.messages?.length) msgs = res.messages;
+        }
+      }
+      if (msgs.length === 0) {
+        const raw =
+          localStorage.getItem(`t8_chat_history_${charName}`) ||
+          (charId ? localStorage.getItem(`t8_chat_history_${charId}`) : null);
+        if (raw) msgs = JSON.parse(raw) || [];
+      }
+    } catch (e) {}
+
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    let recent = msgs.filter((m) => {
+      const ts =
+        m.timestamp || (typeof m.id === "number" && m.id > 1600000000000 ? m.id : null);
+      return ts ? ts >= oneDayAgo : false;
+    });
+    if (recent.length === 0 && msgs.length > 0) {
+      recent = msgs.slice(-15);
+    }
+    if (recent.length > 0) {
+      return recent
+        .map((m) => `${m.isMe ? "玩家" : charName}: ${m.text || m.content || ""}`)
+        .join("；\n");
+    }
+    return "暂无近期传讯互动";
+  };
+
+  // 持久化战局存档
+  const persistSandTables = async (saves) => {
+    setSavedSandTables(saves);
+    try {
+      localStorage.setItem("sandtable_saves", JSON.stringify(saves));
+    } catch (e) {}
+    try {
+      if (window.openDB) {
+        const db = await window.openDB();
+        const tx = db.transaction("user_settings", "readwrite");
+        const store = tx.objectStore("user_settings");
+        await store.put({ key: "sandtable_saves", value: saves });
+      }
+    } catch (e) {}
+  };
+
+  // 保存当前战局
+  const handleSaveSandTable = () => {
+    if (elements.length === 0 && !writeContent.trim() && inventory.length === 0) {
+      alert("当前沙盘空空如也，暂无可收录的战局内容！");
+      return;
+    }
+    const saveId = currentSaveId || Date.now();
+    setCurrentSaveId(saveId);
+
+    const titleText = writeContent.trim()
+      ? (writeContent.trim().length > 16 ? writeContent.trim().substring(0, 16) + "..." : writeContent.trim())
+      : (elements[0]?.detailInfo?.name ? `${elements[0].detailInfo.name}战局` : "未命名战役推演");
+
+    const newSave = {
+      id: saveId,
+      title: titleText,
+      writeContent: writeContent,
+      elements: elements,
+      inventory: inventory,
+      connections: connections,
+      simulationSteps: simulationSteps,
+      currentStep: currentStep,
+      scale: scale,
+      sandboxPosition: sandboxPosition,
+      selectedCharIds: selectedCharIds,
+      createTime: new Date().toLocaleString("zh-CN", { hour12: false }),
+      dateStr: new Date().toLocaleDateString("zh-CN"),
+    };
+    const updated = [newSave, ...savedSandTables.filter((s) => s.id !== saveId)];
+    persistSandTables(updated);
+    showToast(`✨ 战局《${titleText}》已收入军机推演录！`);
+  };
+
+  // 载入战局
+  const handleLoadSandTable = (save) => {
+    setElements(save.elements || []);
+    setInventory(save.inventory || []);
+    setConnections(save.connections || []);
+    setSimulationSteps(save.simulationSteps || []);
+    setCurrentStep(save.currentStep ?? -1);
+    setWriteContent(save.writeContent || "");
+    setScale(save.scale || 1);
+    setSandboxPosition(save.sandboxPosition || { x: 0, y: 0 });
+    if (save.selectedCharIds) {
+      setSelectedCharIds(save.selectedCharIds);
+    }
+    setCurrentSaveId(save.id);
+    setSelectedElement(null);
+    setDetailItem(null);
+    setShowArchiveModal(false);
+    if (save.simulationSteps && save.simulationSteps.length > 0) {
+      setShowSimulationModal(true);
+    }
+    showToast(`🗺️ 已载入战局《${save.title}》`);
+  };
+
+  // 删除战局
+  const handleDeleteSandTable = (e, id, title) => {
+    e.stopPropagation();
+    if (confirm(`确定要将战局《${title}》从推演录中抹去吗？`)) {
+      const updated = savedSandTables.filter((s) => s.id !== id);
+      persistSandTables(updated);
+      if (currentSaveId === id) {
+        setCurrentSaveId(null);
+      }
+      showToast(`已移除战局《${title}》`);
+    }
+  };
+
+  // 重置沙盘
+  const handleResetSandTable = () => {
+    if (elements.length > 0 || writeContent.trim()) {
+      if (!confirm("确定要重新布置沙盘吗？当前未保存的阵型与推演将被清空。")) return;
+    }
+    setElements([]);
+    setInventory([]);
+    setConnections([]);
+    setSimulationSteps([]);
+    setCurrentStep(-1);
+    setWriteContent("");
+    setScale(1);
+    setSandboxPosition({ x: 0, y: 0 });
+    setCurrentSaveId(null);
+    setSelectedElement(null);
+    setDetailItem(null);
+    setShowSimulationModal(false);
+    showToast("已清空沙盘，请点击「书写」重新构筑战局");
+  };
+
+  // 格式化军机战报文本
+  const getFormattedReportText = () => {
+    const titleText = writeContent.trim()
+      ? (writeContent.trim().length > 20 ? writeContent.trim().substring(0, 20) + "..." : writeContent.trim())
+      : "古风沙盘兵棋推演";
+
+    let text = `╔═════════════════════════════════════════════════╗\n`;
+    text += `   📜【军机密卷 · 沙盘推演战报】《${titleText}》\n`;
+    text += `╚═════════════════════════════════════════════════╝\n\n`;
+    text += `【战局背景】：\n${writeContent || "常规战局推演"}\n\n`;
+
+    // 随军参谋与统帅
+    const staffNames = [
+      selectedCharIds.includes("user") ? `统帅（${activeUserName}）` : null,
+      ...availableChars.filter((c) => selectedCharIds.includes(c.id)).map((c) => c.name || c.profile?.name)
+    ].filter(Boolean);
+    text += `【随军参谋团】：${staffNames.join("、") || "统帅亲征"}\n\n`;
+
+    text += `【沙盘兵力态势】：共部署 ${elements.length} 处单位\n`;
+    const grouped = {};
+    elements.forEach((el) => {
+      const name = el.detailInfo?.name || el.char || "未名单位";
+      grouped[name] = (grouped[name] || 0) + 1;
+    });
+    Object.entries(grouped).forEach(([k, v]) => {
+      text += `  • ${k} × ${v}\n`;
+    });
+
+    if (connections.length > 0) {
+      text += `\n【部属牵引连线】：共 ${connections.length} 组从属阵势\n`;
+    }
+
+    text += `\n【推演日期】：${new Date().toLocaleString("zh-CN")}\n`;
+    text += `───────────────────────────────────────────────────\n\n`;
+
+    if (simulationSteps.length > 0) {
+      text += `【定格推演战况实录】（共 ${simulationSteps.length} 步）\n\n`;
+      simulationSteps.forEach((step, idx) => {
+        text += `【第 ${idx + 1} 步】\n`;
+        text += `[战况播报] ${step.description}\n`;
+        text += `[${step.speaker ? `${step.speaker} 锐评` : "军师锐评"}] ${step.reason}\n\n`;
+      });
+    } else {
+      text += `【定格推演战况】：尚未启动模拟推演。\n\n`;
+    }
+
+    text += `───────────────────────────────────────────────────\n`;
+    text += `（洛阳军机处 · 沙盘推演司 藏）\n`;
+    return text;
+  };
+
+  const handleCopyReportText = () => {
+    const fullText = getFormattedReportText();
+    if (!fullText) return alert("暂无可复制的战报内容！");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(fullText).then(() => {
+        showToast("📋 军机战报已复制到剪贴板！");
+      }).catch(() => {
+        showToast("复制失败，请手动选取");
+      });
+    } else {
+      showToast("浏览器不支持快捷复制");
+    }
+  };
+
+  const handleDownloadReportText = () => {
+    const fullText = getFormattedReportText();
+    if (!fullText) return alert("暂无可导出的战报内容！");
+    const blob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `军机战报_沙盘推演实录.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("📥 军机战报已导出！");
+  };
+
+  // Canvas 离屏高清绘制军机舆图战报长卷
+  const handleExportCanvas = () => {
+    if (elements.length === 0 && !writeContent.trim()) {
+      alert("当前沙盘为空，暂无可导出的战报内容！");
+      return;
+    }
+    setIsExportingImage(true);
+
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      const width = 800;
+      const padding = 50;
+      const contentWidth = width - padding * 2;
+
+      const wrapText = (text, maxWidth, fontSize, fontFace = "sans-serif") => {
+        ctx.font = `${fontSize}px ${fontFace}`;
+        const lines = [];
+        const paragraphs = String(text || "").split("\n");
+        for (const para of paragraphs) {
+          let currentLine = "";
+          for (let i = 0; i < para.length; i++) {
+            const char = para[i];
+            const testLine = currentLine + char;
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth && currentLine.length > 0) {
+              lines.push(currentLine);
+              currentLine = char;
+            } else {
+              currentLine = testLine;
+            }
+          }
+          if (currentLine) lines.push(currentLine);
+        }
+        return lines;
+      };
+
+      let calculatedHeight = padding + 180;
+      const bgLines = wrapText("【战局背景】： " + (writeContent || "常规推演战局"), contentWidth - 40, 15, "serif");
+      calculatedHeight += bgLines.length * 24 + 40;
+      calculatedHeight += 80;
+
+      if (simulationSteps.length > 0) {
+        calculatedHeight += 50;
+        simulationSteps.forEach((step) => {
+          const descLines = wrapText(step.description, contentWidth - 60, 15, "sans-serif");
+          const reasonLines = wrapText(`💡 ${step.speaker || "军师"} 锐评：` + step.reason, contentWidth - 60, 14, "serif");
+          calculatedHeight += descLines.length * 24 + reasonLines.length * 22 + 80;
+        });
+      }
+
+      calculatedHeight += 160;
+
+      canvas.width = width * 2;
+      canvas.height = calculatedHeight * 2;
+      ctx.scale(2, 2);
+
+      // 1. 羊皮舆图底色
+      ctx.fillStyle = "#F5EFE4";
+      ctx.fillRect(0, 0, width, calculatedHeight);
+
+      ctx.fillStyle = "rgba(180, 150, 110, 0.05)";
+      for (let i = 0; i < calculatedHeight; i += 6) {
+        ctx.fillRect(0, i, width, 1);
+      }
+
+      // 2. 双重朱砂边框
+      ctx.strokeStyle = "#B35446";
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(20, 20, width - 40, calculatedHeight - 40);
+
+      ctx.strokeStyle = "#D9C3AC";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(26, 26, width - 52, calculatedHeight - 52);
+
+      // 3. 卷首方印
+      ctx.fillStyle = "#B33E32";
+      ctx.fillRect(width - padding - 75, padding - 10, 70, 70);
+      ctx.strokeStyle = "#FAF5EC";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(width - padding - 72, padding - 7, 64, 64);
+      ctx.fillStyle = "#FAF5EC";
+      ctx.font = "bold 16px serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("军机", width - padding - 40, padding + 15);
+      ctx.fillText("密卷", width - padding - 40, padding + 37);
+
+      // 4. 战役标题
+      let curY = padding + 20;
+      ctx.fillStyle = "#2D2620";
+      ctx.font = "bold 26px serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      const titleStr = writeContent.trim()
+        ? (writeContent.trim().length > 15 ? writeContent.trim().substring(0, 15) + "..." : writeContent.trim())
+        : "沙盘兵棋推演图";
+      ctx.fillText(`《${titleStr}》`, padding, curY);
+
+      curY += 28;
+      const staffList = [
+        selectedCharIds.includes("user") ? `统帅(${activeUserName})` : null,
+        ...availableChars.filter((c) => selectedCharIds.includes(c.id)).map((c) => c.name || c.profile?.name)
+      ].filter(Boolean).join("  ·  ");
+
+      ctx.fillStyle = "#8C7B6E";
+      ctx.font = "14px serif";
+      ctx.fillText(`【统帅府·随军参谋】：${staffList || "统帅亲征"}`, padding, curY);
+
+      curY += 25;
+      const boxH = bgLines.length * 24 + 20;
+      ctx.fillStyle = "#ECE3D4";
+      ctx.fillRect(padding, curY, contentWidth, boxH);
+      ctx.strokeStyle = "#D9CBB7";
+      ctx.strokeRect(padding, curY, contentWidth, boxH);
+
+      ctx.fillStyle = "#5A544B";
+      ctx.font = "14px serif";
+      ctx.textAlign = "left";
+      bgLines.forEach((l, lIdx) => {
+        ctx.fillText(l, padding + 16, curY + 24 + lIdx * 24);
+      });
+      curY += boxH + 30;
+
+      // 5. 兵棋态势横栏
+      ctx.fillStyle = "#4A5240";
+      ctx.font = "bold 16px sans-serif";
+      ctx.fillText("⚔️ 参演兵棋阵容：", padding, curY);
+      curY += 22;
+
+      const elementNames = elements.slice(0, 10).map((e) => `${e.char} ${e.detailInfo?.name || "单位"}`).join("   ");
+      ctx.fillStyle = "#6B705C";
+      ctx.font = "14px sans-serif";
+      ctx.fillText(elementNames || "暂无实装单位", padding, curY);
+      curY += 30;
+
+      ctx.strokeStyle = "#D9C3AC";
+      ctx.beginPath();
+      ctx.moveTo(padding, curY);
+      ctx.lineTo(width - padding, curY);
+      ctx.stroke();
+      curY += 35;
+
+      // 6. 逐步推演播报
+      if (simulationSteps.length > 0) {
+        ctx.fillStyle = "#B35446";
+        ctx.font = "bold 18px serif";
+        ctx.textAlign = "center";
+        ctx.fillText("— 定格推演战况全实录 —", width / 2, curY);
+        curY += 25;
+
+        simulationSteps.forEach((step, sIdx) => {
+          ctx.fillStyle = "#B35446";
+          ctx.font = "bold 15px serif";
+          ctx.textAlign = "left";
+          ctx.fillText(`第 ${sIdx + 1} 步推演：`, padding, curY);
+          curY += 15;
+
+          const descLines = wrapText(step.description, contentWidth - 40, 15, "sans-serif");
+          const reasonLines = wrapText(`💡 ${step.speaker ? `${step.speaker} 锐评` : "军师锐评"}：` + step.reason, contentWidth - 40, 14, "serif");
+          const stepBoxH = descLines.length * 24 + reasonLines.length * 22 + 28;
+
+          ctx.fillStyle = "#FDFCF8";
+          ctx.fillRect(padding, curY, contentWidth, stepBoxH);
+          ctx.strokeStyle = "#E4DACD";
+          ctx.strokeRect(padding, curY, contentWidth, stepBoxH);
+
+          ctx.fillStyle = "#3E3832";
+          ctx.font = "14px sans-serif";
+          descLines.forEach((l, lIdx) => {
+            ctx.fillText(l, padding + 16, curY + 22 + lIdx * 24);
+          });
+
+          ctx.fillStyle = "#7A826C";
+          ctx.font = "italic 13px serif";
+          const descOffset = descLines.length * 24 + 18;
+          reasonLines.forEach((l, lIdx) => {
+            ctx.fillText(l, padding + 16, curY + descOffset + lIdx * 22);
+          });
+
+          curY += stepBoxH + 20;
+        });
+      }
+
+      // 7. 卷尾落款
+      curY += 15;
+      ctx.strokeStyle = "#B35446";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding, curY);
+      ctx.lineTo(width - padding, curY);
+      ctx.stroke();
+
+      curY += 30;
+      ctx.fillStyle = "#8C7B6E";
+      ctx.font = "14px serif";
+      ctx.textAlign = "left";
+      const dateStr = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
+      ctx.fillText(`岁在 ${dateStr} · 洛阳军机处沙盘推演总谱`, padding, curY);
+
+      // 卷尾圆印
+      ctx.fillStyle = "#B33E32";
+      ctx.beginPath();
+      ctx.arc(width - padding - 35, curY - 5, 26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#FAF5EC";
+      ctx.stroke();
+      ctx.fillStyle = "#FAF5EC";
+      ctx.font = "bold 12px serif";
+      ctx.textAlign = "center";
+      ctx.fillText("军机", width - padding - 35, curY - 10);
+      ctx.fillText("密核", width - padding - 35, curY + 6);
+
+      const dataUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.download = `军机战报_《${titleStr}》_舆图长卷.png`;
+      link.href = dataUrl;
+      link.click();
+      showToast(`✨ 军机战报画卷已成功生成并下载！`);
+    } catch (err) {
+      console.error("生成战报失败", err);
+      alert("战报绘制失败，请检查浏览器设置！");
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
+  // 添加物品到沙盘
   const handleAddInventoryItem = (item) => {
     if (!item.isInfinite && item.quantity <= 0) {
       alert("该物资已耗尽！");
       return;
     }
 
-    // 扣除库存
     if (!item.isInfinite) {
       setInventory((prev) =>
         prev.map((inv) =>
@@ -74372,24 +76370,22 @@ const SandTablePage = ({ onBack }) => {
       );
     }
 
-    // 添加到沙盘
     const newElement = {
       id: Date.now() + Math.random(),
-      invId: item.id, // 关联库存ID，方便删除时退回
+      invId: item.id,
       char: item.emoji,
       x: 150 + Math.random() * 50,
       y: 150 + Math.random() * 50,
       flipped: false,
-      detailInfo: item, // 将详情信息一并存入实体
+      detailInfo: item,
     };
     setElements([...elements, newElement]);
   };
 
-  // 删除沙盘物品（退回库存）
+  // 删除沙盘物品
   const handleDeleteElement = (id) => {
     const elToDelete = elements.find((el) => el.id === id);
     if (elToDelete) {
-      // 退回库存
       setInventory((prev) =>
         prev.map((inv) =>
           inv.id === elToDelete.invId && !inv.isInfinite
@@ -74398,16 +76394,14 @@ const SandTablePage = ({ onBack }) => {
         ),
       );
     }
-    // 删除相关的连接
     setConnections((prev) =>
       prev.filter((conn) => conn.source !== id && conn.target !== id),
     );
     setElements((prev) => prev.filter((el) => el.id !== id));
     setSelectedElement(null);
-    setDetailItem(null); // 关闭可能打开的详情
+    setDetailItem(null);
   };
 
-  // 查看详情
   const handleElementDetail = (id) => {
     const el = elements.find((e) => e.id === id);
     if (el) {
@@ -74415,28 +76409,22 @@ const SandTablePage = ({ onBack }) => {
     }
   };
 
-  // 处理连接按钮点击
   const handleConnectElement = (id) => {
     if (isConnecting) {
-      // 已经处于连接模式，完成连接
       completeConnection(id);
     } else {
-      // 开始连接模式
       setIsConnecting(true);
       setSelectedElement(id);
     }
   };
 
-  // 完成连接
   const completeConnection = (targetId) => {
     if (selectedElement && selectedElement !== targetId) {
-      // 检查是否已经存在相同的连接
       const existingConnection = connections.find(
         (conn) => conn.source === selectedElement && conn.target === targetId,
       );
 
       if (!existingConnection) {
-        // 添加新连接
         setConnections([
           ...connections,
           {
@@ -74445,19 +76433,14 @@ const SandTablePage = ({ onBack }) => {
             target: targetId,
           },
         ]);
+        showToast("已建立兵力牵引从属关系");
       }
     }
-    // 退出连接模式
     setIsConnecting(false);
     setSelectedElement(null);
   };
 
-  // 移除连接
-  const removeConnection = (connectionId) => {
-    setConnections(connections.filter((conn) => conn.id !== connectionId));
-  };
-
-  // --- 模拟推演核心逻辑 ---
+  // --- 模拟推演核心逻辑（深度注入名士人设与统帅身份库） ---
   const handleSimulate = async () => {
     if (elements.length === 0) {
       alert("沙盘上空空如也，请先放置一些单位后再推演！");
@@ -74470,15 +76453,48 @@ const SandTablePage = ({ onBack }) => {
     setSimulationSteps([]);
 
     try {
+      // 1. 世界书设定
       const worldContext = window.getWorldBookContext
         ? await window.getWorldBookContext()
         : "无特定背景设定";
 
-      // 提取元素简要信息供AI分析，以便明确有哪些可移动物体
+      // 2. 统帅（用户）身份设定
+      let userPersonaPrompt = "";
+      if (selectedCharIds.includes("user") && activeUserObj) {
+        userPersonaPrompt = `【统帅（用户）在身份配置库中的真实设定】：
+- 姓名：${activeUserObj.name}
+- 身份背景：${activeUserObj.identity || activeUserObj.background || "统帅/广陵王"}
+- 性格特质：${activeUserObj.personality || "行事果决，洞悉全局"}
+- 详细人设：${activeUserObj.description || activeUserObj.appearance || "无"}
+`;
+      }
+
+      // 3. 提取勾选的随军参谋名士深度设定与近24h聊天
+      const selectedCharObjs = availableChars.filter((c) =>
+        selectedCharIds.includes(c.id)
+      );
+      let charsPromptParts = [];
+      for (const char of selectedCharObjs) {
+        const charName = char.name || char.profile?.name || "名士";
+        const fullProfile = typeof getFullCharacterSetting === "function"
+          ? await getFullCharacterSetting(charName, char.id)
+          : (char.profile?.personality ? `性格：${char.profile.personality}；行事风格：${char.profile.style || "鲜明"}` : "谋略出众，恪守人物性格");
+        const chat24h = await getChar24hChat(charName, char.id);
+        charsPromptParts.push(`【随军参谋/将领：${charName}】
+- 角色配置库深度人设：${fullProfile}
+- 与统帅近24小时真实传讯互动与羁绊：
+${chat24h}`);
+      }
+      const staffContext = charsPromptParts.join("\n\n--------------------\n\n");
+      const staffNames = [
+        selectedCharIds.includes("user") ? `统帅(${activeUserName})` : null,
+        ...selectedCharObjs.map((c) => c.name || c.profile?.name)
+      ].filter(Boolean);
+
       const elementsInfo = elements.map((el) => ({
         id: el.id,
-        name: el.detailInfo.name,
-        category: el.detailInfo.category,
+        name: el.detailInfo?.name || el.char,
+        category: el.detailInfo?.category || "常规",
         x: Math.round(el.x),
         y: Math.round(el.y),
       }));
@@ -74488,13 +76504,18 @@ const SandTablePage = ({ onBack }) => {
         targetId: conn.target,
       }));
 
-      const sysPrompt = "你是一个精通东汉末年兵法与沙盘推演的军师AI。";
+      const sysPrompt = "你是一个精通东汉历史、兵法谋略、多角色人际心理羁绊与沙盘兵棋推演的顶尖军师AI。";
       const userPrompt = `
             【世界设定】
             ${worldContext}
 
-            【推演背景】
+            ${userPersonaPrompt ? `${userPersonaPrompt}\n` : ""}
+            ${staffContext ? `【本场推演随军参谋席（深度人设与近24h真实聊天羁绊）】：\n${staffContext}\n` : ""}
+
+            【推演战局背景】
             ${writeContent || "无特定背景"}
+
+            【参演核心军师阵容】：${staffNames.join("、") || "统帅亲征"}
 
             【沙盘当前单位】
             ${JSON.stringify(elementsInfo, null, 2)}
@@ -74502,20 +76523,22 @@ const SandTablePage = ({ onBack }) => {
             【单位连线关系（从属/牵引关系，source带动target）】
             ${JSON.stringify(connectionsInfo, null, 2)}
 
-            【推演任务】
-            请基于当前沙盘单位分布、连线关系和背景，生成一场10到15步的定格动画模拟推演。
+            【推演任务与名士锐评铁律】
+            请基于当前沙盘单位分布、连线关系、背景以及【随军参谋名士与统帅的性格特点、口吻风格和24h互动情感基调】，生成一场 10 到 15 步的定格动画模拟推演：
             要求：
             1. 考虑地形，自然类单位（如山脉、密林）通常不可移动。
-            2. 让军队或武将相互靠近、绕后或交战。
+            2. 让军队或武将相互靠近、绕后或交战，动作符合战局逻辑。
             3. 如果有父子连线的元素，只需要给出父元素(sourceId)的移动坐标，系统会自动带动子元素。
-            4. 每一步都要有对战局的描述，以及用诙谐专业的语气说明这步操作的兵法原因。
-            5. 每一步返回发生移动的元素和他们的新绝对坐标 (targetX, targetY)。确保坐标在 0 到 1000 之间变动，每次移动距离建议在 30-100 之间。
+            4. 战况描述(description)要生动描摹战术进程。
+            5. 💡【名士专属军师锐评 (reason)】：必须由随军参谋席中的名士（或统帅本人）轮流或指定发表！在输出中指定 speaker（如 "诸葛亮"、"袁基" 或 "${activeUserName}"），其锐评内容必须严格还原其人设口吻、行事动机与幽默/毒舌/沉稳风格！
+            6. 每一步返回发生移动的元素和他们的新绝对坐标 (targetX, targetY) (0-1000之间，移动幅度30-100)。
 
             【输出格式】
             必须严格返回纯 JSON 数组，格式如下（绝对不要包裹在 \`\`\`json 中）：
             [
               {
                 "step": 1,
+                "speaker": "${staffNames[0] || "军师"}",
                 "description": "我方主帅带领小弟绕开密林，准备偷袭。",
                 "reason": "老六兵法第一条，能苟绝不正面刚！",
                 "moves": [
@@ -74537,7 +76560,8 @@ const SandTablePage = ({ onBack }) => {
               const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length > 0) {
                 setSimulationSteps(data);
-                setCurrentStep(0); // 开始第一步
+                setCurrentStep(0);
+                showToast("✨ 定格推演生成完毕，请查阅战况！");
               } else {
                 throw new Error("解析数据为空");
               }
@@ -74580,7 +76604,6 @@ const SandTablePage = ({ onBack }) => {
 
       const displacements = {};
 
-      // 1. 应用本步的主动绝对移动，并记录位移差 (dx, dy)
       stepData.moves.forEach((move) => {
         const elIndex = simElements.findIndex((e) => e.id === move.elementId);
         if (elIndex !== -1) {
@@ -74593,7 +76616,6 @@ const SandTablePage = ({ onBack }) => {
         }
       });
 
-      // 2. 处理父子连带移动
       let changed = true;
       const propagated = { ...displacements };
       while (changed) {
@@ -74618,9 +76640,8 @@ const SandTablePage = ({ onBack }) => {
   };
 
   const simulatedElements = getSimulatedElements();
-  // --- 模拟推演核心逻辑结束 ---
 
-  // AI生成物品清单核心逻辑
+  // AI生成物品清单核心逻辑（融入统帅与名士人设）
   const handleGenerateItems = async () => {
     if (!writeContent.trim()) {
       alert("请先书写战局背景或兵棋推演的需求！");
@@ -74629,22 +76650,42 @@ const SandTablePage = ({ onBack }) => {
     setIsGenerating(true);
 
     try {
-      // 1. 获取世界书设定
       const worldContext = window.getWorldBookContext
         ? await window.getWorldBookContext()
         : "无特定背景设定";
 
-      // 2. 构建 Prompt
+      // 统帅身份
+      let userPersonaPrompt = "";
+      if (selectedCharIds.includes("user") && activeUserObj) {
+        userPersonaPrompt = `【统帅（用户）身份】：${activeUserObj.name}（${activeUserObj.identity || activeUserObj.background || "统帅"}，性格：${activeUserObj.personality || "鲜明"}）`;
+      }
+
+      // 随军名士
+      const selectedCharObjs = availableChars.filter((c) =>
+        selectedCharIds.includes(c.id)
+      );
+      const staffNames = [
+        selectedCharIds.includes("user") ? activeUserName : null,
+        ...selectedCharObjs.map((c) => c.name || c.profile?.name)
+      ].filter(Boolean);
+
+      const staffInfoStr = selectedCharObjs
+        .map((c) => `【参谋名士：${c.name || c.profile?.name}】性格：${c.profile?.personality || "智谋过人"}；风格：${c.profile?.style || "严谨"}`)
+        .join("\n");
+
       const sysPrompt = "你是一个专业的三国/古风沙盘兵棋推演组件生成器。";
       const userPrompt = `
                           【世界设定】
                           ${worldContext}
 
+                          ${userPersonaPrompt ? `${userPersonaPrompt}\n` : ""}
+                          ${staffInfoStr ? `【参战随军名士】：\n${staffInfoStr}\n` : ""}
+
                           【统帅（用户）书写的推演背景】
                           ${writeContent}
 
                           【任务】
-                          请根据以上背景，生成一场沙盘模拟所需的物品/地形清单，总数必须在 15 到 20 个之间。
+                          请根据以上背景以及参演名士【${staffNames.join("、") || "统帅本人"}】，生成一场沙盘模拟所需的物品/地形清单，总数必须在 15 到 20 个之间。
 
                           【严格生成规则】
                           1. 必须包含的分类：
@@ -74652,19 +76693,20 @@ const SandTablePage = ({ onBack }) => {
                              - 工具类(tool)：必须有（如马车、船只、拒马），isInfinite 为 false，quantity 在 3-10 之间。
                              - 物资类(resource)：必须有（如粮草、辎重、箭矢），isInfinite 为 false，quantity 在 2-5 之间。
                              - 人物/建筑类(character/building)：（如斥候、城门、流民），isInfinite 为 false，quantity 根据常理设定。
-                          2. 必须包含的高亮特殊物品：
-                             - 必须生成且仅生成两个特殊标识（isSpecial 为 true）：一个代表【我方阵营】的emoji，一个代表【敌方阵营】的emoji。quantity 通常为 1 或 2。
+                          2. 必须包含的高亮特殊物品（专属定制）：
+                             - 必须生成 2 到 4 个特殊标识（isSpecial 为 true）：包括【统帅大帐/主帅】、被选中的随军名士专属兵棋（如“袁基·谋士车”、“诸葛亮·军师阵”）、以及【敌方主力】。quantity 为 1 或 2。
                           3. 趣味详情：
-                             - description：物品用途，必须用轻松、风趣、甚至带点吐槽的口吻编写（例如："一处被人遗弃的破碗，不知道有什么用，可能用来讨饭"）。
+                             - description：物品用途，必须融入所涉及名士的性格风格，用轻松、风趣、甚至带点吐槽的口吻编写。
                              - scale：物品实际换算比例（例如："此处的1辆 ≈ 现实100辆" 或 "1个兵 ≈ 1个营"）。
 
                           【输出格式】
                           必须严格返回纯 JSON 数组，不要包裹在 \`\`\`json 之中，格式示例：
                           [
-                            {"id": 1, "emoji": "🔵", "name": "我方主帅", "category": "faction", "quantity": 1, "isInfinite": false, "isSpecial": true, "description": "全村的希望，死了就直接Game Over。", "scale": "1人 ≈ 主帅本阵"},
-                            {"emoji": "🔴", "name": "敌方主力", "category": "faction", "quantity": 3, "isInfinite": false, "isSpecial": true, "description": "看起来很凶的敌人，建议绕道走。", "scale": "1棋 ≈ 5000甲士"},
-                            {"emoji": "🌲", "name": "密林", "category": "nature", "quantity": -1, "isInfinite": true, "isSpecial": false, "description": "藏污纳垢的好地方，适合老六埋伏。", "scale": "1树 ≈ 10亩林地"},
-                            {"emoji": "🌾", "name": "粮草", "category": "resource", "quantity": 5, "isInfinite": false, "isSpecial": false, "description": "人是铁饭是钢，没这玩意儿兵要造反。", "scale": "1垛 ≈ 1000石"}
+                            {"id": 1, "emoji": "🔵", "name": "统帅本阵", "category": "faction", "quantity": 1, "isInfinite": false, "isSpecial": true, "description": "全军核心大营，插着统帅大旗。", "scale": "1人 ≈ 主帅本阵"},
+                            {"id": 2, "emoji": "📜", "name": "随军谋主", "category": "faction", "quantity": 1, "isInfinite": false, "isSpecial": true, "description": "运筹帷幄之中，决胜千里之外。", "scale": "1人 ≈ 幕僚中军"},
+                            {"emoji": "🔴", "name": "敌方主力", "category": "faction", "quantity": 3, "isInfinite": false, "isSpecial": true, "description": "气势汹汹的敌军阵列，建议智取。", "scale": "1棋 ≈ 5000甲士"},
+                            {"emoji": "🌲", "name": "密林", "category": "nature", "quantity": -1, "isInfinite": true, "isSpecial": false, "description": "藏污纳垢的好地方，适合伏兵。", "scale": "1树 ≈ 10亩林地"},
+                            {"emoji": "🌾", "name": "粮草", "category": "resource", "quantity": 5, "isInfinite": false, "isSpecial": false, "description": "人是铁饭是钢，粮道被断就歇菜。", "scale": "1垛 ≈ 1000石"}
                           ]
                         `;
 
@@ -74679,14 +76721,13 @@ const SandTablePage = ({ onBack }) => {
             try {
               const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
               if (Array.isArray(data) && data.length >= 2) {
-                // 补充唯一ID，防止重复
                 const inventoryData = data.map((item, idx) => ({
                   ...item,
                   id: Date.now() + idx,
                 }));
                 setInventory(inventoryData);
                 setShowWriteModal(false);
-                alert("兵棋组件生成完毕，请在底部物品栏查看！");
+                showToast("兵棋组件生成完毕，请在底部物品栏查看！");
               } else {
                 throw new Error("数组为空或不符合要求");
               }
@@ -74714,9 +76755,9 @@ const SandTablePage = ({ onBack }) => {
   };
 
   const handleDrag = (id, e) => {
-    const clientX = e.clientX || e.touches[0].clientX;
-    const clientY = e.clientY || e.touches[0].clientY;
-    // 考虑缩放比例，确保物品拖动在不同缩放级别下都能正常工作
+    const clientX = e.clientX || (e.touches && e.touches[0].clientX);
+    const clientY = e.clientY || (e.touches && e.touches[0].clientY);
+    if (clientX === undefined || clientY === undefined) return;
     setElements((prev) =>
       prev.map((el) =>
         el.id === id
@@ -74765,9 +76806,7 @@ const SandTablePage = ({ onBack }) => {
     setScale(newScale);
   };
 
-  // 沙盘拖动事件处理
   const handleSandboxMouseDown = (e) => {
-    // 只有在鼠标左键点击且没有其他元素被选中时才开始拖动
     if (e.button === 0 && !isConnecting && !selectedElement) {
       setIsDragging(true);
       setDragStart({
@@ -74794,7 +76833,6 @@ const SandTablePage = ({ onBack }) => {
     setIsDragging(false);
   };
 
-  // 触摸事件处理
   const handleSandboxTouchStart = (e) => {
     if (e.touches.length === 1 && !isConnecting && !selectedElement) {
       setIsDragging(true);
@@ -74830,7 +76868,7 @@ const SandTablePage = ({ onBack }) => {
 
   return (
     <div
-      className="sand-table-overlay open fade-in"
+      className="sand-table-overlay open fade-in font-sans"
       style={{
         position: "absolute",
         inset: 0,
@@ -74843,27 +76881,85 @@ const SandTablePage = ({ onBack }) => {
         height: "100%",
       }}
     >
-      {/* 顶部磨砂栏 */}
-      <div className={`top-glass-nav ${navCollapsed ? "collapsed" : ""}`}>
-        <button className="morandi-glass-btn" onClick={onBack}>
+      {/* 顶部轻提示 Toast */}
+      {toastMessage && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[1200] bg-[#3E3832]/90 text-[#F9F7F5] px-4 py-2 rounded-full text-xs font-bold shadow-xl border border-white/20 animate-bounce pointer-events-none flex items-center gap-1.5">
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* 顶部磨砂导航栏 */}
+      <div
+        className={`top-glass-nav ${navCollapsed ? "collapsed" : ""}`}
+        style={{
+          width: "94%",
+          maxWidth: "370px",
+          display: "flex",
+          flexWrap: "nowrap",
+          gap: "5px",
+          padding: "7px 9px",
+          zIndex: 100,
+        }}
+      >
+        <button
+          className="morandi-glass-btn"
+          style={{ flex: "1 1 auto", padding: "6px 4px", fontSize: "11px" }}
+          onClick={onBack}
+        >
           撤离
         </button>
-        <button className="morandi-glass-btn" onClick={() => setElements([])}>
-          清空
+        <button
+          className="morandi-glass-btn"
+          style={{ flex: "1 1 auto", padding: "6px 4px", fontSize: "11px" }}
+          onClick={() => setShowWriteModal(true)}
+          title="书写战局背景"
+        >
+          ✍️ 书写
         </button>
         <button
           className="morandi-glass-btn"
+          style={{ flex: "1 1 auto", padding: "6px 4px", fontSize: "11px" }}
+          onClick={() => setShowArchiveModal(true)}
+          title="军机推演录"
+        >
+          <span>战局录</span>
+          {savedSandTables.length > 0 && (
+            <span className="bg-[#B35446] text-white text-[9px] px-1 py-0.2 rounded-full ml-1 font-bold">
+              {savedSandTables.length}
+            </span>
+          )}
+        </button>
+        <button
+          className="morandi-glass-btn"
+          style={{ flex: "1 1 auto", padding: "6px 4px", fontSize: "11px" }}
+          onClick={handleSaveSandTable}
+        >
+          存战局
+        </button>
+        <button
+          className="morandi-glass-btn"
+          style={{ flex: "1 1 auto", padding: "6px 4px", fontSize: "11px" }}
           onClick={() => setShowConnections(!showConnections)}
         >
-          {showConnections ? "隐藏连线" : "显示连线"}
+          {showConnections ? "隐连线" : "显连线"}
         </button>
         <button
           className="morandi-glass-btn"
-          onClick={() => setNavCollapsed(true)}
+          style={{ flex: "1 1 auto", padding: "6px 4px", fontSize: "11px" }}
+          onClick={handleResetSandTable}
         >
-          收起
+          重置
+        </button>
+        <button
+          className="morandi-glass-btn"
+          style={{ flex: "0 0 26px", padding: "6px 2px", fontSize: "11px" }}
+          onClick={() => setNavCollapsed(true)}
+          title="收起导航"
+        >
+          ▲
         </button>
       </div>
+
       {navCollapsed && (
         <div
           onClick={() => setNavCollapsed(false)}
@@ -74873,53 +76969,161 @@ const SandTablePage = ({ onBack }) => {
             left: "50%",
             transform: "translateX(-50%)",
             zIndex: 101,
-            background: "rgba(255,255,255,0.5)",
+            background: "rgba(255,255,255,0.75)",
             borderRadius: "50%",
-            padding: "5px",
+            padding: "6px 8px",
+            boxShadow: "0 2px 8px rgba(0,0,0,0.12)",
+            cursor: "pointer",
           }}
         >
           <i className="ph ph-caret-down"></i>
         </div>
       )}
 
-      {/* 功能按钮栏 */}
+      {/* 随军参谋与操作席（蝴蝶效应同款滑动选择栏 + 核心按钮） */}
       <div
         style={{
           position: "absolute",
-          top: "80px",
+          top: "65px",
           left: "50%",
           transform: navCollapsed
             ? "translate(-50%, -120px)"
             : "translateX(-50%)",
-          width: "80%",
-          maxWidth: "300px",
-          padding: "12px",
-          background: "rgba(255, 255, 255, 0.4)",
-          backdropFilter: "blur(15px)",
-          WebkitBackdropFilter: "blur(15px)",
-          borderRadius: "30px",
+          width: "92%",
+          maxWidth: "380px",
           display: "flex",
-          gap: "10px",
-          zIndex: 99,
+          flexDirection: "column",
+          gap: "6px",
+          zIndex: 110,
           opacity: navCollapsed ? 0 : 1,
           transition: "all 0.4s cubic-bezier(0.23, 1, 0.32, 1)",
         }}
       >
-        <button
-          className="morandi-glass-btn"
-          onClick={() => setShowWriteModal(true)}
+        {/* 随军参谋头像横向滑动栏 */}
+        <div
+          className="no-scrollbar"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            overflowX: "auto",
+            padding: "4px 8px",
+            background: "rgba(255, 255, 255, 0.75)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            borderRadius: "20px",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+            border: "1px solid rgba(255,255,255,0.6)",
+          }}
         >
-          书写
-        </button>
-        <button
-          className="morandi-glass-btn"
-          onClick={() => alert("选择功能开发中")}
+          <span style={{ fontSize: "10px", color: "#8C7D70", fontWeight: "bold", whiteSpace: "nowrap", flexShrink: 0 }}>
+            随军参谋:
+          </span>
+
+          {/* 统帅（我） */}
+          <div
+            onClick={() => toggleSelectChar("user")}
+            style={{
+              padding: "3px 8px",
+              borderRadius: "10px",
+              fontSize: "10px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "inline-flex",
+              alignItems: "center",
+              gap: "3px",
+              whiteSpace: "nowrap",
+              flexShrink: 0,
+              backgroundColor: selectedCharIds.includes("user")
+                ? "#D6724B"
+                : "rgba(0, 0, 0, 0.05)",
+              color: selectedCharIds.includes("user") ? "white" : "#6B705C",
+              border: selectedCharIds.includes("user")
+                ? "1px solid #B35446"
+                : "1px solid rgba(0,0,0,0.08)",
+              boxShadow: selectedCharIds.includes("user")
+                ? "0 2px 6px rgba(214,114,75,0.3)"
+                : "none",
+              transition: "all 0.2s",
+            }}
+          >
+            <span>👑 统帅({activeUserName})</span>
+            {selectedCharIds.includes("user") ? "✓" : ""}
+          </div>
+
+          {/* 传讯名士列表 */}
+          {availableChars.map((c) => {
+            const isSelected = selectedCharIds.includes(c.id);
+            const name = c.name || c.profile?.name || "名士";
+            return (
+              <div
+                key={c.id}
+                onClick={() => toggleSelectChar(c.id)}
+                style={{
+                  padding: "3px 8px",
+                  borderRadius: "10px",
+                  fontSize: "10px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "3px",
+                  whiteSpace: "nowrap",
+                  flexShrink: 0,
+                  backgroundColor: isSelected
+                    ? "#A8C8BA"
+                    : "rgba(0, 0, 0, 0.05)",
+                  color: isSelected ? "#2C4035" : "#6B705C",
+                  border: isSelected
+                    ? "1px solid #7FA896"
+                    : "1px solid rgba(0,0,0,0.08)",
+                  boxShadow: isSelected
+                    ? "0 2px 6px rgba(168,200,186,0.3)"
+                    : "none",
+                  transition: "all 0.2s",
+                }}
+              >
+                <span>{name}</span>
+                {isSelected ? "✓" : ""}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* 核心操作按钮栏 */}
+        <div
+          style={{
+            padding: "6px 10px",
+            background: "rgba(255, 255, 255, 0.75)",
+            backdropFilter: "blur(12px)",
+            WebkitBackdropFilter: "blur(12px)",
+            borderRadius: "20px",
+            display: "flex",
+            gap: "8px",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+            border: "1px solid rgba(255,255,255,0.6)",
+          }}
         >
-          选择
-        </button>
-        <button className="morandi-glass-btn" onClick={handleSimulate}>
-          推演
-        </button>
+          <button
+            className="morandi-glass-btn flex-1 py-1.5 text-xs font-bold text-[#3E3832]"
+            onClick={() => setShowWriteModal(true)}
+          >
+            ✍️ 书写
+          </button>
+          <button
+            className="morandi-glass-btn flex-1 py-1.5 text-xs font-bold text-[#3E3832]"
+            onClick={handleSimulate}
+            disabled={isSimulating}
+          >
+            ⚔️ 推演
+          </button>
+          <button
+            className="morandi-glass-btn flex-1 py-1.5 text-xs font-bold text-[#3E3832]"
+            onClick={() => setShowExportModal(true)}
+          >
+            📜 战报
+          </button>
+        </div>
       </div>
 
       {/* 大沙盘区域 */}
@@ -75093,14 +77297,26 @@ const SandTablePage = ({ onBack }) => {
       </div>
 
       {/* 下方物品栏 */}
-      {/* 下方物品栏 */}
       <div
         className="item-bar-bottom no-scrollbar"
         style={{ alignItems: "center" }}
       >
         {inventory.length === 0 ? (
-          <div style={{ color: "#999", fontSize: "13px", margin: "auto" }}>
-            沙盘空空如也，请点击上方“书写”生成推演组件。
+          <div
+            onClick={() => setShowWriteModal(true)}
+            style={{
+              color: "#6B705C",
+              fontSize: "12px",
+              margin: "auto",
+              cursor: "pointer",
+              padding: "8px 16px",
+              background: "rgba(168, 200, 186, 0.25)",
+              borderRadius: "20px",
+              border: "1px dashed #A8C8BA",
+              fontWeight: "bold",
+            }}
+          >
+            沙盘空空如也，点此【✍️ 书写背景】生成专属兵棋
           </div>
         ) : (
           inventory.map((item) => (
@@ -75161,21 +77377,85 @@ const SandTablePage = ({ onBack }) => {
         )}
       </div>
 
-      {/* 书写弹窗 */}
+      {/* 书写弹窗（融入参谋名士选择与统帅身份） */}
       {showWriteModal && (
         <div
           className="modal-overlay"
           onClick={() => !isGenerating && setShowWriteModal(false)}
         >
           <div className="write-modal" onClick={(e) => e.stopPropagation()}>
-            <h3 style={{ color: "#5A5F4D" }}>推演背景书写</h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 style={{ color: "#5A5F4D", fontWeight: "bold", margin: 0 }}>
+                战局背景书写 · 统帅军令
+              </h3>
+              <span style={{ fontSize: "11px", color: "#8C7D70", background: "#F4EDE2", padding: "2px 8px", borderRadius: "10px" }}>
+                统帅: {activeUserName}
+              </span>
+            </div>
+
+            {/* 弹窗内的随军名士快速选择 */}
+            <div style={{ marginBottom: "10px" }}>
+              <div style={{ fontSize: "11px", color: "#8C7D70", fontWeight: "bold", marginBottom: "4px" }}>
+                随军参谋席（点击点将）:
+              </div>
+              <div
+                className="no-scrollbar"
+                style={{
+                  display: "flex",
+                  gap: "6px",
+                  overflowX: "auto",
+                  paddingBottom: "4px",
+                }}
+              >
+                <div
+                  onClick={() => toggleSelectChar("user")}
+                  style={{
+                    padding: "3px 8px",
+                    borderRadius: "8px",
+                    fontSize: "10px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap",
+                    backgroundColor: selectedCharIds.includes("user")
+                      ? "#D6724B"
+                      : "#EBE5DC",
+                    color: selectedCharIds.includes("user") ? "white" : "#6B705C",
+                  }}
+                >
+                  👑 我({activeUserName}) {selectedCharIds.includes("user") ? "✓" : ""}
+                </div>
+                {availableChars.map((c) => {
+                  const isSelected = selectedCharIds.includes(c.id);
+                  const name = c.name || c.profile?.name || "名士";
+                  return (
+                    <div
+                      key={c.id}
+                      onClick={() => toggleSelectChar(c.id)}
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "8px",
+                        fontSize: "10px",
+                        fontWeight: "bold",
+                        cursor: "pointer",
+                        whiteSpace: "nowrap",
+                        backgroundColor: isSelected ? "#A8C8BA" : "#EBE5DC",
+                        color: isSelected ? "#2C4035" : "#6B705C",
+                      }}
+                    >
+                      {name} {isSelected ? "✓" : ""}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="write-input-container">
               <textarea
                 className="write-input"
                 value={writeContent}
                 onChange={(e) => setWriteContent(e.target.value)}
                 placeholder="请输入当前局势背景，例如：曹操大军压境徐州，我方固守下邳城，需要粮草与水军支援..."
-                rows={6}
+                rows={5}
                 disabled={isGenerating}
               />
             </div>
@@ -75192,22 +77472,23 @@ const SandTablePage = ({ onBack }) => {
                 justifyContent: "center",
                 alignItems: "center",
                 gap: "8px",
+                fontWeight: "bold",
               }}
             >
               {isGenerating ? (
                 <>
                   <iconify-icon icon="line-md:loading-twotone-loop"></iconify-icon>
-                  推演中...
+                  推演专属兵棋生成中...
                 </>
               ) : (
-                "开始推演"
+                "开始生成专属兵棋"
               )}
             </button>
           </div>
         </div>
       )}
 
-      {/* 物品详情弹窗（莫兰迪色温馨风格） */}
+      {/* 物品详情弹窗 */}
       {detailItem && (
         <div
           style={{
@@ -75358,7 +77639,7 @@ const SandTablePage = ({ onBack }) => {
         </div>
       )}
 
-      {/* 模拟推演底部控制卡片 */}
+      {/* 模拟推演底部控制卡片（署名名士军师锐评） */}
       {showSimulationModal && (
         <div
           style={{
@@ -75369,33 +77650,43 @@ const SandTablePage = ({ onBack }) => {
             background: "#FDFCF8",
             borderTopLeftRadius: "24px",
             borderTopRightRadius: "24px",
-            padding: "24px",
+            padding: "20px 24px",
             boxShadow: "0 -10px 40px rgba(0,0,0,0.15)",
             zIndex: 1100,
             animation: "slideUp 0.3s ease-out forwards",
             borderTop: "1px solid #E8E5D9",
             transition: "all 0.3s ease",
-            minHeight: simulationModalCollapsed ? "100px" : "auto",
+            minHeight: simulationModalCollapsed ? "90px" : "auto",
           }}
         >
           <div
             style={{
               display: "flex",
               justifyContent: "space-between",
-              alignItems: "flex-start",
-              marginBottom: "16px",
+              alignItems: "center",
+              marginBottom: "12px",
             }}
           >
-            <h3
-              style={{
-                margin: 0,
-                fontSize: "18px",
-                color: "#5A5F4D",
-                fontWeight: "bold",
-              }}
-            >
-              沙盘定格推演
-            </h3>
+            <div className="flex items-center gap-2">
+              <h3
+                style={{
+                  margin: 0,
+                  fontSize: "16px",
+                  color: "#5A5F4D",
+                  fontWeight: "bold",
+                }}
+              >
+                ⚔️ 沙盘定格推演
+              </h3>
+              {simulationSteps.length > 0 && (
+                <button
+                  onClick={() => setShowExportModal(true)}
+                  className="px-2 py-0.5 rounded-full bg-[#B35446] text-white text-[11px] font-bold shadow-sm"
+                >
+                  📜 展战报
+                </button>
+              )}
+            </div>
             <div
               style={{
                 display: "flex",
@@ -75452,7 +77743,7 @@ const SandTablePage = ({ onBack }) => {
                 style={{ fontSize: "36px" }}
               ></iconify-icon>
               <span style={{ fontWeight: "bold" }}>
-                正在夜观天象，排兵布阵...
+                正在结合随军参谋与统帅谋略，排兵布阵...
               </span>
             </div>
           ) : simulationSteps.length > 0 && currentStep >= 0 ? (
@@ -75463,14 +77754,14 @@ const SandTablePage = ({ onBack }) => {
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "space-between",
-                  marginBottom: simulationModalCollapsed ? "0" : "16px",
+                  marginBottom: simulationModalCollapsed ? "0" : "14px",
                 }}
               >
                 <button
                   disabled={currentStep <= 0}
                   onClick={() => setCurrentStep((prev) => prev - 1)}
                   style={{
-                    padding: "8px 16px",
+                    padding: "7px 14px",
                     borderRadius: "12px",
                     border: "none",
                     background:
@@ -75480,13 +77771,14 @@ const SandTablePage = ({ onBack }) => {
                     color: "white",
                     cursor: currentStep <= 0 ? "not-allowed" : "pointer",
                     fontWeight: "bold",
+                    fontSize: "13px",
                   }}
                 >
                   ◀ 上一步
                 </button>
                 <span
                   style={{
-                    fontSize: "14px",
+                    fontSize: "13px",
                     color: "#8C917B",
                     fontWeight: "bold",
                   }}
@@ -75497,7 +77789,7 @@ const SandTablePage = ({ onBack }) => {
                   disabled={currentStep >= simulationSteps.length - 1}
                   onClick={() => setCurrentStep((prev) => prev + 1)}
                   style={{
-                    padding: "8px 16px",
+                    padding: "7px 14px",
                     borderRadius: "12px",
                     border: "none",
                     background:
@@ -75510,6 +77802,7 @@ const SandTablePage = ({ onBack }) => {
                         ? "not-allowed"
                         : "pointer",
                     fontWeight: "bold",
+                    fontSize: "13px",
                   }}
                 >
                   下一步 ▶
@@ -75522,7 +77815,7 @@ const SandTablePage = ({ onBack }) => {
                   <div
                     style={{
                       background: "#F9F7F5",
-                      padding: "16px",
+                      padding: "14px",
                       borderRadius: "12px",
                       borderLeft: "4px solid #D6724B",
                       marginBottom: "10px",
@@ -75530,7 +77823,7 @@ const SandTablePage = ({ onBack }) => {
                   >
                     <div
                       style={{
-                        fontSize: "12px",
+                        fontSize: "11px",
                         color: "#8C917B",
                         fontWeight: "bold",
                         marginBottom: "4px",
@@ -75540,20 +77833,20 @@ const SandTablePage = ({ onBack }) => {
                     </div>
                     <div
                       style={{
-                        fontSize: "14px",
+                        fontSize: "13px",
                         color: "#5A5F4D",
-                        lineHeight: "1.6",
+                        lineHeight: "1.5",
                       }}
                     >
                       {simulationSteps[currentStep].description}
                     </div>
                   </div>
 
-                  {/* 军师点拨 */}
+                  {/* 军师点拨（展示署名参谋名士） */}
                   <div
                     style={{
                       background: "#F9F7F5",
-                      padding: "12px 16px",
+                      padding: "12px 14px",
                       borderRadius: "12px",
                       borderLeft: "4px solid #A8C8BA",
                       display: "flex",
@@ -75572,13 +77865,19 @@ const SandTablePage = ({ onBack }) => {
                     <div>
                       <div
                         style={{
-                          fontSize: "12px",
+                          fontSize: "11px",
                           color: "#8C917B",
                           fontWeight: "bold",
                           marginBottom: "4px",
+                          display: "flex",
+                          alignItems: "center",
+                          gap: "4px",
                         }}
                       >
-                        军师锐评
+                        <span className="bg-[#A8C8BA]/30 text-[#2C4035] px-1.5 py-0.2 rounded text-[10px]">
+                          {simulationSteps[currentStep].speaker ? `${simulationSteps[currentStep].speaker}` : "军师"}
+                        </span>
+                        <span>锐评</span>
                       </div>
                       <div
                         style={{
@@ -75595,24 +77894,239 @@ const SandTablePage = ({ onBack }) => {
                 </>
               )}
             </div>
-          ) : (
-            <div
-              style={{
-                textAlign: "center",
-                color: "#999",
-                padding: "20px",
-              }}
-            >
-              天机混沌，暂无推演结果
+          ) : null}
+        </div>
+      )}
+
+      {/* ===== 军机推演录（沙盘存读档抽屉） ===== */}
+      {showArchiveModal && (
+        <div className="fixed inset-0 bg-black/60 z-[1250] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="bg-[#FAF7F2] rounded-3xl w-full max-w-md p-5 shadow-2xl flex flex-col max-h-[82vh] border border-[#E8DFC8]">
+            <div className="flex justify-between items-center pb-3 border-b border-[#E8DFC8]">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-full bg-[#B35446] text-white flex items-center justify-center text-sm shadow-sm font-serif">
+                  策
+                </div>
+                <div>
+                  <h3 className="text-[#3E3832] font-bold text-base font-serif">
+                    军机推演录
+                  </h3>
+                  <div className="text-[11px] text-[#8C7D70]">
+                    已收录战局 {savedSandTables.length} 卷
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowArchiveModal(false)}
+                className="w-7 h-7 rounded-full bg-white text-[#8C7D70] hover:text-[#3E3832] flex items-center justify-center border border-[#E0D5C5] text-sm font-bold shadow-sm"
+              >
+                ✕
+              </button>
             </div>
-          )}
+
+            {/* 战局存档列表 */}
+            <div className="flex-1 overflow-y-auto no-scrollbar py-3 flex flex-col gap-3">
+              {savedSandTables.length > 0 ? (
+                savedSandTables.map((save) => (
+                  <div
+                    key={save.id}
+                    onClick={() => handleLoadSandTable(save)}
+                    className="bg-white rounded-2xl p-3.5 border border-[#E6DDD0] shadow-sm hover:shadow-md hover:border-[#B35446]/40 transition-all cursor-pointer group flex flex-col relative"
+                  >
+                    <div className="flex items-center justify-between mb-1.5">
+                      <h4 className="text-[#3E3832] font-bold text-sm font-serif group-hover:text-[#B35446] transition-colors truncate max-w-[200px]">
+                        《{save.title}》
+                      </h4>
+                      <span className="bg-[#F4ECE1] text-[#915938] text-[10px] px-2 py-0.5 rounded-full font-bold">
+                        {save.elements?.length || 0} 棋子 · {save.simulationSteps?.length || 0} 步推演
+                      </span>
+                    </div>
+
+                    <div className="text-[11px] text-[#7A7062] line-clamp-2 italic font-serif bg-[#FAF8F5] p-2 rounded-xl border border-[#F0EBE1] mb-2.5">
+                      {save.writeContent
+                        ? `“${save.writeContent}”`
+                        : "常规沙盘阵势推演"}
+                    </div>
+
+                    <div className="flex items-center justify-between text-[10px] text-[#A69B8F] pt-2 border-t border-[#F5EFE6]">
+                      <span>{save.createTime || save.dateStr || "近期战局"}</span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleLoadSandTable(save);
+                            setTimeout(() => setShowExportModal(true), 200);
+                          }}
+                          className="text-[#B35446] hover:underline flex items-center gap-0.5 font-bold"
+                        >
+                          <i className="ph-bold ph-scroll"></i>
+                          <span>战报</span>
+                        </button>
+                        <button
+                          onClick={(e) => handleDeleteSandTable(e, save.id, save.title)}
+                          className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                          title="抹去存档"
+                        >
+                          <i className="ph-bold ph-trash"></i>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="flex-1 flex flex-col items-center justify-center py-12 text-center opacity-70">
+                  <i className="ph ph-map-trifold text-4xl text-[#B35446]/40 mb-2"></i>
+                  <p className="text-xs text-[#8C7D70] font-serif">
+                    案上尚无战局记录，快去排兵布阵推演一场吧！
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="pt-3 border-t border-[#E8DFC8] flex justify-between items-center">
+              <button
+                onClick={() => {
+                  setShowArchiveModal(false);
+                  handleResetSandTable();
+                }}
+                className="flex-1 py-2.5 rounded-xl bg-white border border-[#D4AB90] text-[#8C6B50] font-bold active:scale-95 transition-transform text-xs"
+              >
+                ➕ 开启新战役推演
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ===== 军机战报 / 行军舆图导出模态框 ===== */}
+      {showExportModal && (
+        <div className="fixed inset-0 bg-black/75 z-[1300] flex items-center justify-center p-3 animate-fadeIn">
+          <div className="bg-[#FAF6EE] rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] border-2 border-[#B35446]/60 overflow-hidden">
+            <div className="flex justify-between items-center p-4 bg-[#F5EFE4] border-b border-[#E4DACD]">
+              <div className="flex items-center gap-2">
+                <span className="text-lg">📜</span>
+                <div>
+                  <h3 className="text-[#3E3832] font-bold text-sm font-serif">
+                    军机战报 · 行军舆图导出
+                  </h3>
+                  <p className="text-[10px] text-[#8C7D70]">
+                    已布设 {elements.length} 处单位 · {simulationSteps.length} 步推演
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowExportModal(false)}
+                className="w-7 h-7 rounded-full bg-white text-[#8C7D70] hover:text-[#3E3832] flex items-center justify-center border border-[#E0D5C5] text-sm font-bold shadow-sm"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* 舆图战报预览 */}
+            <div className="flex-1 overflow-y-auto no-scrollbar p-5 bg-[#FAF6EE]">
+              <div className="border-2 border-[#B35446] p-5 rounded-2xl relative shadow-inner bg-[#FBF8F1]">
+                <div className="absolute right-4 top-4 border-2 border-[#B33E32] text-[#B33E32] px-2 py-1 text-[11px] font-bold font-serif tracking-widest rounded-sm rotate-6 bg-[#FAF6EE]/90 shadow-sm">
+                  军机密卷
+                </div>
+
+                <div className="text-center mb-4 mt-2">
+                  <div className="text-xs text-[#B35446] font-serif tracking-widest mb-1">
+                    ◈ 沙盘推演实录 · 舆图总谱 ◈
+                  </div>
+                  <h2 className="text-[#2D2620] text-xl font-bold font-serif mb-2">
+                    《{writeContent.trim() ? (writeContent.trim().length > 15 ? writeContent.trim().substring(0, 15) + "..." : writeContent.trim()) : "沙盘兵棋推演图"}》
+                  </h2>
+                  <div className="text-xs text-[#8C7B6E] font-serif max-w-xs mx-auto leading-relaxed bg-[#F4EDE2] p-2.5 rounded-xl border border-[#E8DFC8] mb-2">
+                    【战局背景】：{writeContent || "常规沙盘阵势推演"}
+                  </div>
+                  <div className="text-[11px] text-[#5A5F4D] font-serif">
+                    【随军参谋团】：{[selectedCharIds.includes("user") ? `统帅(${activeUserName})` : null, ...availableChars.filter((c) => selectedCharIds.includes(c.id)).map((c) => c.name || c.profile?.name)].filter(Boolean).join(" · ") || "统帅亲征"}
+                  </div>
+                </div>
+
+                {/* 参演兵力阵容 */}
+                <div className="my-4 pt-3 border-t border-dashed border-[#D9C3AC] flex flex-wrap items-center justify-center gap-2">
+                  <span className="text-xs font-bold text-[#5A5F4D] font-serif">
+                    ⚔️ 部署兵力：
+                  </span>
+                  {elements.slice(0, 12).map((el, i) => (
+                    <span
+                      key={i}
+                      className="bg-[#EAE2D5] text-[#4A5240] px-2.5 py-0.5 rounded-full text-xs font-bold border border-[#D5C9B8]"
+                    >
+                      {el.char} {el.detailInfo?.name || "单位"}
+                    </span>
+                  ))}
+                </div>
+
+                {/* 逐步推演实况 */}
+                <div className="flex flex-col gap-4 mt-4">
+                  {simulationSteps.length > 0 ? (
+                    simulationSteps.map((step, sIdx) => (
+                      <div
+                        key={sIdx}
+                        className="border-t border-[#E4DACD] pt-3 flex flex-col gap-2"
+                      >
+                        <div className="text-left text-xs font-bold text-[#B35446] font-serif tracking-wider">
+                          —— 第 {sIdx + 1} 步推演 ——
+                        </div>
+                        <div className="bg-[#FDFCF8] text-[#3E3832] p-2.5 rounded-xl text-xs leading-relaxed border border-[#E0D5C5]">
+                          <span className="font-bold text-[#8C7D70]">【战况】</span> {step.description}
+                        </div>
+                        <div className="bg-[#F1EBE0] text-[#7A826C] p-2 rounded-xl text-xs font-serif italic border border-[#E0D5C5]">
+                          <span className="font-bold text-[#8FA99D]">💡 {step.speaker ? `${step.speaker} 锐评` : "军师锐评"}：</span> "{step.reason}"
+                        </div>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-6 text-xs text-[#8C7D70] font-serif">
+                      当前尚未运行定格推演，请先在沙盘点击「推演」生成战局。
+                    </div>
+                  )}
+                </div>
+
+                <div className="mt-8 pt-4 border-t-2 border-[#B35446] flex items-center justify-between text-[11px] text-[#8C7B6E] font-serif">
+                  <div>洛阳军机处 · 沙盘推演司 藏</div>
+                  <div className="w-8 h-8 rounded-full border-2 border-[#B33E32] text-[#B33E32] flex items-center justify-center text-[10px] font-bold leading-none rotate-12">
+                    军机<br />密印
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 操作按钮栏 */}
+            <div className="p-3.5 bg-[#F5EFE4] border-t border-[#E4DACD] flex gap-2">
+              <button
+                onClick={handleExportCanvas}
+                disabled={isExportingImage}
+                className="flex-1 py-2.5 rounded-xl bg-[#B35446] hover:bg-[#A04538] text-white text-xs font-bold shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+              >
+                <i className="ph-bold ph-image"></i>
+                <span>{isExportingImage ? "绘制画卷中..." : "保存战报长图 (PNG)"}</span>
+              </button>
+              <button
+                onClick={handleCopyReportText}
+                className="px-3.5 py-2.5 rounded-xl bg-white border border-[#D4AB90] text-[#8C6B50] hover:bg-[#FAF7F2] text-xs font-bold active:scale-95 transition-all flex items-center gap-1"
+                title="复制战报文本"
+              >
+                <i className="ph-bold ph-copy"></i>
+                <span>复制全篇</span>
+              </button>
+              <button
+                onClick={handleDownloadReportText}
+                className="px-3 py-2.5 rounded-xl bg-white border border-[#D4AB90] text-[#8C6B50] hover:bg-[#FAF7F2] text-xs font-bold active:scale-95 transition-all flex items-center gap-1"
+                title="导出为文本文件"
+              >
+                <i className="ph-bold ph-file-text"></i>
+                <span>.txt</span>
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
   );
 };
-
-// T9 情侣空间页面组件
 
 
 // ==================== 安全解析大模型 JSON 结果辅助函数 (修复字符串内未转义换行与控制字符) ====================
@@ -87892,7 +90406,7 @@ const SlotMachineSelector = ({ options, onSelect, onClose }) => {
 
 // ==================== 相对演绎页面组件 ====================
 const RelativeDeductionPage = ({ onBack }) => {
-  const { useState, useEffect } = React;
+  const { useState, useEffect, useRef } = React;
   const [isOpen, setIsOpen] = useState(false);
   const [isFlipped, setIsFlipped] = useState(false);
 
@@ -87911,10 +90425,25 @@ const RelativeDeductionPage = ({ onBack }) => {
   const [selectedContent, setSelectedContent] = useState(null);
   const [isLoadingContent, setIsLoadingContent] = useState(false);
 
-  // --- 新增：AI 剧本生成与播放状态 ---
+  // --- AI 剧本生成与播放状态 ---
   const [scriptPages, setScriptPages] = useState([]); // 存储生成的剧本页 [{ lines: [], choices: [] }]
   const [currentScriptPage, setCurrentScriptPage] = useState(0); // 当前正在查看的页码
   const [isGeneratingScript, setIsGeneratingScript] = useState(false); // 生成中状态
+
+  // --- 方向C：戏折子存读档与导出状态 ---
+  const [currentPlayId, setCurrentPlayId] = useState(null);
+  const [savedPlays, setSavedPlays] = useState([]);
+  const [showArchiveModal, setShowArchiveModal] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [isExportingImage, setIsExportingImage] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const toastTimerRef = useRef(null);
+
+  const showToast = (msg) => {
+    setToastMessage(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => setToastMessage(""), 2800);
+  };
 
   // --- 场景配置状态 ---
   const [sceneConfig, setSceneConfig] = useState({
@@ -87967,7 +90496,429 @@ const RelativeDeductionPage = ({ onBack }) => {
     loadActors();
   }, []);
 
-  // --- 新增：调用 AI 生成剧本逻辑 ---
+  // --- 方向C：从 IndexedDB / localStorage 加载戏折存档 ---
+  useEffect(() => {
+    const loadSavedPlays = async () => {
+      try {
+        if (window.openDB) {
+          const db = await window.openDB();
+          const tx = db.transaction("user_settings", "readonly");
+          const store = tx.objectStore("user_settings");
+          const req = store.get("relative_deduction_saves");
+          req.onsuccess = () => {
+            if (Array.isArray(req.result?.value) && req.result.value.length > 0) {
+              setSavedPlays(req.result.value);
+              return;
+            }
+          };
+        }
+      } catch (e) {
+        console.warn("读取IndexedDB戏折存档失败，回退到localStorage", e);
+      }
+      try {
+        const local = JSON.parse(localStorage.getItem("relative_deduction_saves") || "[]");
+        if (Array.isArray(local) && local.length > 0) {
+          setSavedPlays(local);
+        }
+      } catch (e) {}
+    };
+    loadSavedPlays();
+  }, []);
+
+  // --- 持久化戏折列表 ---
+  const persistPlays = async (plays) => {
+    setSavedPlays(plays);
+    try {
+      localStorage.setItem("relative_deduction_saves", JSON.stringify(plays));
+    } catch (e) {}
+    try {
+      if (window.openDB) {
+        const db = await window.openDB();
+        const tx = db.transaction("user_settings", "readwrite");
+        const store = tx.objectStore("user_settings");
+        await store.put({ key: "relative_deduction_saves", value: plays });
+      }
+    } catch (e) {
+      console.error("保存戏折到IndexedDB失败:", e);
+    }
+  };
+
+  // --- 保存当前戏折 ---
+  const handleSaveCurrentPlay = () => {
+    if (!selectedContent || scriptPages.length === 0) {
+      alert("暂无可收录的戏折内容，请先开始演绎！");
+      return;
+    }
+    const pId = currentPlayId || Date.now();
+    setCurrentPlayId(pId);
+    const newPlay = {
+      id: pId,
+      title: selectedContent.title || "未命名手稿",
+      sourceText: selectedContent.text || "",
+      actors: selectedActors.map((a) => ({
+        id: a.id,
+        name: a.name,
+        avatar: a.avatar || a.avatarKey || a.avatarId || a.id,
+        avatarColor: a.avatarColor || "#89A89A",
+        personality: (a.profile && a.profile.personality) || "",
+      })),
+      pages: scriptPages,
+      currentScriptPage: currentScriptPage,
+      createTime: new Date().toLocaleString("zh-CN", { hour12: false }),
+      dateStr: new Date().toLocaleDateString("zh-CN"),
+    };
+    const updated = [newPlay, ...savedPlays.filter((p) => p.id !== pId)];
+    persistPlays(updated);
+    showToast(`✨ 戏折《${newPlay.title}》已收入名剧录！`);
+  };
+
+  // --- 载入戏折 ---
+  const handleLoadPlay = (play) => {
+    setSelectedContent({ title: play.title, text: play.sourceText });
+    setSelectedActors(play.actors || []);
+    setScriptPages(play.pages || []);
+    setCurrentScriptPage(play.currentScriptPage || 0);
+    setCurrentPlayId(play.id);
+    setIsFlipped(true);
+    setIsOpen(true);
+    setShowArchiveModal(false);
+    showToast(`📖 已翻开戏折《${play.title}》`);
+  };
+
+  // --- 删除戏折 ---
+  const handleDeletePlay = (e, id, title) => {
+    e.stopPropagation();
+    if (confirm(`确定要将戏折《${title}》从名剧录中抹去吗？`)) {
+      const updated = savedPlays.filter((p) => p.id !== id);
+      persistPlays(updated);
+      if (currentPlayId === id) {
+        setCurrentPlayId(null);
+      }
+      showToast(`已移除戏折《${title}》`);
+    }
+  };
+
+  // --- 重置/开新戏 ---
+  const handleResetPlay = () => {
+    if (scriptPages.length > 0) {
+      if (!confirm("确定要新开一台戏吗？未保存的演绎进度将会清空。")) return;
+    }
+    setSelectedContent(null);
+    setSelectedActors([]);
+    setScriptPages([]);
+    setCurrentScriptPage(0);
+    setCurrentPlayId(null);
+    showToast("已开新戏台，请择选剧本与优伶");
+  };
+
+  // --- 格式化戏文全本 ---
+  const getFormattedPlayText = () => {
+    if (!selectedContent) return "";
+    let text = `╔═════════════════════════════════════════════════╗\n`;
+    text += `   🎭【相对演绎 · 戏折全卷】《${selectedContent.title || "戏说名篇"}》\n`;
+    text += `╚═════════════════════════════════════════════════╝\n\n`;
+    text += `【底本文段】：\n${selectedContent.text || "无"}\n\n`;
+    text += `【参演优伶】：${selectedActors.map((a) => a.name).join("、") || "未定"}\n`;
+    text += `【演出日期】：${new Date().toLocaleString("zh-CN")}\n\n`;
+    text += `───────────────────────────────────────────────────\n\n`;
+
+    scriptPages.forEach((page, idx) => {
+      text += `【第 ${idx + 1} 幕】\n\n`;
+      (page.lines || []).forEach((line) => {
+        if (line.type === "narration") {
+          text += `[旁白] ${line.text}\n\n`;
+        } else {
+          text += `[${line.speaker || "演员"}] ${line.text}\n\n`;
+        }
+      });
+      if (page.choices && page.choices.length > 0) {
+        text += `◈ 幕间走向抉择：\n`;
+        page.choices.forEach((c, cIdx) => {
+          text += `  走向 ${cIdx + 1}：${c}\n`;
+        });
+        text += `\n`;
+      }
+      text += `───────────────────────────────────────────────────\n\n`;
+    });
+
+    text += `（洛阳梨园 · 相对演绎总谱 藏）\n`;
+    return text;
+  };
+
+  const handleCopyPlayText = () => {
+    const fullText = getFormattedPlayText();
+    if (!fullText) return alert("暂无可复制的戏文！");
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(fullText).then(() => {
+        showToast("📋 戏折全文已复制到剪贴板！");
+      }).catch(() => {
+        showToast("复制失败，请手动选取");
+      });
+    } else {
+      showToast("浏览器不支持快捷复制");
+    }
+  };
+
+  const handleDownloadPlayText = () => {
+    const fullText = getFormattedPlayText();
+    if (!fullText) return alert("暂无可导出的戏文！");
+    const blob = new Blob([fullText], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `戏折_《${selectedContent.title || "相对演绎"}》_全本文稿.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast("📥 戏折剧本文稿已导出！");
+  };
+
+  // --- Canvas 离屏高清绘制宣纸长卷 ---
+  const handleExportCanvas = () => {
+    if (!selectedContent || scriptPages.length === 0) {
+      alert("暂无可导出的戏折内容！");
+      return;
+    }
+    setIsExportingImage(true);
+
+    try {
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      const width = 800;
+      const padding = 50;
+      const contentWidth = width - padding * 2;
+
+      // 折行辅助函数
+      const wrapText = (text, maxWidth, fontSize, fontFace = "sans-serif") => {
+        ctx.font = `${fontSize}px ${fontFace}`;
+        const lines = [];
+        const paragraphs = String(text || "").split("\n");
+        for (const para of paragraphs) {
+          let currentLine = "";
+          for (let i = 0; i < para.length; i++) {
+            const char = para[i];
+            const testLine = currentLine + char;
+            const metrics = ctx.measureText(testLine);
+            if (metrics.width > maxWidth && currentLine.length > 0) {
+              lines.push(currentLine);
+              currentLine = char;
+            } else {
+              currentLine = testLine;
+            }
+          }
+          if (currentLine) lines.push(currentLine);
+        }
+        return lines;
+      };
+
+      // 预计算总高度
+      let calculatedHeight = padding + 180;
+      calculatedHeight += 70; // 优伶班底高度
+
+      scriptPages.forEach((page) => {
+        calculatedHeight += 60; // 幕标题
+        (page.lines || []).forEach((line) => {
+          if (line.type === "narration") {
+            const lines = wrapText(line.text, contentWidth - 40, 16, "serif");
+            calculatedHeight += lines.length * 26 + 32;
+          } else {
+            const lines = wrapText(line.text, contentWidth - 90, 16, "sans-serif");
+            calculatedHeight += Math.max(36, lines.length * 26 + 12) + 16;
+          }
+        });
+        if (page.choices && page.choices.length > 0) {
+          calculatedHeight += 20;
+          page.choices.forEach((choice) => {
+            const lines = wrapText("◈ 走向：" + choice, contentWidth - 40, 14, "serif");
+            calculatedHeight += lines.length * 22 + 8;
+          });
+        }
+        calculatedHeight += 25; // 幕间距
+      });
+
+      calculatedHeight += 160; // 卷尾落款 + 洛阳印章
+
+      canvas.width = width * 2;
+      canvas.height = calculatedHeight * 2;
+      ctx.scale(2, 2);
+
+      // 1. 宣纸底色
+      ctx.fillStyle = "#FAF6EE";
+      ctx.fillRect(0, 0, width, calculatedHeight);
+
+      // 微细纸纹
+      ctx.fillStyle = "rgba(180, 160, 130, 0.04)";
+      for (let i = 0; i < calculatedHeight; i += 6) {
+        ctx.fillRect(0, i, width, 1);
+      }
+
+      // 2. 双重古风边框
+      ctx.strokeStyle = "#B35446";
+      ctx.lineWidth = 2.5;
+      ctx.strokeRect(20, 20, width - 40, calculatedHeight - 40);
+
+      ctx.strokeStyle = "#D9C3AC";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(26, 26, width - 52, calculatedHeight - 52);
+
+      // 3. 卷首方印【相对演绎】
+      ctx.fillStyle = "#B33E32";
+      ctx.fillRect(width - padding - 75, padding - 10, 70, 70);
+      ctx.strokeStyle = "#FAF5EC";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(width - padding - 72, padding - 7, 64, 64);
+      ctx.fillStyle = "#FAF5EC";
+      ctx.font = "bold 16px serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("相对", width - padding - 40, padding + 15);
+      ctx.fillText("演绎", width - padding - 40, padding + 37);
+
+      // 4. 标题与底本
+      let curY = padding + 20;
+      ctx.fillStyle = "#2D2620";
+      ctx.font = "bold 28px serif";
+      ctx.textAlign = "left";
+      ctx.textBaseline = "alphabetic";
+      const titleText = `《${selectedContent.title || "戏说名篇"}》`;
+      ctx.fillText(titleText, padding, curY);
+
+      curY += 30;
+      ctx.fillStyle = "#8C7B6E";
+      ctx.font = "14px serif";
+      const originSnippet = (selectedContent.text || "").replace(/\n/g, " ").substring(0, 45) + "...";
+      ctx.fillText(`【底本】：${originSnippet}`, padding, curY);
+
+      curY += 35;
+      // 5. 优伶班底
+      ctx.fillStyle = "#5A5F4D";
+      ctx.font = "bold 15px sans-serif";
+      ctx.fillText("🎭 优伶班底：", padding, curY);
+      const actorNames = selectedActors.map((a) => a.name).join("  ·  ") || "暂无";
+      ctx.font = "15px sans-serif";
+      ctx.fillStyle = "#7A826C";
+      ctx.fillText(actorNames, padding + 95, curY);
+
+      curY += 25;
+      ctx.strokeStyle = "#E4DACD";
+      ctx.beginPath();
+      ctx.moveTo(padding, curY);
+      ctx.lineTo(width - padding, curY);
+      ctx.stroke();
+      curY += 35;
+
+      // 6. 逐幕绘制
+      scriptPages.forEach((page, pIdx) => {
+        ctx.fillStyle = "#B35446";
+        ctx.font = "bold 18px serif";
+        ctx.textAlign = "center";
+        ctx.fillText(`— 第 ${pIdx + 1} 幕 —`, width / 2, curY);
+        curY += 25;
+
+        (page.lines || []).forEach((line) => {
+          if (line.type === "narration") {
+            const lines = wrapText(line.text, contentWidth - 40, 15, "serif");
+            const boxH = lines.length * 24 + 20;
+            ctx.fillStyle = "#F1EBE0";
+            ctx.fillRect(padding + 10, curY, contentWidth - 20, boxH);
+            ctx.strokeStyle = "#E0D5C5";
+            ctx.strokeRect(padding + 10, curY, contentWidth - 20, boxH);
+
+            ctx.fillStyle = "#7A7062";
+            ctx.font = "italic 15px serif";
+            ctx.textAlign = "center";
+            lines.forEach((l, lIdx) => {
+              ctx.fillText(l, width / 2, curY + 22 + lIdx * 24);
+            });
+            curY += boxH + 16;
+          } else {
+            const speaker = line.speaker || "神秘人";
+            const lines = wrapText(line.text, contentWidth - 90, 16, "sans-serif");
+
+            // 角色印章
+            ctx.fillStyle = "#EAE2D5";
+            ctx.fillRect(padding + 5, curY, 70, 24);
+            ctx.strokeStyle = "#89A89A";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(padding + 5, curY, 70, 24);
+
+            ctx.fillStyle = "#4A5240";
+            ctx.font = "bold 13px sans-serif";
+            ctx.textAlign = "center";
+            ctx.fillText(speaker.substring(0, 4), padding + 40, curY + 16);
+
+            // 对白
+            ctx.fillStyle = "#332B25";
+            ctx.font = "16px sans-serif";
+            ctx.textAlign = "left";
+            lines.forEach((l, lIdx) => {
+              ctx.fillText(l, padding + 85, curY + 17 + lIdx * 26);
+            });
+            curY += Math.max(32, lines.length * 26 + 10) + 14;
+          }
+        });
+
+        if (page.choices && page.choices.length > 0) {
+          curY += 6;
+          page.choices.forEach((choice) => {
+            ctx.fillStyle = "#A05A45";
+            ctx.font = "14px serif";
+            ctx.textAlign = "left";
+            const lines = wrapText(`◈ 走向：${choice}`, contentWidth - 40, 14, "serif");
+            lines.forEach((l, lIdx) => {
+              ctx.fillText(l, padding + 20, curY + lIdx * 20);
+            });
+            curY += lines.length * 20 + 8;
+          });
+        }
+
+        curY += 20;
+      });
+
+      // 7. 卷尾落款
+      curY += 20;
+      ctx.strokeStyle = "#B35446";
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(padding, curY);
+      ctx.lineTo(width - padding, curY);
+      ctx.stroke();
+
+      curY += 30;
+      ctx.fillStyle = "#8C7B6E";
+      ctx.font = "14px serif";
+      ctx.textAlign = "left";
+      const dateStr = new Date().toLocaleDateString("zh-CN", { year: "numeric", month: "long", day: "numeric" });
+      ctx.fillText(`岁在 ${dateStr} · 洛阳梨园相对演绎总谱`, padding, curY);
+
+      // 卷尾圆印
+      ctx.fillStyle = "#B33E32";
+      ctx.beginPath();
+      ctx.arc(width - padding - 35, curY - 5, 26, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = "#FAF5EC";
+      ctx.stroke();
+      ctx.fillStyle = "#FAF5EC";
+      ctx.font = "bold 12px serif";
+      ctx.textAlign = "center";
+      ctx.fillText("戏折", width - padding - 35, curY - 10);
+      ctx.fillText("藏印", width - padding - 35, curY + 6);
+
+      const dataUrl = canvas.toDataURL("image/png");
+      const link = document.createElement("a");
+      link.download = `戏折_《${selectedContent.title || "相对演绎"}》_宣纸长卷.png`;
+      link.href = dataUrl;
+      link.click();
+      showToast(`✨ 戏折画卷已成功生成并下载！`);
+    } catch (err) {
+      console.error("生成画卷失败", err);
+      alert("画卷绘制失败，请检查浏览器设置！");
+    } finally {
+      setIsExportingImage(false);
+    }
+  };
+
+  // --- 调用 AI 生成剧本逻辑 ---
   const handleGenerateScript = async (userChoice = "") => {
     if (!selectedContent || selectedActors.length === 0) {
       alert("请先选定剧本（演绎内容）并点拨将领（演绎者）！");
@@ -88006,10 +90957,9 @@ const RelativeDeductionPage = ({ onBack }) => {
         )
         .join("\n");
 
-      // 4. 构建上下文记忆（把前面生成的几页作为前情提要）
+      // 4. 构建上下文记忆
       let previousStory = "";
       if (scriptPages.length > 0) {
-        // 为了节省 token，只取最近的两页作为上下文
         const recentPages = scriptPages.slice(-2);
         previousStory =
           "【前情提要】\n" +
@@ -88029,7 +90979,6 @@ const RelativeDeductionPage = ({ onBack }) => {
         }
       }
 
-      // 【新增】：提取当前用户已上传的立绘和背景名称，告诉AI有哪些可用
       const availableBgs =
         sceneConfig.backgrounds.map((b) => b.name).join("、") || "无特定背景";
       const availableSprites =
@@ -88039,44 +90988,58 @@ const RelativeDeductionPage = ({ onBack }) => {
 
       // 5. 提示词构建
       const sysPrompt =
-        "你是一个深谙东汉历史、极具幽默感且脑洞大开的顶级视觉小说剧本构作。你擅长结合世界观设定和特定文风，写出令人惊艳的Galgame剧本。";
+        "你是一个顶级互动剧场/视觉小说剧本构作。你最擅长指导演员【全身心反串入戏饰演故事角色】，将经典人设与荒诞/经典故事深度融合，创造充满戏剧张力与反差喜感的沉浸式魔改大戏。";
       const userPrompt = `
                           【世界观大背景】
                           ${worldContext}
 
                           ${userContext}
 
-                          【演员阵容与人设】（他们说话必须严格符合此设定！）
+                          【参演演员阵容及其本尊性格特点】
                           ${actorsInfo}
 
                           【当前可用的背景资源标签】：${availableBgs}
                           【当前可用的立绘表情标签】：${availableSprites}
 
-                          【本次演绎的原作基础】
-                          篇名：${selectedContent.title}
-                          原文：${selectedContent.text}
+                          【本次演绎的原作剧本/故事底本】
+                          篇名：《${selectedContent.title}》
+                          原文/故事背景：
+                          ${selectedContent.text}
 
                           ${previousStory}
 
-                          【任务与要求】
-                          1. 请基于以上信息，${scriptPages.length === 0 ? "作为剧本的开篇，开始" : "顺着前情提要继续"}生成一段约 500-700 字的魔改演绎剧本。
-                          2. 剧情要有趣、有梗，背景必须基于开启的世界书设定。
-                          3. 必须在剧本末尾，给出现场观众/导演可以决定的 2 到 3 个“下一步剧情走向”选项。
-                          4. 必须严格输出纯 JSON 格式！不要包裹 \`\`\`json，直接输出以 { 开头，} 结尾的 JSON 对象。
+                          ═══════════════════════════════════════════════════
+                          【⚡️ 核心演绎铁律 —— 严禁旁观，必须全员分配并反串入戏！】
+                          ═══════════════════════════════════════════════════
+                          1. 【角色分派机制】：
+                             - 你必须首先将【原作剧本】中的每一个核心故事角色（例如《三只小猪》里的猪老大、猪老二、猪老三、大灰狼；《白蛇传》里的白娘子、许仙、法海；《古文/诗词》里的主角/对立角色），【明确分派】给当前选中的演员！
+                             - 每一个演员都必须分配到具体的故事角色身份！绝不能有任何演员被闲置或沦为场外看客！
 
-                          【JSON 输出格式严格要求】(请在每一句 dialogue 增加 emotion 和 bgKeyword 字段)
+                          2. 【反串扮演与台词法则（双层灵魂）】：
+                             - 【绝非围观/评价剧本】：严禁演员以局外人身份在旁边吃瓜、闲聊、吐槽剧本或点评别人表演！
+                             - 【以戏中人身份行动与说话】：演员说出的每一句台词，都必须是该故事角色在当下情境中的直接言行、争吵、施计、求生或冲突！
+                             - 【融入演员本尊性格反差】：演员在扮演该故事角色时，必须带着演员本尊的标志性性格神韵、口吻、傲娇/算计/仙气等反差感！
+                               （例如：若袁基饰演猪老三，他就是严谨考究、恪守世家礼仪去建避难砖房的猪老三；若刘辩饰演猪老大，他就是娇气贵气嫌茅草扎手的猪老大；若左慈饰演大灰狼，他就是手掐道诀口念真言去吹房子的仙风道骨狼。）
+
+                          3. 【剧情结构与输出要求】：
+                             - ${scriptPages.length === 0 ? "作为本剧开篇，交代角色反串入戏的初登场与故事开端" : "顺着上一幕剧情及观众/导演的选择继续推进戏剧冲突"}，生成约 500-700 字的精妙魔改剧本。
+                             - 旁白仅用于渲染舞台气氛、烘托戏剧动作与场景转场，不得代替演员说话。
+                             - 每一幕末尾必须给出 2 到 3 个推动剧情走向的分歧选项（围绕故事中角色的下一步行动）。
+                             - 必须严格输出纯 JSON 格式！不要包裹 \`\`\`json，直接以 { 开头，} 结尾。
+
+                          【JSON 输出格式严格要求】
                           {
                             "lines": [
                               {
                                 "type": "narration",
-                                "text": "（旁白内容）",
+                                "text": "（旁白描绘舞台场景与动作推进）",
                                 "bgKeyword": "根据剧情氛围，从【当前可用的背景资源标签】中选一个最符合的填入，没有填空"
                               },
                               {
                                 "type": "dialogue",
                                 "speaker": "演员姓名",
-                                "text": "台词内容",
-                                "emotion": "根据语气，从【当前可用的立绘表情标签】中选一个最符合的填入",
+                                "text": "演员以反串角色身份说出的台词与动作描写",
+                                "emotion": "从【当前可用的立绘表情标签】中选一个最符合的填入",
                                 "bgKeyword": "同上"
                               }
                             ],
@@ -88097,7 +91060,6 @@ const RelativeDeductionPage = ({ onBack }) => {
           null,
           (reply) => {
             try {
-              // 1. 清洗 Markdown 代码块并提取最外层的 JSON
               let raw = reply.trim();
               raw = raw.replace(/\`\`\`json/gi, "").replace(/\`\`\`/g, "").trim();
 
@@ -88109,7 +91071,6 @@ const RelativeDeductionPage = ({ onBack }) => {
 
               const data = JSON.parse(raw);
 
-              // 2. 提取与规范化 lines 和 choices
               let normalizedLines = [];
               let normalizedChoices = [];
 
@@ -88122,7 +91083,6 @@ const RelativeDeductionPage = ({ onBack }) => {
                   data.choices || data.options || data.branches || data.nextChoices || [];
               }
 
-              // 3. 检查 lines 数组内部是否混入了 choices 对象（例如 { type: "choices", choices: [...] }）
               if (Array.isArray(normalizedLines)) {
                 const choiceItemIndex = normalizedLines.findIndex(
                   (item) =>
@@ -88142,12 +91102,10 @@ const RelativeDeductionPage = ({ onBack }) => {
                   ) {
                     normalizedChoices = extracted;
                   }
-                  // 从台词列表中剔除 choices 项
                   normalizedLines = normalizedLines.filter((_, idx) => idx !== choiceItemIndex);
                 }
               }
 
-              // 4. 如果没有解析出 choices，提供默认趣味走向
               if (!Array.isArray(normalizedChoices) || normalizedChoices.length === 0) {
                 normalizedChoices = [
                   "顺应当前局势，探查幕后隐藏的玄机与线索。",
@@ -88156,12 +91114,10 @@ const RelativeDeductionPage = ({ onBack }) => {
                 ];
               }
 
-              // 5. 校验 lines 必须是非空数组
               if (!Array.isArray(normalizedLines) || normalizedLines.length === 0) {
                 throw new Error("未能解析出有效的剧本台词内容");
               }
 
-              // 6. 格式化每一行台词，确保 speaker/text/emotion/bgKeyword 字段安全
               normalizedLines = normalizedLines.map((line) => {
                 if (typeof line === "string") {
                   return { type: "narration", text: line, bgKeyword: "" };
@@ -88182,7 +91138,7 @@ const RelativeDeductionPage = ({ onBack }) => {
 
               setScriptPages((prev) => {
                 const newPages = [...prev, safeData];
-                setCurrentScriptPage(newPages.length - 1); // 自动跳到最新一页
+                setCurrentScriptPage(newPages.length - 1);
                 return newPages;
               });
             } catch (e) {
@@ -88288,15 +91244,36 @@ const RelativeDeductionPage = ({ onBack }) => {
   };
 
   return (
-    <div className="fixed inset-0 z-[600] bg-[#F9F7F5] flex flex-col fade-in">
-      <div className="t11-nav">
+    <div className="fixed inset-0 z-[600] bg-[#F9F7F5] flex flex-col fade-in font-sans">
+      {/* 顶部轻提示 Toast */}
+      {toastMessage && (
+        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-[750] bg-[#3E3832]/90 text-[#F9F7F5] px-4 py-2 rounded-full text-xs font-bold shadow-xl border border-white/20 animate-bounce pointer-events-none flex items-center gap-1.5">
+          <span>{toastMessage}</span>
+        </div>
+      )}
+
+      {/* 顶部导航栏 */}
+      <div className="t11-nav flex items-center justify-between px-3">
         <div className="back-btn" onClick={onBack}>
           <i className="ph ph-caret-left" style={{ fontSize: "24px" }}></i>
         </div>
-        <div className="title">相对演绎</div>
+        <div className="title font-bold">相对演绎</div>
+        <button
+          onClick={() => setShowArchiveModal(true)}
+          className="flex items-center gap-1 bg-[#F2EDE4] hover:bg-[#EAE2D5] text-[#5A5F4D] px-2.5 py-1.5 rounded-full text-xs font-bold border border-[#E0D5C5] active:scale-95 transition-all shadow-sm"
+          title="查看戏折名剧录"
+        >
+          <i className="ph-fill ph-book-bookmark text-[#B35446]"></i>
+          <span>戏折子</span>
+          {savedPlays.length > 0 && (
+            <span className="bg-[#B35446] text-white text-[10px] px-1.5 py-0.2 rounded-full font-sans">
+              {savedPlays.length}
+            </span>
+          )}
+        </button>
       </div>
 
-      <div className="flex-1 flex flex-col items-center justify-center p-6 relative">
+      <div className="flex-1 flex flex-col items-center justify-center p-4 relative overflow-hidden">
         {!isFlipped ? (
           <div className="re-book-container">
             <div
@@ -88313,13 +91290,13 @@ const RelativeDeductionPage = ({ onBack }) => {
             </div>
           </div>
         ) : (
-          <div className="w-full h-full flex flex-col animate-slide-up">
-            {/* 顶部操作按钮栏 */}
-            <div className="flex justify-between gap-2 mb-6 relative">
+          <div className="w-full h-full flex flex-col animate-slide-up max-w-lg mx-auto">
+            {/* 顶部主操作栏 */}
+            <div className="flex justify-between items-center gap-2 mb-3 relative">
               {/* 演绎内容 按钮与下拉 */}
               <div className="flex-1 relative">
                 <button
-                  className="duo-btn w-full duo-btn-green"
+                  className="duo-btn w-full duo-btn-green py-2.5 text-xs font-bold"
                   onClick={() => {
                     setShowContentMenu(!showContentMenu);
                     setShowActorMenu(false);
@@ -88331,29 +91308,29 @@ const RelativeDeductionPage = ({ onBack }) => {
                 </button>
 
                 {showContentMenu && (
-                  <div className="absolute top-[3.2rem] left-0 w-full bg-white rounded-xl shadow-lg border border-[#EAEAEA] overflow-hidden z-20 animate-slide-up">
+                  <div className="absolute top-[3.2rem] left-0 w-full bg-white rounded-xl shadow-xl border border-[#EAEAEA] overflow-hidden z-30 animate-slide-up">
                     <div
-                      className="p-3 text-sm text-[#5A5F4D] hover:bg-[#F2F7F4] cursor-pointer text-center font-bold"
+                      className="p-3 text-xs text-[#5A5F4D] hover:bg-[#F2F7F4] cursor-pointer text-center font-bold"
                       onClick={() => fetchContentOptions("古文")}
                     >
-                      典籍古文
+                      📜 典籍古文
                     </div>
                     <div className="border-b border-gray-100"></div>
                     <div
-                      className="p-3 text-sm text-[#5A5F4D] hover:bg-[#F2F7F4] cursor-pointer text-center font-bold"
+                      className="p-3 text-xs text-[#5A5F4D] hover:bg-[#F2F7F4] cursor-pointer text-center font-bold"
                       onClick={() => fetchContentOptions("古诗")}
                     >
-                      汉乐古诗
+                      🎵 汉乐古诗
                     </div>
                     <div className="border-b border-gray-100"></div>
                     <div
-                      className="p-3 text-sm text-[#5A5F4D] hover:bg-[#F2F7F4] cursor-pointer text-center font-bold"
+                      className="p-3 text-xs text-[#5A5F4D] hover:bg-[#F2F7F4] cursor-pointer text-center font-bold"
                       onClick={() => {
                         setShowContentMenu(false);
                         setShowCustomInput(true);
                       }}
                     >
-                      自定义
+                      ✍️ 挥毫自定
                     </div>
                   </div>
                 )}
@@ -88362,7 +91339,7 @@ const RelativeDeductionPage = ({ onBack }) => {
               {/* 演绎者 按钮 */}
               <div className="flex-1 relative">
                 <button
-                  className="duo-btn w-full duo-btn-green"
+                  className="duo-btn w-full duo-btn-green py-2.5 text-xs font-bold"
                   onClick={() => {
                     setShowActorMenu(true);
                     setShowContentMenu(false);
@@ -88374,9 +91351,9 @@ const RelativeDeductionPage = ({ onBack }) => {
                 </button>
               </div>
 
-              {/* 开始演绎 按钮 */}
+              {/* 开始/重新演绎 按钮 */}
               <button
-                className="duo-btn flex-1"
+                className="duo-btn flex-1 py-2.5 text-xs font-bold"
                 style={{
                   backgroundColor: "#E8C3A8",
                   color: "white",
@@ -88386,15 +91363,52 @@ const RelativeDeductionPage = ({ onBack }) => {
                 disabled={isGeneratingScript}
               >
                 {isGeneratingScript
-                  ? "构思剧本中..."
+                  ? "构思中..."
                   : scriptPages.length > 0
-                    ? "重新演绎"
+                    ? "重开此幕"
                     : "开始演绎"}
               </button>
             </div>
 
+            {/* 舞台区操作工具条（剧本生成后出现） */}
+            {scriptPages.length > 0 && (
+              <div className="flex items-center justify-between bg-[#F2EDE4]/80 backdrop-blur-sm px-3 py-1.5 rounded-2xl mb-2.5 border border-[#E4DACD] shadow-sm">
+                <div className="flex items-center gap-1.5 text-xs text-[#6E6359] font-serif font-bold">
+                  <span className="bg-[#B35446] text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                    第 {currentScriptPage + 1}/{scriptPages.length} 幕
+                  </span>
+                  <span className="truncate max-w-[110px]">{selectedContent?.title}</span>
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    onClick={handleSaveCurrentPlay}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#E8C3A8] text-white text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-[#DEB293]"
+                    title="存为戏折"
+                  >
+                    <i className="ph-fill ph-floppy-disk"></i>
+                    <span>存戏折</span>
+                  </button>
+                  <button
+                    onClick={() => setShowExportModal(true)}
+                    className="flex items-center gap-1 px-2.5 py-1 rounded-xl bg-[#B35446] text-white text-xs font-bold shadow-sm active:scale-95 transition-all hover:bg-[#A04538]"
+                    title="导出宣纸画卷与文稿"
+                  >
+                    <i className="ph-fill ph-scroll"></i>
+                    <span>长卷</span>
+                  </button>
+                  <button
+                    onClick={handleResetPlay}
+                    className="flex items-center justify-center w-7 h-7 rounded-xl bg-white/80 text-[#8C7D70] hover:text-[#5A5F4D] text-xs font-bold border border-[#E0D5C5] active:scale-95 transition-all"
+                    title="新开一台戏"
+                  >
+                    <i className="ph-bold ph-arrows-counter-clockwise"></i>
+                  </button>
+                </div>
+              </div>
+            )}
+
             {/* 预览舞台 */}
-            <div className="w-full h-[calc(100vh-200px)] bg-white rounded-3xl p-6 border-2 border-[#EAEAEA] shadow-inner flex flex-col overflow-hidden relative">
+            <div className="w-full flex-1 bg-white rounded-3xl p-5 border-2 border-[#EAEAEA] shadow-inner flex flex-col overflow-hidden relative">
               {/* 左翻页按钮 */}
               {scriptPages.length > 1 && currentScriptPage > 0 && (
                 <button
@@ -88416,7 +91430,7 @@ const RelativeDeductionPage = ({ onBack }) => {
                   </button>
                 )}
 
-              {/* 如果正在生成且没有历史数据，显示大 Loading */}
+              {/* Loading */}
               {isGeneratingScript && scriptPages.length === 0 ? (
                 <div className="flex-1 flex flex-col items-center justify-center opacity-80 animate-pulse">
                   <iconify-icon
@@ -88427,15 +91441,17 @@ const RelativeDeductionPage = ({ onBack }) => {
                       marginBottom: "20px",
                     }}
                   ></iconify-icon>
-                  <h3 className="text-[#5A5F4D] text-xl font-bold tracking-widest">
+                  <h3 className="text-[#5A5F4D] text-lg font-bold tracking-widest font-serif">
                     大幕拉开，好戏酝酿中...
                   </h3>
                 </div>
               ) : scriptPages.length > 0 ? (
                 /* 渲染生成的剧本 */
-                <div className="w-full text-left flex flex-col h-full overflow-y-auto no-scrollbar px-6">
-                  <h3 className="text-[#5A5F4D] text-lg font-bold mb-4 border-b border-[#EAEAEA] pb-2 text-center font-serif">
-                    {selectedContent.title} - 第 {currentScriptPage + 1} 幕
+                <div className="w-full text-left flex flex-col h-full overflow-y-auto no-scrollbar px-3">
+                  <h3 className="text-[#5A5F4D] text-base font-bold mb-3 border-b border-[#EAEAEA] pb-2 text-center font-serif flex items-center justify-center gap-2">
+                    <span className="text-[#B35446]">◈</span>
+                    <span>{selectedContent.title} - 第 {currentScriptPage + 1} 幕</span>
+                    <span className="text-[#B35446]">◈</span>
                   </h3>
 
                   <div className="flex-1">
@@ -88444,20 +91460,19 @@ const RelativeDeductionPage = ({ onBack }) => {
                         return (
                           <div
                             key={idx}
-                            className="bg-[#F9F7F5] border border-[#EAEAEA] p-4 text-center text-[#8C917B] rounded-xl my-4 shadow-sm font-serif leading-relaxed text-sm"
+                            className="bg-[#F9F7F5] border border-[#EAEAEA] p-3 text-center text-[#8C917B] rounded-xl my-3 shadow-sm font-serif leading-relaxed text-xs"
                           >
                             {line.text}
                           </div>
                         );
                       } else {
-                        // 匹配演员头像颜色与数据
                         const actor = selectedActors.find(
                           (a) => a.name === line.speaker,
                         );
                         const avatarColor = actor?.avatarColor || "#D4AB90";
 
                         return (
-                          <div key={idx} className="mb-4 flex flex-col">
+                          <div key={idx} className="mb-3.5 flex flex-col">
                             <div className="flex items-center gap-2 mb-1">
                               <div
                                 className="w-6 h-6 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center shadow-inner"
@@ -88473,7 +91488,7 @@ const RelativeDeductionPage = ({ onBack }) => {
                                 {line.speaker}
                               </span>
                             </div>
-                            <div className="text-[#5A5F4D] text-[15px] leading-relaxed pl-7">
+                            <div className="text-[#5A5F4D] text-sm leading-relaxed pl-7 font-sans">
                               {line.text}
                             </div>
                           </div>
@@ -88482,22 +91497,23 @@ const RelativeDeductionPage = ({ onBack }) => {
                     })}
                   </div>
 
-                  {/* 如果是最新一页，显示分支选项 */}
+                  {/* 分支走向选项 */}
                   {currentScriptPage === scriptPages.length - 1 && (
-                    <div className="mt-8 pt-4 border-t border-dashed border-[#C9C9C1]">
-                      <div className="text-xs text-center text-[#8C917B] mb-3">
-                        —— 请选择接下来的剧情走向 ——
+                    <div className="mt-6 pt-3 border-t border-dashed border-[#C9C9C1]">
+                      <div className="text-xs text-center text-[#8C917B] mb-2.5 font-serif">
+                        —— 导演/观众，请选择接下来的剧情走向 ——
                       </div>
-                      <div className="flex flex-col gap-3">
+                      <div className="flex flex-col gap-2.5 mb-2">
                         {scriptPages[currentScriptPage].choices.map(
                           (choice, cIdx) => (
                             <button
                               key={cIdx}
                               onClick={() => handleGenerateScript(choice)}
                               disabled={isGeneratingScript}
-                              className="w-full text-left bg-white border-2 border-[#E8C3A8] text-[#5A5F4D] p-3 rounded-xl text-sm font-bold active:scale-[0.98] transition-transform shadow-sm hover:bg-[#FDFCF8] disabled:opacity-50"
+                              className="w-full text-left bg-[#FFFDF9] border border-[#E8C3A8] text-[#5A5F4D] p-2.5 rounded-xl text-xs font-bold active:scale-[0.98] transition-transform shadow-sm hover:bg-[#F9F4EC] disabled:opacity-50 flex items-start gap-1.5"
                             >
-                              {isGeneratingScript ? "续写中..." : choice}
+                              <span className="text-[#B35446] font-serif font-bold">◈</span>
+                              <span>{isGeneratingScript ? "续写中..." : choice}</span>
                             </button>
                           ),
                         )}
@@ -88506,19 +91522,19 @@ const RelativeDeductionPage = ({ onBack }) => {
                   )}
                 </div>
               ) : selectedContent ? (
-                /* 原作预览模式（剧本生成前） */
-                <div className="w-full text-left flex flex-col h-full overflow-y-auto no-scrollbar">
+                /* 原作底本模式 */
+                <div className="w-full text-left flex flex-col h-full overflow-y-auto no-scrollbar px-3">
                   <div className="flex-1">
-                    <h3 className="text-[#5A5F4D] text-xl font-bold mb-3 border-b border-[#EAEAEA] pb-3 tracking-widest text-center font-serif">
+                    <h3 className="text-[#5A5F4D] text-lg font-bold mb-3 border-b border-[#EAEAEA] pb-3 tracking-widest text-center font-serif">
                       {selectedContent.title}
                     </h3>
-                    <p className="text-[#5A5F4D] text-base leading-loose whitespace-pre-wrap font-serif mt-4 indent-8">
+                    <p className="text-[#5A5F4D] text-sm leading-loose whitespace-pre-wrap font-serif mt-3 indent-6">
                       {selectedContent.text}
                     </p>
                   </div>
 
-                  <div className="mt-8 pt-5 border-t border-dashed border-[#C9C9C1]">
-                    <h4 className="text-xs font-bold text-[#89A89A] mb-3 tracking-widest">
+                  <div className="mt-6 pt-4 border-t border-dashed border-[#C9C9C1]">
+                    <h4 className="text-xs font-bold text-[#89A89A] mb-2.5 tracking-widest">
                       <i className="ph-fill ph-users mr-1"></i> 今日班底：
                     </h4>
                     <div className="flex gap-2 flex-wrap">
@@ -88526,7 +91542,7 @@ const RelativeDeductionPage = ({ onBack }) => {
                         selectedActors.map((a) => (
                           <span
                             key={a.id}
-                            className="bg-[#F2F7F4] text-[#5A8F6D] px-3 py-1.5 rounded-full text-xs font-bold shadow-sm border border-[#E4EFE9] flex items-center gap-1.5"
+                            className="bg-[#F2F7F4] text-[#5A8F6D] px-2.5 py-1 rounded-full text-xs font-bold shadow-sm border border-[#E4EFE9] flex items-center gap-1.5"
                           >
                             <div
                               className="w-4 h-4 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center text-[8px]"
@@ -88545,34 +91561,43 @@ const RelativeDeductionPage = ({ onBack }) => {
                         ))
                       ) : (
                         <span className="text-xs text-gray-400 italic">
-                          尚未定角...
+                          尚未定角，请点击上方「点兵点将」...
                         </span>
                       )}
                     </div>
                   </div>
                 </div>
               ) : (
-                /* 空白初始页 */
-                <div className="flex-1 flex flex-col items-center justify-center opacity-80">
+                /* 空白初始引导页 */
+                <div className="flex-1 flex flex-col items-center justify-center opacity-85 px-4">
                   <div
                     style={{
-                      fontSize: "60px",
-                      marginBottom: "20px",
+                      fontSize: "52px",
+                      marginBottom: "16px",
                       filter: "drop-shadow(0 4px 6px rgba(0,0,0,0.1))",
                     }}
                   >
                     🎭
                   </div>
-                  <h3 className="text-[#5A5F4D] text-xl font-bold mb-4 tracking-widest">
-                    戏说东汉
+                  <h3 className="text-[#5A5F4D] text-lg font-bold mb-3 tracking-widest font-serif">
+                    戏说东汉 · 相对演绎
                   </h3>
-                  <p className="text-[#8C917B] text-sm leading-relaxed text-center px-4">
+                  <p className="text-[#8C917B] text-xs leading-relaxed text-center px-2 font-serif">
                     翻开书页，命运的齿轮已为你选定。
                     <br />
                     请于上方择取<b>剧本</b>与<b>优伶</b>，
                     <br />
-                    共同完成一场"相对"的演出。
+                    或翻开右上角<b>【戏折子】</b>继续前朝好戏。
                   </p>
+                  {savedPlays.length > 0 && (
+                    <button
+                      onClick={() => setShowArchiveModal(true)}
+                      className="mt-6 flex items-center gap-1.5 px-4 py-2 bg-[#F2EDE4] text-[#6E6359] hover:bg-[#EAE2D5] rounded-full text-xs font-bold border border-[#E0D5C5] shadow-sm active:scale-95 transition-all"
+                    >
+                      <i className="ph-fill ph-book-bookmark text-[#B35446]"></i>
+                      <span>回顾已存戏折 ({savedPlays.length})</span>
+                    </button>
+                  )}
                 </div>
               )}
             </div>
@@ -88583,30 +91608,29 @@ const RelativeDeductionPage = ({ onBack }) => {
 
         {/* 1. 自定义输入弹窗 */}
         {showCustomInput && (
-          <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-fadeIn">
+          <div className="fixed inset-0 bg-black/60 z-[700] flex items-center justify-center p-4 animate-fadeIn">
             <div className="bg-[#FDFCF8] rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col">
-              <h3 className="text-[#5A5F4D] text-lg font-bold mb-4">
-                挥毫泼墨 (自定义剧本)
+              <h3 className="text-[#5A5F4D] text-base font-bold mb-3 font-serif">
+                ✍️ 挥毫泼墨 (自定义剧本)
               </h3>
               <input
                 type="text"
-                className="w-full p-3 border border-[#EAEAEA] rounded-xl bg-white text-[#5A5F4D] outline-none mb-3 font-bold"
+                className="w-full p-2.5 border border-[#EAEAEA] rounded-xl bg-white text-[#5A5F4D] outline-none mb-3 font-bold text-xs"
                 placeholder="赐一个响亮的篇名..."
                 onChange={(e) => {
-                  // 利用 dataset 暂存 title 供确认时使用
                   e.target.dataset.title = e.target.value;
                 }}
               />
               <textarea
-                className="w-full h-32 p-3 border border-[#EAEAEA] rounded-xl bg-white text-[#5A5F4D] outline-none resize-none mb-6 leading-relaxed"
+                className="w-full h-28 p-2.5 border border-[#EAEAEA] rounded-xl bg-white text-[#5A5F4D] outline-none resize-none mb-4 leading-relaxed text-xs"
                 placeholder="写下你想让他们演绎的文段..."
                 value={customText}
                 onChange={(e) => setCustomText(e.target.value)}
               />
-              <div className="flex gap-4 w-full">
+              <div className="flex gap-3 w-full">
                 <button
                   onClick={() => setShowCustomInput(false)}
-                  className="flex-1 py-3 rounded-xl border border-[#D4AB90] text-[#D4AB90] font-bold active:scale-95 transition-transform"
+                  className="flex-1 py-2.5 rounded-xl border border-[#D4AB90] text-[#D4AB90] font-bold active:scale-95 transition-transform text-xs"
                 >
                   拂袖而去
                 </button>
@@ -88623,11 +91647,12 @@ const RelativeDeductionPage = ({ onBack }) => {
                         text: customText.trim(),
                       });
                       setShowCustomInput(false);
+                      showToast(`已选定自定义剧本《${tTitle}》`);
                     } else {
                       alert("不可交白卷！");
                     }
                   }}
-                  className="flex-1 py-3 rounded-xl bg-[#E8C3A8] text-white font-bold shadow-md active:scale-95 transition-transform"
+                  className="flex-1 py-2.5 rounded-xl bg-[#E8C3A8] text-white font-bold shadow-md active:scale-95 transition-transform text-xs"
                 >
                   落笔定稿
                 </button>
@@ -88638,30 +91663,31 @@ const RelativeDeductionPage = ({ onBack }) => {
 
         {/* 2. 演绎者选择弹窗 */}
         {showActorMenu && (
-          <div className="fixed inset-0 bg-black/60 z-[100] flex items-center justify-center p-4 animate-fadeIn">
-            <div className="bg-[#FDFCF8] rounded-2xl w-full max-w-sm p-6 shadow-2xl flex flex-col max-h-[75vh]">
-              <div className="flex justify-between items-center mb-4">
-                <h3 className="text-[#5A5F4D] text-lg font-bold tracking-widest">
-                  钦定优伶
+          <div className="fixed inset-0 bg-black/60 z-[700] flex items-center justify-center p-4 animate-fadeIn">
+            <div className="bg-[#FDFCF8] rounded-2xl w-full max-w-sm p-5 shadow-2xl flex flex-col max-h-[75vh]">
+              <div className="flex justify-between items-center mb-3">
+                <h3 className="text-[#5A5F4D] text-base font-bold tracking-widest font-serif">
+                  🎭 钦定优伶
                 </h3>
-                <span className="text-xs text-[#89A89A] bg-[#F2F7F4] px-2 py-1 rounded-md font-bold">
+                <span className="text-xs text-[#89A89A] bg-[#F2F7F4] px-2 py-0.5 rounded-md font-bold">
                   已选 {selectedActors.length} 人
                 </span>
               </div>
 
-              <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-3 py-2">
+              <div className="flex-1 overflow-y-auto no-scrollbar flex flex-col gap-2.5 py-1">
                 {allActors.length > 0 ? (
                   allActors.map((actor) => (
                     <label
                       key={actor.id}
-                      className={`flex items-center gap-3 p-3 rounded-xl border transition-all cursor-pointer ${selectedActors.some((a) => a.id === actor.id)
+                      className={`flex items-center gap-3 p-2.5 rounded-xl border transition-all cursor-pointer ${
+                        selectedActors.some((a) => a.id === actor.id)
                           ? "bg-[#F2F7F4] border-[#89A89A] shadow-sm"
                           : "bg-white border-[#EAEAEA]"
-                        }`}
+                      }`}
                     >
                       <input
                         type="checkbox"
-                        className="w-5 h-5 accent-[#89A89A] rounded-sm"
+                        className="w-4 h-4 accent-[#89A89A] rounded-sm"
                         checked={selectedActors.some((a) => a.id === actor.id)}
                         onChange={(e) => {
                           if (e.target.checked)
@@ -88673,7 +91699,7 @@ const RelativeDeductionPage = ({ onBack }) => {
                         }}
                       />
                       <div
-                        className="w-10 h-10 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center shadow-inner"
+                        className="w-9 h-9 rounded-full overflow-hidden flex-shrink-0 flex items-center justify-center shadow-inner"
                         style={{
                           backgroundColor: actor.avatarColor || "#89A89A",
                         }}
@@ -88684,11 +91710,11 @@ const RelativeDeductionPage = ({ onBack }) => {
                           name={actor.name}
                         />
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-[#5A5F4D] font-bold">
+                      <div className="flex flex-col flex-1 min-w-0">
+                        <span className="text-[#5A5F4D] font-bold text-xs">
                           {actor.name}
                         </span>
-                        <span className="text-xs text-[#8C917B] truncate max-w-[150px]">
+                        <span className="text-[11px] text-[#8C917B] truncate">
                           {(actor.profile && actor.profile.personality) ||
                             "此人极度神秘"}
                         </span>
@@ -88696,7 +91722,7 @@ const RelativeDeductionPage = ({ onBack }) => {
                     </label>
                   ))
                 ) : (
-                  <div className="text-center text-gray-400 py-10 text-sm">
+                  <div className="text-center text-gray-400 py-8 text-xs">
                     楼里空空如也，请先在传讯中添加名士。
                   </div>
                 )}
@@ -88704,9 +91730,9 @@ const RelativeDeductionPage = ({ onBack }) => {
 
               <button
                 onClick={() => setShowActorMenu(false)}
-                className="mt-5 w-full py-3 rounded-xl bg-[#89A89A] text-white font-bold shadow-lg active:scale-95 transition-transform tracking-widest"
+                className="mt-4 w-full py-2.5 rounded-xl bg-[#89A89A] text-white font-bold shadow-lg active:scale-95 transition-transform tracking-widest text-xs"
               >
-                结班
+                结班定册
               </button>
             </div>
           </div>
@@ -88714,34 +91740,302 @@ const RelativeDeductionPage = ({ onBack }) => {
 
         {/* 3. AI 加载动画 */}
         {isLoadingContent && (
-          <div className="fixed inset-0 bg-black/60 z-[100] flex flex-col items-center justify-center p-4">
+          <div className="fixed inset-0 bg-black/60 z-[700] flex flex-col items-center justify-center p-4">
             <div className="w-16 h-16 bg-white/10 rounded-2xl flex items-center justify-center mb-4 shadow-[0_0_15px_rgba(232,195,168,0.3)] border border-white/20">
               <iconify-icon
                 icon="line-md:loading-twotone-loop"
                 style={{ fontSize: "40px", color: "#E8C3A8" }}
               ></iconify-icon>
             </div>
-            <div className="text-white tracking-widest font-bold font-serif text-lg">
+            <div className="text-white tracking-widest font-bold font-serif text-base">
               正在翻阅浩瀚古籍...
             </div>
           </div>
         )}
 
-        {/* 4. 滚轮选择器 (老虎机) */}
+        {/* 4. 滚轮抽签选择器 */}
         {showWheel && contentOptions.length > 0 && (
           <SlotMachineSelector
             options={contentOptions}
             onSelect={(opt) => {
               setSelectedContent(opt);
               setShowWheel(false);
+              showToast(`已抽取剧本《${opt.title}》`);
             }}
             onClose={() => setShowWheel(false)}
           />
+        )}
+
+        {/* 5. 方向C：戏折子·名剧录 抽屉模态框 */}
+        {showArchiveModal && (
+          <div className="fixed inset-0 bg-black/60 z-[750] flex items-center justify-center p-4 animate-fadeIn">
+            <div className="bg-[#FAF7F2] rounded-3xl w-full max-w-md p-5 shadow-2xl flex flex-col max-h-[82vh] border border-[#E8DFC8]">
+              {/* 头部 */}
+              <div className="flex justify-between items-center pb-3 border-b border-[#E8DFC8]">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-[#B35446] text-white flex items-center justify-center text-sm shadow-sm font-serif">
+                    折
+                  </div>
+                  <div>
+                    <h3 className="text-[#3E3832] font-bold text-base font-serif">
+                      戏折名剧录
+                    </h3>
+                    <div className="text-[11px] text-[#8C7D70]">
+                      已存典藏 {savedPlays.length} 卷
+                    </div>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowArchiveModal(false)}
+                  className="w-7 h-7 rounded-full bg-white text-[#8C7D70] hover:text-[#3E3832] flex items-center justify-center border border-[#E0D5C5] text-sm font-bold shadow-sm"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* 戏折列表 */}
+              <div className="flex-1 overflow-y-auto no-scrollbar py-3 flex flex-col gap-3">
+                {savedPlays.length > 0 ? (
+                  savedPlays.map((play) => (
+                    <div
+                      key={play.id}
+                      onClick={() => handleLoadPlay(play)}
+                      className="bg-white rounded-2xl p-3.5 border border-[#E6DDD0] shadow-sm hover:shadow-md hover:border-[#B35446]/40 transition-all cursor-pointer group flex flex-col relative"
+                    >
+                      <div className="flex items-center justify-between mb-1.5">
+                        <h4 className="text-[#3E3832] font-bold text-sm font-serif group-hover:text-[#B35446] transition-colors truncate max-w-[200px]">
+                          《{play.title}》
+                        </h4>
+                        <span className="bg-[#F4ECE1] text-[#915938] text-[10px] px-2 py-0.5 rounded-full font-bold">
+                          共 {play.pages?.length || 1} 幕
+                        </span>
+                      </div>
+
+                      {/* 演员阵容 */}
+                      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+                        <span className="text-[11px] text-[#8C7D70]">优伶:</span>
+                        {(play.actors || []).map((act, aIdx) => (
+                          <span
+                            key={aIdx}
+                            className="bg-[#F2F7F4] text-[#5A8F6D] px-2 py-0.5 rounded-md text-[10px] font-bold flex items-center gap-1"
+                          >
+                            <span
+                              className="w-2.5 h-2.5 rounded-full inline-block"
+                              style={{ backgroundColor: act.avatarColor || "#89A89A" }}
+                            ></span>
+                            {act.name}
+                          </span>
+                        ))}
+                      </div>
+
+                      {/* 摘录 */}
+                      <div className="text-[11px] text-[#7A7062] line-clamp-2 italic font-serif bg-[#FAF8F5] p-2 rounded-xl border border-[#F0EBE1] mb-2.5">
+                        {play.pages?.[0]?.lines?.[0]?.text
+                          ? `“${play.pages[0].lines[0].text}”`
+                          : (play.sourceText || "暂无戏文摘要")}
+                      </div>
+
+                      {/* 底部信息与操作 */}
+                      <div className="flex items-center justify-between text-[10px] text-[#A69B8F] pt-2 border-t border-[#F5EFE6]">
+                        <span>{play.createTime || play.dateStr || "近期演出"}</span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleLoadPlay(play);
+                              setTimeout(() => setShowExportModal(true), 200);
+                            }}
+                            className="text-[#B35446] hover:underline flex items-center gap-0.5 font-bold"
+                          >
+                            <i className="ph-bold ph-scroll"></i>
+                            <span>展卷</span>
+                          </button>
+                          <button
+                            onClick={(e) => handleDeletePlay(e, play.id, play.title)}
+                            className="text-gray-400 hover:text-red-500 transition-colors p-1"
+                            title="抹去戏折"
+                          >
+                            <i className="ph-bold ph-trash"></i>
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center py-12 text-center opacity-70">
+                    <i className="ph ph-scroll text-4xl text-[#B35446]/40 mb-2"></i>
+                    <p className="text-xs text-[#8C7D70] font-serif">
+                      箱中尚无戏折，快去开启一场即兴大戏吧！
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* 抽屉底部 */}
+              <div className="pt-3 border-t border-[#E8DFC8] flex justify-between items-center">
+                <button
+                  onClick={() => {
+                    setShowArchiveModal(false);
+                    handleResetPlay();
+                  }}
+                  className="flex-1 py-2.5 rounded-xl bg-white border border-[#D4AB90] text-[#8C6B50] font-bold active:scale-95 transition-transform text-xs"
+                >
+                  ➕ 新起一台戏
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 6. 方向C：古风宣纸长卷导出预览模态框 */}
+        {showExportModal && selectedContent && (
+          <div className="fixed inset-0 bg-black/75 z-[800] flex items-center justify-center p-3 animate-fadeIn">
+            <div className="bg-[#FAF6EE] rounded-3xl w-full max-w-lg shadow-2xl flex flex-col max-h-[90vh] border-2 border-[#B35446]/60 overflow-hidden">
+              {/* 弹窗头部 */}
+              <div className="flex justify-between items-center p-4 bg-[#F5EFE4] border-b border-[#E4DACD]">
+                <div className="flex items-center gap-2">
+                  <span className="text-lg">📜</span>
+                  <div>
+                    <h3 className="text-[#3E3832] font-bold text-sm font-serif">
+                      宣纸画卷 · 戏折全本导出
+                    </h3>
+                    <p className="text-[10px] text-[#8C7D70]">
+                      《{selectedContent.title}》共 {scriptPages.length} 幕
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setShowExportModal(false)}
+                  className="w-7 h-7 rounded-full bg-white text-[#8C7D70] hover:text-[#3E3832] flex items-center justify-center border border-[#E0D5C5] text-sm font-bold shadow-sm"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* 宣纸长卷预览区（支持上下平滑滚动） */}
+              <div className="flex-1 overflow-y-auto no-scrollbar p-5 bg-[#FAF6EE]">
+                <div className="border-2 border-[#B35446] p-5 rounded-2xl relative shadow-inner bg-[#FBF8F1]">
+                  {/* 右上角印章 */}
+                  <div className="absolute right-4 top-4 border-2 border-[#B33E32] text-[#B33E32] px-2 py-1 text-[11px] font-bold font-serif tracking-widest rounded-sm rotate-6 bg-[#FAF6EE]/90 shadow-sm">
+                    相对演绎
+                  </div>
+
+                  {/* 卷首标题 */}
+                  <div className="text-center mb-4 mt-2">
+                    <div className="text-xs text-[#B35446] font-serif tracking-widest mb-1">
+                      ◈ 戏折精纂 · 宣纸藏本 ◈
+                    </div>
+                    <h2 className="text-[#2D2620] text-xl font-bold font-serif mb-2">
+                      《{selectedContent.title}》
+                    </h2>
+                    <div className="text-xs text-[#8C7B6E] font-serif max-w-xs mx-auto leading-relaxed bg-[#F4EDE2] p-2.5 rounded-xl border border-[#E8DFC8]">
+                      【底本原文】：{selectedContent.text}
+                    </div>
+                  </div>
+
+                  {/* 优伶阵容 */}
+                  <div className="my-4 pt-3 border-t border-dashed border-[#D9C3AC] flex flex-wrap items-center justify-center gap-2">
+                    <span className="text-xs font-bold text-[#5A5F4D] font-serif">
+                      🎭 登场优伶：
+                    </span>
+                    {selectedActors.map((a, i) => (
+                      <span
+                        key={i}
+                        className="bg-[#EAE2D5] text-[#4A5240] px-2.5 py-0.5 rounded-full text-xs font-bold border border-[#D5C9B8]"
+                      >
+                        {a.name}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* 逐幕长卷正文 */}
+                  <div className="flex flex-col gap-5 mt-4">
+                    {scriptPages.map((page, pIdx) => (
+                      <div
+                        key={pIdx}
+                        className="border-t border-[#E4DACD] pt-3 flex flex-col gap-2.5"
+                      >
+                        <div className="text-center text-xs font-bold text-[#B35446] font-serif tracking-wider">
+                          —— 第 {pIdx + 1} 幕 ——
+                        </div>
+                        {page.lines.map((l, lIdx) => (
+                          l.type === "narration" ? (
+                            <div
+                              key={lIdx}
+                              className="bg-[#F1EBE0] text-[#7A7062] p-2.5 rounded-xl text-center italic text-xs font-serif leading-relaxed border border-[#E0D5C5]"
+                            >
+                              {l.text}
+                            </div>
+                          ) : (
+                            <div key={lIdx} className="flex gap-2 items-start text-xs">
+                              <span className="bg-[#EAE2D5] text-[#4A5240] font-bold px-2 py-0.5 rounded border border-[#89A89A] shrink-0">
+                                {l.speaker}
+                              </span>
+                              <span className="text-[#332B25] leading-relaxed flex-1">
+                                {l.text}
+                              </span>
+                            </div>
+                          )
+                        ))}
+                        {page.choices && page.choices.length > 0 && (
+                          <div className="bg-[#F9F4EC] p-2 rounded-xl border border-dashed border-[#D4AB90] text-[11px] text-[#A05A45] font-serif">
+                            <span className="font-bold">◈ 走向抉择：</span>
+                            {page.choices.map((c, cIdx) => (
+                              <div key={cIdx} className="pl-3 mt-0.5 text-[#8C6B50]">
+                                • {c}
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* 卷尾印落 */}
+                  <div className="mt-8 pt-4 border-t-2 border-[#B35446] flex items-center justify-between text-[11px] text-[#8C7B6E] font-serif">
+                    <div>洛阳梨园 · 相对演绎总谱 藏</div>
+                    <div className="w-8 h-8 rounded-full border-2 border-[#B33E32] text-[#B33E32] flex items-center justify-center text-[10px] font-bold leading-none rotate-12">
+                      戏折<br />之印
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 弹窗底部操作按钮 */}
+              <div className="p-3.5 bg-[#F5EFE4] border-t border-[#E4DACD] flex gap-2">
+                <button
+                  onClick={handleExportCanvas}
+                  disabled={isExportingImage}
+                  className="flex-1 py-2.5 rounded-xl bg-[#B35446] hover:bg-[#A04538] text-white text-xs font-bold shadow-md active:scale-95 transition-all flex items-center justify-center gap-1.5 disabled:opacity-50"
+                >
+                  <i className="ph-bold ph-image"></i>
+                  <span>{isExportingImage ? "绘制画卷中..." : "保存宣纸长图 (PNG)"}</span>
+                </button>
+                <button
+                  onClick={handleCopyPlayText}
+                  className="px-3.5 py-2.5 rounded-xl bg-white border border-[#D4AB90] text-[#8C6B50] hover:bg-[#FAF7F2] text-xs font-bold active:scale-95 transition-all flex items-center gap-1"
+                  title="复制排版文稿到剪贴板"
+                >
+                  <i className="ph-bold ph-copy"></i>
+                  <span>复制全篇</span>
+                </button>
+                <button
+                  onClick={handleDownloadPlayText}
+                  className="px-3 py-2.5 rounded-xl bg-white border border-[#D4AB90] text-[#8C6B50] hover:bg-[#FAF7F2] text-xs font-bold active:scale-95 transition-all flex items-center gap-1"
+                  title="导出为文本文件"
+                >
+                  <i className="ph-bold ph-file-text"></i>
+                  <span>.txt</span>
+                </button>
+              </div>
+            </div>
+          </div>
         )}
       </div>
     </div>
   );
 };
+
 
 // ==================== 古怪农场页面组件 ====================
 const OddFarmPage = ({ onBack }) => {
