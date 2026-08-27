@@ -1949,7 +1949,8 @@
   // 2. 拦截与增强 sendToLLM：确保所有画作均能在传讯页面自动生成精美图片消息卡片
   function setupSendToLLMInterceptor() {
     if (!window.sendToLLM) return;
-    if (window.sendToLLM.__mcp_intercepted) return;
+    if (window.__mcp_sendToLLM_hooked) return;
+    window.__mcp_sendToLLM_hooked = true;
 
     const rawSendToLLM = window.sendToLLM;
     const enhancedSendToLLM = async function (messages, customConfigOrChunk, onFinish, onError) {

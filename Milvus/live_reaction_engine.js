@@ -1106,7 +1106,8 @@
         }
 
         // 拦截 sendToLLM
-        if (window.sendToLLM && !window.sendToLLM.__ambient_hooked) {
+        if (window.sendToLLM && !window.__ambient_sendToLLM_hooked) {
+          window.__ambient_sendToLLM_hooked = true;
           const origSendToLLM = window.sendToLLM;
           const hookedSendToLLM = async function (messages, customConfigOrChunk, onFinish, onError) {
             // 提取最新一条用户消息
