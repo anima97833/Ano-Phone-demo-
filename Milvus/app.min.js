@@ -1156,6 +1156,144 @@ window.tjcStore = {
   }
 };
 
+window.getLearningSystemMemory = async function(charName, charId) {
+  if (!charName) return "";
+  var memoryParts = [];
+
+  // 1. 读取荣誉排行榜中名士自身数据
+  try {
+    var rankList = window.latestLeaderboardData || [];
+    if (!rankList || rankList.length === 0) {
+      if (window.indexedDB) {
+        var req = indexedDB.open("learningSystemDB", 1);
+        await new Promise(function(resolve) {
+          req.onsuccess = function(e) {
+            try {
+              var db = e.target.result;
+              if (db.objectStoreNames.contains("learningData")) {
+                var tx = db.transaction(["learningData"], "readonly");
+                var st = tx.objectStore("learningData");
+                var getReq = st.get(1);
+                getReq.onsuccess = function() {
+                  if (getReq.result && getReq.result.leaderboardData) {
+                    rankList = getReq.result.leaderboardData;
+                  }
+                  resolve();
+                };
+                getReq.onerror = function() { resolve(); };
+              } else { resolve(); }
+            } catch (err) { resolve(); }
+          };
+          req.onerror = function() { resolve(); };
+        });
+      }
+    }
+
+    if (Array.isArray(rankList) && rankList.length > 0) {
+      var myRankIdx = rankList.findIndex(function(r) { return r && (r.realName === charName || r.name === charName); });
+      if (myRankIdx !== -1) {
+        var myRank = rankList[myRankIdx];
+        var rankLines = [];
+        rankLines.push("- 书院荣誉排位: 第 " + (myRankIdx + 1) + " 名 (学习积分: " + (myRank.score || "优秀") + ")");
+        if (myRank.nickname) rankLines.push("- 在书院修习软件中的特色网名: \"" + myRank.nickname + "\"");
+        if (myRank.quote) rankLines.push("- 榜单感言: \"" + myRank.quote + "\"");
+        if (Array.isArray(myRank.recentCourses) && myRank.recentCourses.length > 0) {
+          rankLines.push("- 你目前正在修读的课程书目: " + myRank.recentCourses.join("、"));
+        }
+        if (Array.isArray(myRank.medals) && myRank.medals.length > 0) {
+          rankLines.push("- 所获书院成就勋章: " + myRank.medals.map(function(m) { return "【" + (m.name || "学士") + "】(" + (m.desc || "") + ")"; }).join("；"));
+        }
+        if (rankLines.length > 0) {
+          memoryParts.push("【你在东汉书院学习系统·荣誉榜中的个人修习档案与排位】：\n" + rankLines.join("\n"));
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 2. 读取该名士修读各课程的古风竹简手札、错题随笔与作弊实况
+  try {
+    var noteSummaries = [];
+    for (var i = 0; i < localStorage.length; i++) {
+      var key = localStorage.key(i);
+      if (key && key.indexOf("learning_course_note_" + charName + "_") === 0) {
+        var courseName = key.replace("learning_course_note_" + charName + "_", "");
+        try {
+          var raw = localStorage.getItem(key);
+          if (raw) {
+            var data = JSON.parse(raw);
+            var courseLines = [];
+            if (Array.isArray(data.studentNotes) && data.studentNotes.length > 0) {
+              courseLines.push("  * 刷题手札与错题吐槽: " + data.studentNotes.slice(0, 3).map(function(n) { return "\"" + n + "\""; }).join("；"));
+            }
+            if (data.examStatus) {
+              var es = data.examStatus;
+              var exStr = [];
+              if (es.score) exStr.push("成绩: " + es.score);
+              if (es.cheatRecord) exStr.push("作弊与小动作: " + es.cheatRecord);
+              if (es.studyVibe) exStr.push("刷题状态: " + es.studyVibe);
+              if (exStr.length > 0) courseLines.push("  * 考课实况: " + exStr.join(" | "));
+            }
+            if (courseLines.length > 0) {
+              noteSummaries.push("- 课程《" + courseName + "》：\n" + courseLines.join("\n"));
+            }
+          }
+        } catch (err) {}
+      }
+    }
+    if (noteSummaries.length > 0) {
+      memoryParts.push("【你亲笔写下的课程竹简手札、错题本与刷题实况记录】：\n" + noteSummaries.join("\n"));
+    }
+  } catch (e) {}
+
+  // 3. 读取你作为授业恩师正在教导广陵王的课程进度
+  try {
+    var userCourses = [];
+    if (window.indexedDB) {
+      var req2 = indexedDB.open("learningSystemDB", 1);
+      await new Promise(function(resolve) {
+        req2.onsuccess = function(e) {
+          try {
+            var db = e.target.result;
+            if (db.objectStoreNames.contains("learningData")) {
+              var tx = db.transaction(["learningData"], "readonly");
+              var st = tx.objectStore("learningData");
+              var getReq = st.get(1);
+              getReq.onsuccess = function() {
+                if (getReq.result && getReq.result.courses) {
+                  userCourses = getReq.result.courses;
+                }
+                resolve();
+              };
+              getReq.onerror = function() { resolve(); };
+            } else { resolve(); }
+          } catch (err) { resolve(); }
+        };
+        req2.onerror = function() { resolve(); };
+      });
+    }
+
+    if (Array.isArray(userCourses) && userCourses.length > 0) {
+      var myTeaching = userCourses.filter(function(c) {
+        if (!c) return false;
+        if (c.fromCharacter === charName) return true;
+        if (Array.isArray(c.teachers) && (c.teachers.includes(charName) || (charId && c.teachers.includes(charId)))) return true;
+        return false;
+      });
+      if (myTeaching.length > 0) {
+        var teachLines = myTeaching.map(function(t) {
+          return "- 你担任授业师席的课程《" + (t.content || "书院课程") + "》（广陵王已闯至第 " + (t.unlockedLevel || 1) + " 关，已学概念: " + ((t.learnedConcepts || []).slice(0, 4).join("、") || "入门") + "）";
+        }).join("\n");
+        memoryParts.push("【你担任广陵王（用户）授业恩师的辅导课程与楼主闯关进度】：\n" + teachLines);
+      }
+    }
+  } catch (e) {}
+
+  if (memoryParts.length === 0) return "";
+
+  return "\n\n【名士自身在东汉书院学习系统中的真实修习与授业记忆（荣誉榜/竹简手札/师席）】\n（以下为你自身在学习系统荣誉榜中的排位、网名、所修课程书目、亲笔错题手札吐槽与担任楼主授业恩师的记录。若楼主在聊天中提及你在书院修读的课程、竹简随笔、作弊小动作、荣誉排位或找你请教课业，你拥有完全清晰生动的记忆，请自然自如地接话、回应或依据性格适度吐槽/打趣！）：\n" + memoryParts.join("\n\n");
+};
+var getLearningSystemMemory = window.getLearningSystemMemory;
+
 window.getFangtianMirrorMemory = function(charName) {
   if (!charName) return "";
   var memoryParts = [];
@@ -71031,11 +71169,11 @@ const getFullCharacterSetting = async (charName, charId) => {
   return lines.join("\n");
 };
 
-// ==================== 学习系统：获取名士24小时聊天与方天水镜经历 ====================
+// ==================== 学习系统：获取名士私聊、全群聊互动与方天水镜经历 ====================
 const getCharacterRecentLearningContext = async (charName, charId) => {
   const parts = [];
   try {
-    // 1. 24小时真实传讯记录
+    // 1. 24小时真实传讯私聊记录
     let msgs = [];
     if (window.chatHistoryStore) {
       if (charId) {
@@ -71049,7 +71187,9 @@ const getCharacterRecentLearningContext = async (charName, charId) => {
     }
     if (msgs.length === 0) {
       const raw = localStorage.getItem(`t8_chat_history_${charName}`) || (charId ? localStorage.getItem(`t8_chat_history_${charId}`) : null);
-      if (raw) msgs = JSON.parse(raw) || [];
+      if (raw) {
+        try { msgs = JSON.parse(raw) || []; } catch(e) {}
+      }
     }
 
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
@@ -71061,11 +71201,62 @@ const getCharacterRecentLearningContext = async (charName, charId) => {
       recent24h = msgs.slice(-15);
     }
     if (recent24h.length > 0) {
-      const chatSnippet = recent24h.slice(-10).map((m) => `${m.isMe ? "用户" : charName}: ${m.text || m.content || ""}`).join("；");
-      parts.push(`[近期聊天互动]: ${chatSnippet}`);
+      const chatSnippet = recent24h.slice(-8).map((m) => `${m.isMe ? "用户" : charName}: ${m.text || m.content || ""}`).join("；");
+      parts.push(`[与用户的私聊互动]: ${chatSnippet}`);
     }
 
-    // 2. 方天水镜生成记录 (手札、太疾驰订单、密信、备忘录)
+    // 2. 角色参与的所有群聊动态与名士间互怼记录
+    try {
+      let allChats = [];
+      if (window.chatCharacterStore) {
+        allChats = await window.chatCharacterStore.getAll();
+      } else {
+        allChats = JSON.parse(localStorage.getItem("t8_chat_list") || "[]");
+      }
+      const groupChats = (allChats || []).filter(c => c && (String(c.id).startsWith("group") || c.type === "group" || c.profile?.members));
+      let groupSnippets = [];
+
+      for (const grp of groupChats) {
+        if (!grp || !grp.id) continue;
+        const grpName = grp.name || grp.profile?.name || "群聊";
+        let grpMsgs = [];
+        if (window.chatHistoryStore) {
+          const res = await window.chatHistoryStore.getMessages(grp.id, 1, 30);
+          if (res?.messages?.length) grpMsgs = res.messages;
+        }
+        if (grpMsgs.length === 0) {
+          const raw = localStorage.getItem(`t8_chat_history_${grp.id}`);
+          if (raw) {
+            try { grpMsgs = JSON.parse(raw) || []; } catch(e) {}
+          }
+        }
+
+        // 筛选该名士参与或提及该名士的群聊发言
+        if (grpMsgs.length > 0) {
+          const relatedMsgs = grpMsgs.filter(m => {
+            const txt = m.text || "";
+            return (m.sender === charName) || txt.includes(`[${charName}]`) || txt.includes(charName) || txt.includes(`@${charName}`);
+          });
+          const targetGrpMsgs = relatedMsgs.length > 0 ? relatedMsgs.slice(-4) : grpMsgs.slice(-3);
+          if (targetGrpMsgs.length > 0) {
+            const formatted = targetGrpMsgs.map(m => {
+              let t = (m.text || "").replace(/\n+/g, " ").trim();
+              if (!t.startsWith("[") && m.sender) t = `[${m.sender}]: ${t}`;
+              return t;
+            }).join(" | ");
+            groupSnippets.push(`【${grpName}】${formatted}`);
+          }
+        }
+      }
+
+      if (groupSnippets.length > 0) {
+        parts.push(`[名士在各群聊中的互动发言]: ${groupSnippets.slice(0, 2).join("；")}`);
+      }
+    } catch (eGrp) {
+      console.warn("[Leaderboard] 提取群聊动态失败:", eGrp);
+    }
+
+    // 3. 方天水镜生成记录 (手札、太疾驰订单、密信、备忘录)
     if (window.getFangtianMirrorMemory) {
       const mirrorMem = window.getFangtianMirrorMemory(charName);
       if (mirrorMem) {
@@ -71556,6 +71747,7 @@ const T13LearningPage = ({ onBack }) => {
     }
 
     const fullSetting = await getFullCharacterSetting(charKey, charUser?.id);
+    const recentCtx = await getCharacterRecentLearningContext(charKey, charUser?.id);
 
     const prompt = `
 【世界设定】
@@ -71563,6 +71755,9 @@ const T13LearningPage = ({ onBack }) => {
 
 【传讯--角色配置库中的深度人设与口吻设定】：
 ${fullSetting || `姓名：${charKey}\n性格：${charUser?.quote || "性格鲜明"}`}
+
+【该名士近期私聊、群聊互动与方天水镜近况】：
+${recentCtx || "暂无特别记录"}
 
 【当前修读课程】
 《${courseName}》
@@ -71795,6 +71990,17 @@ ${fullSetting || `姓名：${charKey}\n性格：${charUser?.quote || "性格鲜�
               const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/\`\`\`json|\`\`\`/g, "").trim());
               if (Array.isArray(data) && data.length >= 8) {
                 const final12 = data.slice(0, 12);
+                // 自动将名士本次修读的课程追加记录至持久化历史案卷库中
+                final12.forEach(item => {
+                  const cKey = item?.realName || item?.name;
+                  if (cKey && Array.isArray(item.recentCourses)) {
+                    try {
+                      const prevStored = JSON.parse(localStorage.getItem(`learning_history_courses_${cKey}`) || "[]");
+                      const combined = Array.from(new Set([...item.recentCourses, ...prevStored]));
+                      localStorage.setItem(`learning_history_courses_${cKey}`, JSON.stringify(combined));
+                    } catch(e) {}
+                  }
+                });
                 setLeaderboardData(final12);
                 setSelectedRankUser(final12[0]);
                 window.latestLeaderboardData = final12;
@@ -72615,40 +72821,130 @@ ${fullSetting || `姓名：${charKey}\n性格：${charUser?.quote || "性格鲜�
           ))));
         })()
       ))),
-      /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("h4", { className: "text-sm font-bold text-[#8C917B] mb-3 flex items-center gap-2" }, /* @__PURE__ */ React.createElement("span", { className: "material-symbols-outlined text-base text-[#D4AB90]" }, "menu_book"), "\u8FD1\u671F\u94BB\u7814\u6848\u5377"), /* @__PURE__ */ React.createElement("div", { className: "flex flex-wrap gap-2" }, (selectedRankUser.recentCourses || []).map((course, idx) => {
-        const isLoadingThis = loadingCourseName === course;
-        return /* @__PURE__ */ React.createElement(
-          "div",
-          {
-            key: idx,
-            onClick: (e) => {
-              e.stopPropagation();
-              handleOpenCourseDetail(course, selectedRankUser);
-            },
+      /* @__PURE__ */ (() => {
+        const charKey = selectedRankUser?.realName || selectedRankUser?.name || "名士";
+        const currentCourses = selectedRankUser.recentCourses || [];
+        
+        // 自动检索全部往期历史修读案卷（来自持久化历史库 + localStorage手札缓存）
+        let allHistoryCourses = [];
+        try {
+          const stored = JSON.parse(localStorage.getItem(`learning_history_courses_${charKey}`) || "[]");
+          if (Array.isArray(stored)) allHistoryCourses = stored;
+        } catch (e) {}
+
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith(`learning_course_note_${charKey}_`)) {
+            const cName = k.replace(`learning_course_note_${charKey}_`, "").trim();
+            if (cName && !allHistoryCourses.includes(cName)) {
+              allHistoryCourses.push(cName);
+            }
+          }
+        }
+
+        // 筛选出不在当前最新列表中的往期案卷
+        const pastCourses = allHistoryCourses.filter(c => !currentCourses.includes(c));
+
+        return React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "16px" } },
+          // 1. 当前最新钻研案卷
+          React.createElement("div", null,
+            React.createElement("h4", { className: "text-sm font-bold text-[#8C917B] mb-3 flex items-center gap-2" },
+              React.createElement("span", { className: "material-symbols-outlined text-base text-[#D4AB90]" }, "menu_book"),
+              "近期钻研案卷",
+              React.createElement("span", { style: { fontSize: "11px", color: "#A0A595", fontWeight: "normal" } }, `(当前修读 ${currentCourses.length} 卷)`)
+            ),
+            React.createElement("div", { className: "flex flex-wrap gap-2" },
+              currentCourses.map((course, idx) => {
+                const isLoadingThis = loadingCourseName === course;
+                return React.createElement(
+                  "div",
+                  {
+                    key: idx,
+                    onClick: (e) => {
+                      e.stopPropagation();
+                      handleOpenCourseDetail(course, selectedRankUser);
+                    },
+                    style: {
+                      backgroundColor: isLoadingThis ? "#FAF5EC" : "#fff",
+                      border: isLoadingThis ? "2px solid #D6724B" : "1.5px solid #D4AB90",
+                      padding: "7px 13px",
+                      borderRadius: "12px",
+                      fontSize: "12px",
+                      fontWeight: "bold",
+                      color: "#5A5F4D",
+                      boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                      transition: "all 0.2s"
+                    }
+                  },
+                  isLoadingThis ? React.createElement("iconify-icon", { icon: "line-md:loading-twotone-loop", style: { fontSize: "16px", color: "#D6724B" } })
+                                : React.createElement("span", { className: "material-symbols-outlined", style: { fontSize: "15px", color: "#D6724B" } }, "auto_stories"),
+                  "《", course, "》",
+                  React.createElement("span", { style: { fontSize: "10px", color: "#D6724B", fontWeight: "bold", backgroundColor: "rgba(214,114,75,0.1)", padding: "1px 6px", borderRadius: "6px" } }, isLoadingThis ? "展开中..." : "手札>")
+                );
+              })
+            )
+          ),
+
+          // 2. 往期历任修读案卷库（支持刷新后随时回看历史案卷与手札）
+          pastCourses.length > 0 && React.createElement("div", {
             style: {
-              backgroundColor: isLoadingThis ? "#FAF5EC" : "#fff",
-              border: isLoadingThis ? "2px solid #D6724B" : "1.5px solid #D4AB90",
-              padding: "7px 13px",
-              borderRadius: "12px",
-              fontSize: "12px",
-              fontWeight: "bold",
-              color: "#5A5F4D",
-              boxShadow: "0 2px 6px rgba(0,0,0,0.06)",
-              cursor: "pointer",
-              display: "inline-flex",
-              alignItems: "center",
-              gap: "6px",
-              transition: "all 0.2s"
+              backgroundColor: "rgba(245, 238, 226, 0.55)",
+              border: "1px dashed #D8C2A8",
+              borderRadius: "14px",
+              padding: "12px 14px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px"
             }
           },
-          isLoadingThis ? /* @__PURE__ */ React.createElement("iconify-icon", { icon: "line-md:loading-twotone-loop", style: { fontSize: "16px", color: "#D6724B" } })
-                        : /* @__PURE__ */ React.createElement("span", { className: "material-symbols-outlined", style: { fontSize: "15px", color: "#D6724B" } }, "auto_stories"),
-          "《",
-          course,
-          "》",
-          /* @__PURE__ */ React.createElement("span", { style: { fontSize: "10px", color: "#D6724B", fontWeight: "bold", backgroundColor: "rgba(214,114,75,0.1)", padding: "1px 6px", borderRadius: "6px" } }, isLoadingThis ? "展开中..." : "手札>")
+            React.createElement("div", { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+              React.createElement("h4", { style: { margin: 0, fontSize: "13px", fontWeight: "bold", color: "#7A583A", display: "flex", alignItems: "center", gap: "6px" } },
+                React.createElement("span", { className: "material-symbols-outlined", style: { fontSize: "16px", color: "#A07040" } }, "history_edu"),
+                "往期钻研案卷存档",
+                React.createElement("span", { style: { fontSize: "10.5px", color: "#A08060", background: "rgba(255,255,255,0.8)", padding: "1px 6px", borderRadius: "8px", fontWeight: "normal" } }, `共 ${pastCourses.length} 卷`)
+              ),
+              React.createElement("span", { style: { fontSize: "10.5px", color: "#8C6D4F" } }, "点击随时回看名士手札")
+            ),
+            React.createElement("div", { className: "flex flex-wrap gap-2", style: { marginTop: "4px" } },
+              pastCourses.map((course, pIdx) => {
+                const isLoadingThis = loadingCourseName === course;
+                return React.createElement(
+                  "div",
+                  {
+                    key: "past_" + pIdx,
+                    onClick: (e) => {
+                      e.stopPropagation();
+                      handleOpenCourseDetail(course, selectedRankUser);
+                    },
+                    style: {
+                      backgroundColor: isLoadingThis ? "#FAF5EC" : "rgba(255,255,255,0.85)",
+                      border: isLoadingThis ? "2px solid #D6724B" : "1px solid #C8B298",
+                      padding: "5px 10px",
+                      borderRadius: "10px",
+                      fontSize: "11.5px",
+                      fontWeight: "600",
+                      color: "#6A5A4A",
+                      boxShadow: "0 1px 3px rgba(0,0,0,0.03)",
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      transition: "all 0.2s"
+                    }
+                  },
+                  React.createElement("span", { className: "material-symbols-outlined", style: { fontSize: "13px", color: "#8C6D4F" } }, "library_books"),
+                  "《", course, "》",
+                  React.createElement("span", { style: { fontSize: "9.5px", color: "#8C6D4F", background: "rgba(140,109,79,0.1)", padding: "1px 4px", borderRadius: "4px" } }, isLoadingThis ? "展开中..." : "回看手札")
+                );
+              })
+            )
+          )
         );
-      })))
+      })()
     )
   ), /* @__PURE__ */ React.createElement("nav", { className: "fixed bottom-0 left-0 w-full flex justify-around items-center pt-3 pb-6 px-4 bg-[#fffcf7]/90 dark:bg-stone-900/90 backdrop-blur-xl z-50 rounded-t-2xl border-t border-outline-variant/15 shadow-[0_-10px_30px_rgba(55,56,49,0.05)]" }, /* @__PURE__ */ React.createElement(
     "div",
@@ -101967,6 +102263,16 @@ ${memorySettings.summary}
         }
       } catch (e) {
         console.error("加载方天水镜记忆失败:", e);
+      }
+    }
+    if (currentActiveCharName && window.getLearningSystemMemory) {
+      try {
+        const learningMemory = await window.getLearningSystemMemory(currentActiveCharName, chatData?.id);
+        if (learningMemory) {
+          systemInstruction += learningMemory;
+        }
+      } catch (e) {
+        console.error("加载学习系统记忆失败:", e);
       }
     }
     if (settings.enableCustomPrompt && settings.customPrompt && settings.customPrompt.trim()) {
