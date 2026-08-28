@@ -85689,47 +85689,22 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
 
     console.log(`[方天水镜] 正在检索名士【${character}】(ID: ${characterId}) 的传讯聊天记录，共抓取到 ${messages.length} 条历史消息`);
 
-    const now = Date.now();
-    const oneDayAgo = now - 24 * 60 * 60 * 1000;
-
-    const isWithin24Hours = (msg) => {
-      if (!msg) return false;
-      if (msg.timestamp) {
-        const t = typeof msg.timestamp === "number" ? msg.timestamp : new Date(msg.timestamp).getTime();
-        if (!isNaN(t) && t > 1000000000000) return t >= oneDayAgo && t <= now + 120000;
-      }
-      if (typeof msg.id === "number" && msg.id > 1000000000000 && msg.id < 3000000000000) {
-        return msg.id >= oneDayAgo && msg.id <= now + 120000;
-      }
-      if (typeof msg.id === "string" && /^\d{13}$/.test(msg.id)) {
-        const num = Number(msg.id);
-        if (!isNaN(num)) return num >= oneDayAgo && num <= now + 120000;
-      }
-      if (msg.createdAt) {
-        const t = typeof msg.createdAt === "number" ? msg.createdAt : new Date(msg.createdAt).getTime();
-        if (!isNaN(t) && t > 1000000000000) return t >= oneDayAgo && t <= now + 120000;
-      }
-      if (msg.date) {
-        const t = typeof msg.date === "number" ? msg.date : new Date(msg.date).getTime();
-        if (!isNaN(t) && t > 1000000000000) return t >= oneDayAgo && t <= now + 120000;
-      }
-      return false;
-    };
-
-    const messages24h = messages.filter(isWithin24Hours);
-    console.log(`[方天水镜] 经24小时严格时效过滤后，有效聊天记录共 ${messages24h.length} 条`);
-
-    if (messages24h.length === 0) {
-      return "【最近24小时内暂无传讯聊天记录】";
+    if (!messages || messages.length === 0) {
+      return "【暂无传讯聊天记录】";
     }
 
-    const recent = messages24h.slice(-25);
-    return recent.map((m) => {
+    // 保底机制：无论24小时内发言多少条（即使小于100条或0条），都始终提取最近100条聊天记录作为保底上下文
+    const targetList = messages.slice(-100);
+    console.log(`[方天水镜] 依据保底规则，提取最近 ${targetList.length} 条聊天记录注入Prompt`);
+
+    const formattedLines = targetList.map((m) => {
       const senderName = m.sender === "user" || m.isMe ? "广陵王(用户)" : character;
       const content = m.text || m.content || "";
       const timeStr = m.time ? ` [${m.time}]` : "";
       return `${senderName}${timeStr}: ${content}`;
-    }).join("\n");
+    });
+
+    return `【该角色与用户在传讯页面的最近对话记录（保底提取最新 ${targetList.length} 条）】：\n` + formattedLines.join("\n");
   };
 
   const getContexts = async () => {
