@@ -1156,6 +1156,104 @@ window.tjcStore = {
   }
 };
 
+window.getFangtianMirrorMemory = function(charName) {
+  if (!charName) return "";
+  var memoryParts = [];
+
+  // 1. 日常五大奇物手札 (Daily)
+  try {
+    var rawDaily = localStorage.getItem("fangtian_daily_" + charName);
+    if (rawDaily) {
+      var d = JSON.parse(rawDaily);
+      var dailySummary = [];
+      if (d.dailyQuote) dailySummary.push("- 今日总述: \"" + d.dailyQuote + "\" (" + (d.recordDate || "近期") + ")");
+      if (d.yilutong && d.yilutong.title) dailySummary.push("- 驿路巡查: " + d.yilutong.title + " (自" + (d.yilutong.origin || "起点") + "至" + (d.yilutong.destination || "终点") + ") [批注: " + (d.yilutong.characterNote || d.yilutong.status || "") + "]");
+      if (d.chenwei && d.chenwei.hexagram) dailySummary.push("- 谶纬求卦: 摇得" + d.chenwei.hexagram + " (" + (d.chenwei.queryTopic || "问吉凶") + ") [谶语: " + (d.chenwei.poem || "") + " | 心境: " + (d.chenwei.characterNote || "") + "]");
+      if (d.shapan && d.shapan.topic) dailySummary.push("- 沙盘推演: " + d.shapan.topic + " [胜率: " + (d.shapan.winRate || "") + " | 考量: " + (d.shapan.characterNote || "") + "]");
+      if (d.liexing && d.liexing.star) dailySummary.push("- 观星夜占: 感应" + d.liexing.star + " [异象: " + (d.liexing.phenomenon || "") + " | 占验: " + (d.liexing.characterNote || "") + "]");
+      if (d.hudie && d.hudie.originEvent) dailySummary.push("- 蝴蝶效应思索: 假设\"" + d.hudie.originEvent + "\" [平行结局: " + (d.hudie.alternativeEnd || "") + " | 感慨: " + (d.hudie.characterNote || "") + "]");
+      if (dailySummary.length > 0) {
+        memoryParts.push("【你近期的个人日常生活手札与神器推演】：\n" + dailySummary.join("\n"));
+      }
+    }
+  } catch (e) {}
+
+  // 2. 暗中密信往来 (Secrets)
+  try {
+    var rawSecrets = localStorage.getItem("fangtian_secrets_" + charName);
+    if (rawSecrets) {
+      var secrets = JSON.parse(rawSecrets);
+      if (Array.isArray(secrets) && secrets.length > 0) {
+        var topSecrets = secrets.slice(0, 4).map(function(s) {
+          return "- 与【" + (s.correspondent || "线人") + "(" + (s.role || "密探") + ")】密信 (" + (s.time || "近期") + "): " + (s.summary || "");
+        }).join("\n");
+        if (topSecrets) {
+          memoryParts.push("【你近期私下与外界的暗中密信往来（对广陵王保密，除非被其巧妙察觉或主动问及）】：\n" + topSecrets);
+        }
+      }
+    }
+  } catch (e) {}
+
+  // 3. 随身备忘录与私人财产 (Dynamics)
+  try {
+    var rawDyn = localStorage.getItem("fangtian_dynamics_" + charName);
+    if (rawDyn) {
+      var dyn = JSON.parse(rawDyn);
+      var dynLines = [];
+      if (Array.isArray(dyn.memos) && dyn.memos.length > 0) {
+        var memoStr = dyn.memos.slice(0, 3).map(function(m) { return "[" + (m.tag || "备忘") + "] " + (m.title || "") + ": " + (m.content || ""); }).join("；");
+        dynLines.push("- 随身备忘: " + memoStr);
+      }
+      if (Array.isArray(dyn.assets) && dyn.assets.length > 0) {
+        var assetStr = dyn.assets.slice(0, 3).map(function(a) { return (a.changeTitle || a.type || "") + "(" + (a.partner || "") + "): " + (a.scale || a.detail || ""); }).join("；");
+        dynLines.push("- 私产与交易记录: " + assetStr);
+      }
+      if (dynLines.length > 0) {
+        memoryParts.push("【你随身记下的备忘日程与私产动向】：\n" + dynLines.join("\n"));
+      }
+    }
+  } catch (e) {}
+
+  // 4. 琴棋书画与君子六艺 (Play)
+  try {
+    var rawPlay = localStorage.getItem("fangtian_play_" + charName);
+    if (rawPlay) {
+      var p = JSON.parse(rawPlay);
+      var playLines = [];
+      if (Array.isArray(p.fourArts) && p.fourArts.length > 0) {
+        playLines.push("- 雅玩品鉴: " + p.fourArts.slice(0, 2).map(function(a) { return "【" + (a.category || "琴") + "】" + (a.title || "") + " (" + (a.detail || "") + ")"; }).join("；"));
+      }
+      if (Array.isArray(p.sixSkills) && p.sixSkills.length > 0) {
+        playLines.push("- 六艺修习: " + p.sixSkills.slice(0, 2).map(function(s) { return "【" + (s.skill || "武") + "】" + (s.title || "") + " (" + (s.detail || "") + ")"; }).join("；"));
+      }
+      if (playLines.length > 0) {
+        memoryParts.push("【你近期的风雅雅玩与六艺修习情况】：\n" + playLines.join("\n"));
+      }
+    }
+  } catch (e) {}
+
+  // 5. 太疾驰购物订单 (Orders)
+  try {
+    var rawOrders = localStorage.getItem("fangtian_orders_" + charName);
+    if (rawOrders) {
+      var orders = JSON.parse(rawOrders);
+      if (Array.isArray(orders) && orders.length > 0) {
+        var orderStr = orders.slice(0, 4).map(function(o) {
+          return "- 购买【" + (o.itemName || "物品") + "】(" + (o.cost || "") + ")，状态:" + (o.status || "已送达") + "，收件方:" + (o.recipient || "楼主") + " [缘由: " + (o.reason || "") + "]";
+        }).join("\n");
+        if (orderStr) {
+          memoryParts.push("【你在太疾驰商城的近期消费与采买订单】：\n" + orderStr);
+        }
+      }
+    }
+  } catch (e) {}
+
+  if (memoryParts.length === 0) return "";
+
+  return "\n\n【名士自身真实生活履历与近期行止手札（方天水镜记忆）】\n（以下为你自身在手机与日常生活中的真实行止、手札随笔、暗信往来与采买账册。若楼主在聊天中提及相关话题、地点、物品、卦象或行踪，你拥有完全清晰完整的真实记忆，请自然自如地接话、回应或依据性格适度流露心绪！）：\n" + memoryParts.join("\n\n");
+};
+var getFangtianMirrorMemory = window.getFangtianMirrorMemory;
+
 window.safeParseLLMJson = function(rawText) {
   if (!rawText || typeof rawText !== "string") return null;
   var text = rawText.replace(/```json|```/g, "").trim();
@@ -85515,7 +85613,7 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
     return txt || JSON.stringify(characterProfile);
   };
 
-  const getUserChatHistory = async () => {
+    const getUserChatHistory = async () => {
     let messages = [];
     try {
       if (window.settingsStore?.getXiuyiChatHistory) {
@@ -85524,19 +85622,47 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
       }
     } catch (e) {}
 
+    // 1. 通过 chatHistoryStore 精确查询（支持 ID、名称、数字类型与字符串类型互转）
     if (messages.length === 0 && window.chatHistoryStore) {
+      const candidateIds = [
+        characterId,
+        typeof characterId === "string" && !isNaN(Number(characterId)) ? Number(characterId) : null,
+        typeof characterId === "number" ? String(characterId) : null,
+        character
+      ].filter(Boolean);
+
+      for (const cid of candidateIds) {
+        try {
+          const res = await window.chatHistoryStore.getMessages(cid, 1, 100);
+          if (res && Array.isArray(res.messages) && res.messages.length > 0) {
+            messages = res.messages;
+            break;
+          }
+        } catch (e) {}
+      }
+    }
+
+    // 2. 若未找到，遍历 chatCharacterStore 寻找同名角色的真实 ID 再查
+    if (messages.length === 0 && window.chatCharacterStore && window.chatHistoryStore) {
       try {
-        if (characterId) {
-          const res = await window.chatHistoryStore.getMessages(characterId, 1, 30);
-          if (res && Array.isArray(res.messages) && res.messages.length > 0) messages = res.messages;
-        }
-        if (messages.length === 0) {
-          const res = await window.chatHistoryStore.getMessages(character, 1, 30);
-          if (res && Array.isArray(res.messages) && res.messages.length > 0) messages = res.messages;
+        const allChars = await window.chatCharacterStore.getAll();
+        const matched = (allChars || []).find(c => c && (c.name === character || c.id === characterId));
+        if (matched && matched.id) {
+          const cids = [matched.id, typeof matched.id === "string" && !isNaN(Number(matched.id)) ? Number(matched.id) : null, String(matched.id)].filter(Boolean);
+          for (const cid of cids) {
+            try {
+              const res = await window.chatHistoryStore.getMessages(cid, 1, 100);
+              if (res && Array.isArray(res.messages) && res.messages.length > 0) {
+                messages = res.messages;
+                break;
+              }
+            } catch (e) {}
+          }
         }
       } catch (e) {}
     }
 
+    // 3. 本地 localStorage 兜底多键匹配
     if (messages.length === 0) {
       const candidateKeys = [
         `t8_chat_history_${character}`,
@@ -85561,13 +85687,48 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
       }
     }
 
-    if (messages.length === 0) return "\u3010\u6682\u65E0\u8FD1\u671F\u4F20\u8BAF\u804A\u5929\u8BB0\u5F55\u3011";
+    console.log(`[方天水镜] 正在检索名士【${character}】(ID: ${characterId}) 的传讯聊天记录，共抓取到 ${messages.length} 条历史消息`);
 
-    const recent = messages.slice(-15);
+    const now = Date.now();
+    const oneDayAgo = now - 24 * 60 * 60 * 1000;
+
+    const isWithin24Hours = (msg) => {
+      if (!msg) return false;
+      if (msg.timestamp) {
+        const t = typeof msg.timestamp === "number" ? msg.timestamp : new Date(msg.timestamp).getTime();
+        if (!isNaN(t) && t > 1000000000000) return t >= oneDayAgo && t <= now + 120000;
+      }
+      if (typeof msg.id === "number" && msg.id > 1000000000000 && msg.id < 3000000000000) {
+        return msg.id >= oneDayAgo && msg.id <= now + 120000;
+      }
+      if (typeof msg.id === "string" && /^\d{13}$/.test(msg.id)) {
+        const num = Number(msg.id);
+        if (!isNaN(num)) return num >= oneDayAgo && num <= now + 120000;
+      }
+      if (msg.createdAt) {
+        const t = typeof msg.createdAt === "number" ? msg.createdAt : new Date(msg.createdAt).getTime();
+        if (!isNaN(t) && t > 1000000000000) return t >= oneDayAgo && t <= now + 120000;
+      }
+      if (msg.date) {
+        const t = typeof msg.date === "number" ? msg.date : new Date(msg.date).getTime();
+        if (!isNaN(t) && t > 1000000000000) return t >= oneDayAgo && t <= now + 120000;
+      }
+      return false;
+    };
+
+    const messages24h = messages.filter(isWithin24Hours);
+    console.log(`[方天水镜] 经24小时严格时效过滤后，有效聊天记录共 ${messages24h.length} 条`);
+
+    if (messages24h.length === 0) {
+      return "【最近24小时内暂无传讯聊天记录】";
+    }
+
+    const recent = messages24h.slice(-25);
     return recent.map((m) => {
-      const senderName = m.sender === "user" || m.isMe ? "\u5E7F\u9675\u738B(\u7528\u6237)" : character;
+      const senderName = m.sender === "user" || m.isMe ? "广陵王(用户)" : character;
       const content = m.text || m.content || "";
-      return `${senderName}: ${content}`;
+      const timeStr = m.time ? ` [${m.time}]` : "";
+      return `${senderName}${timeStr}: ${content}`;
     }).join("\n");
   };
 
@@ -85625,7 +85786,7 @@ ${userContext}
 角色姓名：${character}
 角色人设与说话风格：${charInfo}
 
-【该角色与用户在传讯页面的近期真实聊天记录】：
+【该角色与用户在传讯页面最近24小时内的真实聊天记录】：
 ${chatHistoryContext}
 
 【核心任务与生成规则】
@@ -85808,7 +85969,7 @@ ${userContext}
 角色姓名：${character}
 角色人设与风格：${charInfo}
 
-【该角色与用户在传讯页面的近期真实聊天记录】：
+【该角色与用户在传讯页面最近24小时内的真实聊天记录】：
 ${chatHistoryContext}
 
 【任务要求】
@@ -85915,7 +86076,7 @@ ${worldContext}
 角色姓名：${character}
 角色人设与性格：${charInfo}
 
-【该角色与用户在传讯页面的近期真实聊天记录】：
+【该角色与用户在传讯页面最近24小时内的真实聊天记录】：
 ${chatHistoryContext}
 
 【核心任务与生成规则】
@@ -86007,7 +86168,7 @@ ${userContext}
 角色姓名：${character}
 角色人设与风格：${charInfo}
 
-【该角色与用户在传讯页面的近期真实聊天记录】：
+【该角色与用户在传讯页面最近24小时内的真实聊天记录】：
 ${chatHistoryContext}
 
 【任务要求】
@@ -86091,7 +86252,7 @@ ${userContext}
 角色姓名：${character}
 角色人设与风格：${charInfo}
 
-【该角色与用户在传讯页面的近期真实聊天记录】：
+【该角色与用户在传讯页面最近24小时内的真实聊天记录】：
 ${chatHistoryContext}
 
 【任务要求】
@@ -101821,6 +101982,17 @@ ${membersInfo}
 【核心长期记忆】
 ${memorySettings.summary}
 `;
+    }
+    const currentActiveCharName = chatData?.name || chatData?.profile?.name || "";
+    if (currentActiveCharName && window.getFangtianMirrorMemory) {
+      try {
+        const mirrorMemory = window.getFangtianMirrorMemory(currentActiveCharName);
+        if (mirrorMemory) {
+          systemInstruction += mirrorMemory;
+        }
+      } catch (e) {
+        console.error("加载方天水镜记忆失败:", e);
+      }
     }
     if (settings.enableCustomPrompt && settings.customPrompt && settings.customPrompt.trim()) {
       systemInstruction += `
