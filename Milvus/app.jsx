@@ -71157,15 +71157,32 @@ const getFullCharacterSetting = async (charName, charId) => {
   if (!char) return "";
 
   const lines = [];
-  if (char.name || char.profile?.name) lines.push(`【名士姓名】: ${char.name || char.profile?.name}`);
+  const name = char.name || char.profile?.name || charName;
+  lines.push(`【名士姓名】: ${name}`);
+  if (char.profile?.gender || char.gender) lines.push(`【性别】: ${char.profile?.gender || char.gender}`);
   if (char.profile?.personality || char.personality) lines.push(`【性格特质】: ${char.profile?.personality || char.personality}`);
-  if (char.profile?.speakingStyle || char.speakingStyle) lines.push(`【说话口吻与习惯】: ${char.profile?.speakingStyle || char.speakingStyle}`);
-  if (char.profile?.background || char.background) lines.push(`【身份与生平背景】: ${char.profile?.background || char.background}`);
-  if (char.profile?.description || char.description) lines.push(`【立体的角色设定】: ${char.profile?.description || char.description}`);
-  if (char.prompt || char.systemPrompt || char.customPrompt) {
-    const rawP = String(char.prompt || char.systemPrompt || char.customPrompt || "").trim();
-    if (rawP) lines.push(`【传讯专属系统提示词】: ${rawP.slice(0, 600)}`);
+  if (char.profile?.speakingStyle || char.speakingStyle || char.profile?.style || char.style) {
+    lines.push(`【说话口吻与语言风格（极度重要，100%必须遵从！）】: ${char.profile?.speakingStyle || char.speakingStyle || char.profile?.style || char.style}`);
   }
+  if (char.profile?.background || char.background) lines.push(`【身份与生平背景】: ${char.profile?.background || char.background}`);
+  if (char.profile?.description || char.description) lines.push(`【立体的角色设定与生平小传】: ${char.profile?.description || char.description}`);
+  if (char.profile?.mbti || char.mbti) lines.push(`【MBTI人格】: ${char.profile?.mbti || char.mbti}`);
+  if (char.prompt || char.systemPrompt || char.customPrompt || char.profile?.prompt || char.profile?.customPrompt) {
+    const rawP = String(char.prompt || char.systemPrompt || char.customPrompt || char.profile?.prompt || char.profile?.customPrompt || "").trim();
+    if (rawP) lines.push(`【传讯专属系统提示词（最高优先级遵循）】: ${rawP.slice(0, 1200)}`);
+  }
+
+  // 深度读取该名士在角色配置库中挂载的长篇专属设定文档 (characterDocStore)
+  const actualId = char.id || charId;
+  if (window.characterDocStore && actualId) {
+    try {
+      const docContext = await window.characterDocStore.getEnabledDocContext(actualId);
+      if (docContext && docContext.trim()) {
+        lines.push(`【角色专属长篇设定文档】:\n${docContext.trim().slice(0, 1500)}`);
+      }
+    } catch (e) {}
+  }
+
   return lines.join("\n");
 };
 
@@ -71749,69 +71766,76 @@ const T13LearningPage = ({ onBack }) => {
     const fullSetting = await getFullCharacterSetting(charKey, charUser?.id);
     const recentCtx = await getCharacterRecentLearningContext(charKey, charUser?.id);
 
-    const prompt = `
+    // 获取当前玩家/广陵王信息
+    let activeUserName = "广陵王";
+    try {
+      const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+      const activeId = localStorage.getItem("active_persona_id");
+      if (savedPersonas.length > 0) {
+        const found = activeId ? savedPersonas.find(p => String(p.id) === String(activeId)) : savedPersonas[0];
+        if (found && found.name) activeUserName = found.name;
+      }
+    } catch(e) {}
+
+    const sysPrompt = `你现在必须完全沉浸式、以第一人称扮演名士【${charKey}】本人！
+你正在亲笔撰写属于你自己的书院课程竹简手札、错题随笔与考课实况。
+【绝对铁律】：
+1. 严禁以第三方旁白或通用AI的生硬语气写套话！你就是【${charKey}】！
+2. 必须深度融入你在角色配置库中的性格特质、说话口吻、生平经历与专属提示词！
+3. 随笔、错题吐槽、考课小动作与对${activeUserName}的同窗寄语，必须充满你本人的标志性神韵与专属语气！`;
+
+    const userPrompt = `
 【世界设定】
 东汉末年书院，名士们使用手机学习软件考课刷题。
 
-【传讯--角色配置库中的深度人设与口吻设定】：
+【你（${charKey}）在传讯--角色配置库中的深度人设与口吻设定（最高指令，深度遵从）】：
 ${fullSetting || `姓名：${charKey}\n性格：${charUser?.quote || "性格鲜明"}`}
 
-【该名士近期私聊、群聊互动与方天水镜近况】：
+【你近期在私聊、群聊中的真实对白与方天水镜近况（融入你的近期心境）】：
 ${recentCtx || "暂无特别记录"}
 
-【当前修读课程】
-《${courseName}》
-
-【深度人设还原与声线口吻铁律】：
-1. 你必须【深度依循上述角色配置库中的全部设定（性格特质、说话口吻与习惯、身份背景与专属提示词）】！
-2. 无论是 5 则亲笔随笔、作弊小动作、刷题状态写照、还是写给广陵王（主公）的寄语，都必须【100% 还原该名士的标志性神韵与第一人称真实口吻】！
-- 例如：若是孙策，字里行间要有霸气少年将领的豪迈热烈与不羁，吐槽刷题像行军打仗；
-- 若是袁基，言辞温润如玉、风度翩翩又暗藏腹黑算计与世家公子的优雅；
-- 若是左慈，语气要仙风道骨、玄微深邃又带着看透天机的飘逸；
-- 若是傅融，精明算账、心系钱粮、吐槽买书卷太费五铢钱；
-- 若是刘辩，要充满少年帝王的敏感多情与依恋。
-
-【修读课程名称】
+【你当前修读的课程名称】
 《${courseName}》
 
 【任务与生成要求】
-请以【${charKey}】的真实第一人称语气，生成其修读《${courseName}》时的【亲笔手札与刷题考试实况】！要极度生动传神、幽默还原现代人面对背单词/考课软件时的崩溃、摸鱼、抓狂、作弊小动作与灵机一动！
+请以【${charKey}】你的真实第一人称口吻与专属语言风格，亲笔撰写修读《${courseName}》时的【竹简手札、错题本与刷题实况】！
+内容要极度生动传神、幽默还原你在面对背概念、刷闪卡、考试做题时的真实反应（紧密契合你的身份习惯、说话风格与性格小动作）！
 
 【必须返回纯 JSON 对象格式（不要包含 \`\`\`json 标签）】：
 {
   "studentNotes": [
-    "名士亲笔随笔第1条（真实第一人称刷题破防/心得吐槽）",
-    "名士亲笔随笔第2条（关于错题本或考点的怨念）",
-    "名士亲笔随笔第3条（半夜刷闪卡的痛苦或抓狂）",
-    "名士亲笔随笔第4条（同窗攀比或誓要通关的执念）",
-    "名士亲笔随笔第5条（咬断毛笔/狂点屏幕的实况）"
+    "第1条亲笔随笔（以你的第一人称真实口吻撰写刷题/心得/破防吐槽）",
+    "第2条亲笔随笔（关于错题本或考点的怨念与你的独特理解）",
+    "第3条亲笔随笔（夜半刷闪卡或备考时的真实状态与小情绪）",
+    "第4条亲笔随笔（与其他名士同窗攀比或誓要通关的独白）",
+    "第5条亲笔随笔（做题时的具体小动作/咬笔/点屏幕的生动实况）"
   ],
   "syllabus": [
-    { "title": "第一章 基础概念", "desc": "幽默而富有考据感的大纲解释" },
-    { "title": "第二章 进阶实操", "desc": "幽默而富有考据感的大纲解释" },
-    { "title": "第三章 绝密防坑指南", "desc": "幽默而富有考据感的大纲解释" }
+    { "title": "第一章 基础概念", "desc": "以你的眼光和语气写出的大纲幽默考据解释" },
+    { "title": "第二章 进阶实操", "desc": "以你的眼光和语气写出的大纲幽默考据解释" },
+    { "title": "第三章 绝密防坑指南", "desc": "以你的眼光和语气写出的大纲幽默考据解释" }
   ],
   "examStatus": {
-    "score": "88分 / 59.5分危险飘过 / 满分飘过",
-    "streak": "连对 12 题 / 连错 5 题险些砸碎手机",
-    "cheatRecord": "作弊与小动作记录（如：‘偷偷用小号查答案被先生全院通报’ / ‘遇到不会的单选坚信三长一短选最短’ / ‘传讯狂发小纸条求助’ / ‘纯靠直觉乱蒙’）",
-    "studyVibe": "刷题众生相写照（如：‘双眼无神地狂点下一题’ / ‘自信满满地提交，错了一整屏’ / ‘盯着同一道闪卡看了半时辰’）",
-    "teacherComment": "先生评语（如：‘此子天资聪颖，奈何总想走捷径，罚抄三遍！’）"
+    "score": "得分情况（符合你的实力水平，如‘92分’/‘60分险过’/‘满分夺魁’）",
+    "streak": "做题连击状态（如‘连对 15 题神采飞扬’ / ‘连错 3 题眉头紧锁’）",
+    "cheatRecord": "你的专属作弊/做题小动作（深度符合你的人物性格与行事风格）",
+    "studyVibe": "你的刷题众生相写照（生动写出你的姿态、神态与氛围）",
+    "teacherComment": "先生对你的评语（切合你的人物特点）"
   },
-  "messageToUser": "名士对广陵王说的一句打趣寄语"
+  "messageToUser": "你对${activeUserName}说的一句打趣/关切/傲娇/深情的同窗寄语（严格使用你的专属称谓与语气）"
 }
 `;
 
     if (window.sendToLLM) {
       window.sendToLLM(
         [
-          { role: "system", content: "你是一个精通东汉书院名士人设与幽默刷题心理的生成器。" },
-          { role: "user", content: prompt }
+          { role: "system", content: sysPrompt },
+          { role: "user", content: userPrompt }
         ],
-        null,
+        { disableMCP: true },
         (reply) => {
           try {
-            const data = JSON.parse(reply.replace(/\`\`\`json|\`\`\`/g, "").trim());
+            const data = window.safeParseLLMJson ? window.safeParseLLMJson(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
             if (data && Array.isArray(data.studentNotes)) {
               localStorage.setItem(cacheKey, JSON.stringify(data));
               window.showBambooModal({ courseName, character: charUser, data, loading: false });
@@ -85899,13 +85923,15 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
   };
 
   const getCharProfileText = () => {
-    if (!characterProfile) return "\u7EE3\u8863\u697C\u5BC6\u63A2\uFF0C\u5FD7\u52C7\u673A\u654F\u3002";
+    if (!characterProfile) return "绣衣楼密探，志勇机敏。";
     if (typeof characterProfile === "string") return characterProfile;
     let txt = "";
-    if (characterProfile.personality) txt += `\u3010\u6027\u683C\u3011${characterProfile.personality} `;
-    if (characterProfile.style) txt += `\u3010\u8BF4\u8BDD\u98CE\u683C\u3011${characterProfile.style} `;
-    if (characterProfile.background) txt += `\u3010\u80CC\u666F\u3011${characterProfile.background} `;
-    if (characterProfile.bio) txt += `\u3010\u751F\u5E73\u3011${characterProfile.bio} `;
+    if (characterProfile.name) txt += `【姓名】${characterProfile.name} `;
+    if (characterProfile.personality) txt += `【性格】${characterProfile.personality} `;
+    if (characterProfile.speakingStyle || characterProfile.style) txt += `【说话风格与口吻】${characterProfile.speakingStyle || characterProfile.style} `;
+    if (characterProfile.background) txt += `【背景】${characterProfile.background} `;
+    if (characterProfile.bio || characterProfile.description) txt += `【生平设定】${characterProfile.bio || characterProfile.description} `;
+    if (characterProfile.prompt || characterProfile.customPrompt) txt += `【专属设定提示词】${characterProfile.prompt || characterProfile.customPrompt} `;
     return txt || JSON.stringify(characterProfile);
   };
 
@@ -86025,7 +86051,13 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
     } catch (e) {}
     const chatHistoryContext = await getUserChatHistory();
     const userContext = `【当前用户(主公/楼主设定)】姓名:${activeUser.name}，身份:${activeUser.role}，性格:${activeUser.personality}，背景:${activeUser.background || "无"}`;
-    return { worldContext, userContext, activeUser, chatHistoryContext };
+    let fullSetting = "";
+    try {
+      if (typeof getFullCharacterSetting === "function") {
+        fullSetting = await getFullCharacterSetting(character, characterId);
+      }
+    } catch (e) {}
+    return { worldContext, userContext, activeUser, chatHistoryContext, fullSetting };
   };
 
   const loadOrGenerateDaily = async (forceRefresh = false) => {
@@ -86045,17 +86077,16 @@ const T13CharacterMirrorView = ({ character, characterId, characterProfile, avat
     setIsLoadingDaily(true);
     showToast("方天通灵，正在探查名士调用各大奇物手札...");
     try {
-      const { worldContext, userContext, activeUser, chatHistoryContext } = await getContexts();
-      const charInfo = getCharProfileText();
+      const { worldContext, userContext, activeUser, chatHistoryContext, fullSetting } = await getContexts();
+      const charInfo = fullSetting || getCharProfileText();
       const prompt = `
 【世界观设定】
 ${worldContext}
 
 ${userContext}
 
-【密探/名士角色设定】
-角色姓名：${character}
-角色人设与说话风格：${charInfo}
+【你（${character}）在角色配置库中的深度人设、口吻与长篇设定文档（最高指令，深度遵从）】：
+${charInfo}
 
 【该角色与用户在传讯页面最近24小时内的真实聊天记录】：
 ${chatHistoryContext}
@@ -86137,7 +86168,7 @@ ${chatHistoryContext}
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是该名士的本尊灵魂。请严格以该名士的第一人称视角、口吻与性格输出纯 JSON 对象，切勿在字符串中换行。" },
+            { role: "system", content: `你现在必须完全沉浸式、第一人称扮演名士【${character}】本人！你正在亲笔撰写属于你自己的各大奇物日常手札与私密批注。严禁以第三方旁白口吻概括，所有批注与心境必须100%还原你本人的性格特质、语言口吻与专属神韵！` },
             { role: "user", content: prompt }
           ],
           { disableMCP: true },
@@ -86228,17 +86259,16 @@ ${chatHistoryContext}
     setIsLoadingSecrets(true);
     showToast("方天通灵，正在探查其与外界的密信往来...");
     try {
-      const { worldContext, userContext, chatHistoryContext } = await getContexts();
-      const charInfo = getCharProfileText();
+      const { worldContext, userContext, chatHistoryContext, fullSetting } = await getContexts();
+      const charInfo = fullSetting || getCharProfileText();
       const prompt = `
 【世界观设定】
 ${worldContext}
 
 ${userContext}
 
-【密探角色设定】
-角色姓名：${character}
-角色人设与风格：${charInfo}
+【你（${character}）在角色配置库中的深度人设、口吻与长篇设定文档（最高指令，深度遵从）】：
+${charInfo}
 
 【该角色与用户在传讯页面最近24小时内的真实聊天记录】：
 ${chatHistoryContext}
@@ -86268,7 +86298,7 @@ ${chatHistoryContext}
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是一个深谙东汉暗流与绣衣楼谍报运作的古风史官。请严格输出纯 JSON 数组，切勿在字符串中换行。" },
+            { role: "system", content: `你现在必须完全沉浸式扮演名士【${character}】本人及其通信对象！你正在撰写暗中往来的古风谍报密信。你回复的每一句台词必须100%还原你本人的性格特质与标志性口吻！` },
             { role: "user", content: prompt }
           ],
           { disableMCP: true },
@@ -86331,8 +86361,8 @@ ${chatHistoryContext}
     setIsLoadingDynamics(true);
     showToast("神识观微，正在探查备忘录与私人财产资产变动...");
     try {
-      const { worldContext, userContext, activeUser, chatHistoryContext } = await getContexts();
-      const charInfo = getCharProfileText();
+      const { worldContext, userContext, activeUser, chatHistoryContext, fullSetting } = await getContexts();
+      const charInfo = fullSetting || getCharProfileText();
       const prompt = `
 【世界观背景】
 ${worldContext}
@@ -86343,9 +86373,8 @@ ${worldContext}
 用户性格：${activeUser.personality}
 用户背景：${activeUser.background || "无"}
 
-【当前角色设定】
-角色姓名：${character}
-角色人设与性格：${charInfo}
+【你（${character}）在角色配置库中的深度人设、口吻与长篇设定文档（最高指令，深度遵从）】：
+${charInfo}
 
 【该角色与用户在传讯页面最近24小时内的真实聊天记录】：
 ${chatHistoryContext}
@@ -86368,7 +86397,7 @@ ${chatHistoryContext}
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是该角色的私密心腹总管，通晓其个人备忘与私产家底。严格输出纯 JSON 对象，切勿在字符串中换行。" },
+            { role: "system", content: `你现在必须完全沉浸式、以第一人称扮演名士【${character}】本人！你正在亲笔记下属于你自己的随身备忘录与私人财产资产考量。所有内容必须充满你本人的专属语气、行事风格与内心所想！` },
             { role: "user", content: prompt }
           ],
           { disableMCP: true },
@@ -86427,17 +86456,16 @@ ${chatHistoryContext}
     setIsLoadingPlay(true);
     showToast("方天通灵，正在探查其琴棋书画与六艺修习情况...");
     try {
-      const { worldContext, userContext, chatHistoryContext } = await getContexts();
-      const charInfo = getCharProfileText();
+      const { worldContext, userContext, chatHistoryContext, fullSetting } = await getContexts();
+      const charInfo = fullSetting || getCharProfileText();
       const prompt = `
 【世界观设定】
 ${worldContext}
 
 ${userContext}
 
-【密探角色设定】
-角色姓名：${character}
-角色人设与风格：${charInfo}
+【你（${character}）在角色配置库中的深度人设、口吻与长篇设定文档（最高指令，深度遵从）】：
+${charInfo}
 
 【该角色与用户在传讯页面最近24小时内的真实聊天记录】：
 ${chatHistoryContext}
@@ -86458,7 +86486,7 @@ ${chatHistoryContext}
       if (window.sendToLLM) {
         window.sendToLLM(
           [
-            { role: "system", content: "你是一个精通古代风雅六艺与琴棋书画的品鉴大师。请严格输出纯 JSON 对象，切勿在字符串中换行。" },
+            { role: "system", content: `你现在必须完全沉浸式、以第一人称扮演名士【${character}】本人！你正在亲笔记录近期的琴棋书画雅玩与君子六艺修习感悟。所有感悟必须100%符合你本人的身份背景、专属口吻与心境神韵！` },
             { role: "user", content: prompt }
           ],
           { disableMCP: true },
@@ -86511,17 +86539,16 @@ ${chatHistoryContext}
     setIsLoadingOrders(true);
     showToast("方天通灵，正在调取其在太疾驰商城的消费订单账册...");
     try {
-      const { worldContext, userContext, activeUser, chatHistoryContext } = await getContexts();
-      const charInfo = getCharProfileText();
+      const { worldContext, userContext, activeUser, chatHistoryContext, fullSetting } = await getContexts();
+      const charInfo = fullSetting || getCharProfileText();
       const prompt = `
 【世界观设定】
 ${worldContext}
 
 ${userContext}
 
-【密探角色设定】
-角色姓名：${character}
-角色人设与风格：${charInfo}
+【你（${character}）在角色配置库中的深度人设、口吻与长篇设定文档（最高指令，深度遵从）】：
+${charInfo}
 
 【该角色与用户在传讯页面最近24小时内的真实聊天记录】：
 ${chatHistoryContext}
