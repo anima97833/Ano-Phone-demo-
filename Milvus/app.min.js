@@ -847,8 +847,9 @@ window.sendToLLM = async (messages, customConfigOrChunk, onFinish, onError) => {
     if (config.type === "official") endpoint += "v1/chat/completions";
     else endpoint += "api/chat/completions";
 
-    // MCP Tools 挂载判断
-    const mcpEnabled = window.mcpHub && window.mcpHub.isMasterEnabled() && !customConfig?.disableMCP;
+    // MCP Tools 挂载判断（纯JSON/系统结构化生成/显式禁用时坚决不注入MCP工具）
+    const isJsonRequest = Array.isArray(messages) && messages.some(m => typeof m.content === "string" && (m.content.includes("纯 JSON") || m.content.includes("JSON 对象") || m.content.includes("JSON 数组") || m.content.includes("输出纯 JSON") || m.content.includes("JSON 格式") || m.content.includes("safeParseLLMJson")));
+    const mcpEnabled = window.mcpHub && window.mcpHub.isMasterEnabled() && !customConfig?.disableMCP && !isJsonRequest;
     const activeTools = mcpEnabled ? window.mcpHub.getActiveTools() : [];
 
     let currentMessages = [...messages];
@@ -85707,7 +85708,7 @@ ${chatHistoryContext}
             { role: "system", content: "你是该名士的本尊灵魂。请严格以该名士的第一人称视角、口吻与性格输出纯 JSON 对象，切勿在字符串中换行。" },
             { role: "user", content: prompt }
           ],
-          null,
+          { disableMCP: true },
           (reply) => {
             try {
               const parsed = safeParseLLMJson(reply);
@@ -85838,7 +85839,7 @@ ${chatHistoryContext}
             { role: "system", content: "你是一个深谙东汉暗流与绣衣楼谍报运作的古风史官。请严格输出纯 JSON 数组，切勿在字符串中换行。" },
             { role: "user", content: prompt }
           ],
-          null,
+          { disableMCP: true },
           (reply) => {
             try {
               const parsed = safeParseLLMJson(reply);
@@ -85938,7 +85939,7 @@ ${chatHistoryContext}
             { role: "system", content: "你是该角色的私密心腹总管，通晓其个人备忘与私产家底。严格输出纯 JSON 对象，切勿在字符串中换行。" },
             { role: "user", content: prompt }
           ],
-          null,
+          { disableMCP: true },
           (reply) => {
             try {
               const parsed = safeParseLLMJson(reply);
@@ -86028,7 +86029,7 @@ ${chatHistoryContext}
             { role: "system", content: "你是一个精通古代风雅六艺与琴棋书画的品鉴大师。请严格输出纯 JSON 对象，切勿在字符串中换行。" },
             { role: "user", content: prompt }
           ],
-          null,
+          { disableMCP: true },
           (reply) => {
             try {
               const parsed = safeParseLLMJson(reply);
@@ -86116,7 +86117,7 @@ ${chatHistoryContext}
             { role: "system", content: "你是太疾驰商城的首席总账房。请严格输出纯 JSON 数组，切勿在字符串中换行。" },
             { role: "user", content: prompt }
           ],
-          null,
+          { disableMCP: true },
           (reply) => {
             try {
               const parsed = safeParseLLMJson(reply);
