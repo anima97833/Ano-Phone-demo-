@@ -1155,6 +1155,58 @@ window.tjcStore = {
   }
 };
 
+window.safeParseLLMJson = function(rawText) {
+  if (!rawText || typeof rawText !== "string") return null;
+  var text = rawText.replace(/```json|```/g, "").trim();
+
+  // 1. Direct JSON.parse
+  try {
+    return JSON.parse(text);
+  } catch (e) {}
+
+  // 2. Extract first outer { ... } or [ ... ]
+  try {
+    var firstBrace = text.indexOf('{');
+    var lastBrace = text.lastIndexOf('}');
+    if (firstBrace !== -1 && lastBrace !== -1 && lastBrace > firstBrace) {
+      var candidate = text.substring(firstBrace, lastBrace + 1);
+      try {
+        return JSON.parse(candidate);
+      } catch (e1) {}
+    }
+  } catch (e) {}
+
+  // 3. Fallback: normalize punctuation & common malformed json
+  try {
+    var fixed = text
+      .replace(/：/g, ": ")
+      .replace(/，/g, ", ")
+      .replace(/[“”]/g, '"')
+      .replace(/[\u2018\u2019]/g, "'");
+
+    // Fix unquoted keys
+    fixed = fixed.replace(/([{,]\s*)([a-zA-Z0-9_\u4e00-\u9fa5]+)\s*:/g, '$1"$2":');
+
+    // Remove trailing commas
+    fixed = fixed.replace(/,\s*([}\]])/g, '$1');
+
+    var fb = fixed.indexOf('{');
+    var lb = fixed.lastIndexOf('}');
+    if (fb !== -1 && lb !== -1 && lb > fb) {
+      return JSON.parse(fixed.substring(fb, lb + 1));
+    }
+  } catch (e2) {}
+
+  // 4. Try safeParseJSONArray if array
+  if (typeof window.safeParseJSONArray === "function") {
+    var arr = window.safeParseJSONArray(rawText);
+    if (arr && Array.isArray(arr) && arr.length > 0) return arr;
+  }
+
+  return null;
+};
+var safeParseLLMJson = window.safeParseLLMJson;
+
 window.safeParseJSONArray = function(rawText) {
   if (!rawText || typeof rawText !== "string") return [];
   var text = rawText.replace(/```json|```/g, "").trim();
