@@ -85420,6 +85420,1964 @@ ${activeCharsInfo}
 
 
 
+const T13CharacterMirrorView = ({ character, characterId, characterProfile, avatar, onBack }) => {
+  const [activeTab, setActiveTab] = React.useState("daily");
+  const [toastText, setToastText] = React.useState("");
+
+  const [secretMessages, setSecretMessages] = React.useState([]);
+  const [selectedSecret, setSelectedSecret] = React.useState(null);
+  const [isLoadingSecrets, setIsLoadingSecrets] = React.useState(false);
+
+  const [memos, setMemos] = React.useState([]);
+  const [assets, setAssets] = React.useState([]);
+  const [dynamicsSubTab, setDynamicsSubTab] = React.useState("memo");
+  const [isLoadingDynamics, setIsLoadingDynamics] = React.useState(false);
+
+  const [fourArts, setFourArts] = React.useState([]);
+  const [sixSkills, setSixSkills] = React.useState([]);
+  const [playSubTab, setPlaySubTab] = React.useState("fourArts");
+  const [isLoadingPlay, setIsLoadingPlay] = React.useState(false);
+
+  const [orders, setOrders] = React.useState([]);
+  const [selectedOrder, setSelectedOrder] = React.useState(null);
+  const [isLoadingOrders, setIsLoadingOrders] = React.useState(false);
+
+  const [dailyData, setDailyData] = React.useState(null);
+  const [selectedDailyTool, setSelectedDailyTool] = React.useState(null);
+  const [isLoadingDaily, setIsLoadingDaily] = React.useState(false);
+
+  const showToast = (txt) => {
+    setToastText(txt);
+    setTimeout(() => setToastText(""), 2500);
+  };
+
+  const getCharProfileText = () => {
+    if (!characterProfile) return "\u7EE3\u8863\u697C\u5BC6\u63A2\uFF0C\u5FD7\u52C7\u673A\u654F\u3002";
+    if (typeof characterProfile === "string") return characterProfile;
+    let txt = "";
+    if (characterProfile.personality) txt += `\u3010\u6027\u683C\u3011${characterProfile.personality} `;
+    if (characterProfile.style) txt += `\u3010\u8BF4\u8BDD\u98CE\u683C\u3011${characterProfile.style} `;
+    if (characterProfile.background) txt += `\u3010\u80CC\u666F\u3011${characterProfile.background} `;
+    if (characterProfile.bio) txt += `\u3010\u751F\u5E73\u3011${characterProfile.bio} `;
+    return txt || JSON.stringify(characterProfile);
+  };
+
+  const getUserChatHistory = async () => {
+    let messages = [];
+    try {
+      if (window.settingsStore?.getXiuyiChatHistory) {
+        const hist = await window.settingsStore.getXiuyiChatHistory(character);
+        if (Array.isArray(hist) && hist.length > 0) messages = hist;
+      }
+    } catch (e) {}
+
+    if (messages.length === 0 && window.chatHistoryStore) {
+      try {
+        if (characterId) {
+          const res = await window.chatHistoryStore.getMessages(characterId, 1, 30);
+          if (res && Array.isArray(res.messages) && res.messages.length > 0) messages = res.messages;
+        }
+        if (messages.length === 0) {
+          const res = await window.chatHistoryStore.getMessages(character, 1, 30);
+          if (res && Array.isArray(res.messages) && res.messages.length > 0) messages = res.messages;
+        }
+      } catch (e) {}
+    }
+
+    if (messages.length === 0) {
+      const candidateKeys = [
+        `t8_chat_history_${character}`,
+        `t8_messages_${character}`,
+        `chat_history_${character}`,
+        `xiuyi_chat_${character}`,
+        characterId ? `t8_chat_history_${characterId}` : null,
+        characterId ? `t8_messages_${characterId}` : null
+      ].filter(Boolean);
+
+      for (const key of candidateKeys) {
+        try {
+          const raw = localStorage.getItem(key);
+          if (raw) {
+            const parsed = JSON.parse(raw);
+            if (Array.isArray(parsed) && parsed.length > 0) {
+              messages = parsed;
+              break;
+            }
+          }
+        } catch (e) {}
+      }
+    }
+
+    if (messages.length === 0) return "\u3010\u6682\u65E0\u8FD1\u671F\u4F20\u8BAF\u804A\u5929\u8BB0\u5F55\u3011";
+
+    const recent = messages.slice(-15);
+    return recent.map((m) => {
+      const senderName = m.sender === "user" || m.isMe ? "\u5E7F\u9675\u738B(\u7528\u6237)" : character;
+      const content = m.text || m.content || "";
+      return `${senderName}: ${content}`;
+    }).join("\n");
+  };
+
+  const getContexts = async () => {
+    const worldContext = window.getWorldBookContext ? await window.getWorldBookContext() : "";
+    let activeUser = { name: "广陵王", personality: "机警从容，深谋远虑", background: "绣衣楼之主", role: "广陵王/楼主" };
+    try {
+      const savedPersonas = JSON.parse(localStorage.getItem("user_personas") || "[]");
+      const activeId = localStorage.getItem("active_persona_id");
+      if (savedPersonas.length > 0) {
+        const found = activeId ? savedPersonas.find((p) => String(p.id) === String(activeId)) : savedPersonas[0];
+        if (found) {
+          activeUser = {
+            name: found.name || "广陵王",
+            personality: found.personality || "机警从容",
+            background: found.background || "绣衣楼楼主",
+            role: found.role || found.name || "广陵王",
+            gender: found.gender || "未知",
+            identityNote: found.description || found.background || ""
+          };
+        }
+      }
+    } catch (e) {}
+    const chatHistoryContext = await getUserChatHistory();
+    const userContext = `【当前用户(主公/楼主设定)】姓名:${activeUser.name}，身份:${activeUser.role}，性格:${activeUser.personality}，背景:${activeUser.background || "无"}`;
+    return { worldContext, userContext, activeUser, chatHistoryContext };
+  };
+
+  const loadOrGenerateDaily = async (forceRefresh = false) => {
+    const cacheKey = `fangtian_daily_${character}`;
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed && (parsed.yilutong || parsed.chenwei || parsed.shapan || parsed.liexing || parsed.hudie)) {
+            setDailyData(parsed);
+            return;
+          }
+        } catch (e) {}
+      }
+    }
+    setIsLoadingDaily(true);
+    showToast("方天通灵，正在探查名士调用各大奇物手札...");
+    try {
+      const { worldContext, userContext, activeUser, chatHistoryContext } = await getContexts();
+      const charInfo = getCharProfileText();
+      const prompt = `
+【世界观设定】
+${worldContext}
+
+${userContext}
+
+【密探/名士角色设定】
+角色姓名：${character}
+角色人设与说话风格：${charInfo}
+
+【该角色与用户在传讯页面的近期真实聊天记录】：
+${chatHistoryContext}
+
+【核心任务与生成规则】
+在日常生活中，角色【${character}】也会在手机/水镜中主动使用游戏界面的五大奇物工具（东汉驿路通、谶纬小摊、沙盘模拟器、列星、蝴蝶效应）。
+请以【${character}】的【第一人称专属语气与口吻】（完全贴合其性格特点、用词风格以及对${activeUser.name}的独特态度），生成其近期使用这五大工具的真实手札与调用记录！
+
+【五大工具调用要求】：
+1. 🐎【东汉驿路通 (yilutong)】：
+   - 记录该名士规划的一条行进/出巡/查探/奔赴见${activeUser.name}的驿道路线。
+   - 包含：起点、终点、途径核心驿站、行进时辰、名士亲笔行程随笔（用第一人称写下路上见闻、所思所想或因何奔波）。
+
+2. 🔮【谶纬小摊 (chenwei)】：
+   - 记录该名士在谶纬小摊前求问的一签一卦（可关于时局、财运、吉凶、两人的缘分或心结）。
+   - 包含：所问事由、摇得卦象/签文、解卦谶语、名士第一人称私密心境与批注（真实流露内心波澜或祈愿）。
+
+3. 🗺️【沙盘模拟器 (shapan)】：
+   - 记录该名士在沙盘模拟器上推演的一场军政防御、密探布控、粮道运转或局势推演。
+   - 包含：推演主题、战场/局势地形、敌我兵力布防、推演结论与胜率、名士第一人称战术批注与战略算计。
+
+4. 🌌【列星 (liexing)】：
+   - 记录该名士夜观天象、星盘命轨感应（如感应紫微、贪狼、七杀、文曲、天市垣等星曜异动）。
+   - 包含：观察主曜星宿、星象异动征兆、对天下或对${activeUser.name}命运之映射、名士第一人称观星手札。
+
+5. 🦋【蝴蝶效应 (hudie)】：
+   - 记录该名士用蝴蝶效应推演如果此前某一句话或某个微小抉择改变，命运将如何分歧。
+   - 包含：起源事件（可呼应近期聊天中的某件事）、推演的因果涟漪分支结局、名士第一人称的深思与感慨。
+
+6. 📜【今日手札总述 (dailyQuote)】：
+   - 该名士今日晨起/深夜写下的一两句总体心绪随笔（极富角色神韵，20-50字）。
+
+必须严格返回纯 JSON 对象格式（不要包含 \`\`\`json 标记）：
+{
+  "dailyQuote": "今日心绪随笔总述（第一人称口吻）",
+  "recordDate": "今日时辰（如：建安四年 暮春 申时）",
+  "yilutong": {
+    "title": "行程主题（如：暗查宛南官道巡防）",
+    "origin": "起点（如：广陵绣衣楼主阁）",
+    "destination": "终点（如：伏牛山秘密粮仓）",
+    "stations": ["广陵驿", "合肥南驿", "汝南分水驿", "伏牛山隐驿"],
+    "duration": "行程耗时（如：两日一夜 / 快马四时辰）",
+    "time": "出行时辰",
+    "status": "已抵达 / 途经歇马 / 秘密折返",
+    "characterNote": "名士第一人称随笔笔记"
+  },
+  "chenwei": {
+    "queryTopic": "求问事由",
+    "hexagram": "卦象名称",
+    "poem": "签诗谶语",
+    "meaning": "谶纬揭示之天机寓意",
+    "time": "求签时辰",
+    "characterNote": "名士第一人称私密心境"
+  },
+  "shapan": {
+    "topic": "军略推演主题",
+    "terrain": "推演地形",
+    "layout": "敌我布防概要",
+    "winRate": "推演胜算与推断",
+    "time": "推演时辰",
+    "characterNote": "名士第一人称战术批注"
+  },
+  "liexing": {
+    "star": "感应主曜",
+    "phenomenon": "星象异动",
+    "omen": "天象命轨映射",
+    "time": "观星时辰",
+    "characterNote": "名士第一人称观星手札"
+  },
+  "hudie": {
+    "originEvent": "假设起源事件",
+    "rippleEffect": "因果涟漪分歧",
+    "alternativeEnd": "推演平行结局",
+    "time": "推演时辰",
+    "characterNote": "名士第一人称感慨"
+  }
+}
+`;
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是该名士的本尊灵魂。请严格以该名士的第一人称视角、口吻与性格输出纯 JSON 对象，切勿在字符串中换行。" },
+            { role: "user", content: prompt }
+          ],
+          null,
+          (reply) => {
+            try {
+              const parsed = safeParseLLMJson(reply);
+              if (parsed && (parsed.yilutong || parsed.chenwei || parsed.shapan || parsed.liexing || parsed.hudie)) {
+                setDailyData(parsed);
+                localStorage.setItem(cacheKey, JSON.stringify(parsed));
+                showToast("已捕获名士最新日常奇物手札！");
+              }
+            } catch (err) {
+              console.error("解析日常失败:", err);
+            }
+            setIsLoadingDaily(false);
+          },
+          () => setIsLoadingDaily(false)
+        );
+      } else {
+        const defaultDaily = {
+          dailyQuote: "今日案牍稍歇，抽空以各大神器巡览一番，心中所念之事，终是有了几分眉目。",
+          recordDate: "今日未时",
+          yilutong: {
+            title: `巡察通往${activeUser.name}府邸之密道驿路`,
+            origin: "内阁公廨",
+            destination: `${activeUser.name}府邸东水榭`,
+            stations: ["内阁侧门", "广陵春和驿", "流水暗渠码头", "水榭暗门"],
+            duration: "半个时辰",
+            time: "今日辰时三刻",
+            status: "路线通畅·已排查隐患",
+            characterNote: `沿途暗桩已重新换防，特意避开了人声鼎沸的闹市。若${activeUser.name}有急召，策马半刻便至。`
+          },
+          chenwei: {
+            queryTopic: `求问近期江东风云与${activeUser.name}平安吉凶`,
+            hexagram: "上上卦·地天泰卦",
+            poem: "天地交泰物顺通，风平浪静见长虹。任凭惊涛拍岸起，同舟共济万事融。",
+            meaning: "阴阳交和，诸事吉亨，虽有暗流但终可化险为夷。",
+            time: "今日巳时",
+            characterNote: "摇得此泰卦，悬着的心总算放下大半。无论局势如何动荡，卦象既言大吉，我便护你周全。"
+          },
+          shapan: {
+            topic: "广陵外围伏牛山防御与暗桩粮道推演",
+            terrain: "山林险谷与狭窄关道",
+            layout: "扼守一线天隘口，部署神臂弓暗卡三座，精锐四十人",
+            winRate: "阻击成功率 92%，可支撑三日",
+            time: "今日午时",
+            characterNote: "以沙盘推演数遍，此隘口易守难攻。哪怕敌军数倍来犯，亦能从容据守，确保后方粮道无忧。"
+          },
+          liexing: {
+            star: "天市垣·帝座星 & 文昌曜",
+            phenomenon: "天市垣诸星璀璨，文昌星隐隐与主星相拱，西北虽有浊气，然紫光内敛",
+            omen: "主谋略得当，天下英豪相聚，贵人运势昌隆",
+            time: "昨夜子时",
+            characterNote: "仰观星汉灿烂，虽有战乱暗曜闪烁，但广陵上空星气澄澈。只要所谋不差，天下大势尽在掌中。"
+          },
+          hudie: {
+            originEvent: `若初见之时未曾与${activeUser.name}结下同盟契约...`,
+            rippleEffect: "少了一路涉险与刀光剑影，退居山林作一逍遥散人",
+            alternativeEnd: "虽得一世清闲，却终究错过这风云际会与知心之人",
+            time: "今日丑时",
+            characterNote: "因果推演千百遍，世间并无后悔二字。若能重选，我依然会走向你，共赴这场乱世局。"
+          }
+        };
+        setDailyData(defaultDaily);
+        localStorage.setItem(cacheKey, JSON.stringify(defaultDaily));
+        setIsLoadingDaily(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsLoadingDaily(false);
+    }
+  };
+
+  const loadOrGenerateSecrets = async (forceRefresh = false) => {
+    const cacheKey = `fangtian_secrets_${character}`;
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length >= 5) {
+            setSecretMessages(parsed);
+            return;
+          }
+        } catch (e) {}
+      }
+    }
+    setIsLoadingSecrets(true);
+    showToast("方天通灵，正在探查其与外界的密信往来...");
+    try {
+      const { worldContext, userContext, chatHistoryContext } = await getContexts();
+      const charInfo = getCharProfileText();
+      const prompt = `
+【世界观设定】
+${worldContext}
+
+${userContext}
+
+【密探角色设定】
+角色姓名：${character}
+角色人设与风格：${charInfo}
+
+【该角色与用户在传讯页面的近期真实聊天记录】：
+${chatHistoryContext}
+
+【任务要求】
+请结合世界书、该角色人设以及【其与用户在传讯页面的真实聊天记录】，探查并生成该角色近期与【其他人（如：楼内同僚、外勤线人、隐市掌柜、朝廷官员、故交亲友等，绝对不能是广陵王本人）】的【至少 5 条】暗中传讯往来记录。
+密信内容可暗中呼应其与用户的聊天进展（如奉命排查、暗中准备、私下打点、为用户善后等）。
+内容必须充满古风谍报感，符合角色的行事作风。
+
+必须严格返回纯 JSON 数组格式（不要包含 \`\`\`json 标记）：
+[
+  {
+    "id": 1,
+    "correspondent": "通信对象姓名或代号",
+    "role": "对方身份",
+    "time": "传讯时辰",
+    "summary": "传讯主旨与摘要",
+    "secretLevel": "密级",
+    "messages": [
+      { "sender": "对方姓名", "time": "13:20", "text": "对话内容1" },
+      { "sender": "${character}", "time": "13:22", "text": "对话内容2" },
+      { "sender": "对方姓名", "time": "13:25", "text": "对话内容3" }
+    ]
+  }
+]
+`;
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是一个深谙东汉暗流与绣衣楼谍报运作的古风史官。请严格输出纯 JSON 数组，切勿在字符串中换行。" },
+            { role: "user", content: prompt }
+          ],
+          null,
+          (reply) => {
+            try {
+              const parsed = safeParseLLMJson(reply);
+              if (Array.isArray(parsed) && parsed.length >= 1) {
+                setSecretMessages(parsed);
+                localStorage.setItem(cacheKey, JSON.stringify(parsed));
+                showToast("已捕获最新密信卷宗！");
+              }
+            } catch (err) {
+              console.error("解析传讯失败:", err);
+            }
+            setIsLoadingSecrets(false);
+          },
+          () => setIsLoadingSecrets(false)
+        );
+      } else {
+        const defaultSecrets = [
+          {
+            id: 1,
+            correspondent: "宛城暗桩·阿全",
+            role: "潜伏线人",
+            time: "今日未时三刻",
+            summary: "宛城太守府私铸铜钱之账册残卷已得手，候命接应。",
+            secretLevel: "绝密",
+            messages: [
+              { sender: "宛城暗桩·阿全", time: "13:20", text: "大人，账册残卷已从后厨地窖取出，藏于茶砖之内。" },
+              { sender: character, time: "13:23", text: "切勿走宛洛官道，绕行伏牛山水道，酉时在城南驿馆密接。" },
+              { sender: "宛城暗桩·阿全", time: "13:25", text: "遵命！属下定誓死护送。" }
+            ]
+          }
+        ];
+        setSecretMessages(defaultSecrets);
+        localStorage.setItem(cacheKey, JSON.stringify(defaultSecrets));
+        setIsLoadingSecrets(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsLoadingSecrets(false);
+    }
+  };
+
+  const loadOrGenerateDynamics = async (forceRefresh = false) => {
+    const cacheKey = `fangtian_dynamics_${character}`;
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed.memos && parsed.assets) {
+            setMemos(parsed.memos);
+            setAssets(parsed.assets);
+            return;
+          }
+        } catch (e) {}
+      }
+    }
+    setIsLoadingDynamics(true);
+    showToast("神识观微，正在探查备忘录与私人财产资产变动...");
+    try {
+      const { worldContext, userContext, activeUser, chatHistoryContext } = await getContexts();
+      const charInfo = getCharProfileText();
+      const prompt = `
+【世界观背景】
+${worldContext}
+
+【用户(主公/心上人/楼主)在身份配置库中的设定】
+用户姓名：${activeUser.name}
+用户身份：${activeUser.role}
+用户性格：${activeUser.personality}
+用户背景：${activeUser.background || "无"}
+
+【当前角色设定】
+角色姓名：${character}
+角色人设与性格：${charInfo}
+
+【该角色与用户在传讯页面的近期真实聊天记录】：
+${chatHistoryContext}
+
+【核心任务与生成规则】
+请为角色【${character}】生成两类极其真实的私密手记：
+一、【随身备忘录 (memos)】(4-6条)
+二、【私人资产与交易变动 (assets)】(4-6条)
+
+必须严格返回纯 JSON 对象格式（不要包含 \`\`\`json 标记）：
+{
+  "memos": [
+    { "id": 1, "tag": "提醒", "time": "今日辰时", "title": "标题", "content": "内容" }
+  ],
+  "assets": [
+    { "id": 1, "time": "近期时日", "type": "良田田庄", "changeTitle": "概要", "partner": "交易方", "scale": "规模", "totalHold": "总持有", "detail": "考量" }
+  ]
+}
+`;
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是该角色的私密心腹总管，通晓其个人备忘与私产家底。严格输出纯 JSON 对象，切勿在字符串中换行。" },
+            { role: "user", content: prompt }
+          ],
+          null,
+          (reply) => {
+            try {
+              const parsed = safeParseLLMJson(reply);
+              if (parsed && parsed.memos && (parsed.assets || parsed.trips)) {
+                const assetList = parsed.assets || parsed.trips;
+                setMemos(parsed.memos);
+                setAssets(assetList);
+                localStorage.setItem(cacheKey, JSON.stringify({ memos: parsed.memos, assets: assetList }));
+                showToast("已捕获最新备忘与私产交易账单！");
+              }
+            } catch (err) {
+              console.error("解析动向失败:", err);
+            }
+            setIsLoadingDynamics(false);
+          },
+          () => setIsLoadingDynamics(false)
+        );
+      } else {
+        const defaultDyn = {
+          memos: [
+            { id: 1, tag: "提醒", time: "今日辰时", title: `提醒${activeUser.name}添衣`, content: `${activeUser.name}这几天总在风口看密信，后厨熬的雪梨百合汤得盯着趁热喝完。` }
+          ],
+          assets: [
+            { id: 1, time: "本月初五", type: "良田田庄", changeTitle: "购置宛南沃野庄园", partner: "宛城富商李氏", scale: "+350亩良田，耗银铢五百两", totalHold: "良田累计 1,200 亩", detail: "此地土质肥沃引灌便利，产粮充裕，可作为秘密粮草供给基地。" }
+          ]
+        };
+        setMemos(defaultDyn.memos);
+        setAssets(defaultDyn.assets);
+        localStorage.setItem(cacheKey, JSON.stringify(defaultDyn));
+        setIsLoadingDynamics(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsLoadingDynamics(false);
+    }
+  };
+
+  const loadOrGeneratePlay = async (forceRefresh = false) => {
+    const cacheKey = `fangtian_play_${character}`;
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (parsed.fourArts && parsed.sixSkills) {
+            setFourArts(parsed.fourArts);
+            setSixSkills(parsed.sixSkills);
+            return;
+          }
+        } catch (e) {}
+      }
+    }
+    setIsLoadingPlay(true);
+    showToast("方天通灵，正在探查其琴棋书画与六艺修习情况...");
+    try {
+      const { worldContext, userContext, chatHistoryContext } = await getContexts();
+      const charInfo = getCharProfileText();
+      const prompt = `
+【世界观设定】
+${worldContext}
+
+${userContext}
+
+【密探角色设定】
+角色姓名：${character}
+角色人设与风格：${charInfo}
+
+【该角色与用户在传讯页面的近期真实聊天记录】：
+${chatHistoryContext}
+
+【任务要求】
+请细致生成该角色近期的【琴棋书画 (fourArts)】与【君子六艺 (sixSkills)】游玩修习记录。
+
+必须严格返回纯 JSON 对象格式（不要包含 \`\`\`json 标记）：
+{
+  "fourArts": [
+    { "id": 1, "category": "琴", "title": "曲目名", "time": "修习时日", "detail": "感悟" }
+  ],
+  "sixSkills": [
+    { "id": 1, "skill": "射", "title": "项目", "time": "演练时日", "detail": "过程" }
+  ]
+}
+`;
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是一个精通古代风雅六艺与琴棋书画的品鉴大师。请严格输出纯 JSON 对象，切勿在字符串中换行。" },
+            { role: "user", content: prompt }
+          ],
+          null,
+          (reply) => {
+            try {
+              const parsed = safeParseLLMJson(reply);
+              if (parsed && parsed.fourArts && parsed.sixSkills) {
+                setFourArts(parsed.fourArts);
+                setSixSkills(parsed.sixSkills);
+                localStorage.setItem(cacheKey, JSON.stringify(parsed));
+                showToast("已捕获最新风雅雅玩卷宗！");
+              }
+            } catch (err) {
+              console.error("解析娱乐失败:", err);
+            }
+            setIsLoadingPlay(false);
+          },
+          () => setIsLoadingPlay(false)
+        );
+      } else {
+        const defaultPlay = {
+          fourArts: [{ id: 1, category: "琴", title: "抚七弦琴《平沙落雁》", time: "昨夜子时", detail: "案头燃沉香一炷，指拂冰弦，音律清越沉静。" }],
+          sixSkills: [{ id: 1, skill: "射", title: "校场引七石硬弓·贯虱穿杨", time: "今日卯时", detail: "于楼后演武场连发九箭，箭箭深没靶心红心。" }]
+        };
+        setFourArts(defaultPlay.fourArts);
+        setSixSkills(defaultPlay.sixSkills);
+        localStorage.setItem(cacheKey, JSON.stringify(defaultPlay));
+        setIsLoadingPlay(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsLoadingPlay(false);
+    }
+  };
+
+  const loadOrGenerateOrders = async (forceRefresh = false) => {
+    const cacheKey = `fangtian_orders_${character}`;
+    if (!forceRefresh) {
+      const cached = localStorage.getItem(cacheKey);
+      if (cached) {
+        try {
+          const parsed = JSON.parse(cached);
+          if (Array.isArray(parsed) && parsed.length >= 4) {
+            setOrders(parsed);
+            return;
+          }
+        } catch (e) {}
+      }
+    }
+    setIsLoadingOrders(true);
+    showToast("方天通灵，正在调取其在太疾驰商城的消费订单账册...");
+    try {
+      const { worldContext, userContext, activeUser, chatHistoryContext } = await getContexts();
+      const charInfo = getCharProfileText();
+      const prompt = `
+【世界观设定】
+${worldContext}
+
+${userContext}
+
+【密探角色设定】
+角色姓名：${character}
+角色人设与风格：${charInfo}
+
+【该角色与用户在传讯页面的近期真实聊天记录】：
+${chatHistoryContext}
+
+【任务要求】
+生成该角色近期的【5-7条太疾驰购物订单】。
+必须严格返回纯 JSON 数组格式（不要包含 \`\`\`json 标记）：
+[
+  {
+    "id": 1,
+    "itemName": "商品名称",
+    "category": "分类",
+    "quantity": "数量",
+    "cost": "金额",
+    "recipient": "给谁",
+    "status": "状态",
+    "time": "时辰",
+    "reason": "动机"
+  }
+]
+`;
+      if (window.sendToLLM) {
+        window.sendToLLM(
+          [
+            { role: "system", content: "你是太疾驰商城的首席总账房。请严格输出纯 JSON 数组，切勿在字符串中换行。" },
+            { role: "user", content: prompt }
+          ],
+          null,
+          (reply) => {
+            try {
+              const parsed = safeParseLLMJson(reply);
+              if (Array.isArray(parsed) && parsed.length >= 1) {
+                setOrders(parsed);
+                localStorage.setItem(cacheKey, JSON.stringify(parsed));
+                showToast("已调取太疾驰全部消费账册！");
+              }
+            } catch (err) {
+              console.error("解析购物订单失败:", err);
+            }
+            setIsLoadingOrders(false);
+          },
+          () => setIsLoadingOrders(false)
+        );
+      } else {
+        const defaultOrders = [
+          { id: 1, itemName: "蒙顶甘露极品云雾茶 (精装)", category: "珍馐餐饮", quantity: "2 罐", cost: "160 银铢", recipient: `赠${activeUser.name}`, status: "已派达·亲手奉上", time: "今日辰时", reason: "特选高山初采嫩芽，甘冽清甜。" }
+        ];
+        setOrders(defaultOrders);
+        localStorage.setItem(cacheKey, JSON.stringify(defaultOrders));
+        setIsLoadingOrders(false);
+      }
+    } catch (e) {
+      console.error(e);
+      setIsLoadingOrders(false);
+    }
+  };
+
+  React.useEffect(() => {
+    if (activeTab === "daily") loadOrGenerateDaily();
+    else if (activeTab === "msg") loadOrGenerateSecrets();
+    else if (activeTab === "dynamics") loadOrGenerateDynamics();
+    else if (activeTab === "play") loadOrGeneratePlay();
+    else if (activeTab === "shop") loadOrGenerateOrders();
+  }, [activeTab, character]);
+
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      style: {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "#F5F3EF",
+        zIndex: 260,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden"
+      }
+    },
+    /* 顶部导航 */
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
+          height: "56px",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #E5DFD5",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 14px",
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.04)",
+          flexShrink: 0
+        }
+      },
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { display: "flex", alignItems: "center", gap: "10px" } },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            onClick: onBack,
+            style: {
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#5A5F4D"
+            }
+          },
+          /* @__PURE__ */ React.createElement("i", { className: "ph ph-caret-left", style: { fontSize: "24px" } })
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "8px" } },
+          /* @__PURE__ */ React.createElement(WaterMirrorAvatar, { avatar, name: character, size: 38 }),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            null,
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "15px", fontWeight: "700", color: "#3B4033" } }, character, " · 方天视界"),
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11px", color: "#8E9482" } }, "神识通灵 · 虚实尽览")
+          )
+        )
+      ),
+      /* @__PURE__ */ React.createElement(
+        "button",
+        {
+          onClick: () => {
+            if (activeTab === "daily") loadOrGenerateDaily(true);
+            else if (activeTab === "msg") loadOrGenerateSecrets(true);
+            else if (activeTab === "dynamics") loadOrGenerateDynamics(true);
+            else if (activeTab === "play") loadOrGeneratePlay(true);
+            else if (activeTab === "shop") loadOrGenerateOrders(true);
+          },
+          disabled: isLoadingDaily || isLoadingSecrets || isLoadingDynamics || isLoadingPlay || isLoadingOrders,
+          style: {
+            fontSize: "12px",
+            background: "linear-gradient(135deg, #89A8B2 0%, #5E8896 100%)",
+            color: "#FFFFFF",
+            padding: "5px 12px",
+            borderRadius: "14px",
+            border: "none",
+            fontWeight: "600",
+            cursor: "pointer",
+            display: "flex",
+            alignItems: "center",
+            gap: "4px",
+            boxShadow: "0 2px 8px rgba(94, 136, 150, 0.3)"
+          }
+        },
+        /* @__PURE__ */ React.createElement("i", { className: "ph ph-sparkle" }),
+        /* @__PURE__ */ React.createElement("span", null, "探查最新")
+      )
+    ),
+    /* 五大功能导航 Tab */
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #EBE6DC",
+          padding: "0 6px",
+          flexShrink: 0
+        }
+      },
+      [
+        { key: "daily", name: "日常", icon: "ph-calendar-check" },
+        { key: "msg", name: "传讯", icon: "ph-chats-teardrop" },
+        { key: "dynamics", name: "动向", icon: "ph-compass" },
+        { key: "play", name: "娱乐", icon: "ph-game-controller" },
+        { key: "shop", name: "购物", icon: "ph-shopping-bag" }
+      ].map((tab) => {
+        const isAct = activeTab === tab.key;
+        return /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            key: tab.key,
+            onClick: () => setActiveTab(tab.key),
+            style: {
+              flex: 1,
+              padding: "11px 0",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "4px",
+              fontSize: "13.5px",
+              fontWeight: isAct ? "700" : "500",
+              color: isAct ? "#447585" : "#7C8272",
+              borderBottom: isAct ? "3px solid #447585" : "3px solid transparent",
+              cursor: "pointer",
+              transition: "all 0.2s ease"
+            }
+          },
+          /* @__PURE__ */ React.createElement("i", { className: `ph ${tab.icon}`, style: { fontSize: "16px" } }),
+          /* @__PURE__ */ React.createElement("span", null, tab.name)
+        );
+      })
+    ),
+    /* 视界内容区 */
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        className: "no-scrollbar",
+        style: {
+          flex: 1,
+          overflowY: "auto",
+          padding: "14px",
+          boxSizing: "border-box"
+        }
+      },
+      /* 1. 日常模块 */
+      activeTab === "daily" && /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+        /* 今日随笔 Banner */
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              background: "linear-gradient(135deg, #E6F0F2 0%, #DCE8EC 100%)",
+              borderRadius: "18px",
+              padding: "14px 16px",
+              border: "1px solid #C4DCE2",
+              boxShadow: "0 2px 10px rgba(68, 117, 133, 0.08)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "6px" } },
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "16px" } }, "📜"),
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14px", fontWeight: "700", color: "#2B525D" } }, "今日奇物调用与起居随笔")
+            ),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", background: "#4A7A88", color: "#fff", padding: "2px 8px", borderRadius: "10px", fontWeight: "600" } }, dailyData?.recordDate || "今日时辰")
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "13px", color: "#3A5660", lineHeight: "1.6", fontStyle: "italic" } }, `“${dailyData?.dailyQuote || `${character}今日案牍稍歇，以此五大神器巡历各方，记此手札。`}”`)
+        ),
+        isLoadingDaily ? /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { textAlign: "center", padding: "40px 20px", color: "#7B8072" } },
+          /* @__PURE__ */ React.createElement("i", { className: "ph ph-spinner animate-spin text-3xl mb-2", style: { color: "#4D7C8A" } }),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "13px" } }, "神识通灵中，正在读取名士奇物手札...")
+        ) : dailyData ? /* @__PURE__ */ React.createElement(
+          React.Fragment,
+          null,
+          /* 1. 驿路通 */
+          dailyData.yilutong && /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              onClick: () => setSelectedDailyTool({ type: "yilutong", name: "东汉驿路通", icon: "🐎", color: "#547A8A", data: dailyData.yilutong }),
+              style: {
+                background: "#FFFFFF",
+                borderRadius: "16px",
+                padding: "14px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                borderLeft: "4px solid #547A8A",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                transition: "transform 0.15s"
+              }
+            },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                /* @__PURE__ */ React.createElement("span", { style: { fontSize: "15px" } }, "🐎"),
+                /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14.5px", fontWeight: "700", color: "#3B4235" } }, "东汉驿路通 · ", dailyData.yilutong.title)
+              ),
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", background: "#E8F0F2", color: "#447585", padding: "2px 6px", borderRadius: "6px", fontWeight: "600" } }, dailyData.yilutong.status || "行进中")
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "6px", fontSize: "12px", color: "#6A7062", background: "#F7F6F2", padding: "6px 10px", borderRadius: "8px" } },
+              /* @__PURE__ */ React.createElement("span", { style: { fontWeight: "700", color: "#3B4235" } }, dailyData.yilutong.origin),
+              /* @__PURE__ */ React.createElement("i", { className: "ph ph-arrow-right", style: { color: "#8E9485" } }),
+              /* @__PURE__ */ React.createElement("span", { style: { fontWeight: "700", color: "#3B4235" } }, dailyData.yilutong.destination),
+              /* @__PURE__ */ React.createElement("span", { style: { marginLeft: "auto", fontSize: "11px", color: "#8E9485" } }, "耗时：", dailyData.yilutong.duration)
+            ),
+            dailyData.yilutong.stations && Array.isArray(dailyData.yilutong.stations) && /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", gap: "4px", flexWrap: "wrap" } },
+              dailyData.yilutong.stations.map((st, i) => /* @__PURE__ */ React.createElement("span", { key: i, style: { fontSize: "10.5px", background: "#EDF2F4", color: "#547A8A", padding: "1px 6px", borderRadius: "4px" } }, "驿站: ", st))
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" } },
+              /* @__PURE__ */ React.createElement("b", null, "亲笔手札："),
+              `"${dailyData.yilutong.characterNote}"`
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#8E9485", marginTop: "2px" } },
+              /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", { className: "ph ph-clock mr-1" }), dailyData.yilutong.time),
+              /* @__PURE__ */ React.createElement("span", { style: { color: "#547A8A", fontWeight: "600" } }, "查看驿道详情 >")
+            )
+          ),
+          /* 2. 谶纬小摊 */
+          dailyData.chenwei && /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              onClick: () => setSelectedDailyTool({ type: "chenwei", name: "谶纬小摊", icon: "🔮", color: "#8A6494", data: dailyData.chenwei }),
+              style: {
+                background: "#FFFFFF",
+                borderRadius: "16px",
+                padding: "14px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                borderLeft: "4px solid #8A6494",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                transition: "transform 0.15s"
+              }
+            },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                /* @__PURE__ */ React.createElement("span", { style: { fontSize: "15px" } }, "🔮"),
+                /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14.5px", fontWeight: "700", color: "#3B4235" } }, "谶纬小摊 · ", dailyData.chenwei.queryTopic)
+              ),
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", background: "#F3EBF5", color: "#7B4F87", padding: "2px 6px", borderRadius: "6px", fontWeight: "700" } }, dailyData.chenwei.hexagram)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#FAF4FC", borderLeft: "3px solid #C49BD1", padding: "8px 12px", borderRadius: "0 8px 8px 0" } },
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "13px", fontWeight: "600", color: "#5F3A6C", fontStyle: "italic" } }, `“${dailyData.chenwei.poem}”`),
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11.5px", color: "#84658F", marginTop: "4px" } }, /* @__PURE__ */ React.createElement("b", null, "天机简释："), dailyData.chenwei.meaning)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" } },
+              /* @__PURE__ */ React.createElement("b", null, "密探心境："),
+              `"${dailyData.chenwei.characterNote}"`
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#8E9485", marginTop: "2px" } },
+              /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", { className: "ph ph-clock mr-1" }), dailyData.chenwei.time),
+              /* @__PURE__ */ React.createElement("span", { style: { color: "#8A6494", fontWeight: "600" } }, "查看解卦卷宗 >")
+            )
+          ),
+          /* 3. 沙盘模拟器 */
+          dailyData.shapan && /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              onClick: () => setSelectedDailyTool({ type: "shapan", name: "沙盘模拟器", icon: "🗺️", color: "#B8623D", data: dailyData.shapan }),
+              style: {
+                background: "#FFFFFF",
+                borderRadius: "16px",
+                padding: "14px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                borderLeft: "4px solid #B8623D",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                transition: "transform 0.15s"
+              }
+            },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                /* @__PURE__ */ React.createElement("span", { style: { fontSize: "15px" } }, "🗺️"),
+                /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14.5px", fontWeight: "700", color: "#3B4235" } }, "沙盘模拟器 · ", dailyData.shapan.topic)
+              ),
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", background: "#FAEEE9", color: "#B8623D", padding: "2px 6px", borderRadius: "6px", fontWeight: "700" } }, dailyData.shapan.winRate)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { fontSize: "12px", color: "#6A7062", background: "#FDF9F7", border: "1px solid #F3DDD3", padding: "8px 10px", borderRadius: "8px", display: "flex", flexDirection: "column", gap: "4px" } },
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "地形要害："), dailyData.shapan.terrain),
+              /* @__PURE__ */ React.createElement("div", { style: { marginTop: "4px" } }, /* @__PURE__ */ React.createElement("b", null, "兵力布防："), dailyData.shapan.layout)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" } },
+              /* @__PURE__ */ React.createElement("b", null, "战术批注："),
+              `"${dailyData.shapan.characterNote}"`
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#8E9485", marginTop: "2px" } },
+              /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", { className: "ph ph-clock mr-1" }), dailyData.shapan.time),
+              /* @__PURE__ */ React.createElement("span", { style: { color: "#B8623D", fontWeight: "600" } }, "查看沙盘全貌 >")
+            )
+          ),
+          /* 4. 列星 */
+          dailyData.liexing && /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              onClick: () => setSelectedDailyTool({ type: "liexing", name: "列星·星象图", icon: "🌌", color: "#2B4C7E", data: dailyData.liexing }),
+              style: {
+                background: "#FFFFFF",
+                borderRadius: "16px",
+                padding: "14px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                borderLeft: "4px solid #2B4C7E",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                transition: "transform 0.15s"
+              }
+            },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                /* @__PURE__ */ React.createElement("span", { style: { fontSize: "15px" } }, "🌌"),
+                /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14.5px", fontWeight: "700", color: "#3B4235" } }, "列星 · ", dailyData.liexing.star)
+              ),
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", background: "#E8EEF7", color: "#2B4C7E", padding: "2px 6px", borderRadius: "6px", fontWeight: "700" } }, "星象观微")
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { fontSize: "12.5px", color: "#2F4858", background: "#F2F6FA", padding: "8px 10px", borderRadius: "8px", lineHeight: "1.5" } },
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "天象异动："), dailyData.liexing.phenomenon),
+              /* @__PURE__ */ React.createElement("div", { style: { marginTop: "4px", color: "#3D608A" } }, /* @__PURE__ */ React.createElement("b", null, "命轨映射："), dailyData.liexing.omen)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" } },
+              /* @__PURE__ */ React.createElement("b", null, "观星札记："),
+              `"${dailyData.liexing.characterNote}"`
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#8E9485", marginTop: "2px" } },
+              /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", { className: "ph ph-clock mr-1" }), dailyData.liexing.time),
+              /* @__PURE__ */ React.createElement("span", { style: { color: "#2B4C7E", fontWeight: "600" } }, "感应星曜命轨 >")
+            )
+          ),
+          /* 5. 蝴蝶效应 */
+          dailyData.hudie && /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              onClick: () => setSelectedDailyTool({ type: "hudie", name: "蝴蝶效应", icon: "🦋", color: "#3D8A68", data: dailyData.hudie }),
+              style: {
+                background: "#FFFFFF",
+                borderRadius: "16px",
+                padding: "14px",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+                borderLeft: "4px solid #3D8A68",
+                cursor: "pointer",
+                display: "flex",
+                flexDirection: "column",
+                gap: "8px",
+                transition: "transform 0.15s"
+              }
+            },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+              /* @__PURE__ */ React.createElement(
+                "div",
+                { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                /* @__PURE__ */ React.createElement("span", { style: { fontSize: "15px" } }, "🦋"),
+                /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14.5px", fontWeight: "700", color: "#3B4235" } }, "蝴蝶效应 · 命运分歧推演")
+              ),
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", background: "#EBF5F0", color: "#3D8A68", padding: "2px 6px", borderRadius: "6px", fontWeight: "700" } }, "因果推演")
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#F3FAF6", borderLeft: "3px solid #82C2A5", padding: "8px 10px", borderRadius: "0 8px 8px 0", fontSize: "12px", color: "#285842", display: "flex", flexDirection: "column", gap: "4px" } },
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "假定起源："), dailyData.hudie.originEvent),
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "因果涟漪："), dailyData.hudie.rippleEffect),
+              /* @__PURE__ */ React.createElement("div", { style: { color: "#1F4D38", fontWeight: "600" } }, /* @__PURE__ */ React.createElement("b", null, "平行结局："), dailyData.hudie.alternativeEnd)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" } },
+              /* @__PURE__ */ React.createElement("b", null, "深思感触："),
+              `"${dailyData.hudie.characterNote}"`
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", justifyContent: "space-between", fontSize: "11px", color: "#8E9485", marginTop: "2px" } },
+              /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", { className: "ph ph-clock mr-1" }), dailyData.hudie.time),
+              /* @__PURE__ */ React.createElement("span", { style: { color: "#3D8A68", fontWeight: "600" } }, "探寻因果全貌 >")
+            )
+          )
+        ) : null
+      ),
+      /* 2. 传讯模块 */
+      activeTab === "msg" && /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              background: "linear-gradient(135deg, #E6EFF2 0%, #DFEBEE 100%)",
+              borderRadius: "16px",
+              padding: "12px 14px",
+              border: "1px solid #C9DFE5",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            null,
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "14px", fontWeight: "700", color: "#325761" } }, /* @__PURE__ */ React.createElement("i", { className: "ph ph-shield-warning mr-1" }), " 暗中信笺卷宗"),
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11.5px", color: "#66848E", marginTop: "2px" } }, "共截获 ", secretMessages.length, " 封往来密信 · 点击可拆封详阅")
+          ),
+          /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", background: "#4D7C8A", color: "#fff", padding: "3px 8px", borderRadius: "8px", fontWeight: "600" } }, "AI 神识截获")
+        ),
+        isLoadingSecrets ? /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { textAlign: "center", padding: "40px 20px", color: "#7B8072" } },
+          /* @__PURE__ */ React.createElement("i", { className: "ph ph-spinner animate-spin text-3xl mb-2", style: { color: "#4D7C8A" } }),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "13px" } }, "神识正在截获密信，请稍候...")
+        ) : secretMessages.map((item) => /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            key: item.id,
+            onClick: () => setSelectedSecret(item),
+            style: {
+              background: "#FFFFFF",
+              borderRadius: "16px",
+              padding: "14px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              borderLeft: "4px solid #C5A059",
+              cursor: "pointer",
+              transition: "transform 0.15s, box-shadow 0.15s",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "8px" } },
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14px", fontWeight: "700", color: "#3B4235" } }, item.correspondent),
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "10.5px", background: "#F0EFEB", color: "#7B8072", padding: "2px 6px", borderRadius: "6px" } }, item.role)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "span",
+              {
+                style: {
+                  fontSize: "10.5px",
+                  fontWeight: "700",
+                  padding: "2px 6px",
+                  borderRadius: "6px",
+                  background: item.secretLevel === "绝密" ? "#FCE4EC" : "#E8F5E9",
+                  color: item.secretLevel === "绝密" ? "#C2185B" : "#2E7D32"
+                }
+              },
+              item.secretLevel
+            )
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12.5px", color: "#5A6052", lineHeight: "1.5" } }, item.summary),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px", fontSize: "11px", color: "#8E9485" } },
+            /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", { className: "ph ph-clock mr-1" }), item.time),
+            /* @__PURE__ */ React.createElement("span", { style: { color: "#4E7E8E", fontWeight: "600", display: "flex", alignItems: "center", gap: "2px" } }, /* @__PURE__ */ React.createElement("span", null, "拆信详阅"), /* @__PURE__ */ React.createElement("i", { className: "ph ph-caret-right" }))
+          )
+        ))
+      ),
+      /* 3. 动向模块 */
+      activeTab === "dynamics" && /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { display: "flex", gap: "8px", background: "#EAE7DF", padding: "4px", borderRadius: "12px" } },
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => setDynamicsSubTab("memo"),
+              style: {
+                flex: 1,
+                padding: "8px 0",
+                borderRadius: "10px",
+                border: "none",
+                fontSize: "13px",
+                fontWeight: dynamicsSubTab === "memo" ? "700" : "500",
+                background: dynamicsSubTab === "memo" ? "#FFFFFF" : "transparent",
+                color: dynamicsSubTab === "memo" ? "#3B4235" : "#7B8072",
+                cursor: "pointer",
+                boxShadow: dynamicsSubTab === "memo" ? "0 2px 6px rgba(0,0,0,0.06)" : "none"
+              }
+            },
+            /* @__PURE__ */ React.createElement("i", { className: "ph ph-note-pencil mr-1" }),
+            " 随身备忘录 (",
+            memos.length,
+            ")"
+          ),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => setDynamicsSubTab("asset"),
+              style: {
+                flex: 1,
+                padding: "8px 0",
+                borderRadius: "10px",
+                border: "none",
+                fontSize: "13px",
+                fontWeight: dynamicsSubTab === "asset" ? "700" : "500",
+                background: dynamicsSubTab === "asset" ? "#FFFFFF" : "transparent",
+                color: dynamicsSubTab === "asset" ? "#3B4235" : "#7B8072",
+                cursor: "pointer",
+                boxShadow: dynamicsSubTab === "asset" ? "0 2px 6px rgba(0,0,0,0.06)" : "none"
+              }
+            },
+            /* @__PURE__ */ React.createElement("i", { className: "ph ph-coins mr-1" }),
+            " 私产与势力交易 (",
+            assets.length,
+            ")"
+          )
+        ),
+        isLoadingDynamics ? /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { textAlign: "center", padding: "40px 20px", color: "#7B8072" } },
+          /* @__PURE__ */ React.createElement("i", { className: "ph ph-spinner animate-spin text-3xl mb-2", style: { color: "#4D7C8A" } }),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "13px" } }, "正在感应私密动向与资产变化...")
+        ) : dynamicsSubTab === "memo" ? memos.map((m) => /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            key: m.id,
+            style: {
+              background: "#FFFFFF",
+              borderRadius: "16px",
+              padding: "14px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              borderLeft: "4px solid #89A8B2"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" } },
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14px", fontWeight: "700", color: "#3B4235" } }, m.title),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "10.5px", background: "rgba(137,168,178,0.2)", color: "#457585", padding: "2px 8px", borderRadius: "8px", fontWeight: "600" } }, m.tag)
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "13px", color: "#4A4F44", lineHeight: "1.6" } }, m.content),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11px", color: "#8E9485", marginTop: "6px" } }, /* @__PURE__ */ React.createElement("i", { className: "ph ph-calendar mr-1" }), m.time)
+        )) : assets.map((a) => /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            key: a.id,
+            style: {
+              background: "#FFFFFF",
+              borderRadius: "16px",
+              padding: "14px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              borderLeft: "4px solid #D6724B",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "6px" } },
+              /* @__PURE__ */ React.createElement("span", { style: { background: "#D6724B", color: "#fff", padding: "2px 6px", borderRadius: "6px", fontSize: "11px", fontWeight: "700" } }, a.type || "资产变动"),
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14px", fontWeight: "700", color: "#3B4235" } }, a.changeTitle || a.destination || "资产交易")
+            ),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", color: "#8E9485" } }, a.time)
+          ),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", justifyContent: "space-between", alignItems: "center", background: "#FFF8F2", padding: "6px 10px", borderRadius: "8px", fontSize: "12px" } },
+            /* @__PURE__ */ React.createElement("span", { style: { color: "#8C4A1E" } }, /* @__PURE__ */ React.createElement("b", null, "交易方："), a.partner || a.purpose || "隐秘处置"),
+            /* @__PURE__ */ React.createElement("span", { style: { color: "#D6724B", fontWeight: "700" } }, a.scale || a.totalHold || "")
+          ),
+          a.totalHold && /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11.5px", color: "#5A8F76", fontWeight: "600" } }, /* @__PURE__ */ React.createElement("i", { className: "ph ph-vault mr-1" }), "当前累计掌控：", a.totalHold),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12.5px", color: "#4A4F44", lineHeight: "1.55", fontStyle: "italic", background: "#FDFCF8", padding: "6px 8px", borderRadius: "6px" } }, `"${a.detail}"`)
+        ))
+      ),
+      /* 4. 娱乐模块 */
+      activeTab === "play" && /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { display: "flex", gap: "8px", background: "#EAE7DF", padding: "4px", borderRadius: "12px" } },
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => setPlaySubTab("fourArts"),
+              style: {
+                flex: 1,
+                padding: "8px 0",
+                borderRadius: "10px",
+                border: "none",
+                fontSize: "13px",
+                fontWeight: playSubTab === "fourArts" ? "700" : "500",
+                background: playSubTab === "fourArts" ? "#FFFFFF" : "transparent",
+                color: playSubTab === "fourArts" ? "#3B4235" : "#7B8072",
+                cursor: "pointer",
+                boxShadow: playSubTab === "fourArts" ? "0 2px 6px rgba(0,0,0,0.06)" : "none"
+              }
+            },
+            /* @__PURE__ */ React.createElement("i", { className: "ph ph-paint-brush-broad mr-1" }),
+            " 琴棋书画 (",
+            fourArts.length,
+            ")"
+          ),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => setPlaySubTab("sixSkills"),
+              style: {
+                flex: 1,
+                padding: "8px 0",
+                borderRadius: "10px",
+                border: "none",
+                fontSize: "13px",
+                fontWeight: playSubTab === "sixSkills" ? "700" : "500",
+                background: playSubTab === "sixSkills" ? "#FFFFFF" : "transparent",
+                color: playSubTab === "sixSkills" ? "#3B4235" : "#7B8072",
+                cursor: "pointer",
+                boxShadow: playSubTab === "sixSkills" ? "0 2px 6px rgba(0,0,0,0.06)" : "none"
+              }
+            },
+            /* @__PURE__ */ React.createElement("i", { className: "ph ph-sword mr-1" }),
+            " 君子六艺 (",
+            sixSkills.length,
+            ")"
+          )
+        ),
+        isLoadingPlay ? /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { textAlign: "center", padding: "40px 20px", color: "#7B8072" } },
+          /* @__PURE__ */ React.createElement("i", { className: "ph ph-spinner animate-spin text-3xl mb-2", style: { color: "#4D7C8A" } }),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "13px" } }, "正在品鉴雅玩修行卷宗...")
+        ) : playSubTab === "fourArts" ? fourArts.map((art) => /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            key: art.id,
+            style: {
+              background: "#FFFFFF",
+              borderRadius: "16px",
+              padding: "14px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              borderLeft: "4px solid #5A8F76"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" } },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "8px" } },
+              /* @__PURE__ */ React.createElement("span", { style: { width: "24px", height: "24px", borderRadius: "6px", background: "#5A8F76", color: "#fff", fontSize: "13px", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center" } }, art.category),
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14.5px", fontWeight: "700", color: "#3B4235" } }, art.title)
+            ),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", color: "#8E9485" } }, art.time)
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "13px", color: "#4A4F44", lineHeight: "1.6", fontStyle: "italic", padding: "2px 0" } }, `"${art.detail}"`)
+        )) : sixSkills.map((skill) => /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            key: skill.id,
+            style: {
+              background: "#FFFFFF",
+              borderRadius: "16px",
+              padding: "14px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              borderLeft: "4px solid #7E6551"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "6px" } },
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "8px" } },
+              /* @__PURE__ */ React.createElement("span", { style: { width: "24px", height: "24px", borderRadius: "6px", background: "#7E6551", color: "#fff", fontSize: "13px", fontWeight: "700", display: "flex", alignItems: "center", justifyContent: "center" } }, skill.skill),
+              /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14.5px", fontWeight: "700", color: "#3B4235" } }, skill.title)
+            ),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", color: "#8E9485" } }, skill.time)
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "13px", color: "#4A4F44", lineHeight: "1.6" } }, skill.detail)
+        ))
+      ),
+      /* 5. 购物模块 */
+      activeTab === "shop" && /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              background: "linear-gradient(135deg, #FFF6EE 0%, #FEEDDC 100%)",
+              borderRadius: "16px",
+              padding: "12px 14px",
+              border: "1px solid #F5D3B3",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            null,
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "14px", fontWeight: "700", color: "#8C4A1E" } }, /* @__PURE__ */ React.createElement("i", { className: "ph ph-shopping-bag-open mr-1" }), " 太疾驰商城 · 消费总账"),
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11.5px", color: "#A86D46", marginTop: "2px" } }, "共调取 ", orders.length, " 笔订单 · 包含分类、数量与收件人")
+          ),
+          /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", background: "#D6724B", color: "#fff", padding: "3px 8px", borderRadius: "8px", fontWeight: "600" } }, "太疾驰派送")
+        ),
+        isLoadingOrders ? /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { textAlign: "center", padding: "40px 20px", color: "#7B8072" } },
+          /* @__PURE__ */ React.createElement("i", { className: "ph ph-spinner animate-spin text-3xl mb-2", style: { color: "#D6724B" } }),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "13px" } }, "正在调取太疾驰消费记录...")
+        ) : orders.map((ord) => /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            key: ord.id,
+            onClick: () => setSelectedOrder(ord),
+            style: {
+              background: "#FFFFFF",
+              borderRadius: "16px",
+              padding: "14px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.04)",
+              borderLeft: "4px solid #D6724B",
+              cursor: "pointer",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+            /* @__PURE__ */ React.createElement("div", { style: { display: "flex", alignItems: "center", gap: "6px" } }, /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14.5px", fontWeight: "700", color: "#3B4235" } }, ord.itemName)),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "13px", fontWeight: "700", color: "#D6724B" } }, ord.cost)
+          ),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" } },
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", background: "#F5F3ED", color: "#7B8072", padding: "2px 8px", borderRadius: "6px" } }, "分类：", ord.category),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", background: "#F5F3ED", color: "#7B8072", padding: "2px 8px", borderRadius: "6px" } }, "数量：", ord.quantity),
+            /* @__PURE__ */ React.createElement(
+              "span",
+              {
+                style: {
+                  fontSize: "11px",
+                  background: ord.recipient.includes("广陵王") || ord.recipient.includes("主公") || ord.recipient.includes("殿下") ? "#FBE9E7" : "#E8EAF6",
+                  color: ord.recipient.includes("广陵王") || ord.recipient.includes("主公") || ord.recipient.includes("殿下") ? "#D84315" : "#3949AB",
+                  fontWeight: "700",
+                  padding: "2px 8px",
+                  borderRadius: "6px"
+                }
+              },
+              "给谁：",
+              ord.recipient
+            )
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#6A7062", lineHeight: "1.5", fontStyle: "italic", marginTop: "2px" } }, `“${ord.reason}”`),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginTop: "4px", fontSize: "11px", color: "#8E9485" } },
+            /* @__PURE__ */ React.createElement("span", null, /* @__PURE__ */ React.createElement("i", { className: "ph ph-clock mr-1" }), ord.time, " · ", ord.status),
+            /* @__PURE__ */ React.createElement("span", { style: { color: "#D6724B", fontWeight: "600" } }, "查看签条 >")
+          )
+        ))
+      )
+    ),
+    /* 日常工具详情弹窗 Modal */
+    selectedDailyTool && /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0, 0, 0, 0.65)",
+          backdropFilter: "blur(6px)",
+          zIndex: 999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          boxSizing: "border-box"
+        },
+        onClick: () => setSelectedDailyTool(null)
+      },
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
+            width: "100%",
+            maxWidth: "420px",
+            maxHeight: "85vh",
+            background: "#FDFCFA",
+            borderRadius: "24px",
+            padding: "20px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+            animation: "scaleUp 0.2s ease-out"
+          },
+          onClick: (e) => e.stopPropagation()
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: "1px solid #EBE6DC", paddingBottom: "12px", marginBottom: "14px" } },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "8px" } },
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "20px" } }, selectedDailyTool.icon),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              null,
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "16px", fontWeight: "700", color: "#3B4235" } }, selectedDailyTool.name, " · 调用详情"),
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11px", color: "#8E9485" } }, character, " 的私密手札卷宗")
+            )
+          ),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => setSelectedDailyTool(null),
+              style: { background: "none", border: "none", fontSize: "22px", color: "#8E9485", cursor: "pointer" }
+            },
+            "×"
+          )
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "no-scrollbar",
+            style: {
+              flex: 1,
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "12px",
+              padding: "4px 0"
+            }
+          },
+          selectedDailyTool.type === "yilutong" && /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "15px", fontWeight: "700", color: "#547A8A" } }, selectedDailyTool.data.title),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#F5F8FA", padding: "10px 14px", borderRadius: "12px", fontSize: "13px", color: "#4A4F44", lineHeight: "1.6" } },
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "出发地："), selectedDailyTool.data.origin),
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "目的地："), selectedDailyTool.data.destination),
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "耗时："), selectedDailyTool.data.duration),
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "时辰："), selectedDailyTool.data.time),
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "状态："), selectedDailyTool.data.status)
+            ),
+            selectedDailyTool.data.stations && /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#EDF3F5", padding: "10px 14px", borderRadius: "12px" } },
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", fontWeight: "700", color: "#547A8A", marginBottom: "6px" } }, "【途经驿站】"),
+              /* @__PURE__ */ React.createElement(
+                "div",
+                { style: { display: "flex", gap: "6px", flexWrap: "wrap" } },
+                selectedDailyTool.data.stations.map((st, i) => /* @__PURE__ */ React.createElement("span", { key: i, style: { fontSize: "11px", background: "#FFFFFF", color: "#447585", padding: "3px 8px", borderRadius: "6px", border: "1px solid #D5E4E8" } }, st))
+              )
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#FFFDF9", border: "1px solid #EBE4D8", padding: "12px", borderRadius: "12px", fontSize: "13px", color: "#3B4235", lineHeight: "1.6" } },
+              /* @__PURE__ */ React.createElement("b", null, "【名士亲笔见闻】"),
+              /* @__PURE__ */ React.createElement("br", null),
+              `"${selectedDailyTool.data.characterNote}"`
+            )
+          ),
+          selectedDailyTool.type === "chenwei" && /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "15px", fontWeight: "700", color: "#8A6494" } }, "求测：", selectedDailyTool.data.queryTopic),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#FAF4FC", border: "1px solid #EAD8F0", padding: "14px", borderRadius: "14px", textAlign: "center" } },
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "16px", fontWeight: "700", color: "#6E3F7C", marginBottom: "8px" } }, "【", selectedDailyTool.data.hexagram, "】"),
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "14px", fontWeight: "600", color: "#4A2B54", fontStyle: "italic", lineHeight: "1.7" } }, `“${selectedDailyTool.data.poem}”`),
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#7B5885", marginTop: "10px", borderTop: "1px dashed #DCC3E6", paddingTop: "8px" } }, /* @__PURE__ */ React.createElement("b", null, "天机解卦："), selectedDailyTool.data.meaning)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#FFFDF9", border: "1px solid #EBE4D8", padding: "12px", borderRadius: "12px", fontSize: "13px", color: "#3B4235", lineHeight: "1.6" } },
+              /* @__PURE__ */ React.createElement("b", null, "【密探私密心境】"),
+              /* @__PURE__ */ React.createElement("br", null),
+              `"${selectedDailyTool.data.characterNote}"`
+            )
+          ),
+          selectedDailyTool.type === "shapan" && /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "15px", fontWeight: "700", color: "#B8623D" } }, "推演主题：", selectedDailyTool.data.topic),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#FAF4F0", border: "1px solid #F2DDD3", padding: "12px 14px", borderRadius: "12px", fontSize: "13px", color: "#4A4F44", lineHeight: "1.6" } },
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "推演地形："), selectedDailyTool.data.terrain),
+              /* @__PURE__ */ React.createElement("div", { style: { marginTop: "4px" } }, /* @__PURE__ */ React.createElement("b", null, "兵力布防："), selectedDailyTool.data.layout),
+              /* @__PURE__ */ React.createElement("div", { style: { marginTop: "4px", color: "#B8623D", fontWeight: "700" } }, /* @__PURE__ */ React.createElement("b", null, "兵推胜率："), selectedDailyTool.data.winRate)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#FFFDF9", border: "1px solid #EBE4D8", padding: "12px", borderRadius: "12px", fontSize: "13px", color: "#3B4235", lineHeight: "1.6" } },
+              /* @__PURE__ */ React.createElement("b", null, "【战术批注】"),
+              /* @__PURE__ */ React.createElement("br", null),
+              `"${selectedDailyTool.data.characterNote}"`
+            )
+          ),
+          selectedDailyTool.type === "liexing" && /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "15px", fontWeight: "700", color: "#2B4C7E" } }, "感应主曜：", selectedDailyTool.data.star),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#F0F5FA", border: "1px solid #D6E3F2", padding: "12px 14px", borderRadius: "12px", fontSize: "13px", color: "#2A4568", lineHeight: "1.6" } },
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "星象异动："), selectedDailyTool.data.phenomenon),
+              /* @__PURE__ */ React.createElement("div", { style: { marginTop: "6px", color: "#1D3A63", fontWeight: "600" } }, /* @__PURE__ */ React.createElement("b", null, "命轨征兆："), selectedDailyTool.data.omen)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#FFFDF9", border: "1px solid #EBE4D8", padding: "12px", borderRadius: "12px", fontSize: "13px", color: "#3B4235", lineHeight: "1.6" } },
+              /* @__PURE__ */ React.createElement("b", null, "【观星札记】"),
+              /* @__PURE__ */ React.createElement("br", null),
+              `"${selectedDailyTool.data.characterNote}"`
+            )
+          ),
+          selectedDailyTool.type === "hudie" && /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "15px", fontWeight: "700", color: "#3D8A68" } }, "假定起源：", selectedDailyTool.data.originEvent),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#F0F8F4", border: "1px solid #D1EADE", padding: "12px 14px", borderRadius: "12px", fontSize: "13px", color: "#25533F", lineHeight: "1.6" } },
+              /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("b", null, "因果涟漪："), selectedDailyTool.data.rippleEffect),
+              /* @__PURE__ */ React.createElement("div", { style: { marginTop: "6px", color: "#1B4734", fontWeight: "700" } }, /* @__PURE__ */ React.createElement("b", null, "平行分支结局："), selectedDailyTool.data.alternativeEnd)
+            ),
+            /* @__PURE__ */ React.createElement(
+              "div",
+              { style: { background: "#FFFDF9", border: "1px solid #EBE4D8", padding: "12px", borderRadius: "12px", fontSize: "13px", color: "#3B4235", lineHeight: "1.6" } },
+              /* @__PURE__ */ React.createElement("b", null, "【深思感触】"),
+              /* @__PURE__ */ React.createElement("br", null),
+              `"${selectedDailyTool.data.characterNote}"`
+            )
+          )
+        ),
+        /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: () => setSelectedDailyTool(null),
+            style: {
+              marginTop: "14px",
+              padding: "10px 0",
+              borderRadius: "12px",
+              border: "none",
+              background: selectedDailyTool.color || "#89A8B2",
+              color: "#FFFFFF",
+              fontWeight: "700",
+              fontSize: "13px",
+              cursor: "pointer"
+            }
+          },
+          "收纳手札"
+        )
+      )
+    ),
+    /* 传讯详情弹窗 Modal */
+    selectedSecret && /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0, 0, 0, 0.65)",
+          backdropFilter: "blur(6px)",
+          zIndex: 999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          boxSizing: "border-box"
+        },
+        onClick: () => setSelectedSecret(null)
+      },
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
+            width: "100%",
+            maxWidth: "420px",
+            maxHeight: "80vh",
+            background: "#FDFCFA",
+            borderRadius: "24px",
+            padding: "20px",
+            boxSizing: "border-box",
+            display: "flex",
+            flexDirection: "column",
+            boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+            animation: "scaleUp 0.2s ease-out"
+          },
+          onClick: (e) => e.stopPropagation()
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", borderBottom: "1px solid #EBE6DC", paddingBottom: "12px", marginBottom: "12px" } },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            null,
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "16px", fontWeight: "700", color: "#3B4235" } }, selectedSecret.correspondent, " 之暗信"),
+            /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11.5px", color: "#8E9485", marginTop: "2px" } }, "密级：", selectedSecret.secretLevel, " · ", selectedSecret.time)
+          ),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => setSelectedSecret(null),
+              style: { background: "none", border: "none", fontSize: "20px", color: "#8E9485", cursor: "pointer" }
+            },
+            "×"
+          )
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { fontSize: "12px", color: "#7B8072", background: "#F5F3ED", padding: "8px 12px", borderRadius: "10px", marginBottom: "14px" } },
+          /* @__PURE__ */ React.createElement("b", null, "【信笺密由】"),
+          " ",
+          selectedSecret.summary
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "no-scrollbar",
+            style: {
+              flex: 1,
+              overflowY: "auto",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px",
+              padding: "4px 0"
+            }
+          },
+          selectedSecret.messages && selectedSecret.messages.map((m, idx) => {
+            const isChar = m.sender === character;
+            return /* @__PURE__ */ React.createElement(
+              "div",
+              {
+                key: idx,
+                style: {
+                  display: "flex",
+                  flexDirection: "column",
+                  alignItems: isChar ? "flex-end" : "flex-start"
+                }
+              },
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "10.5px", color: "#8E9485", marginBottom: "2px" } }, m.sender, " · ", m.time),
+              /* @__PURE__ */ React.createElement(
+                "div",
+                {
+                  style: {
+                    maxWidth: "80%",
+                    padding: "10px 14px",
+                    borderRadius: isChar ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+                    background: isChar ? "linear-gradient(135deg, #89A8B2 0%, #688A96 100%)" : "#FFFFFF",
+                    color: isChar ? "#FFFFFF" : "#3B4235",
+                    fontSize: "13px",
+                    lineHeight: "1.5",
+                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)",
+                    border: isChar ? "none" : "1px solid #EBE6DC"
+                  }
+                },
+                m.text
+              )
+            );
+          })
+        ),
+        /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: () => setSelectedSecret(null),
+            style: {
+              marginTop: "14px",
+              padding: "10px 0",
+              borderRadius: "12px",
+              border: "none",
+              background: "#89A8B2",
+              color: "#FFFFFF",
+              fontWeight: "700",
+              fontSize: "13px",
+              cursor: "pointer"
+            }
+          },
+          "卷起封存"
+        )
+      )
+    ),
+    /* 太疾驰订单签条弹窗 Modal */
+    selectedOrder && /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          top: 0,
+          left: 0,
+          width: "100vw",
+          height: "100vh",
+          background: "rgba(0, 0, 0, 0.65)",
+          backdropFilter: "blur(6px)",
+          zIndex: 999,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "20px",
+          boxSizing: "border-box"
+        },
+        onClick: () => setSelectedOrder(null)
+      },
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
+            width: "100%",
+            maxWidth: "380px",
+            background: "#FDFCFA",
+            borderRadius: "24px",
+            padding: "22px",
+            boxSizing: "border-box",
+            boxShadow: "0 10px 40px rgba(0,0,0,0.3)",
+            animation: "scaleUp 0.2s ease-out"
+          },
+          onClick: (e) => e.stopPropagation()
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "16px" } },
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "16px", fontWeight: "700", color: "#8C4A1E" } }, "太疾驰 · 派送签条"),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              onClick: () => setSelectedOrder(null),
+              style: { background: "none", border: "none", fontSize: "20px", color: "#8E9485", cursor: "pointer" }
+            },
+            "×"
+          )
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { background: "#FFF6EE", border: "1px dashed #F5D3B3", borderRadius: "16px", padding: "16px", display: "flex", flexDirection: "column", gap: "10px", marginBottom: "16px" } },
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "16px", fontWeight: "700", color: "#3B4235" } }, selectedOrder.itemName),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#7B8072" } },
+            /* @__PURE__ */ React.createElement("span", null, "分类：", selectedOrder.category),
+            /* @__PURE__ */ React.createElement("span", null, "数量：", selectedOrder.quantity)
+          ),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", justifyContent: "space-between", fontSize: "13px", color: "#7B8072" } },
+            /* @__PURE__ */ React.createElement("span", null, "花费：", /* @__PURE__ */ React.createElement("b", { style: { color: "#D6724B" } }, selectedOrder.cost)),
+            /* @__PURE__ */ React.createElement("span", null, "派送：", selectedOrder.status)
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { borderTop: "1px solid #F5E6D8", paddingTop: "8px", fontSize: "13px", color: "#D84315", fontWeight: "700" } }, "【受赠对象】", selectedOrder.recipient),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { fontSize: "12px", color: "#6A7062", lineHeight: "1.6", background: "#FFFFFF", padding: "8px 10px", borderRadius: "8px" } },
+            /* @__PURE__ */ React.createElement("b", null, "买家心声备注："),
+            /* @__PURE__ */ React.createElement("br", null),
+            `"${selectedOrder.reason}"`
+          )
+        ),
+        /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: () => setSelectedOrder(null),
+            style: {
+              width: "100%",
+              padding: "10px 0",
+              borderRadius: "12px",
+              border: "none",
+              background: "#D6724B",
+              color: "#FFFFFF",
+              fontWeight: "700",
+              fontSize: "13px",
+              cursor: "pointer"
+            }
+          },
+          "收纳签条"
+        )
+      )
+    ),
+    /* 提示 Toast */
+    toastText && /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
+          position: "fixed",
+          bottom: "80px",
+          left: "50%",
+          transform: "translateX(-50%)",
+          background: "rgba(35, 45, 48, 0.88)",
+          color: "#FFF",
+          padding: "10px 18px",
+          borderRadius: "20px",
+          fontSize: "13.5px",
+          fontWeight: "500",
+          backdropFilter: "blur(6px)",
+          zIndex: 9999,
+          boxShadow: "0 6px 20px rgba(0,0,0,0.25)",
+          animation: "fadeIn 0.2s ease-out"
+        }
+      },
+      toastText
+    )
+  );
+};
 const T13WaterMirrorPage = ({ onBack }) => {
   const [characterList, setCharacterList] = React.useState([]);
   const [selectedCharObj, setSelectedCharObj] = React.useState(null);
@@ -85595,30 +87553,10 @@ const T13WaterMirrorPage = ({ onBack }) => {
           }
         ),
         selectedCharObj ? (
-          /* 闀滀腑鏄惧寲浜虹墿鍊掑奖 */
-          /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", animation: "fadeIn 0.5s ease-out" } }, /* @__PURE__ */ React.createElement(
-            "div",
-            {
-              style: {
-                width: "90px",
-                height: "90px",
-                borderRadius: "50%",
-                overflow: "hidden",
-                border: "2px solid #D1E5EE",
-                boxShadow: "0 0 20px rgba(209, 229, 238, 0.6)",
-                marginBottom: "10px"
-              }
-            },
-            /* @__PURE__ */ React.createElement(UniversalAvatarLoader, {
-              avatar: selectedCharObj.avatar,
-              avatarId: selectedCharObj.avatarId || selectedCharObj.id,
-              name: selectedCharObj.name || "?",
-              fallbackColor: selectedCharObj.avatarColor || "#E8C3A8",
-              style: { width: "100%", height: "100%", objectFit: "cover", borderRadius: "50%" }
-            })
-          ), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "16px", fontWeight: "700", color: "#EAF4F8", letterSpacing: "1px" } }, selectedCharObj.name), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11px", color: "#8CB2C2", marginTop: "3px" } }, "\u8F7B\u89E6\u53EF\u66F4\u6362\u955C\u4E2D\u4EBA\u7269"))
+          /* 镜中显化人物倒影 */
+          /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", alignItems: "center", animation: "fadeIn 0.5s ease-out" } }, /* @__PURE__ */ React.createElement("div", { style: { marginBottom: "10px" } }, /* @__PURE__ */ React.createElement(WaterMirrorAvatar, { avatar: selectedCharObj.avatar, name: selectedCharObj.name, size: 90 })), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "16px", fontWeight: "700", color: "#EAF4F8", letterSpacing: "1px" } }, selectedCharObj.name), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11px", color: "#8CB2C2", marginTop: "3px" } }, "\u8F7B\u89E6\u53EF\u66F4\u6362\u955C\u4E2D\u4EBA\u7269"))
         ) : (
-          /* 鍒濆嬮暅涓鐏垫皵 */
+          /* 初始镜中灵气 */
           /* @__PURE__ */ React.createElement("div", { style: { textAlign: "center", padding: "0 20px" } }, /* @__PURE__ */ React.createElement("i", { className: "ph-fill ph-sparkle", style: { fontSize: "36px", color: "#A2C6D6", marginBottom: "8px", display: "block" } }), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "15px", fontWeight: "600", color: "#E0EFF5", letterSpacing: "1px" } }, "\u70B9\u51FB\u6C34\u955C"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#7B9EAE", marginTop: "4px" } }, "\u62E9\u9009\u4F20\u8BAF\u4E2D\u7684\u5BC6\u63A2\u89D2\u8272"))
         )
       ),
@@ -85726,25 +87664,7 @@ const T13WaterMirrorPage = ({ onBack }) => {
                   cursor: "pointer"
                 }
               },
-              /* @__PURE__ */ React.createElement(
-                "div",
-                {
-                  style: {
-                    width: "44px",
-                    height: "44px",
-                    borderRadius: "50%",
-                    overflow: "hidden",
-                    background: "#E8C3A8",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    color: "#fff",
-                    fontWeight: "bold",
-                    flexShrink: 0
-                  }
-                },
-                charObj.avatar ? /* @__PURE__ */ React.createElement("img", { src: charObj.avatar, alt: charObj.name, style: { width: "100%", height: "100%", objectFit: "cover" } }) : charObj.name.charAt(0)
-              ),
+              /* @__PURE__ */ React.createElement(WaterMirrorAvatar, { avatar: charObj.avatar, name: charObj.name, size: 44 }),
               /* @__PURE__ */ React.createElement("div", { style: { flex: 1, minWidth: 0 } }, /* @__PURE__ */ React.createElement("div", { style: { fontSize: "15px", fontWeight: "700", color: "#3B4235" } }, charObj.name), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#7B8072", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" } }, profileStr || "\u4F20\u8BAF\u5BC6\u63A2\u89D2\u8272")),
               isSel && /* @__PURE__ */ React.createElement("i", { className: "ph-bold ph-check", style: { fontSize: "18px", color: "#4E7E8E" } })
             );
@@ -85756,6 +87676,7 @@ const T13WaterMirrorPage = ({ onBack }) => {
       T13CharacterMirrorView,
       {
         character: viewingCharObj.name,
+        characterId: viewingCharObj.id,
         characterProfile: viewingCharObj.profile,
         avatar: viewingCharObj.avatar,
         onBack: () => setViewingCharObj(null)
@@ -85763,6 +87684,10 @@ const T13WaterMirrorPage = ({ onBack }) => {
     )
   );
 };
+
+window.T13CharacterMirrorView = T13CharacterMirrorView;
+window.T13WaterMirrorPage = T13WaterMirrorPage;
+
 
 const T13Page = ({
   setIsStarChartOpen,
@@ -100495,11 +102420,15 @@ if (settings.plotMode !== "offline") {
         if (pendingMsgs.length > 0) {
           pendingMsgs.forEach((msg, idx) => {
             newAiMsgs.push({
+              ...msg,
               id: Date.now() + Math.random() + idx,
               text: msg.text,
+              content: msg.content,
               type: msg.type,
+              isEmoji: msg.type === "image" ? true : Boolean(msg.isEmoji),
               isMe: false,
               tap: true,
+              sender: msg.sender || (isGroupChat ? (typeof currentSpeaker !== 'undefined' ? currentSpeaker : (chatData?.name || "名士")) : (chatData?.name || "名士")),
               time: (/* @__PURE__ */ new Date()).toLocaleTimeString([], {
                 hour: "2-digit",
                 minute: "2-digit"
@@ -103997,97 +105926,115 @@ ${recentMessages.slice(-50).map((msg) => `${msg.isMe ? "\u6211" : chatData.name}
                       item.text
                     )
                   ))
-                ) : msg.type === "image" ? /* @__PURE__ */ React.createElement("div", { style: { position: "relative", maxWidth: "260px" } }, /* @__PURE__ */ React.createElement(
-                  "div",
-                  {
-                    style: {
-                      borderRadius: "14px",
-                      overflow: "hidden",
-                      backgroundColor: "#faf7f2",
-                      border: "1px solid rgba(180, 160, 130, 0.25)",
-                      boxShadow: "0 4px 14px rgba(0, 0, 0, 0.08)",
-                      padding: "4px"
-                    }
-                  },
-                  /* @__PURE__ */ React.createElement(
-                    "img",
-                    {
-                      src: (() => {
-                        const raw = msg.content;
-                        if (raw && typeof raw === "string" && raw.startsWith("data:image/svg+xml")) {
-                          if (raw.includes(";utf8,") || raw.includes(";charset=utf-8,")) {
-                            try {
-                              let clean = decodeURIComponent(raw.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
-                              if (!clean.includes("xmlns=")) {
-                                clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
-                              }
-                              return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
-                            } catch (e) {
-                              return raw;
-                            }
-                          }
-                        }
-                        return raw;
-                      })(),
-                      alt: msg.text && !msg.text.startsWith("data:") ? msg.text : "手绘画卷",
-                      style: {
-                        width: "100%",
-                        maxHeight: "320px",
-                        borderRadius: "10px",
-                        display: "block",
-                        objectFit: "contain",
-                        cursor: "pointer",
-                        backgroundColor: "#fff"
-                      },
-                      onClick: (e) => {
-                        e.stopPropagation();
-                        let targetUrl = msg.content;
-                        if (targetUrl && typeof targetUrl === "string" && targetUrl.startsWith("data:image/svg+xml")) {
-                          try {
-                            let clean = decodeURIComponent(targetUrl.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
-                            if (!clean.includes("xmlns=")) {
-                              clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
-                            }
-                            targetUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
-                          } catch (err) {}
-                        }
-                        if (targetUrl) {
-                          try {
-                            const win = window.open();
-                            if (win) {
-                              win.document.write(`<body style="margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;"><img style="max-width:95vw;max-height:95vh;object-fit:contain;" src="${targetUrl}" /></body>`);
-                            }
-                          } catch (err) {}
-                        }
-                      },
-                      onError: (e) => {
-                        const raw = msg.content;
-                        if (raw && typeof raw === "string" && raw.includes("data:image/svg+xml")) {
-                          try {
-                            let clean = decodeURIComponent(raw.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
-                            if (!clean.includes("xmlns=")) {
-                              clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
-                            }
-                            e.target.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
-                          } catch (err) {}
-                        }
-                      }
-                    }
-                  ),
-                  msg.text && !msg.text.startsWith("data:") && /* @__PURE__ */ React.createElement(
+                ) : msg.type === "image" ? (() => {
+                  const isEmojiOrSticker = msg.isEmoji || (msg.text && (msg.text.includes("表情") || msg.text.includes("emoji") || msg.text.includes("sticker") || msg.text.startsWith("[表情包"))) || (!msg.text?.includes("《") && !msg.text?.includes("画卷") && !msg.text?.includes("手绘") && !msg.text?.includes("生成的画") && !msg.text?.includes("丹青") && !msg.text?.includes("图") && !msg.svgContent);
+                  const displayTitle = isEmojiOrSticker ? null : (msg.text && !msg.text.startsWith("data:") ? msg.text : null);
+
+                  return /* @__PURE__ */ React.createElement(
                     "div",
                     {
                       style: {
-                        fontSize: "11px",
-                        color: "#7a6e5d",
-                        textAlign: "center",
-                        padding: "4px 6px 2px",
-                        fontFamily: "serif, sans-serif"
+                        position: "relative",
+                        maxWidth: isEmojiOrSticker ? "120px" : "260px",
+                        display: "inline-block"
                       }
                     },
-                    msg.text
-                  )
-                )) : msg.type === "voice" ? msg.showText ? /* @__PURE__ */ React.createElement(
+                    /* @__PURE__ */ React.createElement(
+                      "div",
+                      {
+                        style: {
+                          borderRadius: isEmojiOrSticker ? "8px" : "14px",
+                          overflow: "hidden",
+                          backgroundColor: isEmojiOrSticker ? "transparent" : "#faf7f2",
+                          border: isEmojiOrSticker ? "none" : "1px solid rgba(180, 160, 130, 0.25)",
+                          boxShadow: isEmojiOrSticker ? "none" : "0 4px 14px rgba(0, 0, 0, 0.08)",
+                          padding: isEmojiOrSticker ? "0px" : "4px"
+                        }
+                      },
+                      /* @__PURE__ */ React.createElement(
+                        "img",
+                        {
+                          src: (() => {
+                            const raw = msg.content;
+                            if (raw && typeof raw === "string" && raw.startsWith("data:image/svg+xml")) {
+                              if (raw.includes(";utf8,") || raw.includes(";charset=utf-8,")) {
+                                try {
+                                  let clean = decodeURIComponent(raw.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
+                                  if (!clean.includes("xmlns=")) {
+                                    clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
+                                  }
+                                  return `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
+                                } catch (e) {
+                                  return raw;
+                                }
+                              }
+                            }
+                            return raw;
+                          })(),
+                          alt: displayTitle || "表情",
+                          style: {
+                            width: isEmojiOrSticker ? "auto" : "100%",
+                            maxWidth: isEmojiOrSticker ? "120px" : "100%",
+                            maxHeight: isEmojiOrSticker ? "120px" : "320px",
+                            minWidth: isEmojiOrSticker ? "60px" : "auto",
+                            minHeight: isEmojiOrSticker ? "60px" : "auto",
+                            borderRadius: isEmojiOrSticker ? "8px" : "10px",
+                            display: "block",
+                            objectFit: "contain",
+                            cursor: "pointer",
+                            backgroundColor: isEmojiOrSticker ? "transparent" : "#fff"
+                          },
+                          onClick: (e) => {
+                            e.stopPropagation();
+                            let targetUrl = msg.content;
+                            if (targetUrl && typeof targetUrl === "string" && targetUrl.startsWith("data:image/svg+xml")) {
+                              try {
+                                let clean = decodeURIComponent(targetUrl.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
+                                if (!clean.includes("xmlns=")) {
+                                  clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
+                                }
+                                targetUrl = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
+                              } catch (err) {}
+                            }
+                            if (targetUrl) {
+                              try {
+                                const win = window.open();
+                                if (win) {
+                                  win.document.write(`<body style="margin:0;background:#1e1e1e;display:flex;align-items:center;justify-content:center;height:100vh;"><img style="max-width:95vw;max-height:95vh;object-fit:contain;" src="${targetUrl}" /></body>`);
+                                }
+                              } catch (err) {}
+                            }
+                          },
+                          onError: (e) => {
+                            const raw = msg.content;
+                            if (raw && typeof raw === "string" && raw.includes("data:image/svg+xml")) {
+                              try {
+                                let clean = decodeURIComponent(raw.replace(/^data:image\/svg\+xml;?(?:utf8|charset=utf-8)?,?/i, ""));
+                                if (!clean.includes("xmlns=")) {
+                                  clean = clean.replace(/<svg\b/i, '<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"');
+                                }
+                                e.target.src = `data:image/svg+xml;base64,${btoa(unescape(encodeURIComponent(clean)))}`;
+                              } catch (err) {}
+                            }
+                          }
+                        }
+                      ),
+                      displayTitle && /* @__PURE__ */ React.createElement(
+                        "div",
+                        {
+                          style: {
+                            fontSize: "11px",
+                            color: "#7a6e5d",
+                            textAlign: "center",
+                            padding: "4px 6px 2px",
+                            fontFamily: "serif, sans-serif"
+                          }
+                        },
+                        displayTitle
+                      )
+                    )
+                  );
+                })() : msg.type === "voice" ? msg.showText ? /* @__PURE__ */ React.createElement(
                   "div",
                   {
                     style: {
@@ -106362,18 +108309,56 @@ const NewUniversePage = ({ onBack, chatData, universeParams }) => {
           null,
           (reply) => {
             try {
-              const data = window.safeParseJSONArray ? window.safeParseJSONArray(reply) : JSON.parse(reply.replace(/```json|```/g, "").trim());
-              if (data.lines) {
-                const newScriptLines = data.lines.map((line) => ({
-                  bg: "",
-                  sprite: "",
-                  name: line.type === "dialogue" ? line.speaker : "",
-                  text: line.text
-                }));
+              let lines = null;
+              try {
+                const clean = reply.replace(/```json|```/g, "").trim();
+                const parsed = JSON.parse(clean);
+                if (Array.isArray(parsed)) {
+                  lines = parsed;
+                } else if (parsed && Array.isArray(parsed.lines)) {
+                  lines = parsed.lines;
+                } else if (parsed && typeof parsed === "object") {
+                  lines = parsed.lines || parsed.script || parsed.dialogues || parsed.dialogue || parsed.scenes || parsed.story || parsed.content || parsed.data;
+                }
+              } catch (errJson) {}
+
+              if (!lines && window.safeParseJSONArray) {
+                const arr = window.safeParseJSONArray(reply);
+                if (Array.isArray(arr) && arr.length > 0) {
+                  lines = arr;
+                }
+              }
+
+              if (!lines || !Array.isArray(lines) || lines.length === 0) {
+                if (window.parseUniversalScriptLines) {
+                  const fallbackLines = window.parseUniversalScriptLines(reply, chatData?.name);
+                  if (fallbackLines && fallbackLines.length > 0) {
+                    setScriptData((prev) => [...prev, ...fallbackLines]);
+                    setUserActionText("");
+                    setIsGeneratingScript(false);
+                    return;
+                  }
+                }
+                throw new Error("未能解析出有效的剧本台词内容");
+              }
+
+              const newScriptLines = lines.map((line) => {
+                if (typeof line === "string") {
+                  return { bg: "", sprite: "", name: "", text: line };
+                }
+                return {
+                  bg: line.bg || "",
+                  sprite: line.sprite || "",
+                  name: line.type === "dialogue" ? (line.speaker || line.name || "") : (line.name || line.speaker || ""),
+                  text: line.text || line.content || line.dialogue || ""
+                };
+              }).filter((l) => l.text && l.text.trim());
+
+              if (newScriptLines.length > 0) {
                 setScriptData((prev) => [...prev, ...newScriptLines]);
                 setUserActionText("");
               } else {
-                throw new Error("JSON \u7F3A\u5C11 lines \u5B57\u6BB5");
+                throw new Error("未能解析出有效的剧本台词内容");
               }
             } catch (e) {
               console.error("\u5267\u672C\u89E3\u6790\u5931\u8D25:", e, reply);
