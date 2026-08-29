@@ -127193,6 +127193,921 @@ const MinimaxSettingsOverlay = ({ isOpen, onClose }) => {
     /* @__PURE__ */ React.createElement(MinimaxSettingsPage, { onClose })
   );
 };
+
+// ==================== [新增] AI 文生图配置页面组件 ====================
+
+const ImageGenerationSettingsPage = ({ onClose }) => {
+  const { useState: useState2, useEffect: useEffect2 } = React;
+
+  const PROVIDER_PRESETS = {
+    siliconflow: {
+      name: "⚡ 硅基流动 (SiliconFlow / Flux / SD3)",
+      url: "https://api.siliconflow.cn/v1",
+      models: [
+        { id: "black-forest-labs/FLUX.1-schnell", label: "FLUX.1-schnell (极速生成 / 推荐)" },
+        { id: "black-forest-labs/FLUX.1-dev", label: "FLUX.1-dev (高质量精细)" },
+        { id: "stabilityai/stable-diffusion-3-5-large", label: "Stable Diffusion 3.5 Large" },
+        { id: "Pro/black-forest-labs/FLUX.1-schnell", label: "Pro/FLUX.1-schnell" }
+      ],
+      defaultModel: "black-forest-labs/FLUX.1-schnell",
+      tip: "在硅基流动官网获取 sk- 开头的 API Key，性价比高、支持开源优质模型"
+    },
+    openai: {
+      name: "🤖 OpenAI 官方 & 中转 API (DALL·E 3)",
+      url: "https://api.openai.com/v1",
+      models: [
+        { id: "dall-e-3", label: "DALL·E 3 (旗舰画质)" },
+        { id: "dall-e-2", label: "DALL·E 2 (标准)" }
+      ],
+      defaultModel: "dall-e-3",
+      tip: "支持 OpenAI 官方或各类 OneAPI/NewAPI 等第三方中转 API"
+    },
+    zhipu: {
+      name: "🧠 智谱 AI 开放平台 (CogView-3)",
+      url: "https://open.bigmodel.cn/api/paas/v4",
+      models: [
+        { id: "cogview-3-plus", label: "CogView-3-Plus (高清增强)" },
+        { id: "cogview-3-flash", label: "CogView-3-Flash (免费快速)" },
+        { id: "cogview-3", label: "CogView-3 (通用)" }
+      ],
+      defaultModel: "cogview-3-plus",
+      tip: "在智谱 AI 开放平台获取 API Key，擅长中文理解与中式审美"
+    },
+    custom: {
+      name: "💻 本地 ComfyUI / SD-WebUI 代理 / 自定义端点",
+      url: "http://127.0.0.1:7860/v1",
+      models: [
+        { id: "sd-model", label: "本地默认模型" }
+      ],
+      defaultModel: "sd-model",
+      tip: "支持本地 SD-WebUI (OpenAI 兼容代理插件) 或自建 ComfyUI 代理"
+    }
+  };
+
+  const [config, setConfig] = useState2({
+    provider: "siliconflow",
+    url: "https://api.siliconflow.cn/v1",
+    apiKey: "",
+    model: "black-forest-labs/FLUX.1-schnell",
+    size: "1024x1024",
+    timeout: "120",
+    enableChatDraw: true,
+    fetchedModels: [],
+  });
+
+  const [showKey, setShowKey] = useState2(false);
+  const [testPrompt, setTestPrompt] = useState2("A lovely anime girl enjoying afternoon tea in a sunlit cozy cafe, highly detailed, masterpiece");
+  const [isTesting, setIsTesting] = useState2(false);
+  const [testResultImage, setTestResultImage] = useState2(null);
+  const [testError, setTestError] = useState2(null);
+  const [testTime, setTestTime] = useState2(null);
+
+  // 拉取模型相关状态
+  const [isLoadingModels, setIsLoadingModels] = useState2(false);
+  const [fetchError, setFetchError] = useState2(null);
+  const [fetchSuccessMsg, setFetchSuccessMsg] = useState2(null);
+  const [modelSearchKeyword, setModelSearchKeyword] = useState2("");
+
+  useEffect2(() => {
+    const saved = localStorage.getItem("image_generation_api_config");
+    if (saved) {
+      try {
+        setConfig(prev => ({ ...prev, ...JSON.parse(saved) }));
+      } catch (e) {}
+    }
+  }, []);
+
+  const handleSelectPreset = (providerKey) => {
+    const preset = PROVIDER_PRESETS[providerKey];
+    if (!preset) return;
+    setConfig(prev => ({
+      ...prev,
+      provider: providerKey,
+      url: preset.url,
+      model: preset.defaultModel,
+    }));
+    setFetchSuccessMsg(null);
+    setFetchError(null);
+  };
+
+  // 拉取/获取可用模型
+  const handleFetchModels = async () => {
+    if (!config.url || !config.url.trim()) {
+      alert("请先填写生图 API 地址 (URL)");
+      return;
+    }
+    if (!config.apiKey || !config.apiKey.trim()) {
+      alert("请先填写生图 API Key");
+      return;
+    }
+
+    setIsLoadingModels(true);
+    setFetchError(null);
+    setFetchSuccessMsg(null);
+
+    let baseUrl = config.url.trim();
+    if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
+      baseUrl = "https://" + baseUrl;
+    }
+
+    baseUrl = baseUrl.replace(/\/images\/generations\/?$/, "");
+    baseUrl = baseUrl.replace(/\/chat\/completions\/?$/, "");
+    baseUrl = baseUrl.replace(/\/+$/, "");
+
+    let modelsUrl = "";
+    if (baseUrl.includes("bigmodel.cn")) {
+      modelsUrl = baseUrl.endsWith("/v4") ? `${baseUrl}/models` : `${baseUrl}/api/paas/v4/models`;
+    } else if (baseUrl.endsWith("/v1")) {
+      modelsUrl = `${baseUrl}/models`;
+    } else if (baseUrl.includes("/v1/")) {
+      modelsUrl = baseUrl.replace(/\/v1\/.*$/, "/v1/models");
+    } else {
+      modelsUrl = `${baseUrl}/v1/models`;
+    }
+
+    console.log("正在请求文生图可用模型列表:", modelsUrl);
+
+    try {
+      let response = await fetch(modelsUrl, {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${config.apiKey.trim()}`,
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (response.status === 404 && modelsUrl.includes("/v1/models")) {
+        const fallbackUrl = `${baseUrl}/models`;
+        try {
+          const fallbackRes = await fetch(fallbackUrl, {
+            method: "GET",
+            headers: {
+              Authorization: `Bearer ${config.apiKey.trim()}`,
+              "Content-Type": "application/json",
+            },
+          });
+          if (fallbackRes.ok) response = fallbackRes;
+        } catch (e) {}
+      }
+
+      if (!response.ok) {
+        const errText = await response.text().catch(() => "");
+        let msg = `HTTP ${response.status}: ${response.statusText}`;
+        try {
+          const errObj = JSON.parse(errText);
+          if (errObj.error && errObj.error.message) msg = errObj.error.message;
+          else if (errObj.message) msg = errObj.message;
+        } catch (e) {}
+        throw new Error(msg);
+      }
+
+      const data = await response.json();
+      let rawList = [];
+      if (Array.isArray(data.data)) {
+        rawList = data.data;
+      } else if (Array.isArray(data.models)) {
+        rawList = data.models;
+      } else if (Array.isArray(data)) {
+        rawList = data;
+      }
+
+      const modelIds = rawList
+        .map((item) => (typeof item === "string" ? item : item.id || item.name || item.model))
+        .filter(Boolean);
+
+      if (modelIds.length === 0) {
+        throw new Error("接口返回的模型列表为空");
+      }
+
+      const isImgModel = (id) => {
+        const lower = String(id).toLowerCase();
+        return (
+          lower.includes("flux") ||
+          lower.includes("sd") ||
+          lower.includes("stable-diffusion") ||
+          lower.includes("dall-e") ||
+          lower.includes("cogview") ||
+          lower.includes("kolors") ||
+          lower.includes("midjourney") ||
+          lower.includes("image") ||
+          lower.includes("wanx") ||
+          lower.includes("drawing") ||
+          lower.includes("paint")
+        );
+      };
+
+      const sortedModels = [
+        ...modelIds.filter((m) => isImgModel(m)),
+        ...modelIds.filter((m) => !isImgModel(m)),
+      ];
+
+      const newConfig = {
+        ...config,
+        fetchedModels: sortedModels,
+        model: config.model || sortedModels[0] || "",
+      };
+
+      setConfig(newConfig);
+      localStorage.setItem("image_generation_api_config", JSON.stringify(newConfig));
+
+      const imgModelCount = sortedModels.filter((m) => isImgModel(m)).length;
+      const successMsg = `成功拉取 ${sortedModels.length} 个模型${imgModelCount > 0 ? ` (其中 ${imgModelCount} 个生图专用模型已优先置顶)` : ""}`;
+      setFetchSuccessMsg(successMsg);
+    } catch (err) {
+      console.error("拉取生图模型失败:", err);
+      let errMsg = err.message || String(err);
+      if (errMsg.includes("Failed to fetch")) {
+        errMsg = "网络连接失败，请检查 URL 是否正确或是否存在跨域拦截 (CORS)";
+      }
+      setFetchError(errMsg);
+    } finally {
+      setIsLoadingModels(false);
+    }
+  };
+
+  const handleSave = () => {
+    if (!config.apiKey.trim() || !config.url.trim()) {
+      alert("请填写完整的 API Key 和服务地址 (URL)");
+      return;
+    }
+    localStorage.setItem("image_generation_api_config", JSON.stringify(config));
+    alert("AI 文生图配置保存成功！");
+    if (onClose) onClose();
+  };
+
+  const handleTestGenerate = async () => {
+    if (!config.apiKey.trim() || !config.url.trim()) {
+      alert("请先填写 API Key 和服务地址再进行生图测试");
+      return;
+    }
+    if (!testPrompt.trim()) {
+      alert("请输入测试生图的提示词");
+      return;
+    }
+    localStorage.setItem("image_generation_api_config", JSON.stringify(config));
+    setIsTesting(true);
+    setTestResultImage(null);
+    setTestError(null);
+    const startTime = Date.now();
+    try {
+      const url = await window.generateAIImage(testPrompt.trim(), {
+        model: config.model,
+        size: config.size,
+        ignoreDisabled: true
+      });
+      const costSeconds = ((Date.now() - startTime) / 1000).toFixed(1);
+      setTestTime(costSeconds);
+      setTestResultImage(url);
+    } catch (err) {
+      setTestError(err.message || String(err));
+    } finally {
+      setIsTesting(false);
+    }
+  };
+
+  const inputStyle = {
+    width: "100%",
+    padding: "12px 16px",
+    border: "1px solid #ddd",
+    borderRadius: "8px",
+    fontSize: "14px",
+    outline: "none",
+    backgroundColor: "#fff",
+    transition: "border 0.3s",
+  };
+
+  const currentPreset = PROVIDER_PRESETS[config.provider] || PROVIDER_PRESETS.custom;
+  const hasFetched = config.fetchedModels && config.fetchedModels.length > 0;
+
+  let displayModels = [];
+  if (hasFetched) {
+    displayModels = config.fetchedModels
+      .filter((m) => !modelSearchKeyword.trim() || m.toLowerCase().includes(modelSearchKeyword.trim().toLowerCase()))
+      .map((m) => ({ id: m, label: m }));
+  } else if (currentPreset.models && currentPreset.models.length > 0) {
+    displayModels = currentPreset.models;
+  }
+
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      style: {
+        flex: 1,
+        padding: "20px",
+        overflowY: "auto",
+        backgroundColor: "#F9F7F5"
+      }
+    },
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
+          background: "#fff",
+          borderRadius: "16px",
+          padding: "20px",
+          boxShadow: "0 4px 12px rgba(0,0,0,0.03)"
+        }
+      },
+      /* 导航与标题 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "16px"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              fontSize: "16px",
+              fontWeight: "bold",
+              color: "#4c1d95",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }
+          },
+          /* @__PURE__ */ React.createElement("span", null, "🎨"),
+          " AI 文生图配置 (Text-to-Image)"
+        ),
+        onClose && /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            onClick: onClose,
+            style: {
+              background: "none",
+              border: "none",
+              color: "#6b7280",
+              fontSize: "14px",
+              cursor: "pointer",
+              padding: "4px 8px"
+            }
+          },
+          "返回"
+        )
+      ),
+      /* 独立提示横幅 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
+            marginBottom: "20px",
+            padding: "12px 14px",
+            background: "#f5f3ff",
+            border: "1px solid #ddd6fe",
+            borderRadius: "10px",
+            fontSize: "13px",
+            color: "#5b21b6",
+            lineHeight: "1.6"
+          }
+        },
+        /* @__PURE__ */ React.createElement("strong", null, "💡 独立文生图通道说明："),
+        /* @__PURE__ */ React.createElement("br", null),
+        "此处配置专用于 ",
+        /* @__PURE__ */ React.createElement("strong", null, "AI 绘画与图像生成 (Text-to-Image)"),
+        "，驱动角色在对话中主动发送画作照片，以及朋友圈发布时的原创 AI 配图。",
+        /* @__PURE__ */ React.createElement("br", null),
+        /* @__PURE__ */ React.createElement(
+          "span",
+          { style: { color: "#059669", fontWeight: "600" } },
+          "✨ 本接口与主聊天的【传讯大模型 API】及【MiniMax 语音配置】完全独立，绝对不会混淆或互相覆盖。"
+        )
+      ),
+      /* 提供商快捷切换 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { marginBottom: "16px" } },
+        /* @__PURE__ */ React.createElement(
+          "label",
+          {
+            style: {
+              display: "block",
+              marginBottom: "8px",
+              fontSize: "14px",
+              fontWeight: "500",
+              color: "#5a5f4d"
+            }
+          },
+          "选择服务提供商预设"
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" } },
+          Object.entries(PROVIDER_PRESETS).map(([key, preset]) => {
+            const isSelected = config.provider === key;
+            return /* @__PURE__ */ React.createElement(
+              "button",
+              {
+                key,
+                type: "button",
+                onClick: () => handleSelectPreset(key),
+                style: {
+                  padding: "10px 8px",
+                  border: isSelected ? "2px solid #8b5cf6" : "1px solid #e2e8f0",
+                  borderRadius: "8px",
+                  backgroundColor: isSelected ? "#f5f3ff" : "#fff",
+                  color: isSelected ? "#6d28d9" : "#475569",
+                  fontSize: "12px",
+                  fontWeight: isSelected ? "bold" : "normal",
+                  cursor: "pointer",
+                  textAlign: "left",
+                  lineHeight: "1.3",
+                  transition: "all 0.2s"
+                }
+              },
+              preset.name
+            );
+          })
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { fontSize: "11px", color: "#64748b", marginTop: "6px" } },
+          "📌 当前预设说明：",
+          currentPreset.tip
+        )
+      ),
+      /* API URL 服务地址 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { marginBottom: "16px" } },
+        /* @__PURE__ */ React.createElement(
+          "label",
+          {
+            style: {
+              display: "block",
+              marginBottom: "8px",
+              fontSize: "14px",
+              fontWeight: "500",
+              color: "#5a5f4d"
+            }
+          },
+          "生图 API 地址 (URL) *"
+        ),
+        /* @__PURE__ */ React.createElement("input", {
+          type: "text",
+          value: config.url,
+          onChange: (e) => setConfig({ ...config, url: e.target.value }),
+          placeholder: "例如: https://api.siliconflow.cn/v1",
+          style: inputStyle
+        }),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { fontSize: "11px", color: "#888", marginTop: "4px" } },
+          "支持 OpenAI 兼容规范，系统会自动识别补充 /images/generations 路径"
+        )
+      ),
+      /* API Key */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { marginBottom: "16px" } },
+        /* @__PURE__ */ React.createElement(
+          "label",
+          {
+            style: {
+              display: "block",
+              marginBottom: "8px",
+              fontSize: "14px",
+              fontWeight: "500",
+              color: "#5a5f4d"
+            }
+          },
+          "生图 API Key *"
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { position: "relative" } },
+          /* @__PURE__ */ React.createElement("input", {
+            type: showKey ? "text" : "password",
+            value: config.apiKey,
+            onChange: (e) => setConfig({ ...config, apiKey: e.target.value }),
+            placeholder: "sk-...",
+            style: { ...inputStyle, paddingRight: "60px" }
+          }),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              type: "button",
+              onClick: () => setShowKey(!showKey),
+              style: {
+                position: "absolute",
+                right: "10px",
+                top: "50%",
+                transform: "translateY(-50%)",
+                background: "none",
+                border: "none",
+                color: "#888",
+                fontSize: "12px",
+                cursor: "pointer",
+                padding: "4px 8px"
+              }
+            },
+            showKey ? "隐藏" : "显示"
+          )
+        )
+      ),
+      /* 生图模型选择与拉取 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { marginBottom: "16px" } },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "8px"
+            }
+          },
+          /* @__PURE__ */ React.createElement(
+            "label",
+            {
+              style: {
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#5a5f4d"
+              }
+            },
+            "生图模型 (Model) *"
+          ),
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              type: "button",
+              onClick: handleFetchModels,
+              disabled: isLoadingModels,
+              style: {
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                padding: "4px 10px",
+                backgroundColor: isLoadingModels ? "#cbd5e1" : "#8b5cf6",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "12px",
+                fontWeight: "500",
+                cursor: isLoadingModels ? "not-allowed" : "pointer",
+                transition: "all 0.2s"
+              }
+            },
+            isLoadingModels ? [
+              /* @__PURE__ */ React.createElement("span", {
+                key: "spin",
+                style: {
+                  display: "inline-block",
+                  width: "10px",
+                  height: "10px",
+                  border: "2px solid #fff",
+                  borderTopColor: "transparent",
+                  borderRadius: "50%",
+                  animation: "spin 1s linear infinite"
+                }
+              }),
+              " 拉取中..."
+            ] : [
+              /* @__PURE__ */ React.createElement("span", { key: "icon" }, "📥"),
+              " 拉取模型列表"
+            ]
+          )
+        ),
+        fetchSuccessMsg && /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              marginBottom: "8px",
+              padding: "6px 10px",
+              backgroundColor: "#ecfdf5",
+              border: "1px solid #a7f3d0",
+              borderRadius: "6px",
+              color: "#065f46",
+              fontSize: "12px"
+            }
+          },
+          "✅ ",
+          fetchSuccessMsg
+        ),
+        fetchError && /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              marginBottom: "8px",
+              padding: "6px 10px",
+              backgroundColor: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "6px",
+              color: "#b91c1c",
+              fontSize: "12px"
+            }
+          },
+          "❌ 拉取失败: ",
+          fetchError
+        ),
+        hasFetched && config.fetchedModels.length > 6 && /* @__PURE__ */ React.createElement("input", {
+          type: "text",
+          value: modelSearchKeyword,
+          onChange: (e) => setModelSearchKeyword(e.target.value),
+          placeholder: "🔍 搜索过滤拉取的模型...",
+          style: {
+            ...inputStyle,
+            padding: "8px 12px",
+            fontSize: "13px",
+            marginBottom: "8px",
+            backgroundColor: "#f8fafc"
+          }
+        }),
+        displayModels.length > 0 && /* @__PURE__ */ React.createElement(
+          "select",
+          {
+            value: config.model,
+            onChange: (e) => setConfig({ ...config, model: e.target.value }),
+            style: { ...inputStyle, marginBottom: "8px", cursor: "pointer" }
+          },
+          /* @__PURE__ */ React.createElement("option", { value: "" }, "-- 请选择模型 --"),
+          displayModels.map(m => /* @__PURE__ */ React.createElement("option", { key: m.id, value: m.id }, m.label || m.id))
+        ),
+        /* @__PURE__ */ React.createElement("input", {
+          type: "text",
+          value: config.model,
+          onChange: (e) => setConfig({ ...config, model: e.target.value }),
+          placeholder: "输入或选择模型名, 如 black-forest-labs/FLUX.1-schnell",
+          style: inputStyle
+        }),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { fontSize: "11px", color: "#888", marginTop: "4px" } },
+          hasFetched ? "✨ 已从服务器拉取可用模型列表，可直接下拉选择或手动输入。" : "💡 可点击右上角【拉取模型列表】自动获取，或直接手动填写。"
+        )
+      ),
+      /* 图片尺寸与超时设置 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { display: "flex", gap: "12px", marginBottom: "16px" } },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { flex: 1 } },
+          /* @__PURE__ */ React.createElement(
+            "label",
+            {
+              style: {
+                display: "block",
+                marginBottom: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#5a5f4d"
+              }
+            },
+            "默认尺寸"
+          ),
+          /* @__PURE__ */ React.createElement(
+            "select",
+            {
+              value: config.size || "1024x1024",
+              onChange: (e) => setConfig({ ...config, size: e.target.value }),
+              style: { ...inputStyle, cursor: "pointer" }
+            },
+            /* @__PURE__ */ React.createElement("option", { value: "1024x1024" }, "1024x1024 (正方形 1:1)"),
+            /* @__PURE__ */ React.createElement("option", { value: "768x1024" }, "768x1024 (竖屏人像 3:4)"),
+            /* @__PURE__ */ React.createElement("option", { value: "1024x768" }, "1024x768 (横屏风景 4:3)"),
+            /* @__PURE__ */ React.createElement("option", { value: "512x512" }, "512x512 (小图 1:1)")
+          )
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { flex: 1 } },
+          /* @__PURE__ */ React.createElement(
+            "label",
+            {
+              style: {
+                display: "block",
+                marginBottom: "8px",
+                fontSize: "14px",
+                fontWeight: "500",
+                color: "#5a5f4d"
+              }
+            },
+            "超时时间 (秒)"
+          ),
+          /* @__PURE__ */ React.createElement("input", {
+            type: "number",
+            value: config.timeout || "120",
+            onChange: (e) => setConfig({ ...config, timeout: e.target.value }),
+            min: "10",
+            max: "300",
+            style: inputStyle
+          })
+        )
+      ),
+      /* 聊天角色作画开关 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 14px",
+            background: "#f8fafc",
+            borderRadius: "8px",
+            border: "1px solid #e2e8f0",
+            marginBottom: "20px"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          null,
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { fontSize: "14px", fontWeight: "500", color: "#334155" } },
+            "允许角色在聊天中主动画图/发照片"
+          ),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { fontSize: "11px", color: "#64748b", marginTop: "2px" } },
+            "开启后，角色可通过 [生成图片: 提示词] 触发作画并直接显示在聊天框中"
+          )
+        ),
+        /* @__PURE__ */ React.createElement("input", {
+          type: "checkbox",
+          checked: config.enableChatDraw !== false,
+          onChange: (e) => setConfig({ ...config, enableChatDraw: e.target.checked }),
+          style: { width: "18px", height: "18px", cursor: "pointer", accentColor: "#8b5cf6" }
+        })
+      ),
+      /* 实时生图测试区域 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          style: {
+            marginBottom: "20px",
+            padding: "14px",
+            background: "#fafafa",
+            borderRadius: "10px",
+            border: "1px dashed #cbd5e1"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              fontSize: "13px",
+              fontWeight: "bold",
+              color: "#334155",
+              marginBottom: "8px",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px"
+            }
+          },
+          /* @__PURE__ */ React.createElement("span", null, "🧪"),
+          " 实时生图连通性测试"
+        ),
+        /* @__PURE__ */ React.createElement("textarea", {
+          value: testPrompt,
+          onChange: (e) => setTestPrompt(e.target.value),
+          rows: "2",
+          placeholder: "输入测试提示词 (支持中英文)...",
+          style: {
+            width: "100%",
+            padding: "8px 10px",
+            borderRadius: "6px",
+            border: "1px solid #ddd",
+            fontSize: "13px",
+            outline: "none",
+            resize: "vertical",
+            marginBottom: "8px"
+          }
+        }),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { display: "flex", gap: "10px", alignItems: "center" } },
+          /* @__PURE__ */ React.createElement(
+            "button",
+            {
+              type: "button",
+              onClick: handleTestGenerate,
+              disabled: isTesting,
+              style: {
+                padding: "8px 16px",
+                backgroundColor: isTesting ? "#cbd5e1" : "#8b5cf6",
+                color: "#fff",
+                border: "none",
+                borderRadius: "6px",
+                fontSize: "13px",
+                fontWeight: "bold",
+                cursor: isTesting ? "not-allowed" : "pointer",
+                transition: "background-color 0.2s"
+              }
+            },
+            isTesting ? "正在作画生成中 (请稍候)... ⏳" : "测试生图 🎨"
+          ),
+          testTime && /* @__PURE__ */ React.createElement(
+            "span",
+            { style: { fontSize: "12px", color: "#059669" } },
+            "✅ 生成成功，耗时 ",
+            testTime,
+            " 秒"
+          )
+        ),
+        testError && /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: {
+              marginTop: "10px",
+              padding: "8px 10px",
+              background: "#fef2f2",
+              border: "1px solid #fecaca",
+              borderRadius: "6px",
+              color: "#dc2626",
+              fontSize: "12px"
+            }
+          },
+          "❌ 测试失败: ",
+          testError
+        ),
+        testResultImage && /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { marginTop: "12px", textAlign: "center" } },
+          /* @__PURE__ */ React.createElement("img", {
+            src: testResultImage,
+            alt: "生图测试结果",
+            style: {
+              maxWidth: "100%",
+              maxHeight: "260px",
+              borderRadius: "8px",
+              border: "1px solid #e2e8f0",
+              boxShadow: "0 4px 10px rgba(0,0,0,0.1)"
+            }
+          }),
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { fontSize: "11px", color: "#64748b", marginTop: "4px" } },
+            "✨ 提示词已成功生成并渲染！接口工作正常。"
+          )
+        )
+      ),
+      /* 底部保存配置按钮 */
+      /* @__PURE__ */ React.createElement(
+        "div",
+        { style: { display: "flex", gap: "10px" } },
+        /* @__PURE__ */ React.createElement(
+          "button",
+          {
+            type: "button",
+            onClick: handleSave,
+            style: {
+              width: "100%",
+              padding: "14px",
+              backgroundColor: "#8b5cf6",
+              color: "white",
+              border: "none",
+              borderRadius: "8px",
+              fontSize: "15px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 4px 12px rgba(139, 92, 246, 0.3)",
+              transition: "background-color 0.2s"
+            }
+          },
+          "保存文生图配置"
+        )
+      )
+    )
+  );
+};
+
+const ImageGenerationSettingsOverlay = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: `settings-overlay ${isOpen ? "open" : ""}`,
+      style: { zIndex: 1010 }
+    },
+    /* @__PURE__ */ React.createElement("div", { className: "settings-nav" }, /* @__PURE__ */ React.createElement("div", { className: "back-btn", onClick: onClose }, /* @__PURE__ */ React.createElement(
+      "svg",
+      {
+        xmlns: "http://www.w3.org/2000/svg",
+        width: "24",
+        height: "24",
+        viewBox: "0 0 24 24",
+        fill: "none",
+        stroke: "currentColor",
+        strokeWidth: "2",
+        strokeLinecap: "round",
+        strokeLinejoin: "round"
+      },
+      /* @__PURE__ */ React.createElement("path", { d: "m15 18-6-6 6-6" })
+    )), /* @__PURE__ */ React.createElement("div", { className: "title" }, "AI 文生图配置")),
+    /* @__PURE__ */ React.createElement(ImageGenerationSettingsPage, { onClose })
+  );
+};
+
+
 const CharityPage = ({ onClose }) => {
   const { useState: useState2, useEffect: useEffect2, useRef: useRef2 } = React;
   const [donateCount, setDonateCount] = useState2(1284592);
@@ -131563,16 +132478,1420 @@ const BackupRestorePage = ({ onClose }) => {
     ))
   );
 };
-const PrivacySecurityPage = ({ onOpenMinimax }) => {
+const MCPToolsSettingsPage = ({ onClose }) => {
+  const [masterEnabled, setMasterEnabled] = React.useState(true);
+  const [builtInTools, setBuiltInTools] = React.useState([]);
+  const [externalServers, setExternalServers] = React.useState([]);
+  const [activeTab, setActiveTab] = React.useState("builtin");
+
+  const [serverName, setServerName] = React.useState("");
+  const [serverUrl, setServerUrl] = React.useState("");
+  const [isConnecting, setIsConnecting] = React.useState(false);
+  const [connectError, setConnectError] = React.useState(null);
+  const [connectSuccess, setConnectSuccess] = React.useState(null);
+
+  const refreshHubState = () => {
+    if (window.mcpHub) {
+      // 预置风月大富翁 MCP
+      const spicyUrl = "https://spicy-monopoly.lol/mcp";
+      if (!window.mcpHub.externalServers.some(s => s.url === spicyUrl || s.id === "spicy_monopoly_mcp")) {
+        window.mcpHub.externalServers.unshift({
+          id: "spicy_monopoly_mcp",
+          name: "风月大富翁 (Spicy Monopoly)",
+          url: spicyUrl,
+          description: "成年请进。感谢伟大的游戏开发 Ren & 游戏策划 Puppy 🐾",
+          enabled: true,
+          isPreset: true,
+          createdAt: new Date().toISOString()
+        });
+      }
+      // 确保内置工具栏包含风月大富翁
+      if (!window.mcpHub.builtInTools.some(t => t.name === "spicy_monopoly_game")) {
+        window.mcpHub.builtInTools.unshift({
+          name: "spicy_monopoly_game",
+          displayName: "风月大富翁 · 双人情趣棋盘 (Spicy Monopoly)",
+          icon: "ph-dice-six",
+          category: "情侣空间 & 棋盘对弈",
+          description: "成年请进。感谢伟大的游戏开发 Ren & 游戏策划 Puppy 🐾",
+          version: "2026.07.06",
+          enabled: true
+        });
+      }
+      setMasterEnabled(window.mcpHub.isMasterEnabled());
+      setBuiltInTools([...window.mcpHub.builtInTools]);
+      setExternalServers([...window.mcpHub.externalServers]);
+    }
+  };
+
+  React.useEffect(() => {
+    refreshHubState();
+  }, []);
+
+  const handleToggleMaster = (val) => {
+    if (window.mcpHub) {
+      window.mcpHub.setMasterEnabled(val);
+      setMasterEnabled(val);
+    }
+  };
+
+  const handleToggleTool = (toolName, val) => {
+    if (window.mcpHub) {
+      window.mcpHub.toggleTool(toolName, val);
+      refreshHubState();
+    }
+  };
+
+  const handleAddExternal = async () => {
+    if (!serverUrl.trim()) {
+      setConnectError("\u8BF7\u8F93\u5165\u6709\u6548\u7684 MCP \u670D\u52A1\u5730\u5740");
+      return;
+    }
+    setIsConnecting(true);
+    setConnectError(null);
+    setConnectSuccess(null);
+    try {
+      const added = await window.mcpHub.addExternalServer(serverName, serverUrl);
+      setConnectSuccess(`\u6210\u529F\u8FDE\u63A5\u5230\u8282\u70B9\u3010${added.name}\u3011\uFF0C\u53D1\u73B0 ${added.toolsCount} \u4E2A\u5916\u90E8\u5DE5\u5177\uFF01`);
+      setServerName("");
+      setServerUrl("");
+      refreshHubState();
+    } catch (err) {
+      setConnectError(`\u8FDE\u63A5\u5931\u8D25: ${err.message}`);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  const handleRemoveExternal = (id) => {
+    if (confirm("\u786E\u5B9A\u8981\u79FB\u9664\u8BE5\u5916\u90E8 MCP \u8282\u70B9\u5417\uFF1F")) {
+      if (window.mcpHub) {
+        window.mcpHub.removeExternalServer(id);
+        refreshHubState();
+      }
+    }
+  };
+
+  const handleToggleExternal = (id, val) => {
+    if (window.mcpHub) {
+      window.mcpHub.toggleExternalServer(id, val);
+      refreshHubState();
+    }
+  };
+
+  return React.createElement(
+    "div",
+    {
+      className: "no-scrollbar",
+      style: {
+        position: "fixed",
+        top: 0,
+        left: 0,
+        width: "100%",
+        height: "100%",
+        background: "#F5F3EF",
+        zIndex: 300,
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden"
+      }
+    },
+    React.createElement(
+      "div",
+      {
+        style: {
+          height: "56px",
+          background: "#FFFFFF",
+          borderBottom: "1px solid #E5DFD5",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "0 16px",
+          boxShadow: "0 2px 10px rgba(0, 0, 0, 0.04)",
+          flexShrink: 0
+        }
+      },
+      React.createElement(
+        "div",
+        { style: { display: "flex", alignItems: "center", gap: "10px" } },
+        React.createElement(
+          "div",
+          {
+            onClick: onClose,
+            style: {
+              width: "36px",
+              height: "36px",
+              borderRadius: "50%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              color: "#5A5F4D"
+            }
+          },
+          React.createElement("i", { className: "ph ph-caret-left", style: { fontSize: "24px" } })
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement("div", { style: { fontSize: "16px", fontWeight: "700", color: "#3B4033" } }, "🧩 MCP 扩展工具箱 (Agent Tools)"),
+          React.createElement("div", { style: { fontSize: "11px", color: "#8E9482" } }, "让名士自主调用世界书、备忘录、商城记账与外部万物")
+        )
+      )
+    ),
+    React.createElement(
+      "div",
+      {
+        className: "no-scrollbar",
+        style: {
+          flex: 1,
+          overflowY: "auto",
+          padding: "16px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "14px"
+        }
+      },
+      React.createElement(
+        "div",
+        {
+          style: {
+            background: "linear-gradient(135deg, #FAF7F2 0%, #F3EEE6 100%)",
+            borderRadius: "20px",
+            padding: "18px",
+            border: "1px solid #E5DFD3",
+            boxShadow: "0 4px 14px rgba(0, 0, 0, 0.03)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between"
+          }
+        },
+        React.createElement(
+          "div",
+          { style: { display: "flex", alignItems: "center", gap: "12px" } },
+          React.createElement(
+            "div",
+            {
+              style: {
+                width: "44px",
+                height: "44px",
+                borderRadius: "14px",
+                background: masterEnabled ? "#4E7E8E" : "#A6ABA0",
+                color: "#FFFFFF",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "22px",
+                transition: "background 0.3s"
+              }
+            },
+            React.createElement("i", { className: "ph ph-cpu" })
+          ),
+          React.createElement(
+            "div",
+            null,
+            React.createElement("div", { style: { fontSize: "15px", fontWeight: "700", color: "#3B4235" } }, "AI 自主工具调用 (MCP)"),
+            React.createElement("div", { style: { fontSize: "12px", color: "#7B8072", marginTop: "2px" } }, masterEnabled ? "已启用 · 名士可在对话中按需自主调用工具" : "已关闭 · 回退至常规无工具文本对话")
+          )
+        ),
+        React.createElement(
+          "label",
+          { style: { position: "relative", display: "inline-block", width: "48px", height: "26px", cursor: "pointer" } },
+          React.createElement("input", {
+            type: "checkbox",
+            checked: masterEnabled,
+            onChange: (e) => handleToggleMaster(e.target.checked),
+            style: { opacity: 0, width: 0, height: 0 }
+          }),
+          React.createElement(
+            "span",
+            {
+              style: {
+                position: "absolute",
+                top: 0, left: 0, right: 0, bottom: 0,
+                background: masterEnabled ? "#4E7E8E" : "#D0CCC4",
+                borderRadius: "26px",
+                transition: "0.3s"
+              }
+            },
+            React.createElement("span", {
+              style: {
+                position: "absolute",
+                height: "20px",
+                width: "20px",
+                left: masterEnabled ? "24px" : "4px",
+                bottom: "3px",
+                background: "#FFFFFF",
+                borderRadius: "50%",
+                transition: "0.3s",
+                boxShadow: "0 2px 4px rgba(0,0,0,0.2)"
+              }
+            })
+          )
+        )
+      ),
+      React.createElement(
+        "div",
+        { style: { display: "flex", gap: "8px", background: "#EAE7DF", padding: "4px", borderRadius: "14px" } },
+        [
+          { key: "builtin", label: `内置 Web 工具 (${builtInTools.filter(t => t.enabled).length}/${builtInTools.length})`, icon: "ph-puzzle-piece" },
+          { key: "external", label: `外部 MCP 节点 (${externalServers.length})`, icon: "ph-broadcast" },
+          { key: "guide", label: "新手指南", icon: "ph-lightbulb" }
+        ].map(tab => {
+          const isAct = activeTab === tab.key;
+          return React.createElement(
+            "button",
+            {
+              key: tab.key,
+              onClick: () => setActiveTab(tab.key),
+              style: {
+                flex: 1,
+                padding: "9px 0",
+                borderRadius: "10px",
+                border: "none",
+                fontSize: "12.5px",
+                fontWeight: isAct ? "700" : "500",
+                background: isAct ? "#FFFFFF" : "transparent",
+                color: isAct ? "#3B4235" : "#7B8072",
+                cursor: "pointer",
+                boxShadow: isAct ? "0 2px 6px rgba(0,0,0,0.06)" : "none",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "4px",
+                transition: "all 0.2s"
+              }
+            },
+            React.createElement("i", { className: `ph ${tab.icon}` }),
+            React.createElement("span", null, tab.label)
+          );
+        })
+      ),
+      activeTab === "builtin" && React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+        React.createElement("div", { style: { fontSize: "12px", color: "#8E9485", padding: "0 4px" } }, "💡 内置工具无需任何外部环境，在手机和电脑浏览器中即开即用："),
+        builtInTools.map(tool => React.createElement(
+          "div",
+          {
+            key: tool.name,
+            style: {
+              background: "#FFFFFF",
+              borderRadius: "16px",
+              padding: "14px 16px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+              border: "1px solid #EBE7DE",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px"
+            }
+          },
+          React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "8px" } },
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    width: "32px",
+                    height: "32px",
+                    borderRadius: "10px",
+                    background: tool.enabled ? "rgba(78, 126, 142, 0.12)" : "#F0EFEB",
+                    color: tool.enabled ? "#4E7E8E" : "#999",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "18px"
+                  }
+                },
+                React.createElement("i", { className: `ph ${tool.icon}` })
+              ),
+              React.createElement(
+                "div",
+                null,
+                React.createElement("div", { style: { fontSize: "14px", fontWeight: "700", color: "#3B4235" } }, tool.displayName),
+                React.createElement("div", { style: { fontSize: "11px", color: "#8E9485" } }, "标识符: ", React.createElement("code", { style: { background: "#F5F3ED", padding: "1px 4px", borderRadius: "4px" } }, tool.name), ` · ${tool.category}`)
+              )
+            ),
+            React.createElement(
+              "label",
+              { style: { position: "relative", display: "inline-block", width: "40px", height: "22px", cursor: "pointer" } },
+              React.createElement("input", {
+                type: "checkbox",
+                checked: tool.enabled,
+                onChange: (e) => handleToggleTool(tool.name, e.target.checked),
+                style: { opacity: 0, width: 0, height: 0 }
+              }),
+              React.createElement(
+                "span",
+                {
+                  style: {
+                    position: "absolute",
+                    top: 0, left: 0, right: 0, bottom: 0,
+                    background: tool.enabled ? "#4E7E8E" : "#D0CCC4",
+                    borderRadius: "22px",
+                    transition: "0.2s"
+                  }
+                },
+                React.createElement("span", {
+                  style: {
+                    position: "absolute",
+                    height: "16px",
+                    width: "16px",
+                    left: tool.enabled ? "20px" : "3px",
+                    bottom: "3px",
+                    background: "#FFFFFF",
+                    borderRadius: "50%",
+                    transition: "0.2s"
+                  }
+                })
+              )
+            )
+          ),
+          React.createElement(
+            "div",
+            { style: { fontSize: "12.5px", color: "#5F6557", lineHeight: "1.5", background: "#FAF9F5", padding: "8px 10px", borderRadius: "8px" } },
+            tool.description
+          )
+        ))
+      ),
+      activeTab === "external" && React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "14px" } },
+        React.createElement(
+          "div",
+          {
+            style: {
+              background: "#FFFFFF",
+              borderRadius: "18px",
+              padding: "16px",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.04)",
+              border: "1px solid #EBE7DE",
+              display: "flex",
+              flexDirection: "column",
+              gap: "10px"
+            }
+          },
+          React.createElement(
+            "div",
+            { style: { fontSize: "14px", fontWeight: "700", color: "#3B4235", display: "flex", alignItems: "center", gap: "6px" } },
+            React.createElement("i", { className: "ph ph-plus-circle", style: { color: "#4E7E8E", fontSize: "18px" } }),
+            React.createElement("span", null, "连接外部标准 MCP 服务")
+          ),
+          React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+            React.createElement("label", { style: { fontSize: "12px", color: "#7B8072" } }, "节点名称 (可选)"),
+            React.createElement("input", {
+              type: "text",
+              placeholder: "例如: 本地文件助手 / 联网搜索",
+              value: serverName,
+              onChange: (e) => setServerName(e.target.value),
+              style: { padding: "8px 12px", borderRadius: "10px", border: "1px solid #D5D0C5", fontSize: "13px", outline: "none" }
+            })
+          ),
+          React.createElement(
+            "div",
+            { style: { display: "flex", flexDirection: "column", gap: "6px" } },
+            React.createElement("label", { style: { fontSize: "12px", color: "#7B8072" } }, "MCP 服务端点 URL (支持 HTTP / SSE / JSON-RPC)"),
+            React.createElement("input", {
+              type: "text",
+              placeholder: "http://localhost:3000/sse 或 http://127.0.0.1:8000/mcp",
+              value: serverUrl,
+              onChange: (e) => setServerUrl(e.target.value),
+              style: { padding: "8px 12px", borderRadius: "10px", border: "1px solid #D5D0C5", fontSize: "13px", outline: "none" }
+            })
+          ),
+          connectError && React.createElement("div", { style: { fontSize: "12px", color: "#C2185B", background: "#FCE4EC", padding: "8px 12px", borderRadius: "8px" } }, connectError),
+          connectSuccess && React.createElement("div", { style: { fontSize: "12px", color: "#2E7D32", background: "#E8F5E9", padding: "8px 12px", borderRadius: "8px" } }, connectSuccess),
+          React.createElement(
+            "button",
+            {
+              onClick: handleAddExternal,
+              disabled: isConnecting,
+              style: {
+                marginTop: "4px",
+                padding: "10px 0",
+                borderRadius: "12px",
+                border: "none",
+                background: isConnecting ? "#A0AFB5" : "linear-gradient(135deg, #4E7E8E 0%, #3D6A78 100%)",
+                color: "#FFFFFF",
+                fontWeight: "700",
+                fontSize: "13.5px",
+                cursor: isConnecting ? "not-allowed" : "pointer",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                gap: "6px",
+                boxShadow: "0 2px 8px rgba(78, 126, 142, 0.3)"
+              }
+            },
+            isConnecting ? React.createElement("i", { className: "ph ph-spinner animate-spin" }) : React.createElement("i", { className: "ph ph-plug" }),
+            React.createElement("span", null, isConnecting ? "正在握手探测工具列表..." : "测试并保存连接")
+          )
+        ),
+        React.createElement("div", { style: { fontSize: "13px", fontWeight: "700", color: "#3B4235" } }, `已保存的外部节点 (${externalServers.length})`),
+        externalServers.length === 0 ? React.createElement(
+          "div",
+          { style: { textAlign: "center", padding: "30px 16px", color: "#8E9485", background: "#FFFFFF", borderRadius: "16px", border: "1px dashed #D5D0C5" } },
+          React.createElement("i", { className: "ph ph-broadcast text-3xl mb-2", style: { color: "#B8C0B0" } }),
+          React.createElement("div", { style: { fontSize: "13px" } }, "暂未添加外部 MCP 节点"),
+          React.createElement("div", { style: { fontSize: "11px", marginTop: "4px" } }, "您可填入本地跑起来的 MCP 服务或远程网关地址")
+        ) : externalServers.map(srv => React.createElement(
+          "div",
+          {
+            key: srv.id,
+            style: {
+              background: "#FFFFFF",
+              borderRadius: "16px",
+              padding: "14px 16px",
+              boxShadow: "0 2px 8px rgba(0,0,0,0.03)",
+              border: "1px solid #EBE7DE",
+              display: "flex",
+              flexDirection: "column",
+              gap: "8px"
+            }
+          },
+          React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", justifyContent: "space-between" } },
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "8px" } },
+              React.createElement("span", { style: { fontSize: "18px" } }, "🌐"),
+              React.createElement(
+                "div",
+                null,
+                React.createElement("div", { style: { fontSize: "14px", fontWeight: "700", color: "#3B4235" } }, srv.name),
+                React.createElement("div", { style: { fontSize: "11px", color: "#8E9485" } }, srv.url)
+              )
+            ),
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "8px" } },
+              React.createElement(
+                "label",
+                { style: { position: "relative", display: "inline-block", width: "36px", height: "20px", cursor: "pointer" } },
+                React.createElement("input", {
+                  type: "checkbox",
+                  checked: srv.enabled,
+                  onChange: (e) => handleToggleExternal(srv.id, e.target.checked),
+                  style: { opacity: 0, width: 0, height: 0 }
+                }),
+                React.createElement(
+                  "span",
+                  {
+                    style: {
+                      position: "absolute",
+                      top: 0, left: 0, right: 0, bottom: 0,
+                      background: srv.enabled ? "#4E7E8E" : "#D0CCC4",
+                      borderRadius: "20px",
+                      transition: "0.2s"
+                    }
+                  },
+                  React.createElement("span", {
+                    style: {
+                      position: "absolute",
+                      height: "14px",
+                      width: "14px",
+                      left: srv.enabled ? "18px" : "3px",
+                      bottom: "3px",
+                      background: "#FFFFFF",
+                      borderRadius: "50%",
+                      transition: "0.2s"
+                    }
+                  })
+                )
+              ),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => handleRemoveExternal(srv.id),
+                  style: {
+                    background: "#FCE4EC",
+                    border: "none",
+                    color: "#C2185B",
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "8px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center"
+                  }
+                },
+                React.createElement("i", { className: "ph ph-trash", style: { fontSize: "14px" } })
+              )
+            )
+          ),
+          React.createElement("div", { style: { fontSize: "11.5px", background: "#F7F6F2", padding: "6px 10px", borderRadius: "8px", color: "#547A8A" } }, `包含 `, React.createElement("b", null, srv.toolsCount || srv.tools?.length || 0), ` 个工具 · 上次连接: ${srv.updatedAt || "刚刚"}`)
+        ))
+      ),
+      activeTab === "guide" && React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "12px" } },
+        React.createElement(
+          "div",
+          { style: { background: "#FFFFFF", borderRadius: "16px", padding: "16px", border: "1px solid #EBE7DE", lineHeight: "1.6", fontSize: "13px", color: "#4A4F44" } },
+          React.createElement("div", { style: { fontSize: "14.5px", fontWeight: "700", color: "#3B4235", marginBottom: "8px" } }, "💡 什么是 MCP（模型上下文协议）？"),
+          React.createElement("p", { style: { margin: "0 0 8px 0" } }, "MCP 是由 Anthropic 提出的全球开源统一扩展协议。它就像给 AI 装上了一个“万能 Type-C 插座”，让 AI 从原本“只会文字打字”进化为“能主动调用外部工具、查档案、翻账本、做计算”的超级智能体。")
+        ),
+        React.createElement(
+          "div",
+          { style: { background: "#FFFFFF", borderRadius: "16px", padding: "16px", border: "1px solid #EBE7DE", lineHeight: "1.6", fontSize: "13px", color: "#4A4F44" } },
+          React.createElement("div", { style: { fontSize: "14.5px", fontWeight: "700", color: "#3B4235", marginBottom: "8px" } }, "🚀 我需要配置什么才能使用？"),
+          React.createElement("p", { style: { margin: "0 0 8px 0" } }, React.createElement("b", null, "零门槛直接使用："), "只要上方的主开关开启，小手机已内置的 6 大 Web 工具（如世界书查阅、备忘录写入、太疾驰记账等）就会自动生效！"),
+          React.createElement("p", { style: { margin: 0 } }, React.createElement("b", null, "极客进阶："), "如果您在本地电脑运行了官方提供的开源 MCP Server（如 ", React.createElement("code", null, "npx @modelcontextprotocol/server-filesystem"), " 或 Brave 搜索），可在“外部 MCP 节点”填入对应 URL，小手机便可操控本地万物！")
+        )
+      )
+    )
+  );
+};
+
+
+// ==========================================
+// 【存储空间占用分析组件 · LocalStorage & IndexedDB】
+// ==========================================
+const StorageUsagePage = ({ onClose, onOpenBackup }) => {
+  const [activeTab, setActiveTab] = React.useState('indexeddb');
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [lastScanTime, setLastScanTime] = React.useState('');
+  
+  const [lsStats, setLsStats] = React.useState({
+    totalBytes: 0,
+    totalKb: '0.00',
+    totalMb: '0.00',
+    percent: '0.0',
+    count: 0,
+    items: []
+  });
+
+  const [idbStats, setIdbStats] = React.useState({
+    usageBytes: 0,
+    quotaBytes: 0,
+    percent: '0.0',
+    usageMb: '0.00',
+    quotaGb: '0.00',
+    stores: [],
+    totalRecords: 0,
+    totalEstimatedBytes: 0,
+    totalEstimatedMb: '0.00'
+  });
+
+  const STORE_META_MAP = {
+    chat_history: { name: '聊天记录库', icon: '💬', color: '#5E8896', desc: '角色与群聊历史对话、卡片与多媒体' },
+    avatars: { name: '头像与绘图库', icon: '🖼️', color: '#8A7561', desc: '名士头像、壁纸、AI生成画作与线稿' },
+    book_contents: { name: '藏书楼书籍全文', icon: '📖', color: '#6A8E72', desc: '已导入的 Word / Txt 书籍完整文本' },
+    books: { name: '藏书楼元数据', icon: '📚', color: '#7E927A', desc: '书名、作者、进度与分类信息' },
+    chat_characters: { name: '角色资料与动态', icon: '👥', color: '#4B7382', desc: '名士设定、朋友圈动态与空间资料' },
+    world_book: { name: '世界书设定集', icon: '📜', color: '#B38243', desc: '词条、背景设定与交互触发规则' },
+    user_settings: { name: '系统与个性化配置', icon: '⚙️', color: '#6E706E', desc: '金库余额、偏好设置与状态缓存' },
+    backpack: { name: '珍宝道具行囊', icon: '🎒', color: '#C07D53', desc: '已获得的礼物、物品与道具' },
+    music_playlist: { name: '音乐曲库列表', icon: '🎵', color: '#886CA6', desc: '播放清单与本地音频配置' },
+    emojis: { name: '自定义表情包', icon: '✨', color: '#E08A3C', desc: '导入及收藏的聊天表情图片' },
+    lockscreen: { name: '锁屏壁纸库', icon: '📱', color: '#4E889E', desc: '自定义锁屏背景图片与轮播' },
+    delivery_orders: { name: '跑腿外卖订单', icon: '📦', color: '#D97757', desc: '角色代点外卖与跑腿历史订单' },
+    areas: { name: '区域与足迹', icon: '🗺️', color: '#5C946E', desc: '地图探索、区域标记与足迹记录' },
+    relationship: { name: '关系与好感', icon: '💖', color: '#D65D7A', desc: '角色好感度与互动羁绊' },
+    calendar: { name: '日程与备忘', icon: '📅', color: '#4A7C9B', desc: '日历任务与提醒事项' },
+    diary: { name: '密友日记', icon: '📔', color: '#96705B', desc: '个人日记手札与随笔' },
+    mcp_tools: { name: 'MCP 工具库', icon: '🔌', color: '#3B82F6', desc: '扩展工具注册表与配置' },
+    mcp_logs: { name: 'MCP 调用日志', icon: '📝', color: '#6B7280', desc: '工具调用历史与返回结果' },
+    mcp_cache: { name: 'MCP 运行缓存', icon: '⚡', color: '#EAB308', desc: '代理与请求本地缓存' }
+  };
+
+  const [isOptimizing, setIsOptimizing] = React.useState(false);
+  const [optimizeResult, setOptimizeResult] = React.useState(null);
+
+  const handleOptimizeLocalStorage = async () => {
+    if (isOptimizing) return;
+    setIsOptimizing(true);
+    try {
+      if (window.optimizeLocalStorage) {
+        const res = await window.optimizeLocalStorage();
+        setOptimizeResult(res);
+        await scanStorage();
+      }
+    } catch(err) {
+      console.error(err);
+    } finally {
+      setIsOptimizing(false);
+    }
+  };
+
+  const scanStorage = async () => {
+    setIsLoading(true);
+    try {
+      // 1. LocalStorage 统计
+      let lsBytes = 0;
+      const lsItems = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (!key) continue;
+        const val = localStorage.getItem(key) || '';
+        const size = (key.length + val.length) * 2;
+        lsBytes += size;
+        lsItems.push({
+          key,
+          size,
+          sizeKb: (size / 1024).toFixed(2),
+          sizeMb: (size / (1024 * 1024)).toFixed(3),
+          charCount: val.length
+        });
+      }
+      lsItems.sort((a, b) => b.size - a.size);
+      const lsMaxQuota = 5 * 1024 * 1024; // 5MB 典型限额
+      const lsPercent = Math.min(100, (lsBytes / lsMaxQuota) * 100).toFixed(1);
+      
+      setLsStats({
+        totalBytes: lsBytes,
+        totalKb: (lsBytes / 1024).toFixed(2),
+        totalMb: (lsBytes / (1024 * 1024)).toFixed(2),
+        percent: lsPercent,
+        count: localStorage.length,
+        items: lsItems
+      });
+
+      // 2. IndexedDB & 浏览器 Origin Storage 统计
+      let qBytes = 0, uBytes = 0;
+      if (navigator.storage && navigator.storage.estimate) {
+        try {
+          const est = await navigator.storage.estimate();
+          uBytes = est.usage || 0;
+          qBytes = est.quota || 0;
+        } catch(e) {}
+      }
+
+      let storeList = [];
+      let totalRecs = 0;
+      let totalEstBytes = 0;
+
+      if (window.openDB) {
+        const db = await window.openDB();
+        const storeNames = Array.from(db.objectStoreNames);
+        
+        for (const sName of storeNames) {
+          const meta = STORE_META_MAP[sName] || {
+            name: sName,
+            icon: '📁',
+            color: '#718096',
+            desc: '应用扩展数据表'
+          };
+
+          const sStats = await new Promise((resolve) => {
+            try {
+              const tx = db.transaction(sName, 'readonly');
+              const store = tx.objectStore(sName);
+              const countReq = store.count();
+              countReq.onsuccess = () => {
+                const count = countReq.result || 0;
+                let estimatedBytes = 0;
+                let sampleCount = 0;
+                let sampleBytes = 0;
+                const cursorReq = store.openCursor();
+                cursorReq.onsuccess = (e) => {
+                  const cursor = e.target.result;
+                  if (cursor && sampleCount < 200) {
+                    try {
+                      const vStr = typeof cursor.value === 'string' ? cursor.value : JSON.stringify(cursor.value);
+                      sampleBytes += (vStr.length * 2);
+                      sampleCount++;
+                    } catch(err) {}
+                    cursor.continue();
+                  } else {
+                    if (sampleCount > 0) {
+                      const avgSize = sampleBytes / sampleCount;
+                      estimatedBytes = Math.round(avgSize * count);
+                    }
+                    resolve({ count, estimatedBytes });
+                  }
+                };
+                cursorReq.onerror = () => resolve({ count, estimatedBytes: 0 });
+              };
+              countReq.onerror = () => resolve({ count: 0, estimatedBytes: 0 });
+            } catch(e) {
+              resolve({ count: 0, estimatedBytes: 0 });
+            }
+          });
+
+          totalRecs += sStats.count;
+          totalEstBytes += sStats.estimatedBytes;
+
+          storeList.push({
+            id: sName,
+            name: meta.name,
+            icon: meta.icon,
+            color: meta.color,
+            desc: meta.desc,
+            count: sStats.count,
+            estimatedBytes: sStats.estimatedBytes,
+            sizeKb: (sStats.estimatedBytes / 1024).toFixed(1),
+            sizeMb: (sStats.estimatedBytes / (1024 * 1024)).toFixed(2)
+          });
+        }
+      }
+
+      // 按体积降序排序
+      storeList.sort((a, b) => b.estimatedBytes - a.estimatedBytes);
+
+      const idbPercent = qBytes > 0 ? ((uBytes / qBytes) * 100).toFixed(2) : '0.00';
+      setIdbStats({
+        usageBytes: uBytes,
+        quotaBytes: qBytes,
+        percent: idbPercent,
+        usageMb: (uBytes / (1024 * 1024)).toFixed(2),
+        quotaGb: (qBytes / (1024 * 1024 * 1024)).toFixed(2),
+        stores: storeList,
+        totalRecords: totalRecs,
+        totalEstimatedBytes: totalEstBytes,
+        totalEstimatedMb: (totalEstBytes / (1024 * 1024)).toFixed(2)
+      });
+
+      const now = new Date();
+      setLastScanTime(now.toLocaleTimeString());
+    } catch(err) {
+      console.error('扫描存储空间失败:', err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  React.useEffect(() => {
+    scanStorage();
+  }, []);
+
+  const getProgressColor = (percentNum) => {
+    if (percentNum > 80) return '#E5484D';
+    if (percentNum > 50) return '#E08A3C';
+    return '#4E7E8E';
+  };
+
+  return React.createElement(
+    'div',
+    {
+      style: {
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100%',
+        background: '#FAF8F5'
+      }
+    },
+    // 顶部导航栏
+    React.createElement(
+      'div',
+      {
+        style: {
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '14px 16px',
+          background: '#FFFFFF',
+          borderBottom: '1px solid #EBE6DC',
+          boxShadow: '0 1px 4px rgba(0,0,0,0.02)',
+          zIndex: 10
+        }
+      },
+      React.createElement(
+        'button',
+        {
+          onClick: onClose,
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: 'none',
+            border: 'none',
+            fontSize: '15px',
+            color: '#5A5F4D',
+            cursor: 'pointer',
+            padding: '4px 8px',
+            borderRadius: '8px'
+          }
+        },
+        React.createElement('i', { className: 'ph-bold ph-caret-left', style: { fontSize: '18px' } }),
+        React.createElement('span', null, '返回')
+      ),
+      React.createElement(
+        'div',
+        { style: { fontSize: '16px', fontWeight: '700', color: '#2C3026' } },
+        '存储空间与占用分析'
+      ),
+      React.createElement(
+        'button',
+        {
+          onClick: scanStorage,
+          disabled: isLoading,
+          style: {
+            display: 'flex',
+            alignItems: 'center',
+            gap: '4px',
+            background: '#F0ECE1',
+            border: 'none',
+            fontSize: '12px',
+            color: '#5A5F4D',
+            cursor: isLoading ? 'not-allowed' : 'pointer',
+            padding: '5px 10px',
+            borderRadius: '12px',
+            fontWeight: '600'
+          }
+        },
+        React.createElement('i', { className: `ph ${isLoading ? 'ph-spinner animate-spin' : 'ph-arrows-clockwise'}` }),
+        React.createElement('span', null, isLoading ? '扫描中' : '刷新')
+      )
+    ),
+
+    // 内容滚动区
+    React.createElement(
+      'div',
+      {
+        className: 'no-scrollbar',
+        style: {
+          flex: 1,
+          overflowY: 'auto',
+          padding: '16px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: '14px'
+        }
+      },
+      // 1. 顶部总览卡片
+      React.createElement(
+        'div',
+        { style: { display: 'flex', flexDirection: 'column', gap: '12px' } },
+        // LocalStorage 卡片
+        React.createElement(
+          'div',
+          {
+            style: {
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              padding: '16px',
+              border: '1px solid #EBE4D8',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.03)'
+            }
+          },
+          React.createElement(
+            'div',
+            { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' } },
+            React.createElement(
+              'div',
+              null,
+              React.createElement('div', { style: { fontSize: '14.5px', fontWeight: '700', color: '#2C3026', display: 'flex', alignItems: 'center', gap: '6px' } },
+                React.createElement('span', null, '⚡'),
+                'LocalStorage 本地缓存'
+              ),
+              React.createElement('div', { style: { fontSize: '11.5px', color: '#8C887B', marginTop: '2px' } }, '基础偏好、界面状态与关键会话 (上限 5 MB)')
+            ),
+            React.createElement(
+              'div',
+              {
+                style: {
+                  background: `${getProgressColor(Number(lsStats.percent))}15`,
+                  color: getProgressColor(Number(lsStats.percent)),
+                  padding: '3px 8px',
+                  borderRadius: '10px',
+                  fontSize: '12px',
+                  fontWeight: '700'
+                }
+              },
+              `占用率 ${lsStats.percent}%`
+            )
+          ),
+          // 进度条
+          React.createElement(
+            'div',
+            {
+              style: {
+                height: '8px',
+                background: '#EFEBE1',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                margin: '10px 0'
+              }
+            },
+            React.createElement('div', {
+              style: {
+                height: '100%',
+                width: `${Math.max(2, Math.min(100, lsStats.percent))}%`,
+                background: `linear-gradient(90deg, ${getProgressColor(Number(lsStats.percent))}, #7AA2B0)`,
+                borderRadius: '6px',
+                transition: 'width 0.4s ease'
+              }
+            })
+          ),
+          React.createElement(
+            'div',
+            { style: { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#6A665A' } },
+            React.createElement('span', null, `已用: ${lsStats.totalKb} KB (${lsStats.totalMb} MB)`),
+            React.createElement('span', null, `总计 ${lsStats.count} 个配置键`)
+          ),
+          Number(lsStats.percent) > 40 && React.createElement(
+            'div',
+            { style: { marginTop: '12px', paddingTop: '10px', borderTop: '1px dashed #EFEBE1' } },
+            React.createElement(
+              'button',
+              {
+                onClick: handleOptimizeLocalStorage,
+                disabled: isOptimizing,
+                style: {
+                  width: '100%',
+                  padding: '9px 0',
+                  borderRadius: '10px',
+                  border: 'none',
+                  background: 'linear-gradient(135deg, #4E7E8E 0%, #3D6A78 100%)',
+                  color: '#FFFFFF',
+                  fontWeight: '700',
+                  fontSize: '13px',
+                  cursor: isOptimizing ? 'not-allowed' : 'pointer',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  boxShadow: '0 2px 6px rgba(78, 126, 142, 0.25)'
+                }
+              },
+              React.createElement('i', { className: `ph ${isOptimizing ? 'ph-spinner animate-spin' : 'ph-sparkle'}` }),
+              React.createElement('span', null, isOptimizing ? '正在迁移瘦身...' : '✨ 一键瘦身（将大立绘/大缓存无损迁移至 IndexedDB）')
+            ),
+            optimizeResult && optimizeResult.migratedKeys.length > 0 && React.createElement(
+              'div',
+              { style: { fontSize: '11.5px', color: '#5A8F6D', marginTop: '6px', textAlign: 'center', fontWeight: '600' } },
+              `🎉 成功释放 ${optimizeResult.freedMb} MB 空间（已迁移 ${optimizeResult.migratedKeys.join(', ')}）`
+            )
+          )
+        ),
+
+        // IndexedDB 卡片
+        React.createElement(
+          'div',
+          {
+            style: {
+              background: '#FFFFFF',
+              borderRadius: '16px',
+              padding: '16px',
+              border: '1px solid #EBE4D8',
+              boxShadow: '0 2px 10px rgba(0,0,0,0.03)'
+            }
+          },
+          React.createElement(
+            'div',
+            { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '8px' } },
+            React.createElement(
+              'div',
+              null,
+              React.createElement('div', { style: { fontSize: '14.5px', fontWeight: '700', color: '#2C3026', display: 'flex', alignItems: 'center', gap: '6px' } },
+                React.createElement('span', null, '🗄️'),
+                'IndexedDB 核心数据库'
+              ),
+              React.createElement('div', { style: { fontSize: '11.5px', color: '#8C887B', marginTop: '2px' } }, '海量聊天记录、高精图库、世界书与藏书楼全文')
+            ),
+            React.createElement(
+              'div',
+              {
+                style: {
+                  background: '#EAF3F5',
+                  color: '#4E7E8E',
+                  padding: '3px 8px',
+                  borderRadius: '10px',
+                  fontSize: '12px',
+                  fontWeight: '700'
+                }
+              },
+              `已存 ${idbStats.totalEstimatedMb} MB`
+            )
+          ),
+          // 浏览器配额条
+          React.createElement(
+            'div',
+            {
+              style: {
+                height: '8px',
+                background: '#EFEBE1',
+                borderRadius: '6px',
+                overflow: 'hidden',
+                margin: '10px 0'
+              }
+            },
+            React.createElement('div', {
+              style: {
+                height: '100%',
+                width: `${Math.max(1, Math.min(100, Number(idbStats.percent) * 50 || (idbStats.totalEstimatedBytes / (100 * 1024 * 1024)) * 100))}%`,
+                background: 'linear-gradient(90deg, #4E7E8E, #5E8896)',
+                borderRadius: '6px',
+                transition: 'width 0.4s ease'
+              }
+            })
+          ),
+          React.createElement(
+            'div',
+            { style: { display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#6A665A' } },
+            React.createElement('span', null, `探测记录: ${idbStats.totalRecords.toLocaleString()} 条 · ${idbStats.stores.length} 张表`),
+            React.createElement('span', null, idbStats.quotaBytes > 0 ? `配额约 ${idbStats.quotaGb} GB` : '无限容量')
+          )
+        )
+      ),
+
+      // 2. 标签切换器
+      React.createElement(
+        'div',
+        {
+          style: {
+            display: 'flex',
+            background: '#EAE5D9',
+            padding: '3px',
+            borderRadius: '12px',
+            marginTop: '4px'
+          }
+        },
+        React.createElement(
+          'button',
+          {
+            onClick: () => setActiveTab('indexeddb'),
+            style: {
+              flex: 1,
+              padding: '8px 0',
+              border: 'none',
+              borderRadius: '9px',
+              fontSize: '13px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              background: activeTab === 'indexeddb' ? '#FFFFFF' : 'transparent',
+              color: activeTab === 'indexeddb' ? '#383D31' : '#7D796F',
+              boxShadow: activeTab === 'indexeddb' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+              transition: '0.2s'
+            }
+          },
+          `🗄️ IndexedDB 分表明细 (${idbStats.stores.length})`
+        ),
+        React.createElement(
+          'button',
+          {
+            onClick: () => setActiveTab('localstorage'),
+            style: {
+              flex: 1,
+              padding: '8px 0',
+              border: 'none',
+              borderRadius: '9px',
+              fontSize: '13px',
+              fontWeight: '700',
+              cursor: 'pointer',
+              background: activeTab === 'localstorage' ? '#FFFFFF' : 'transparent',
+              color: activeTab === 'localstorage' ? '#383D31' : '#7D796F',
+              boxShadow: activeTab === 'localstorage' ? '0 2px 6px rgba(0,0,0,0.06)' : 'none',
+              transition: '0.2s'
+            }
+          },
+          `⚡ LocalStorage 键名排行 (${lsStats.count})`
+        )
+      ),
+
+      // 3. 标签内容详情区
+      activeTab === 'indexeddb' && React.createElement(
+        'div',
+        { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+        idbStats.stores.map((s) => {
+          const maxBytes = idbStats.stores[0]?.estimatedBytes || 1;
+          const barWidth = Math.max(4, Math.round((s.estimatedBytes / maxBytes) * 100));
+          
+          return React.createElement(
+            'div',
+            {
+              key: s.id,
+              style: {
+                background: '#FFFFFF',
+                borderRadius: '14px',
+                padding: '12px 14px',
+                border: '1px solid #ECE7DC',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '8px',
+                boxShadow: '0 1px 4px rgba(0,0,0,0.02)'
+              }
+            },
+            React.createElement(
+              'div',
+              { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+              React.createElement(
+                'div',
+                { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
+                React.createElement(
+                  'div',
+                  {
+                    style: {
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '10px',
+                      background: `${s.color}15`,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      fontSize: '16px'
+                    }
+                  },
+                  s.icon
+                ),
+                React.createElement(
+                  'div',
+                  null,
+                  React.createElement('div', { style: { fontSize: '13.5px', fontWeight: '700', color: '#2C3026' } }, s.name),
+                  React.createElement('div', { style: { fontSize: '11px', color: '#9E9A8E' } }, `表名: ${s.id}`)
+                )
+              ),
+              React.createElement(
+                'div',
+                { style: { textAlign: 'right' } },
+                React.createElement('div', { style: { fontSize: '13.5px', fontWeight: '700', color: '#4E7E8E' } }, `${s.sizeMb} MB`),
+                React.createElement('div', { style: { fontSize: '11px', color: '#8C887B' } }, `${s.count.toLocaleString()} 条记录`)
+              )
+            ),
+            // 相对占比条
+            React.createElement(
+              'div',
+              {
+                style: {
+                  height: '5px',
+                  background: '#F5F2EA',
+                  borderRadius: '3px',
+                  overflow: 'hidden'
+                }
+              },
+              React.createElement('div', {
+                style: {
+                  height: '100%',
+                  width: `${barWidth}%`,
+                  background: s.color,
+                  borderRadius: '3px'
+                }
+              })
+            ),
+            React.createElement(
+              'div',
+              { style: { fontSize: '11.5px', color: '#858074', lineHeight: '1.4' } },
+              s.desc
+            )
+          );
+        })
+      ),
+
+      activeTab === 'localstorage' && React.createElement(
+        'div',
+        { style: { display: 'flex', flexDirection: 'column', gap: '8px' } },
+        lsStats.items.map((item, idx) => {
+          const maxLsItem = lsStats.items[0]?.size || 1;
+          const barWidth = Math.max(3, Math.round((item.size / maxLsItem) * 100));
+
+          return React.createElement(
+            'div',
+            {
+              key: item.key,
+              style: {
+                background: '#FFFFFF',
+                borderRadius: '14px',
+                padding: '12px 14px',
+                border: '1px solid #ECE7DC',
+                display: 'flex',
+                flexDirection: 'column',
+                gap: '6px'
+              }
+            },
+            React.createElement(
+              'div',
+              { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } },
+              React.createElement(
+                'div',
+                { style: { display: 'flex', alignItems: 'center', gap: '6px', overflow: 'hidden' } },
+                React.createElement(
+                  'span',
+                  {
+                    style: {
+                      fontSize: '11px',
+                      fontWeight: '700',
+                      background: '#F0EFEB',
+                      color: '#6B685E',
+                      padding: '1px 6px',
+                      borderRadius: '6px'
+                    }
+                  },
+                  `#${idx + 1}`
+                ),
+                React.createElement(
+                  'span',
+                  {
+                    style: {
+                      fontSize: '13px',
+                      fontWeight: '600',
+                      color: '#2C3026',
+                      wordBreak: 'break-all'
+                    }
+                  },
+                  item.key
+                )
+              ),
+              React.createElement(
+                'span',
+                {
+                  style: {
+                    fontSize: '13px',
+                    fontWeight: '700',
+                    color: item.size > 200 * 1024 ? '#E5484D' : '#5A8F6D',
+                    whiteSpace: 'nowrap',
+                    marginLeft: '8px'
+                  }
+                },
+                `${item.sizeKb} KB`
+              )
+            ),
+            React.createElement(
+              'div',
+              {
+                style: {
+                  height: '4px',
+                  background: '#F5F2EA',
+                  borderRadius: '2px',
+                  overflow: 'hidden'
+                }
+              },
+              React.createElement('div', {
+                style: {
+                  height: '100%',
+                  width: `${barWidth}%`,
+                  background: item.size > 200 * 1024 ? '#E5484D' : '#5A8F6D',
+                  borderRadius: '2px'
+                }
+              })
+            ),
+            React.createElement(
+              'div',
+              { style: { fontSize: '11px', color: '#9E9A8E' } },
+              `字符长度: ${item.charCount.toLocaleString()} 字`
+            )
+          );
+        })
+      ),
+
+      // 4. 底部贴心建议
+      React.createElement(
+        'div',
+        {
+          style: {
+            background: '#F4F1EA',
+            borderRadius: '14px',
+            padding: '12px 14px',
+            border: '1px dashed #D6D0C2',
+            marginTop: '6px'
+          }
+        },
+        React.createElement(
+          'div',
+          { style: { fontSize: '12px', color: '#6B665A', lineHeight: '1.5' } },
+          '💡 ',
+          React.createElement('b', null, '空间管理提示：'),
+          '若 LocalStorage 接近 5MB 上限，可通过【备份与恢复】将全量数据导出为本地备份文件，或在【清理临时缓存】中释放多余的临时图像。'
+        ),
+        onOpenBackup && React.createElement(
+          'button',
+          {
+            onClick: onOpenBackup,
+            style: {
+              marginTop: '8px',
+              width: '100%',
+              padding: '8px 0',
+              borderRadius: '10px',
+              border: '1px solid #5A8F6D',
+              background: '#FFFFFF',
+              color: '#5A8F6D',
+              fontSize: '12.5px',
+              fontWeight: '700',
+              cursor: 'pointer'
+            }
+          },
+          '📦 前往【备份与恢复】'
+        )
+      )
+    )
+  );
+};
+
+const PrivacySecurityPage = ({ onOpenMinimax, onOpenAiImage, onOpenMcp }) => {
   const [activeSubPage, setActiveSubPage] = React.useState(null);
+
+  const [minimaxEnabled, setMinimaxEnabled] = React.useState(() => {
+    try {
+      const s = localStorage.getItem("minimax_api_config");
+      return s ? JSON.parse(s).enabled !== false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const [aiImageEnabled, setAiImageEnabled] = React.useState(() => {
+    try {
+      const s = localStorage.getItem("image_generation_api_config");
+      return s ? JSON.parse(s).enabled !== false : true;
+    } catch (e) {
+      return true;
+    }
+  });
+
+  const [mcpEnabled, setMcpEnabled] = React.useState(() => {
+    return window.mcpHub ? window.mcpHub.isMasterEnabled() : true;
+  });
+
+  const handleToggleMinimax = (e) => {
+    e.stopPropagation();
+    const nextVal = e.target.checked;
+    setMinimaxEnabled(nextVal);
+    try {
+      const s = localStorage.getItem("minimax_api_config");
+      const parsed = s ? JSON.parse(s) : {};
+      parsed.enabled = nextVal;
+      localStorage.setItem("minimax_api_config", JSON.stringify(parsed));
+    } catch (err) {}
+  };
+
+  const handleToggleAiImage = (e) => {
+    e.stopPropagation();
+    const nextVal = e.target.checked;
+    setAiImageEnabled(nextVal);
+    try {
+      const s = localStorage.getItem("image_generation_api_config");
+      const parsed = s ? JSON.parse(s) : {};
+      parsed.enabled = nextVal;
+      localStorage.setItem("image_generation_api_config", JSON.stringify(parsed));
+    } catch (err) {}
+  };
+
+  const handleToggleMcp = (e) => {
+    e.stopPropagation();
+    const nextVal = e.target.checked;
+    setMcpEnabled(nextVal);
+    if (window.mcpHub) {
+      window.mcpHub.setMasterEnabled(nextVal);
+    }
+  };
+
+  if (activeSubPage === "mcp_tools") {
+    return /* @__PURE__ */ React.createElement(MCPToolsSettingsPage, { onClose: () => setActiveSubPage(null) });
+  }
   if (activeSubPage === "wallet") {
     return /* @__PURE__ */ React.createElement(WalletPage, { onClose: () => setActiveSubPage(null) });
   }
   if (activeSubPage === "backpack") {
     return /* @__PURE__ */ React.createElement(BackpackPage, { onClose: () => setActiveSubPage(null) });
   }
+  if (activeSubPage === "storage_usage") {
+    return /* @__PURE__ */ React.createElement(StorageUsagePage, { onClose: () => setActiveSubPage(null), onOpenBackup: () => setActiveSubPage("backup_restore") });
+  }
   if (activeSubPage === "backup_restore") {
     return /* @__PURE__ */ React.createElement(BackupRestorePage, { onClose: () => setActiveSubPage(null) });
+  }
+  if (activeSubPage === "minimax") {
+    return /* @__PURE__ */ React.createElement(MinimaxSettingsPage, { onClose: () => setActiveSubPage(null) });
+  }
+  if (activeSubPage === "ai_image") {
+    return /* @__PURE__ */ React.createElement(ImageGenerationSettingsPage, { onClose: () => setActiveSubPage(null) });
   }
   return /* @__PURE__ */ React.createElement(
     "div",
@@ -131609,7 +133928,7 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
             cursor: "pointer"
           }
         },
-        /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: "14px", fontWeight: "500", color: "#333" } }, "\u6211\u7684\u91D1\u5E93"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "2px" } }, "\u67E5\u770B\u4F59\u989D\u4E0E\u4EA4\u6613\u8BB0\u5F55")),
+        /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: "14px", fontWeight: "500", color: "#333" } }, "我的金库"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "2px" } }, "查看余额与交易记录")),
         /* @__PURE__ */ React.createElement("i", { "data-lucide": "chevron-right", style: { color: "#aaa" } })
       ),
       /* @__PURE__ */ React.createElement(
@@ -131624,7 +133943,7 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
             cursor: "pointer"
           }
         },
-        /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: "14px", fontWeight: "500", color: "#333" } }, "\u6211\u7684\u80CC\u5305"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "2px" } }, "\u7BA1\u7406\u5DF2\u83B7\u5F97\u7684\u7269\u54C1")),
+        /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement("div", { style: { fontSize: "14px", fontWeight: "500", color: "#333" } }, "我的背包"), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "2px" } }, "管理已获得的物品")),
         /* @__PURE__ */ React.createElement("i", { "data-lucide": "chevron-right", style: { color: "#aaa" } })
       )
     ),
@@ -131638,7 +133957,7 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
           margin: "12px 0 8px"
         }
       },
-      "\u6570\u636E\u4E0E\u5B89\u5168"
+      "数据与安全"
     ),
     /* @__PURE__ */ React.createElement(
       "div",
@@ -131655,8 +133974,8 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
         "div",
         {
           onClick: () => {
-            if (confirm("\u786E\u5B9A\u8981\u6E05\u7406\u4E34\u65F6\u56FE\u50CF\u4E0E\u7F51\u9875\u7F13\u5B58\u5417\uFF1F")) {
-              alert("\u7F13\u5B58\u6E05\u7406\u5B8C\u6210");
+            if (confirm("确定要清理临时图像与网页缓存吗？")) {
+              alert("缓存清理完成");
             }
           },
           style: {
@@ -131673,13 +133992,41 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
           {
             style: { fontSize: "14px", fontWeight: "500", color: "#D6724B" }
           },
-          "\u6E05\u7406\u4E34\u65F6\u7F13\u5B58"
-        ), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "2px" } }, "\u91CA\u653E\u6D4F\u89C8\u5668\u5360\u7528\u7684\u4E34\u65F6\u8D44\u6E90\u7A7A\u95F4")),
+          "清理临时缓存"
+        ), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "2px" } }, "释放浏览器占用的临时资源空间")),
         /* @__PURE__ */ React.createElement(
           "i",
           {
             "data-lucide": "trash-2",
             style: { color: "#D6724B", width: 18, height: 18 }
+          }
+        )
+      ),
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          onClick: () => setActiveSubPage("storage_usage"),
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "12px 0",
+            borderBottom: "1px solid #f5f5f5",
+            cursor: "pointer"
+          }
+        },
+        /* @__PURE__ */ React.createElement("div", null, /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            style: { fontSize: "14px", fontWeight: "500", color: "#4E7E8E" }
+          },
+          "存储空间查看"
+        ), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "2px" } }, "实时分析 LocalStorage 与 IndexedDB 占用率及分表详情")),
+        /* @__PURE__ */ React.createElement(
+          "i",
+          {
+            "data-lucide": "pie-chart",
+            style: { color: "#4E7E8E", width: 18, height: 18 }
           }
         )
       ),
@@ -131700,8 +134047,8 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
           {
             style: { fontSize: "14px", fontWeight: "500", color: "#5A8F6D" }
           },
-          "\u5907\u4EFD\u4E0E\u6062\u590D"
-        ), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "2px" } }, "\u5BFC\u51FA\u5168\u91CF\u6570\u636E\u6216\u5BFC\u5165\u5907\u4EFD\u6587\u4EF6\u8FC1\u79FB\u6570\u636E")),
+          "备份与恢复"
+        ), /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "2px" } }, "导出全量数据或导入备份文件迁移数据")),
         /* @__PURE__ */ React.createElement(
           "i",
           {
@@ -131710,10 +134057,160 @@ const PrivacySecurityPage = ({ onOpenMinimax }) => {
           }
         )
       )
+    ),
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
+          fontSize: "14px",
+          fontWeight: "bold",
+          color: "#5A5F4D",
+          margin: "12px 0 8px"
+        }
+      },
+      "语音与扩展服务"
+    ),
+    /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        style: {
+          background: "#FFFFFF",
+          borderRadius: "16px",
+          padding: "16px",
+          boxShadow: "0 4px 12px rgba(163, 177, 164, 0.08)",
+          marginBottom: "16px"
+        }
+      },
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          onClick: () => (onOpenMinimax ? onOpenMinimax() : setActiveSubPage("minimax")),
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "14px 0",
+            borderBottom: "1px solid #f5f5f5",
+            cursor: "pointer"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { flex: 1, paddingRight: "12px" } },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "6px" } },
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14px", fontWeight: "600", color: "#3B82F6" } }, "🔊 MiniMax 语音配置 (TTS)"),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", padding: "1px 6px", borderRadius: "10px", background: minimaxEnabled ? "#EBF7F0" : "#F3F4F6", color: minimaxEnabled ? "#2E7D32" : "#888" } }, minimaxEnabled ? "已开启" : "已停用")
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "3px" } }, "自主配置 API Key 与语音模型，点击进入详细设置")
+        ),
+        /* @__PURE__ */ React.createElement(
+          "label",
+          {
+            onClick: (e) => e.stopPropagation(),
+            style: { position: "relative", display: "inline-block", width: "44px", height: "24px", margin: 0, cursor: "pointer", flexShrink: 0 }
+          },
+          /* @__PURE__ */ React.createElement("input", { type: "checkbox", checked: minimaxEnabled, onChange: handleToggleMinimax, style: { opacity: 0, width: 0, height: 0 } }),
+          /* @__PURE__ */ React.createElement(
+            "span",
+            {
+              style: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: minimaxEnabled ? "#3B82F6" : "#D1D5DB", borderRadius: "24px", transition: "0.25s" }
+            },
+            /* @__PURE__ */ React.createElement("span", {
+              style: { position: "absolute", height: "18px", width: "18px", left: minimaxEnabled ? "23px" : "3px", bottom: "3px", backgroundColor: "#FFF", borderRadius: "50%", transition: "0.25s", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" }
+            })
+          )
+        )
+      ),
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          onClick: () => (onOpenAiImage ? onOpenAiImage() : setActiveSubPage("ai_image")),
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "14px 0",
+            borderBottom: "1px solid #f5f5f5",
+            cursor: "pointer"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { flex: 1, paddingRight: "12px" } },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "6px" } },
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14px", fontWeight: "600", color: "#8B5CF6" } }, "🎨 AI 文生图配置 (Text-to-Image)"),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", padding: "1px 6px", borderRadius: "10px", background: aiImageEnabled ? "#F3E8FF" : "#F3F4F6", color: aiImageEnabled ? "#7E22CE" : "#888" } }, aiImageEnabled ? "已开启" : "已停用")
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "3px" } }, "支持 Flux / DALL·E 3 / CogView 角色作画，点击进入详细设置")
+        ),
+        /* @__PURE__ */ React.createElement(
+          "label",
+          {
+            onClick: (e) => e.stopPropagation(),
+            style: { position: "relative", display: "inline-block", width: "44px", height: "24px", margin: 0, cursor: "pointer", flexShrink: 0 }
+          },
+          /* @__PURE__ */ React.createElement("input", { type: "checkbox", checked: aiImageEnabled, onChange: handleToggleAiImage, style: { opacity: 0, width: 0, height: 0 } }),
+          /* @__PURE__ */ React.createElement(
+            "span",
+            {
+              style: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: aiImageEnabled ? "#8B5CF6" : "#D1D5DB", borderRadius: "24px", transition: "0.25s" }
+            },
+            /* @__PURE__ */ React.createElement("span", {
+              style: { position: "absolute", height: "18px", width: "18px", left: aiImageEnabled ? "23px" : "3px", bottom: "3px", backgroundColor: "#FFF", borderRadius: "50%", transition: "0.25s", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" }
+            })
+          )
+        )
+      ),
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          onClick: () => (onOpenMcp ? onOpenMcp() : setActiveSubPage("mcp_tools")),
+          style: {
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "14px 0",
+            cursor: "pointer"
+          }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { style: { flex: 1, paddingRight: "12px" } },
+          /* @__PURE__ */ React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "6px" } },
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "14px", fontWeight: "600", color: "#4E7E8E" } }, "🧩 MCP 扩展工具箱 (Agent Tools)"),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "11px", padding: "1px 6px", borderRadius: "10px", background: mcpEnabled ? "#E0F2FE" : "#F3F4F6", color: mcpEnabled ? "#0369A1" : "#888" } }, mcpEnabled ? "已开启" : "已停用")
+          ),
+          /* @__PURE__ */ React.createElement("div", { style: { fontSize: "12px", color: "#888", marginTop: "3px" } }, "开启 AI 自主调用世界书、备忘录、商城记账与外部万物工具")
+        ),
+        /* @__PURE__ */ React.createElement(
+          "label",
+          {
+            onClick: (e) => e.stopPropagation(),
+            style: { position: "relative", display: "inline-block", width: "44px", height: "24px", margin: 0, cursor: "pointer", flexShrink: 0 }
+          },
+          /* @__PURE__ */ React.createElement("input", { type: "checkbox", checked: mcpEnabled, onChange: handleToggleMcp, style: { opacity: 0, width: 0, height: 0 } }),
+          /* @__PURE__ */ React.createElement(
+            "span",
+            {
+              style: { position: "absolute", top: 0, left: 0, right: 0, bottom: 0, backgroundColor: mcpEnabled ? "#4E7E8E" : "#D1D5DB", borderRadius: "24px", transition: "0.25s" }
+            },
+            /* @__PURE__ */ React.createElement("span", {
+              style: { position: "absolute", height: "18px", width: "18px", left: mcpEnabled ? "23px" : "3px", bottom: "3px", backgroundColor: "#FFF", borderRadius: "50%", transition: "0.25s", boxShadow: "0 2px 4px rgba(0,0,0,0.2)" }
+            })
+          )
+        )
+      )
     )
   );
 };
-const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
+
+const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax, onOpenAiImage, onOpenMcp }) => {
   if (!isOpen) return null;
   return /* @__PURE__ */ React.createElement("div", { className: "settings-overlay open", style: { zIndex: 1005 } }, /* @__PURE__ */ React.createElement("div", { className: "settings-nav" }, /* @__PURE__ */ React.createElement("div", { className: "back-btn", onClick: onClose }, /* @__PURE__ */ React.createElement(
     "svg",
@@ -131729,8 +134226,14 @@ const PrivacySecurityOverlay = ({ isOpen, onClose, onOpenMinimax }) => {
       strokeLinejoin: "round"
     },
     /* @__PURE__ */ React.createElement("path", { d: "m15 18-6-6 6-6" })
-  )), /* @__PURE__ */ React.createElement("div", { className: "title" }, "\u9690\u79C1\u4E0E\u5B89\u5168")), /* @__PURE__ */ React.createElement(PrivacySecurityPage, { onOpenMinimax }));
+  )), /* @__PURE__ */ React.createElement("div", { className: "title" }, "隐私与安全")), /* @__PURE__ */ React.createElement(PrivacySecurityPage, { onOpenMinimax, onOpenAiImage, onOpenMcp }));
 };
+
+const MCPToolsOverlay = ({ isOpen, onClose }) => {
+  if (!isOpen) return null;
+  return /* @__PURE__ */ React.createElement("div", { className: "settings-overlay open", style: { zIndex: 1006 } }, /* @__PURE__ */ React.createElement(MCPToolsSettingsPage, { onClose }));
+};
+
 const FloatingShoppingChat = ({ session, onClose, onEndSession }) => {
   const { character, chatId } = session;
   const [messages, setMessages] = React.useState([]);
@@ -133441,6 +135944,8 @@ const MasterApp = () => {
   const [isFontSettingsOpen, setIsFontSettingsOpen] = useState(false);
   const [isMinimaxSettingsOpen, setIsMinimaxSettingsOpen] = useState(false);
   const [isPrivacySecurityOpen, setIsPrivacySecurityOpen] = useState(false);
+  const [isAiImageSettingsOpen, setIsAiImageSettingsOpen] = useState(false);
+  const [isMCPToolsOpen, setIsMCPToolsOpen] = useState(false);
   const [isCommStatusSettingsOpen, setIsCommStatusSettingsOpen] = useState(false);
   React.useEffect(() => {
     window.__IS_MSG_APP_OPEN = isMsgOpen;
@@ -136270,7 +138775,23 @@ const MasterApp = () => {
       {
         isOpen: isPrivacySecurityOpen,
         onClose: () => setIsPrivacySecurityOpen(false),
-        onOpenMinimax: () => setIsMinimaxSettingsOpen(true)
+        onOpenMinimax: () => setIsMinimaxSettingsOpen(true),
+        onOpenAiImage: () => setIsAiImageSettingsOpen(true),
+        onOpenMcp: () => setIsMCPToolsOpen(true)
+      }
+    ),
+    /* @__PURE__ */ React.createElement(
+      ImageGenerationSettingsOverlay,
+      {
+        isOpen: isAiImageSettingsOpen,
+        onClose: () => setIsAiImageSettingsOpen(false)
+      }
+    ),
+    /* @__PURE__ */ React.createElement(
+      MCPToolsOverlay,
+      {
+        isOpen: isMCPToolsOpen,
+        onClose: () => setIsMCPToolsOpen(false)
       }
     ),
     /* @__PURE__ */ React.createElement(
