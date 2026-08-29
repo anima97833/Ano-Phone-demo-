@@ -133441,6 +133441,18 @@ const MasterApp = () => {
   const [isFontSettingsOpen, setIsFontSettingsOpen] = useState(false);
   const [isMinimaxSettingsOpen, setIsMinimaxSettingsOpen] = useState(false);
   const [isPrivacySecurityOpen, setIsPrivacySecurityOpen] = useState(false);
+  const [isCommStatusSettingsOpen, setIsCommStatusSettingsOpen] = useState(false);
+  React.useEffect(() => {
+    window.__IS_MSG_APP_OPEN = isMsgOpen;
+  }, [isMsgOpen]);
+  React.useEffect(() => {
+    window.openSpecificChat = (chatId) => {
+      setIsMsgOpen(true);
+      setTimeout(() => {
+        window.dispatchEvent(new CustomEvent("open-specific-chat", { detail: { chatId } }));
+      }, 50);
+    };
+  }, []);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [currentUser, setCurrentUser] = useState({
     name: "\u7528\u6237\u540D",
@@ -134623,7 +134635,7 @@ const MasterApp = () => {
         color: "#D0021B",
         onClick: () => setIsMemoryOpen(true)
       }
-    ), /* @__PURE__ */ React.createElement(SettingRow, { icon: "bell", text: "\u901A\u77E5\u4E0E\u72B6\u6001", color: "#417505" }), /* @__PURE__ */ React.createElement(
+    ), /* @__PURE__ */ React.createElement(SettingRow, { icon: "bell", text: "\u901A\u77E5\u4E0E\u72B6\u6001", color: "#417505", onClick: () => setIsCommStatusSettingsOpen(true) }), /* @__PURE__ */ React.createElement(
       SettingRow,
       {
         icon: "shield-check",
@@ -136701,6 +136713,8 @@ const MasterApp = () => {
         )
       )
     )),
+    /* @__PURE__ */ React.createElement(GlobalNotificationBanner, null),
+    isCommStatusSettingsOpen && /* @__PURE__ */ React.createElement(CommStatusSettingsPage, { onClose: () => setIsCommStatusSettingsOpen(false) }),
     isStarChartOpen && /* @__PURE__ */ React.createElement(StarChartPage, { onBack: () => setIsStarChartOpen(false) }),
     isButterflyEffectOpen && /* @__PURE__ */ React.createElement(ButterflyEffectPage, { onBack: () => setIsButterflyEffectOpen(false) }),
     isSandTableOpen && /* @__PURE__ */ React.createElement(SandTablePage, { onBack: () => setIsSandTableOpen(false) }),
