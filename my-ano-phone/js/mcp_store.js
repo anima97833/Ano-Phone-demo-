@@ -1112,39 +1112,7 @@
         `;
 
         // 包装为带动画类名的 SVG
-        let animatedSvg = rawSvg.replace(/<svg([^>]*)>/i, `<svgname: "draw_handdrawn_sketch",
-      displayName: "手绘线稿与动效简笔画 (Stroke Animation)",
-      icon: "ph-pen-nib-straight",
-      category: "艺术与工坊",
-      description: "当主公要求角色“画个草图”、“画个简笔画”、“手绘一张图”、“画个线稿”、“密室示意图”，或角色想要现场运笔为画作一笔一划勾勒线条时调用（注：若主公仅要求发日常聊天表情包，请优先在对白末尾使用标签 [发表情: 表情名称] 调用相册）。此工具接收结构化矢量图形/SVG代码，并自动生成具有真实手绘质感、从第一笔画到最后一笔实时逐渐勾勒成形的动态矢量线稿卡片。",
-      inputSchema: {
-        type: "object",
-        properties: {
-          title: {
-            type: "string",
-            description: "线稿/画作的雅致标题，例如'《绣衣楼密室平面图》'、'《手绘小猫像》'、'《兰草折枝图》'"
-          },
-          svgContent: {
-            type: "string",
-            description: "完整的标准 SVG 矢量图形代码字符串。必须包含 viewBox=\"0 0 400 300\" 及各类 path、circle、line、rect、text 等图形元素，绘制内容细腻工整，富有手绘美感。"
-          },
-          strokeColor: {
-            type: "string",
-            description: "线条主色调 HEX 码，如 '#3d3b38' (古墨色), '#990000' (朱砂红), '#5e6756' (竹青色), '#b38243' (藤黄色)，默认 '#3d3b38'"
-          },
-          duration: {
-            type: "number",
-            description: "一笔一划绘制完成的总时长秒数，通常为 2.5 到 4.0 秒，默认为 3.0"
-          },
-          description: {
-            type: "string",
-            description: "名士对此幅手绘线稿/画作的题跋与心意解说"
-          }
-        },
-        required: ["title", "svgContent"]
-      },
-      defaultEnabled: true,
-      handler: async (args, context) => { class="ao3-sketch-${sketchId}">` + animCss);
+        let animatedSvg = rawSvg.replace(/<svg([^>]*)>/i, `<svg$1 class="ao3-sketch-${sketchId}">` + animCss);
 
         // 安全的 UTF-8 Base64 编码
         let svgDataUrl = "";
@@ -1282,30 +1250,82 @@
         // 2. 图像生成与绑定
         let imageUrl = args.image || null;
 
-        // 如果本轮刚刚生成过画作，优先直接使用该画作
-        if (!imageUrl && window.__lastMcpGeneratedImage && window.__lastMcpGeneratedImage.imageUrl) {
+        // 仅当明确在文案中表示“晒画/这幅画/画好了”且本轮存在手绘/画作时才复用，否则一律为动态专门生图
+        const isSharingExistingArt = content && /(?:画好了|这幅画|刚画的|手绘|线稿|丹青|画卷|呈递|晒画|画作|刚画好的)/i.test(content);
+        if (!imageUrl && isSharingExistingArt && window.__lastMcpGeneratedImage && window.__lastMcpGeneratedImage.imageUrl) {
           imageUrl = window.__lastMcpGeneratedImage.imageUrl;
         }
 
-        // 若无图片且有生图提示词，调用 AI 生图
-        if (!imageUrl && args.imagePrompt && typeof window.generateAIImage === "function") {
+        // 若无图片，智能解析或转译精准的视觉画面英文提示词
+        if (!imageUrl && typeof window.generateAIImage === "function") {
+          let visualPrompt = (args.imagePrompt || "").trim().replace(/[\u4e00-\u9fa5]/g, "").trim();
+
+          // 若缺少有效的英文视觉提示词，启动智能转译与场景推导
+          if (!visualPrompt || visualPrompt.length < 8) {
+            // ① 优先尝试通过轻量 LLM 将朋友圈正文转译为精准的动作姿态与环境描述（带超时保护）
+            if (typeof window.sendToLLM === "function") {
+              try {
+                const translateSystemPrompt = "You are an expert AI image prompt generator for anime illustration. Convert the Chinese moment text into a concise, vivid English visual prompt for text-to-image generation. Focus on character's exact action, posture, scene, setting and mood. Output ONLY the English prompt tokens, no quotes, no explanations.";
+                const userPrompt = `Character: ${charName}\nMoment: "${content}"\nVisual Prompt:`;
+                
+                const llmPromise = new Promise((resolve) => {
+                  const timer = setTimeout(() => resolve(null), 3000);
+                  window.sendToLLM([
+                    { role: "system", content: translateSystemPrompt },
+                    { role: "user", content: userPrompt }
+                  ], { temperature: 0.7, top_p: 0.9, disableMCP: true }, (res) => {
+                    clearTimeout(timer);
+                    resolve(res);
+                  }, () => {
+                    clearTimeout(timer);
+                    resolve(null);
+                  });
+                });
+                const genRes = await llmPromise;
+                if (genRes && typeof genRes === "string") {
+                  const cleaned = genRes.replace(/[\u4e00-\u9fa5]/g, "").replace(/["'`{}]/g, "").trim();
+                  if (cleaned.length >= 10) {
+                    visualPrompt = cleaned;
+                  }
+                }
+              } catch (e) {
+                console.warn("[MCP] 朋友圈正文 LLM 转译视觉提示词失败:", e);
+              }
+            }
+
+            // ② 智能动作与场景关键词推导兜底（杜绝货不对板与千篇一律的坐姿图）
+            if (!visualPrompt || visualPrompt.length < 8) {
+              let sceneAction = "relaxing peacefully in an ancient scenic room";
+              if (/困|趴|睡|小憩|歇息|闭目|打盹|梦|累/i.test(content)) {
+                sceneAction = "resting head on wooden desk, peaceful nap with an open book, gentle afternoon sunlight, closed eyes, cozy sleepy posture";
+              } else if (/看书|读书|卷宗|典籍|研读|阅/i.test(content)) {
+                sceneAction = "reading an open ancient book at a wooden desk, warm study room lighting, quiet scholar atmosphere";
+              } else if (/茶|煮茶|品茗|饮茶/i.test(content)) {
+                sceneAction = "steaming ceramic teacup on tea table, serene ancient tea garden, tranquil atmosphere";
+              } else if (/雨|下雨|微雨|油纸伞|伞/i.test(content)) {
+                sceneAction = "light spring rain, holding an oiled paper umbrella in misty courtyard, tranquil water ripples";
+              } else if (/吃|点心|糖|糕|膳|酒|宴/i.test(content)) {
+                sceneAction = "delicate traditional pastries and tea on a porcelain plate, warm cozy table";
+              } else if (/月|夜|星|晚|灯/i.test(content)) {
+                sceneAction = "under the serene night sky with glowing moon, warm lantern light in tranquil ancient courtyard";
+              } else if (/花|桃花|樱|院|林|草/i.test(content)) {
+                sceneAction = "blooming flower petals floating in gentle breeze, ancient garden scenic view";
+              } else if (/剑|武|练|兵/i.test(content)) {
+                sceneAction = "holding an ancient sword, dynamic martial stance, dramatic atmospheric lighting";
+              }
+
+              visualPrompt = `a cute character, ${sceneAction}, anime illustration, masterpiece, high quality`;
+            }
+          }
+
+          // 构造最终严格无文字生图指令
           try {
-            const cleanPrompt = args.imagePrompt.replace(/[\u4e00-\u9fa5]/g, "").trim();
-            const finalPrompt = cleanPrompt
-              ? `${cleanPrompt}, masterpiece, high quality, aesthetic scenery, no text, no words, no calligraphy, no watermark`
-              : `aesthetic ancient Chinese scenery, poetic landscape, masterpiece, no text`;
+            const finalPrompt = `${visualPrompt}, aesthetic, high quality, masterpiece, no text, no words, no calligraphy, no watermark, no characters`;
+            console.log(`[MCP] 正在为【${charName}】的朋友圈动态生成精准配图:`, finalPrompt);
             imageUrl = await window.generateAIImage(finalPrompt);
           } catch (err) {
             console.warn("[MCP] 朋友圈配图生成失败:", err);
           }
-        }
-
-        // 若依然无图，自动根据动态正文免费生成一张意境配图
-        if (!imageUrl && typeof window.generateAIImage === "function") {
-          try {
-            const fallbackPrompt = `aesthetic poetic ancient scenery, tranquil atmosphere, masterpiece, no text, related to ${content.substring(0, 30)}`;
-            imageUrl = await window.generateAIImage(fallbackPrompt);
-          } catch (e) { }
         }
 
         // 3. 构建朋友圈动态条目
@@ -1890,7 +1910,7 @@
     console.log("[MCP] 启动 Pollinations.ai 免费生图引擎, Prompt:", prompt);
     const cleanPrompt = (prompt || "masterpiece ancient chinese scenic landscape").trim();
     const seed = Math.floor(Math.random() * 1000000);
-    const enriched = `masterpiece, ultra-detailed, traditional Chinese aesthetic, ethereal lighting, ${cleanPrompt}`;
+    const enriched = `masterpiece, ultra-detailed, anime aesthetic, ${cleanPrompt}, no text, no words, no watermark`;
     return `https://image.pollinations.ai/prompt/${encodeURIComponent(enriched)}?width=768&height=1024&seed=${seed}&nologo=true&enhance=false&model=flux`;
   };
 

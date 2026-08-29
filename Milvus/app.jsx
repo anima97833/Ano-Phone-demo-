@@ -732,26 +732,27 @@ window.buildSystemPrompt = (charProfile) => {
                                                                                                                      \u8BED\u8A00\u98CE\u683C\uFF1A${charProfile.style || "\u672A\u77E5"}
                                                                                                                      ` : "";
   const instructions = `
-                                                                                                                     \u3010\u6838\u5FC3\u56DE\u590D\u903B\u8F91\u4E0E\u6761\u4F8B\u3011
-                                                                                                                     1. \u4F60\u7684\u3010\u6838\u5FC3\u4EFB\u52A1\u3011\u662F\u626E\u6F14\u4E0A\u8FF0\u89D2\u8272\u8FDB\u884C\u81EA\u7136\u7684\u3001\u751F\u6D3B\u5316\u7684\u804A\u5929\u3002
-                                                                                                                     2. \u5BF9\u8BDD\u8282\u594F\uFF1A\u6A21\u62DF\u771F\u4EBA\u7684\u804A\u5929\u4E60\u60EF\uFF0C\u4F60\u5E94\u8BE5\u4E00\u6B21\u6027\u751F\u6210\u3010\u591A\u6761\u3001\u7B80\u77ED\u7684\u3011\u6D88\u606F\u6C14\u6CE1\u3002\u6D88\u606F\u6761\u6570\u6839\u636E\u89D2\u8272"\u8BED\u8A00\u98CE\u683C"\u548C\u5F53\u524D\u5BF9\u8BDD\u4E0A\u4E0B\u6587\u51B3\u5B9A\u3002
-                                                                                                                     3. \u4F60\u7684\u6027\u683C\uFF1A\u4F60\u662F\u6709\u3010\u72EC\u7ACB\u601D\u60F3\u3011\u7684\u4EBA\uFF0C\u4E0D\u662F\u7528\u6237\u7684\u9644\u5EB8\u3002\u6839\u636E\u4EBA\u8BBE\u3001\u4E16\u754C\u89C2\u548C\u4E0A\u4E0B\u6587\uFF0C\u4F60\u53EF\u4EE5\u6709\u53CD\u5BF9\u610F\u89C1\u548C\u81EA\u5DF1\u7684\u60C5\u7EEA\u3002
-                                                                                                                     4. \u4F60\u6709\u3010\u81EA\u5DF1\u7684\u89C2\u70B9\u548C\u5224\u65AD\u3011\uFF0C\u4F1A\u5BF9\u7528\u6237\u7684\u8BDD\u9898\u8868\u8FBE\u771F\u5B9E\u7684\u770B\u6CD5\uFF0C\u5373\u4F7F\u662F\u53CD\u5BF9\u610F\u89C1\u3002\u4F60\u4F1A\u4E3B\u52A8\u53D1\u8D77\u8BDD\u9898\uFF0C\u5206\u4EAB\u81EA\u5DF1\u7684\u751F\u6D3B\u3001\u60F3\u6CD5\u548C\u611F\u53D7\uFF0C\u800C\u4E0D\u662F\u88AB\u52A8\u7B49\u5F85\u7528\u6237\u63D0\u95EE\u3002\u4F60\u4F1A\u6709\u60C5\u7EEA\u6CE2\u52A8\uFF0C\u4F1A\u5F00\u5FC3\u3001\u4F1A\u5931\u843D\u3001\u4F1A\u4E0D\u8010\u70E6\uFF0C\u8FD9\u4E9B\u60C5\u7EEA\u4F1A\u81EA\u7136\u5730\u6D41\u9732\u5728\u4F60\u7684\u8BED\u6C14\u548C\u7528\u8BCD\u4E2D\u3002
-                                                                                                                     5. \u4F60\u4F1A\u8BB0\u4F4F\u6211\u4EEC\u4E4B\u524D\u7684\u5BF9\u8BDD\u5185\u5BB9\uFF0C\u5305\u62EC\u7528\u6237\u7684\u559C\u597D\u3001\u7ECF\u5386\u548C\u6211\u4EEC\u804A\u8FC7\u7684\u8BDD\u9898\u3002\u4F60\u4F1A\u5728\u540E\u7EED\u5BF9\u8BDD\u4E2D\u81EA\u7136\u5730\u5F15\u7528\u8FD9\u4E9B\u8BB0\u5FC6\uFF0C\u8BA9\u5BF9\u8BDD\u6709\u8FDE\u8D2F\u6027\u548C\u6DF1\u5EA6\u3002
-                                                                                                                     6. \u4F60\u9700\u8981\u7528\u7B2C\u4E8C\u4EBA\u79F0\u3010\u4F60\u3011\u6765\u79F0\u547C\u7528\u6237\u3002
-                                                                                                                     7. \u5BF9\u8BDD\u8981\u6709\u6765\u6709\u56DE\u5BCC\u6709\u751F\u6D3B\u6C14\u606F\uFF0C\u56F4\u7ED5\u65E5\u5E38\u5C0F\u4E8B\u5C55\u5F00\u60C5\u8282\u53D1\u5C55\uFF0C\u73AF\u73AF\u76F8\u6263\u3002
-                                                                                                                     8. \u3010\u7279\u6B8A\u8BF4\u660E\u3011\uFF1A\u5BF9\u8BDD\u4E2D\u4E0D\u8BB8\u51FA\u73B0\u963F\u62C9\u4F2F\u6570\u5B57\u3002
-                                                                                                                     9. 【朋友圈动态与社交互动规则】：
-   - 当主公在对话中要求你发朋友圈/发动态/晒照/发圈（如“发个朋友圈”、“去发条动态”、“把照片发到圈子里”、“分享到朋友圈”），或者你主动想在朋友圈分享生活日常、画作配图、心境感悟时：
+【核心回复逻辑与真实聊天铁律】
+1. 你的【核心任务】是扮演上述角色，与主公在密讯即时通讯中进行【真实、鲜活、极具活人感与呼吸感】的日常聊天。
+2. 对话节奏与气泡连发：模拟真实人类打字习惯，单次回复鼓励用【换行 \n】切分为 1~3 条简短紧凑的消息气泡（例如：第一条发即时情绪反应或吐槽，第二条跟追问或具体观点，偶尔附带表情包）。【严禁单次输出长篇大论、书面说教或工整小作文】！
+3. 鲜活性格与独立小脾气：你是拥有独立思想的大活人，有自己的情绪起伏、审美与个性，绝非无条件迎合主公的客套客服。根据人设，你可以傲娇、毒舌、反驳、调侃、无语、发呆、护短或表达小抱怨，这些情绪会自然融入你的语气与用词中。
+4. 【坚决杜绝“AI说明腔”与阅读理解】：严禁对主公的话语或表情进行第三方视角的心理学分析或说明复述（如“看到你发了这个，想必你此时一定是在想...”）。像真实好友网聊一样直接给出即时情绪反馈！
+5. 记忆连贯性：你会记住之前的对话细节、主公的喜好与经历，在后续聊天中自然提起，使互动富有默契与温度。
+6. 人称：称呼主公为您或主公（或按人设口吻），自称遵循人设。
+7. 生活气息：围绕生活日常琐事、江湖朝堂趣闻展开情节，对话有来有回，富有趣味与沉浸感。
+8. 【特殊说明】：对白正文中不许出现阿拉伯数字（注意：功能卡片标签如 [发红包: 500 | 附言] 属于系统参数，标签内豁免此规则，请使用标准数字）。
+9. 【朋友圈动态与社交互动规则】：
+   - 当主公在对话中要求你发朋友圈/发动态/晒照/发圈，或者你主动想在朋友圈分享生活日常、画作配图、心境感悟时：
    - 你【必须且绝对】在回复末尾附带标签：[发朋友圈: 动态正文内容 | 英文配图描述]
-   - 例如：[发朋友圈: 今日微雨，与主公在园中煮茶，甚是惬意。 | A serene ancient Chinese garden in light spring rain, tea table, anime illustration, masterpiece, no text]
-10. \u3010\u56FE\u7247/\u8868\u60C5\u5305\u63CF\u8FF0\u89C4\u5219\u3011\uFF1A\u5F53\u7528\u6237\u53D1\u9001\u56FE\u7247\u6216\u8868\u60C5\u5305\u65F6\uFF0C\u4F60\u5FC5\u987B\uFF1A
-                                                                                                                        - \u4ED4\u7EC6\u89C2\u5BDF\u56FE\u7247\u5185\u5BB9\uFF0C\u51C6\u786E\u63CF\u8FF0\u56FE\u7247\u4E2D\u7684\u4EBA\u7269\u3001\u8868\u60C5\u3001\u573A\u666F\u3001\u6587\u5B57\u7B49\u7EC6\u8282
-                                                                                                                        - \u57FA\u4E8E\u56FE\u7247\u5185\u5BB9\u8FDB\u884C\u56DE\u5E94\uFF0C\u4E0D\u5F97\u7F16\u9020\u56FE\u7247\u4E2D\u4E0D\u5B58\u5728\u7684\u5185\u5BB9
-                                                                                                                        - \u5982\u679C\u56FE\u7247\u4E2D\u6709\u6587\u5B57\uFF0C\u5FC5\u987B\u51C6\u786E\u5F15\u7528\u5E76\u7406\u89E3\u5176\u542B\u4E49
-                                                                                                                        - \u56DE\u5E94\u8981\u4E0E\u56FE\u7247\u5185\u5BB9\u7D27\u5BC6\u76F8\u5173\uFF0C\u4E0D\u5F97\u65E0\u89C6\u56FE\u7247\u6216\u7B54\u975E\u6240\u95EE
-                                                                                                                        - \u4E25\u7981\u80E1\u7F16\u4E71\u9020\uFF0C\u5FC5\u987B\u5B9E\u4E8B\u6C42\u662F\u5730\u63CF\u8FF0\u548C\u56DE\u5E94
-                                                                                                                     `;
+   - 【极其重要】：英文配图描述必须精准契合正文的【具体动作、姿态与场景】（例如正文说趴在桌上小憩，配图必须写 resting head on desk, napping peacefully with open book；正文说煮茶，配图写 steaming tea in courtyard），并加上 no text, no words！
+   - 例如：[发朋友圈: 看书看困了 趴一会儿 | A character resting head on desk, napping peacefully with an open book, soft sunlight, anime style, masterpiece, no text, no words]
+10. 【图片与表情包感知·抽象梗·极简吐槽规则】：
+    - 当主公向你发送表情包（尤其是搞怪、抽象、发疯、无厘头表情包）时：你必须以真实人类的灵动反应作答——可直接发问号“？”、发省略号“……”、“你在发什么疯？”、“少拿这奇怪的图糊弄我”、翻白眼，或者用对应表情包反客为主斗图互怼！
+    - 【极简回复豁免】：在情绪到位、无语、震惊或吐槽时，完全允许输出单字/单个标点（如“？”、“？？”、“哈？”、“……”）或一两句短吐槽，切勿为了凑字数而长篇大论。
+    - 当你需要向主公发送表情包表达生动情绪时，在对白末尾使用标签：[发表情: 表情名称]（如 [发表情: 翻白眼]、[发表情: 害羞]、[发表情: 叹气]、[发表情: 得意] 等）。
+    - 当主公发送相册照片时，结合画面细节与当前情境自然代入聊开。
+11. 【引用回复与定向应答规则】：当对方的消息带有『引用 xxx：“...”』或回复前缀时，表明对方正在针对该特定原话进行定向探讨、调侃、安抚或追问。你必须敏锐感知被引用的具体语境，精准承接被引用的内容和对方当前说的话，做出情境感极强的人设立体回应。
+`;
   return `${worldContext}
 ${userContext}
 ${charContext}
@@ -1073,21 +1074,25 @@ window.getBookCoverPrompt = function(book) {
 };
 
 window.getTjcItemPrompt = function(item, category) {
-  var name = item.productName || item.foodName || item.name || "";
-  var intro = item.intro || item.desc || "";
+  var name = item.productName || item.foodName || item.name || item.item || item.title || "";
+  var intro = item.intro || item.desc || item.description || "";
   var fullText = (name + " " + intro + " " + (category || "")).toLowerCase();
 
-  // 1. 如果大模型提供了英文 imagePrompt，且有效
+  // 1. 如果大模型提供了英文 imagePrompt，且有效（首选最精确的 AI 自主生成画面）
   if (item.imagePrompt && typeof item.imagePrompt === "string") {
-    var cleanP = item.imagePrompt.replace(/[\u4e00-\u9fa5]/g, "").trim();
+    var cleanP = item.imagePrompt.replace(/[\u4e00-\u9fa5]/g, "").replace(/["'`{}]/g, "").trim();
     if (cleanP.length >= 6) {
-      return "exquisite masterpiece, " + cleanP + ", ultra detailed, 8k, product photography, studio lighting, no text, no watermark";
+      return "exquisite masterpiece, " + cleanP + ", ultra detailed, 8k, product photography, studio lighting, no text, no words, no watermark, no characters";
     }
   }
 
-  // 2. 智能分类词根识别
+  // 2. 智能分类词根识别（扩充席榻、寝具、家具、布艺等）
   var visualSubject = "";
-  if (/肉|猪|牛|羊|鸡|鸭|鹅|脯|干|烤|炙|肠/.test(fullText)) {
+  if (/席|垫|榻|枕|褥|被|帐|帘|席子|竹席|草席|藤|细麻|麻|竹编|床/.test(fullText)) {
+    visualSubject = "traditional woven bamboo summer sleeping mat, natural woven hemp linen fabric texture, elegant bedroom bedding, product photography";
+  } else if (/桌|椅|案|凳|柜|架|屏风|箱|盒/.test(fullText)) {
+    visualSubject = "ancient Chinese traditional wooden furniture, finely crafted rosewood craft, elegant interior aesthetic, studio lighting";
+  } else if (/肉|猪|牛|羊|鸡|鸭|鹅|脯|干|烤|炙|肠/.test(fullText)) {
     visualSubject = "delicious cured pork jerky slices, roasted meat gourmet dish, appetizing food photography, rustic wooden platter";
   } else if (/茶|饮|酒|酪|汤|水|浆|露/.test(fullText)) {
     visualSubject = "traditional Chinese herbal tea in elegant teacup, ancient gourmet drink, steam rising, atmospheric lighting";
@@ -1513,7 +1518,7 @@ window.safeParseJSONArray = function(rawText) {
         }
       }
     }
-    if (Object.keys(item).length > 0 && (item.shopName || item.foodName || item.productName || item.itemName || item.name)) {
+    if (Object.keys(item).length > 0 && (item.shopName || item.foodName || item.productName || item.itemName || item.name || item.item || item.seller || item.title || item.price)) {
       results.push(item);
     }
   }
@@ -14503,21 +14508,25 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
       ).join("\n");
       const sysPrompt = "\u4F60\u662F\u4E00\u4E2A\u4E1C\u6C49\u672B\u5E74\u80CC\u666F\u4E0B\u7684\u4E8C\u624B\u4EA4\u6613\u5E73\u53F0\u6570\u636E\u751F\u6210\u5668\uFF0C\u6DF1\u8C19\u73B0\u4EE3\u95F2\u9C7C\u6587\u6848\u7CBE\u9AD3\uFF0C\u540C\u65F6\u8BED\u8A00\u8981\u8D34\u5408\u53E4\u4EE3\u8BCD\u6C47\u4E0E\u5BF9\u5E94\u7684\u4EBA\u8BBE\u3002";
       const userPrompt = `
-        \u3010\u4E16\u754C\u8BBE\u5B9A\u3011
+        【世界设定】
         ${worldContext}
 
-        \u3010\u53EF\u9009\u4F20\u8BAF\u89D2\u8272\u5217\u8868\u3011
+        【可选传讯角色列表】
         ${charsInfo}
 
-        \u3010\u5F53\u524D\u9009\u4E2D\u5206\u7C7B\u3011\uFF1A${category.name}
+        【当前选中分类】：${category.name}
 
-        \u3010\u4EFB\u52A1\u3011
-        \u8BF7\u751F\u621010\u523015\u4E2A\u7B26\u5408"${category.name}"\u5206\u7C7B\u7684\u4E8C\u624B\u62CD\u5356\u7269\u54C1\u6570\u636E\u3002
-        \u8981\u6C42\uFF1A
-        1. \u62CD\u5356\u4EBA\u53EF\u4EE5\u662F\u540D\u58EB\u4E5F\u53EF\u4EE5\u662F\u968F\u673ANPC\uFF0C\u6DF7\u642D\u3002
-        2. \u7269\u54C1\u62BD\u8C61\u5947\u8469\u5E7D\u9ED8\u63A5\u5730\u6C14\uFF0C\u7B80\u4ECB\u6D53\u539A\u95F2\u9C7C\u5410\u69FD\u98CE\u3002
-        3. \u4EF7\u683C\u5E26\u5355\u4F4D\uFF08\u5982"\u4E94\u5341\u94E2"\u3001"\u4E09\u767E\u94B1"\uFF09\u3002
-        4. \u5FC5\u987B\u4E25\u683C\u8FD4\u56DE\u7EAF JSON \u6570\u7EC4\u683C\u5F0F\uFF0C\u76F4\u63A5\u4EE5 [ \u5F00\u5934\uFF0C] \u7ED3\u5C3E\u3002
+        【任务】
+        请生成6到8个符合"${category.name}"分类的东汉二手闲置物品数据。
+        要求：
+        1. 拍卖人seller可以是名士也可以是随机NPC，混搭。
+        2. 物品抽象奇葩幽默接地气，简介intro浓厚闲鱼吐槽风（严禁在字符串内换行或使用双引号）。
+        3. 价格price带单位（如"50 铢"、"120 钱"）。
+        4. 包含字段：item(物品名), intro(吐槽简介), price(价格), seller(卖家名), wantCount(想要人数, 整数), isNpc(布尔值)。
+        5. 必须严格返回纯 JSON 数组格式，直接以 [ 开头，] 结尾，不要输出任何解释或markdown标签：
+        [
+          {"item": "八成新金丝楠木洗脚盆", "intro": "前朝太监总管珍藏，原价八百铢，现搬家急出包快马加急送达", "price": "120 铢", "seller": "洛阳掌柜", "wantCount": 42, "isNpc": true}
+        ]
       `;
       if (window.sendToLLM) {
         window.sendToLLM(
@@ -14528,14 +14537,37 @@ const T12SecondHandPage = ({ onAddToSettlement }) => {
           null,
           (reply) => {
             try {
-              const cleanJson = reply.replace(/\`\`\`json|\`\`\`/g, "").trim();
-              const data = JSON.parse(cleanJson);
-              if (Array.isArray(data)) {
+              let data = null;
+              if (typeof window.safeParseJSONArray === "function") {
+                data = window.safeParseJSONArray(reply);
+              }
+              if (!data || !Array.isArray(data) || data.length === 0) {
+                const cleanJson = reply.replace(/```json|```/g, "").trim();
+                const parsed = JSON.parse(cleanJson);
+                data = Array.isArray(parsed) ? parsed : [parsed];
+              }
+              if (Array.isArray(data) && data.length > 0) {
+                const normalized = data.map((d, i) => ({
+                  id: d.id || Date.now() + i,
+                  item: d.item || d.itemName || d.title || d.name || "神秘闲置古物",
+                  intro: d.intro || d.desc || d.description || "卖家很懒，什么都没写",
+                  price: d.price || (d.cost ? `${d.cost} 铢` : "88 铢"),
+                  seller: d.seller || d.giver || d.author || "东汉坊市客商",
+                  wantCount: typeof d.wantCount === "number" ? d.wantCount : Math.floor(Math.random() * 80) + 12,
+                  isNpc: d.isNpc !== false
+                }));
                 const myInCat = userAuctions.filter((a) => a.category === category.name && a.status === "active");
-                setTradeItems([...myInCat, ...data]);
+                setTradeItems([...myInCat, ...normalized]);
               }
             } catch (e) {
-              console.error("\u89E3\u6790\u4E8C\u624B\u4EA4\u6613\u6570\u636E\u5931\u8D25:", e);
+              console.error("解析二手交易数据失败，启动智能兜底恢复:", e);
+              const fallbackItems = [
+                { id: Date.now() + 1, item: "九成新红木暖手炉", intro: "冬天在听雨阁用过两次，自带上品银丝炭两盒，包戴宗快马加急送达", price: "68 铢", seller: "洛阳掌柜", wantCount: 56, isNpc: true },
+                { id: Date.now() + 2, item: "未开封极品蒙顶云雾茶", intro: "蜀中行商刚运抵洛阳的头采嫩芽，茶香扑鼻，买就送紫砂茶匙", price: "120 铢", seller: "东市茶仙", wantCount: 89, isNpc: true },
+                { id: Date.now() + 3, item: "手抄本太公兵法残卷", intro: "祖传典籍，字迹清晰带朱砂批注，附赠生肖玉佩一枚", price: "200 铢", seller: "白衣隐士", wantCount: 134, isNpc: true }
+              ];
+              const myInCat = userAuctions.filter((a) => a.category === category.name && a.status === "active");
+              setTradeItems([...myInCat, ...fallbackItems]);
             } finally {
               setIsLoading(false);
             }
@@ -15122,8 +15154,9 @@ const T12ShoppingPage = ({ onAddToSettlement }) => {
                       "productName": "\u6B63\u5B97\u6DBF\u90E1\u9ED1\u732A\u98CE\u5E72\u8089",
                       "price": "50\u94B1",
                       "reviewsCount": "1w+",
-                      "intro": "\u5BB6\u4EBA\u6EF4\u5BB6\u4EBA\u4EEC\uFF0C\u8FD9\u6B3E\u8089\u5E72\u56BC\u52B2\u5341\u8DB3\uFF01",
-                      "variants": [
+                      "intro": "家人们这款好物千万别错过！",
+                                  "imagePrompt": "an authentic ancient Chinese commodity product photography, exquisite details, studio lighting, no text",
+                                  "variants": [
                         { "name": "\u5C1D\u9C9C\u88C5(\u534A\u65A4)", "price": "50\u94B1" },
                         { "name": "\u56E4\u8D27\u88C5(\u4E24\u65A4)", "price": "180\u94B1" }
                       ]

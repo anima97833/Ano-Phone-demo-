@@ -507,6 +507,145 @@ const avatarStore = {
 
 // 用户设置存储操作（新增）
 const settingsStore = {
+  // === 场景与换装选定形态 (团建/离线/心纸居) ===
+    getSelectedSprites: async (key = "t8_teambuilding_selected_sprites") => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get(key);
+        req.onsuccess = () => {
+          if (req.result && req.result.value && typeof req.result.value === "object") {
+            try { localStorage.removeItem(key); } catch (e) {}
+            resolve(req.result.value);
+          } else {
+            try {
+              const local = JSON.parse(localStorage.getItem(key) || "{}");
+              if (local && typeof local === "object" && Object.keys(local).length > 0) {
+                settingsStore.setSelectedSprites(key, local).catch(() => {});
+              }
+              resolve(local);
+            } catch (e) {
+              resolve({});
+            }
+          }
+        };
+        req.onerror = () => resolve({});
+      });
+    } catch (e) {
+      return {};
+    }
+  },
+
+  setSelectedSprites: async (key, map) => {
+    try {
+      const db = await openDB();
+      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+      const store = tx.objectStore(STORES.USER_SETTINGS);
+      store.put({ key: key, value: map, updatedAt: Date.now() });
+      try { localStorage.removeItem(key); } catch (e) {}
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  // === 州郡大帝 / 密奏主公头像 ===
+  getEmperorAvatar: async () => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get("t13_emperor_avatar");
+        req.onsuccess = () => {
+          if (req.result && req.result.value) {
+            resolve(req.result.value);
+          } else {
+            const local = localStorage.getItem("t13_emperor_avatar");
+            resolve(local || "");
+          }
+        };
+        req.onerror = () => resolve("");
+      });
+    } catch (e) {
+      return "";
+    }
+  },
+
+  setEmperorAvatar: async (base64) => {
+    try {
+      const db = await openDB();
+      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+      const store = tx.objectStore(STORES.USER_SETTINGS);
+      store.put({ key: "t13_emperor_avatar", value: base64, updatedAt: Date.now() });
+      try { localStorage.removeItem("t13_emperor_avatar"); } catch (e) {}
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  // === 黄巾矿场自定义矿工头像 ===
+  getMinerAvatar: async () => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get("yellow_turban_miner_avatar");
+        req.onsuccess = () => {
+          if (req.result && req.result.value) {
+            resolve(req.result.value);
+          } else {
+            const local = localStorage.getItem("yellow_turban_miner_avatar");
+            resolve(local || null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) {
+      return null;
+    }
+  },
+
+  setMinerAvatar: async (dataUrl) => {
+    try {
+      const db = await openDB();
+      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+      const store = tx.objectStore(STORES.USER_SETTINGS);
+      store.put({ key: "yellow_turban_miner_avatar", value: dataUrl, updatedAt: Date.now() });
+      try { localStorage.removeItem("yellow_turban_miner_avatar"); } catch (e) {}
+      return true;
+    } catch (e) {
+      return false;
+    }
+  },
+
+  // === 绣衣楼自定义头像 ===
+  getXiuyilouAvatars: async () => {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORES.USER_SETTINGS, "readonly");
+      const store = transaction.objectStore(STORES.USER_SETTINGS);
+      const request = store.get("xiuyilou_avatars");
+      request.onsuccess = () => resolve(request.result?.value || null);
+      request.onerror = () => reject("获取绣衣楼头像失败");
+    });
+  },
+
+  setXiuyilouAvatars: async (avatarsMap) => {
+    const db = await openDB();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORES.USER_SETTINGS, "readwrite");
+      const store = transaction.objectStore(STORES.USER_SETTINGS);
+      const request = store.put({ key: "xiuyilou_avatars", value: avatarsMap });
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject("保存绣衣楼头像失败");
+    });
+  },
+
   // 获取用户头像
   getUserAvatar: async () => {
     const db = await openDB();
@@ -2713,3 +2852,791 @@ window.bookStore = bookStore;
 window.avatarStore = avatarStore;
 window.migrateBookData = migrateBookData;
 window.migrateLargeData = migrateLargeData;
+
+
+// 方天水镜专属 IndexedDB 存储操作
+const waterMirrorStore = {
+  get: async (key) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get(key);
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            try {
+              const parsed = typeof req.result.value === "string" ? JSON.parse(req.result.value) : req.result.value;
+              resolve(parsed);
+            } catch (e) {
+              resolve(req.result.value);
+            }
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) {
+      console.error("waterMirrorStore.get error:", e);
+      return null;
+    }
+  },
+
+  set: async (key, val) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: key, value: val, updatedAt: Date.now() });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("写入水镜数据失败");
+      });
+    } catch (e) {
+      console.error("waterMirrorStore.set error:", e);
+    }
+  },
+
+  delete: async (key) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => resolve();
+      });
+    } catch (e) {
+      console.error("waterMirrorStore.delete error:", e);
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.waterMirrorStore = waterMirrorStore;
+}
+
+
+// 东汉驿路通专属 IndexedDB 存储操作
+const yilutongStore = {
+  get: async (key) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get(key);
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            try {
+              const parsed = typeof req.result.value === "string" ? JSON.parse(req.result.value) : req.result.value;
+              resolve(parsed);
+            } catch (e) {
+              resolve(req.result.value);
+            }
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) {
+      console.error("yilutongStore.get error:", e);
+      return null;
+    }
+  },
+
+  set: async (key, val) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: key, value: val, updatedAt: Date.now() });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("写入驿路通数据失败");
+      });
+    } catch (e) {
+      console.error("yilutongStore.set error:", e);
+    }
+  },
+
+  delete: async (key) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => resolve();
+      });
+    } catch (e) {
+      console.error("yilutongStore.delete error:", e);
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.yilutongStore = yilutongStore;
+}
+
+
+// 谶纬小摊专属 IndexedDB 存储操作
+const fortuneStore = {
+  getSaves: async () => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get("fortune_saves");
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            try {
+              const parsed = typeof req.result.value === "string" ? JSON.parse(req.result.value) : req.result.value;
+              resolve(Array.isArray(parsed) ? parsed : []);
+            } catch (e) {
+              resolve(Array.isArray(req.result.value) ? req.result.value : []);
+            }
+          } else {
+            resolve([]);
+          }
+        };
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      console.error("fortuneStore.getSaves error:", e);
+      return [];
+    }
+  },
+
+  saveSaves: async (saves) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: "fortune_saves", value: saves, updatedAt: Date.now() });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("保存谶纬记录失败");
+      });
+    } catch (e) {
+      console.error("fortuneStore.saveSaves error:", e);
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.fortuneStore = fortuneStore;
+}
+
+
+// 沙盘模拟器专属 IndexedDB 存储操作
+const sandtableStore = {
+  getSaves: async () => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get("sandtable_saves");
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            try {
+              const parsed = typeof req.result.value === "string" ? JSON.parse(req.result.value) : req.result.value;
+              resolve(Array.isArray(parsed) ? parsed : []);
+            } catch (e) {
+              resolve(Array.isArray(req.result.value) ? req.result.value : []);
+            }
+          } else {
+            resolve([]);
+          }
+        };
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      console.error("sandtableStore.getSaves error:", e);
+      return [];
+    }
+  },
+
+  saveSaves: async (saves) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: "sandtable_saves", value: saves, updatedAt: Date.now() });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("保存沙盘战局失败");
+      });
+    } catch (e) {
+      console.error("sandtableStore.saveSaves error:", e);
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.sandtableStore = sandtableStore;
+}
+
+
+// 相对演绎专属 IndexedDB 存储操作
+const deductionStore = {
+  getSaves: async () => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get("relative_deduction_saves");
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            try {
+              const parsed = typeof req.result.value === "string" ? JSON.parse(req.result.value) : req.result.value;
+              resolve(Array.isArray(parsed) ? parsed : []);
+            } catch (e) {
+              resolve(Array.isArray(req.result.value) ? req.result.value : []);
+            }
+          } else {
+            resolve([]);
+          }
+        };
+        req.onerror = () => resolve([]);
+      });
+    } catch (e) {
+      console.error("deductionStore.getSaves error:", e);
+      return [];
+    }
+  },
+
+  saveSaves: async (saves) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: "relative_deduction_saves", value: saves, updatedAt: Date.now() });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("保存戏折剧本失败");
+      });
+    } catch (e) {
+      console.error("deductionStore.saveSaves error:", e);
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.deductionStore = deductionStore;
+}
+
+
+// 蝴蝶效应专属 IndexedDB 存储操作
+const butterflyStore = {
+  getMode: async () => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get("butterfly_mode");
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            resolve(req.result.value);
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) {
+      console.error("butterflyStore.getMode error:", e);
+      return null;
+    }
+  },
+
+  setMode: async (mode) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: "butterfly_mode", value: mode, updatedAt: Date.now() });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("保存蝴蝶效应模式失败");
+      });
+    } catch (e) {
+      console.error("butterflyStore.setMode error:", e);
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.butterflyStore = butterflyStore;
+}
+
+
+// 学习系统专属 IndexedDB 存储操作
+const learningStore = {
+  get: async (key) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get(key);
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            try {
+              const parsed = typeof req.result.value === "string" ? JSON.parse(req.result.value) : req.result.value;
+              resolve(parsed);
+            } catch (e) {
+              resolve(req.result.value);
+            }
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) {
+      console.error("learningStore.get error:", e);
+      return null;
+    }
+  },
+
+  set: async (key, val) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: key, value: val, updatedAt: Date.now() });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("写入学习数据失败");
+      });
+    } catch (e) {
+      console.error("learningStore.set error:", e);
+    }
+  },
+
+  delete: async (key) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => resolve();
+      });
+    } catch (e) {
+      console.error("learningStore.delete error:", e);
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.learningStore = learningStore;
+}
+
+
+// 州郡统计年表专属 IndexedDB 存储操作
+const statisticsStore = {
+  getData: async () => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get("t13_statistics_data_v2");
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            try {
+              const parsed = typeof req.result.value === "string" ? JSON.parse(req.result.value) : req.result.value;
+              resolve(parsed);
+            } catch (e) {
+              resolve(req.result.value);
+            }
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) {
+      console.error("statisticsStore.getData error:", e);
+      return null;
+    }
+  },
+
+  saveData: async (payload) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: "t13_statistics_data_v2", value: payload, updatedAt: Date.now() });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("保存州郡统计年表失败");
+      });
+    } catch (e) {
+      console.error("statisticsStore.saveData error:", e);
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.statisticsStore = statisticsStore;
+}
+
+
+// 团建活动与金库专属 IndexedDB 存储操作
+const teambuildingStore = {
+  getCoins: async () => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get("farm_coins");
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            const num = parseInt(req.result.value, 10);
+            resolve(isNaN(num) ? 500 : num);
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) {
+      console.error("teambuildingStore.getCoins error:", e);
+      return null;
+    }
+  },
+
+  setCoins: async (coins) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: "farm_coins", value: Number(coins), updatedAt: Date.now() });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("更新金库余额失败");
+      });
+    } catch (e) {
+      console.error("teambuildingStore.setCoins error:", e);
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.teambuildingStore = teambuildingStore;
+}
+
+
+// 心纸居专属 IndexedDB 存储操作
+const mansionStore = {
+  get: async (key) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.get(key);
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            try {
+              const parsed = typeof req.result.value === "string" ? JSON.parse(req.result.value) : req.result.value;
+              resolve(parsed);
+            } catch (e) {
+              resolve(req.result.value);
+            }
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+    } catch (e) {
+      console.error("mansionStore.get error:", e);
+      return null;
+    }
+  },
+
+  set: async (key, val) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.put({ key: key, value: val, updatedAt: Date.now() });
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject("写入心纸居数据失败");
+      });
+    } catch (e) {
+      console.error("mansionStore.set error:", e);
+    }
+  },
+
+  delete: async (key) => {
+    try {
+      const db = await openDB();
+      return new Promise((resolve) => {
+        const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+        const store = tx.objectStore(STORES.USER_SETTINGS);
+        const req = store.delete(key);
+        req.onsuccess = () => resolve();
+        req.onerror = () => resolve();
+      });
+    } catch (e) {
+      console.error("mansionStore.delete error:", e);
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.mansionStore = mansionStore;
+  window.xinzhiStore = mansionStore;
+}
+
+// 朋友圈 / 动态存储引擎 (IndexedDB)
+const momentsStore = {
+  // 获取全部朋友圈动态
+  getMoments: async () => {
+    try {
+      // 1. 优先尝试从 CHAT_CHARACTERS 获取
+      if (typeof window !== "undefined" && window.chatCharacterStore && typeof window.chatCharacterStore.getAll === "function") {
+        try {
+          const allItems = await window.chatCharacterStore.getAll();
+          const momentsItem = (allItems || []).find((item) => item.type === "moments");
+          if (momentsItem && momentsItem.data && Array.isArray(momentsItem.data) && momentsItem.data.length > 0) {
+            return momentsItem.data;
+          }
+        } catch (e) {}
+      }
+
+      // 2. 尝试从 USER_SETTINGS 获取
+      const db = await openDB();
+      const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+      const store = tx.objectStore(STORES.USER_SETTINGS);
+      const req = store.get("t8_moments_data");
+      const res = await new Promise((resolve) => {
+        req.onsuccess = () => {
+          if (req.result && req.result.value !== undefined) {
+            resolve(req.result.value);
+          } else {
+            resolve(null);
+          }
+        };
+        req.onerror = () => resolve(null);
+      });
+      if (res && Array.isArray(res) && res.length > 0) {
+        return res;
+      }
+
+      // 3. Fallback: 从旧 localStorage 迁移
+      try {
+        const local = localStorage.getItem("t8_moments");
+        if (local) {
+          const parsed = JSON.parse(local);
+          if (Array.isArray(parsed) && parsed.length > 0) {
+            // 异步自动写入 IndexedDB
+            momentsStore.saveMoments(parsed).catch(() => {});
+            return parsed;
+          }
+        }
+      } catch (e) {}
+
+      return [];
+    } catch (e) {
+      console.error("momentsStore.getMoments error:", e);
+      return [];
+    }
+  },
+
+  // 保存全部朋友圈动态
+  saveMoments: async (moments) => {
+    try {
+      const db = await openDB();
+      // 1. 写入 USER_SETTINGS
+      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+      const store = tx.objectStore(STORES.USER_SETTINGS);
+      store.put({ key: "t8_moments_data", value: moments, updatedAt: Date.now() });
+
+      // 2. 同步写入 CHAT_CHARACTERS 表 (兼容已有逻辑)
+      if (typeof window !== "undefined" && window.chatCharacterStore && typeof window.chatCharacterStore.save === "function") {
+        await window.chatCharacterStore.save({
+          id: "moments_data",
+          type: "moments",
+          data: moments,
+          updatedAt: new Date().toISOString()
+        }).catch(() => {});
+      }
+
+      // 3. 清理 localStorage 中的旧大对象，释放 5MB 配额
+      try {
+        localStorage.removeItem("t8_moments");
+      } catch (err) {}
+
+      // 4. 发送全局更新事件
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("momentsUpdated", { detail: { moments } }));
+      }
+      return true;
+    } catch (e) {
+      console.error("momentsStore.saveMoments error:", e);
+      return false;
+    }
+  },
+
+  // 获取朋友圈空间个性化资料（背景图、头像、个性签名等）
+  getSpaceProfile: async () => {
+    try {
+      const db = await openDB();
+      const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+      const store = tx.objectStore(STORES.USER_SETTINGS);
+      const req = store.get("t8_space_profile");
+      const res = await new Promise((resolve) => {
+        req.onsuccess = () => resolve(req.result?.value || null);
+        req.onerror = () => resolve(null);
+      });
+      if (res) return res;
+
+      try {
+        const local = localStorage.getItem("t8_space_profile");
+        if (local) {
+          const parsed = JSON.parse(local);
+          momentsStore.saveSpaceProfile(parsed).catch(() => {});
+          return parsed;
+        }
+      } catch (e) {}
+
+      return null;
+    } catch (e) {
+      return null;
+    }
+  },
+
+  // 保存朋友圈空间个性化资料
+  saveSpaceProfile: async (profile) => {
+    try {
+      const db = await openDB();
+      const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+      const store = tx.objectStore(STORES.USER_SETTINGS);
+      store.put({ key: "t8_space_profile", value: profile, updatedAt: Date.now() });
+      try {
+        localStorage.removeItem("t8_space_profile");
+      } catch (err) {}
+      return true;
+    } catch (e) {
+      console.error("momentsStore.saveSpaceProfile error:", e);
+      return false;
+    }
+  }
+};
+
+if (typeof window !== "undefined") {
+  window.momentsStore = momentsStore;
+}
+
+// ==========================================
+// 【关键核心数据保护与自动无损回写引擎】
+// ==========================================
+const CRITICAL_KEYS_PROTECTED = [
+  "user_personas",
+  "active_persona_id",
+  "messaging_characters",
+  "user_name",
+  "player_name",
+  "t8_user_nickname",
+  "user_avatar",
+  "t8_user_avatar",
+  "t8_user_avatar_frame",
+  "minimax_api_config",
+  "image_generation_api_config",
+  "mcp_servers_config",
+  "app_theme",
+  "app_font",
+  "t8_memory_config"
+];
+
+// 启动时自动从 IndexedDB 将身份库与核心配置拉取并安全恢复到 localStorage
+async function restoreEssentialDataFromIndexedDB() {
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORES.USER_SETTINGS, "readonly");
+    const store = tx.objectStore(STORES.USER_SETTINGS);
+
+    for (const key of CRITICAL_KEYS_PROTECTED) {
+      const req = store.get(key);
+      req.onsuccess = () => {
+        const res = req.result;
+        if (res && res.value) {
+          const currentLocal = localStorage.getItem(key);
+          if (!currentLocal || currentLocal === "[]" || currentLocal === "{}" || currentLocal === "") {
+            const valStr = typeof res.value === "string" ? res.value : JSON.stringify(res.value);
+            localStorage.setItem(key, valStr);
+            console.log(`[Restore] 已从 IndexedDB 成功恢复核心配置: ${key}`);
+          }
+        }
+      };
+    }
+  } catch(e) {
+    console.error("恢复核心配置失败:", e);
+  }
+}
+
+// 自动瘦身与大对象无损迁移引擎 (仅针对脱机超大立绘/缓存对象，严格保护用户身份库与配置)
+async function optimizeLocalStorage() {
+  let freedBytes = 0;
+  const migratedKeys = [];
+  try {
+    const db = await openDB();
+    const tx = db.transaction(STORES.USER_SETTINGS, "readwrite");
+    const store = tx.objectStore(STORES.USER_SETTINGS);
+
+    // 仅针对确实占用数兆字节的独立立绘图片库
+    const ALLOWED_MIGRATION_KEYS = [
+      "t8_offline_selected_sprites",
+      "t8_teambuilding_selected_sprites",
+      "mansion_character_sprites"
+    ];
+
+    for (const key of ALLOWED_MIGRATION_KEYS) {
+      const val = localStorage.getItem(key);
+      if (!val) continue;
+
+      const size = (key.length + val.length) * 2;
+      try {
+        let parsed = val;
+        try { parsed = JSON.parse(val); } catch(e) {}
+        store.put({ key: key, value: parsed, updatedAt: Date.now() });
+        localStorage.removeItem(key);
+        freedBytes += size;
+        migratedKeys.push(key);
+      } catch(err) {}
+    }
+  } catch(e) {
+    console.error("optimizeLocalStorage error:", e);
+  }
+  return {
+    freedBytes,
+    freedKb: (freedBytes / 1024).toFixed(1),
+    freedMb: (freedBytes / (1024 * 1024)).toFixed(2),
+    migratedKeys
+  };
+}
+
+if (typeof window !== "undefined") {
+  window.optimizeLocalStorage = optimizeLocalStorage;
+  window.restoreEssentialDataFromIndexedDB = restoreEssentialDataFromIndexedDB;
+
+  // 页面启动立即执行核心数据恢复
+  restoreEssentialDataFromIndexedDB();
+}
