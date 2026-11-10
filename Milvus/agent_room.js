@@ -74,8 +74,6 @@
       }
     }, [char?.id]);
 
-    if (!char) return null;
-
   // 保存房间配置
   const saveRoomConfig = (floorId, customPattern) => {
     try {
@@ -131,11 +129,19 @@
 
     // 预载人物头像图片
     let avatarImg = null;
-    if (char && char.avatar) {
+    if (char && (char.avatar || char.avatarId)) {
+      const loadAvatar = (url) => {
+        if (!url || typeof url !== "string") return;
         const img = new Image();
-        img.src = char.avatar;
+        img.src = url;
         img.onload = () => { avatarImg = img; };
+      };
+      if (typeof window.resolveAvatarUrl === "function" && char.avatar) {
+        Promise.resolve(window.resolveAvatarUrl(char.avatar, "")).then(loadAvatar).catch(() => loadAvatar(char.avatar));
+      } else if (char.avatar) {
+        loadAvatar(char.avatar);
       }
+    }
 
       // 自定义地砖图片缓存
       let customPatternImg = null;
@@ -629,7 +635,7 @@
   return React.createElement(
     "div",
     {
-      className: "agent-private-room-overlay",
+      className: "agent-private-room-overlay open",
       style: {
         position: "fixed",
         inset: 0,
