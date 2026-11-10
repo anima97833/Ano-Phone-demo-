@@ -127,19 +127,32 @@
       h: 460
     };
 
-    // 预载人物头像图片
+    // 预载人物立绘/小人图片 (优先读取心纸居专属小人形态或头像)
     let avatarImg = null;
-    if (char && (char.avatar || char.avatarId)) {
-      const loadAvatar = (url) => {
+    let spriteUrl = (char && char.image) ? char.image : null;
+    if (!spriteUrl && char && char.id) {
+      try {
+        const customMap = JSON.parse(localStorage.getItem("t8_mansion_custom_avatars") || "{}");
+        if (customMap[char.id] && customMap[char.id].length > 0) {
+          spriteUrl = customMap[char.id][0];
+        }
+      } catch (e) {}
+    }
+    if (!spriteUrl && char) {
+      spriteUrl = char.avatar || char.avatarId || null;
+    }
+
+    if (spriteUrl) {
+      const loadImg = (url) => {
         if (!url || typeof url !== "string") return;
         const img = new Image();
         img.src = url;
         img.onload = () => { avatarImg = img; };
       };
-      if (typeof window.resolveAvatarUrl === "function" && char.avatar) {
-        Promise.resolve(window.resolveAvatarUrl(char.avatar, "")).then(loadAvatar).catch(() => loadAvatar(char.avatar));
-      } else if (char.avatar) {
-        loadAvatar(char.avatar);
+      if (typeof window.resolveAvatarUrl === "function" && spriteUrl && !spriteUrl.startsWith("data:") && !spriteUrl.startsWith("http")) {
+        Promise.resolve(window.resolveAvatarUrl(spriteUrl, "")).then(loadImg).catch(() => loadImg(spriteUrl));
+      } else {
+        loadImg(spriteUrl);
       }
     }
 
@@ -425,32 +438,43 @@
         ctx.stroke();
       };
 
-      // 绘制名士小人
+      // 绘制名士小人 (纯纯人物形象，无多余块状底座，尺寸加大更清晰)
       const drawCharacter = (now) => {
         const pX = player.x;
         const pY = player.y;
 
+        // 人物标准展示尺寸 (高度增大至 98px，视觉饱满清晰，完美匹配2.5D房间尺度)
+        const targetH = 98;
+        let drawW = 86;
+        let drawH = targetH;
+        if (avatarImg && avatarImg.width && avatarImg.height) {
+          const aspect = avatarImg.width / avatarImg.height;
+          drawW = Math.round(Math.min(115, Math.max(55, targetH * aspect)));
+        }
+
         if (player.pose === "sleeping_bed") {
           ctx.save();
-          drawRoundedRect(pX - 18, pY - 8, 55, 28, 8, "#D6724B", "#5C2B18", 2);
+          ctx.translate(pX, pY);
+          // 纯净人物立绘微倾安睡
           if (avatarImg) {
             ctx.save();
-            ctx.beginPath();
-            ctx.arc(pX - 6, pY + 6, 16, 0, Math.PI * 2);
-            ctx.clip();
-            ctx.drawImage(avatarImg, pX - 22, pY - 10, 32, 32);
+            ctx.globalAlpha = 0.95;
+            ctx.drawImage(avatarImg, -drawW * 0.35, -drawH * 0.45, drawW * 0.72, drawH * 0.72);
             ctx.restore();
           }
-          ctx.fillStyle = "#8C6A48";
+          // 软榻锦被微覆
+          drawRoundedRect(-24, 0, 72, 36, 10, "rgba(214, 114, 75, 0.9)", "#8F4826", 2);
+          ctx.fillStyle = "#F5EFE6";
           ctx.font = "bold 13px sans-serif";
-          ctx.fillText("Zzz...", pX + 42, pY - 6);
+          ctx.fillText("Zzz...", 54, -2);
           ctx.restore();
           return;
         }
 
-        ctx.fillStyle = "rgba(40, 25, 15, 0.3)";
+        // 脚底自然柔和投影 (椭圆阴影)
+        ctx.fillStyle = "rgba(40, 25, 15, 0.28)";
         ctx.beginPath();
-        ctx.ellipse(pX, pY + 22, 18, 7, 0, 0, Math.PI * 2);
+        ctx.ellipse(pX, pY + 2, Math.max(22, drawW * 0.32), 7, 0, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.save();
@@ -460,52 +484,40 @@
           ctx.scale(-1, 1);
         }
 
-        const bob = player.isMoving ? Math.sin(player.walkCycle * 8) * 3 : 0;
+        // 走动时的微弹动感
+        const bob = player.isMoving ? Math.sin(player.walkCycle * 9) * 3.5 : 0;
 
-        // 汉服古风披帛/衣服底座
-        drawRoundedRect(-14, -8 + bob, 28, 30, 8, "#8B5738", "#4A2B18", 2.2);
-
-        // 头像徽章 (圆形名士头像立绘)
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(0, -18 + bob, 20, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
+        // 纯净人物立绘渲染 (去除下方块状底座，纯粹的人物形象呈现)
         if (avatarImg) {
-          ctx.drawImage(avatarImg, -20, -38 + bob, 40, 40);
+          ctx.drawImage(avatarImg, -drawW / 2, -drawH + bob, drawW, drawH);
         } else {
-          ctx.fillStyle = "#CBB49C";
-          ctx.fill();
+          // 兜底：古风典雅圆形名士牌
+          ctx.save();
+          drawRoundedRect(-36, -72 + bob, 72, 72, 36, "#EAD7C2", "#8B6544", 2.5);
           ctx.fillStyle = "#5C4129";
-          ctx.font = "bold 15px sans-serif";
+          ctx.font = "bold 24px sans-serif";
           ctx.textAlign = "center";
-          ctx.fillText((char.name || "名")[0], 0, -12 + bob);
+          ctx.textBaseline = "middle";
+          ctx.fillText((char.name || "名")[0], 0, -36 + bob);
+          ctx.restore();
         }
-        ctx.restore();
-
-        // 头像金色边框
-        ctx.strokeStyle = "#D4AF37";
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(0, -18 + bob, 20, 0, Math.PI * 2);
-        ctx.stroke();
 
         ctx.restore();
 
-        // 头顶气泡对白
+        // 头顶气泡对白 (自适应根据放大后的人物高度动态上浮)
         if (player.bubbleText && player.bubbleTimer > 0) {
           ctx.save();
-          ctx.font = "bold 12px sans-serif";
+          ctx.font = "bold 12.5px sans-serif";
           const tw = ctx.measureText(player.bubbleText).width;
-          const bw = Math.max(70, tw + 20);
+          const bw = Math.max(76, tw + 22);
           const bx = pX - bw / 2;
-          const by = pY - 68;
+          const by = pY - drawH - 18 + bob;
 
-          drawRoundedRect(bx, by, bw, 26, 12, "#FFFBF2", "#8F6443", 1.8);
+          drawRoundedRect(bx, by, bw, 28, 14, "#FFFBF2", "#8F6443", 1.8);
           ctx.beginPath();
-          ctx.moveTo(pX - 4, by + 26);
-          ctx.lineTo(pX, by + 32);
-          ctx.lineTo(pX + 4, by + 26);
+          ctx.moveTo(pX - 4, by + 28);
+          ctx.lineTo(pX, by + 34);
+          ctx.lineTo(pX + 4, by + 28);
           ctx.fillStyle = "#FFFBF2";
           ctx.fill();
           ctx.strokeStyle = "#8F6443";
@@ -513,7 +525,8 @@
 
           ctx.fillStyle = "#5A3A1F";
           ctx.textAlign = "center";
-          ctx.fillText(player.bubbleText, pX, by + 17);
+          ctx.textBaseline = "middle";
+          ctx.fillText(player.bubbleText, pX, by + 14);
           ctx.restore();
         }
       };
@@ -596,8 +609,9 @@
           }
         }
 
-        const distToPlayer = Math.sqrt((clickX - player.x) ** 2 + (clickY - player.y) ** 2);
-        if (distToPlayer < 40) {
+        // 点击人物身体或头部触发互动
+        const distToPlayer = Math.sqrt((clickX - player.x) ** 2 + (clickY - (player.y - 48)) ** 2);
+        if (distToPlayer < 58) {
           const greetings = [
             `“楼主在此，心自清宁。” 🌸`,
             `“今日风清气爽，愿同楼主闲坐半日。” ✨`,
