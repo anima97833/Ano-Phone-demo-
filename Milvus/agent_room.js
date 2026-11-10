@@ -142,6 +142,10 @@
       spriteUrl = char.avatar || char.avatarId || null;
     }
 
+    if (spriteUrl && typeof spriteUrl === "object") {
+      spriteUrl = spriteUrl.url || spriteUrl.src || spriteUrl.id || null;
+    }
+
     if (spriteUrl) {
       const loadImg = (url) => {
         if (!url || typeof url !== "string") return;
@@ -149,9 +153,28 @@
         img.src = url;
         img.onload = () => { avatarImg = img; };
       };
-      if (typeof window.resolveAvatarUrl === "function" && spriteUrl && !spriteUrl.startsWith("data:") && !spriteUrl.startsWith("http")) {
-        Promise.resolve(window.resolveAvatarUrl(spriteUrl, "")).then(loadImg).catch(() => loadImg(spriteUrl));
-      } else {
+
+      const isDirectUrl = typeof spriteUrl === "string" && (
+        spriteUrl.startsWith("data:") ||
+        spriteUrl.startsWith("http://") ||
+        spriteUrl.startsWith("https://") ||
+        spriteUrl.startsWith("./") ||
+        spriteUrl.startsWith("/") ||
+        spriteUrl.startsWith("blob:")
+      );
+
+      if (isDirectUrl) {
+        loadImg(spriteUrl);
+      } else if (typeof window.resolveAvatarUrl === "function") {
+        Promise.resolve(window.resolveAvatarUrl(spriteUrl, ""))
+          .then((res) => {
+            if (res) loadImg(res);
+            else if (typeof spriteUrl === "string") loadImg(spriteUrl);
+          })
+          .catch(() => {
+            if (typeof spriteUrl === "string") loadImg(spriteUrl);
+          });
+      } else if (typeof spriteUrl === "string") {
         loadImg(spriteUrl);
       }
     }
