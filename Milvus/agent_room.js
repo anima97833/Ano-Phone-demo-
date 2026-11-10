@@ -3,10 +3,10 @@
  * 具备特性：
  * 1. 贴图全异步存入 IndexedDB，避免 LocalStorage 容量超限
  * 2. 统一以家具底边水平接触线 (Foot Anchor Y) 深度排序，无错位穿透
- * 3. 真实家具底部 Collider 物理碰撞检测与沿体滑动
- * 4. 全家具/窗户/墙面更换贴图，并标注清晰的推荐尺寸与比例
+ * 3. 墙壁、窗户、茶案、罗汉软榻及所有自定义家具均具备真实物理碰撞阻挡与沿体滑动
+ * 4. 全家具/窗户/墙面支持更换贴图，支持用户上传自定义新家具，并显著标注推荐尺寸与比例
  * 5. 虚拟摄像机：平滑 Lerp 跟随名士、移动端双指 Pinch 捏合缩放 (0.75x ~ 2.2x)、拖拽漫游
- * 6. 自由造景营造模式：家具库自由添加、拖拽摆放、镜像翻转、删除及专属持久化
+ * 6. 自由造景营造模式：家具库增设、自定义上传家具、拖拽摆放、缩放尺寸、镜像翻转、一键回收及持久化
  */
 (function () {
   const { useState, useEffect, useRef } = React;
@@ -88,7 +88,7 @@
     {
       id: "wood",
       name: "楠木地板",
-      desc: "温润沉稳，古朴雅致",
+      desc: "温润沉稳",
       icon: "🪵",
       plankH: 24,
       colors: ["#7A5835", "#6E4E2D", "#84613C", "#68482A"],
@@ -97,7 +97,7 @@
     {
       id: "tatami",
       name: "素雅草席",
-      desc: "天然织蔺，草香怡人",
+      desc: "天然织蔺",
       icon: "🌾",
       plankH: 20,
       colors: ["#C2B280", "#BAAB76", "#C8B988", "#B4A570"],
@@ -106,7 +106,7 @@
     {
       id: "bamboo",
       name: "青竹凉席",
-      desc: "初夏截竹，幽翠生凉",
+      desc: "幽翠生凉",
       icon: "🎋",
       plankH: 18,
       colors: ["#7D8B69", "#72805E", "#889673", "#6A7756"],
@@ -115,7 +115,7 @@
     {
       id: "slate",
       name: "汉白玉砖",
-      desc: "温润如玉，清冷出尘",
+      desc: "清冷出尘",
       icon: "🏛️",
       plankH: 30,
       colors: ["#E3DFD5", "#DDD9CF", "#E8E4DA", "#D5D1C7"],
@@ -133,13 +133,13 @@
       icon: "🍵",
       w: 180,
       h: 100,
-      footOffsetX: 10,
-      footOffsetY: 45,
-      footW: 160,
-      footH: 50,
-      recomSize: "360 × 200",
-      recomRatio: "9:5",
-      recomDesc: "推荐透明PNG。古雅茶盘、棋桌或小案几"
+      footOffsetX: 6,
+      footOffsetY: 22,
+      footW: 168,
+      footH: 72,
+      recomSize: "360 × 200 px",
+      recomRatio: "9 : 5",
+      recomDesc: "推荐透明PNG（古木茶案、棋盘、食案）"
     },
     bed: {
       type: "bed",
@@ -147,13 +147,13 @@
       icon: "🛏️",
       w: 165,
       h: 180,
-      footOffsetX: 12,
-      footOffsetY: 40,
-      footW: 140,
-      footH: 135,
-      recomSize: "330 × 360",
-      recomRatio: "11:12",
-      recomDesc: "推荐透明PNG。雕花软榻、拔步床、贵妃榻"
+      footOffsetX: 6,
+      footOffsetY: 18,
+      footW: 153,
+      footH: 156,
+      recomSize: "330 × 360 px",
+      recomRatio: "11 : 12",
+      recomDesc: "推荐透明PNG（雕花软榻、拔步床、卧榻）"
     },
     censer: {
       type: "censer",
@@ -161,13 +161,13 @@
       icon: "🪔",
       w: 70,
       h: 90,
-      footOffsetX: 8,
-      footOffsetY: 35,
-      footW: 54,
-      footH: 50,
-      recomSize: "140 × 180",
-      recomRatio: "7:9",
-      recomDesc: "推荐透明PNG。博山炉、青瓷瓶、案头雅玩"
+      footOffsetX: 6,
+      footOffsetY: 20,
+      footW: 58,
+      footH: 64,
+      recomSize: "140 × 180 px",
+      recomRatio: "7 : 9",
+      recomDesc: "推荐透明PNG（博山炉、花瓶、宫灯摆件）"
     },
     screen: {
       type: "screen",
@@ -175,13 +175,13 @@
       icon: "🖼️",
       w: 125,
       h: 185,
-      footOffsetX: 10,
-      footOffsetY: 120,
-      footW: 105,
-      footH: 60,
-      recomSize: "240 × 360",
-      recomRatio: "2:3",
-      recomDesc: "推荐透明PNG。水墨折叠屏风、轻纱隔断"
+      footOffsetX: 6,
+      footOffsetY: 95,
+      footW: 113,
+      footH: 84,
+      recomSize: "240 × 360 px",
+      recomRatio: "2 : 3",
+      recomDesc: "推荐透明PNG（水墨屏风、落地隔断）"
     },
     guqin_desk: {
       type: "guqin_desk",
@@ -189,13 +189,13 @@
       icon: "🎼",
       w: 160,
       h: 90,
-      footOffsetX: 10,
-      footOffsetY: 40,
-      footW: 140,
-      footH: 45,
-      recomSize: "320 × 180",
-      recomRatio: "16:9",
-      recomDesc: "推荐透明PNG。七弦古琴几案、画桌"
+      footOffsetX: 6,
+      footOffsetY: 20,
+      footW: 148,
+      footH: 64,
+      recomSize: "320 × 180 px",
+      recomRatio: "16 : 9",
+      recomDesc: "推荐透明PNG（古琴案、书画长桌）"
     },
     bookshelf: {
       type: "bookshelf",
@@ -203,13 +203,13 @@
       icon: "📚",
       w: 130,
       h: 175,
-      footOffsetX: 10,
-      footOffsetY: 85,
-      footW: 110,
-      footH: 85,
-      recomSize: "260 × 340",
-      recomRatio: "13:17",
-      recomDesc: "推荐透明PNG。博古架、多宝阁、药书橱"
+      footOffsetX: 6,
+      footOffsetY: 60,
+      footW: 118,
+      footH: 108,
+      recomSize: "260 × 340 px",
+      recomRatio: "13 : 17",
+      recomDesc: "推荐透明PNG（博古架、书柜、武器架）"
     },
     carpet: {
       type: "carpet",
@@ -219,12 +219,54 @@
       h: 130,
       footOffsetX: 0,
       footOffsetY: 0,
-      footW: 0, // 地毯不阻挡通行
+      footW: 0,
       footH: 0,
       isFloorDeco: true,
-      recomSize: "440 × 260",
-      recomRatio: "17:10",
-      recomDesc: "推荐透明PNG。名士蒲团、缠枝纹祥云织毯"
+      recomSize: "440 × 260 px",
+      recomRatio: "17 : 10",
+      recomDesc: "推荐透明PNG（地毯、蒲团，无阻挡可踩踏）"
+    },
+    custom_small: {
+      type: "custom_small",
+      name: "自定义小摆件",
+      icon: "🪴",
+      w: 85,
+      h: 95,
+      footOffsetX: 6,
+      footOffsetY: 22,
+      footW: 73,
+      footH: 68,
+      recomSize: "170 × 190 px",
+      recomRatio: "9 : 10",
+      recomDesc: "推荐透明PNG（盆景、酒坛、立牌、宠物窝）"
+    },
+    custom_medium: {
+      type: "custom_medium",
+      name: "自定义中型家具",
+      icon: "🪑",
+      w: 150,
+      h: 110,
+      footOffsetX: 6,
+      footOffsetY: 24,
+      footW: 138,
+      footH: 80,
+      recomSize: "300 × 220 px",
+      recomRatio: "15 : 11",
+      recomDesc: "推荐透明PNG（桌椅、矮柜、浴桶、沙盘）"
+    },
+    custom_large: {
+      type: "custom_large",
+      name: "自定义大型家具",
+      icon: "🏯",
+      w: 165,
+      h: 175,
+      footOffsetX: 8,
+      footOffsetY: 30,
+      footW: 149,
+      footH: 138,
+      recomSize: "330 × 350 px",
+      recomRatio: "11 : 12",
+      recomDesc: "推荐透明PNG（大床、屏风、大型立柜）"
     }
   };
 
@@ -232,21 +274,21 @@
   const BG_SPECS = {
     wall: {
       name: "素雅照壁 (墙壁)",
-      recomSize: "1120 × 240",
-      recomRatio: "14:3",
-      recomDesc: "横版长条，推荐山水远峰、竹影、宣纸暗纹"
+      recomSize: "1120 × 240 px",
+      recomRatio: "14 : 3",
+      recomDesc: "横版长条，推荐山水、竹影、墙纸纹理"
     },
     window: {
       name: "雕花窗棂 (窗景)",
-      recomSize: "360 × 160",
-      recomRatio: "9:4",
-      recomDesc: "横版风景，推荐四时佳境、落樱、竹林、夜月"
+      recomSize: "360 × 160 px",
+      recomRatio: "9 : 4",
+      recomDesc: "横版窗景，推荐庭院、落樱、夜月、雪景"
     },
     floor: {
       name: "地砖材质 (平铺)",
-      recomSize: "256 × 256",
-      recomRatio: "1:1",
-      recomDesc: "正方形无缝贴图，四方连续平铺纹理"
+      recomSize: "256 × 256 px",
+      recomRatio: "1 : 1",
+      recomDesc: "正方形无缝纹理，自动四方连续平铺"
     }
   };
 
@@ -263,7 +305,7 @@
     {
       id: "f_table",
       type: "tea_table",
-      x: 230,
+      x: 225,
       y: 285,
       flipX: false,
       ...FURNITURE_DEFS.tea_table
@@ -271,12 +313,46 @@
     {
       id: "f_bed",
       type: "bed",
-      x: 460,
-      y: 240,
+      x: 465,
+      y: 245,
       flipX: false,
       ...FURNITURE_DEFS.bed
     }
   ];
+
+  // 归一化家具碰撞盒（兼容旧存档并随宽高缩放）
+  const normalizeFurnitureItem = (f) => {
+    const def = FURNITURE_DEFS[f.type] || FURNITURE_DEFS.custom_medium;
+    const w = Number(f.w) || def.w;
+    const h = Number(f.h) || def.h;
+    const isFloorDeco = f.isFloorDeco !== undefined ? f.isFloorDeco : Boolean(def.isFloorDeco);
+    if (isFloorDeco) {
+      return {
+        ...def,
+        ...f,
+        w,
+        h,
+        footOffsetX: 0,
+        footOffsetY: 0,
+        footW: 0,
+        footH: 0,
+        isFloorDeco: true
+      };
+    }
+    const scaleX = w / def.w;
+    const scaleY = h / def.h;
+    return {
+      ...def,
+      ...f,
+      w,
+      h,
+      footOffsetX: Math.round(def.footOffsetX * scaleX),
+      footOffsetY: Math.round(def.footOffsetY * scaleY),
+      footW: Math.max(24, Math.round(def.footW * scaleX)),
+      footH: Math.max(24, Math.round(def.footH * scaleY)),
+      isFloorDeco: false
+    };
+  };
 
   // =========================================================================
   // 三、 2.5D 密探专属雅居主模态组件
@@ -285,16 +361,31 @@
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const textureInputRef = useRef(null);
+    const customFurnitureInputRef = useRef(null);
 
-    // 模式切换与UI状态
+    // 模式切换与UI状态 (同步维护 Ref 供 Canvas 渲染循环无延迟读取)
     const [isEditMode, setIsEditMode] = useState(false);
+    const isEditModeRef = useRef(false);
+    isEditModeRef.current = isEditMode;
+
     const [selectedFurnitureId, setSelectedFurnitureId] = useState(null);
+    const selectedFurnitureIdRef = useRef(null);
+    selectedFurnitureIdRef.current = selectedFurnitureId;
+
     const [showBuildDrawer, setShowBuildDrawer] = useState(false);
     const [showFloorDrawer, setShowFloorDrawer] = useState(false);
-    const [textureTarget, setTextureTarget] = useState(null); // { key, name, recomSize, recomRatio, recomDesc }
+    const [showTextureHubModal, setShowTextureHubModal] = useState(false);
+    const [textureTarget, setTextureTarget] = useState(null); // { key, name, recomSize, recomRatio, recomDesc, type }
+
+    // 自定义上传新家具弹窗状态
+    const [showCustomUploadModal, setShowCustomUploadModal] = useState(false);
+    const [customUploadName, setCustomUploadName] = useState("自定义家具");
+    const [customUploadPreset, setCustomUploadPreset] = useState("custom_medium");
 
     // 房间地板
     const [currentFloorId, setCurrentFloorId] = useState("wood");
+    const currentFloorIdRef = useRef("wood");
+    currentFloorIdRef.current = currentFloorId;
 
     // 家具实体列表 (State + Ref 保证渲染循环中实时读取)
     const [furnitures, setFurnitures] = useState(() => createDefaultFurnitures());
@@ -307,7 +398,7 @@
     // 虚拟摄像机状态
     const camera = useRef({
       x: 380,
-      y: 410,
+      y: 390,
       zoom: 1.0,
       isFollowing: true,
       lastPinchDist: 0,
@@ -315,7 +406,7 @@
       panStartX: 0,
       panStartY: 0,
       camStartX: 380,
-      camStartY: 410
+      camStartY: 390
     });
 
     // 房间几何尺寸 (画布逻辑分辨率 760 x 820)
@@ -323,7 +414,12 @@
       x: 100,
       y: 130,
       w: 560,
-      h: 460
+      h: 460,
+      wallH: 118,
+      winX: 330,
+      winY: 146,
+      winW: 180,
+      winH: 80
     };
 
     // 1. 初始化读取房间配置与 IndexedDB 材质
@@ -331,17 +427,14 @@
       if (!char || !char.id) return;
       const charId = char.id;
 
-      // 读取房间布局
+      let initialList = createDefaultFurnitures();
       try {
         const savedLayout = JSON.parse(localStorage.getItem(`t8_room_layout_${charId}`) || "null");
-        if (savedLayout && Array.isArray(savedLayout.furnitures) && savedLayout.furnitures.length > 0) {
-          const loaded = savedLayout.furnitures.map((f) => {
-            const def = FURNITURE_DEFS[f.type] || FURNITURE_DEFS.tea_table;
-            return { ...def, ...f };
-          });
-          setFurnitures(loaded);
+        if (savedLayout && Array.isArray(savedLayout.furnitures)) {
+          initialList = savedLayout.furnitures.map(normalizeFurnitureItem);
+          setFurnitures(initialList);
         } else {
-          setFurnitures(createDefaultFurnitures());
+          setFurnitures(initialList);
         }
         if (savedLayout && savedLayout.floorId) {
           setCurrentFloorId(savedLayout.floorId);
@@ -357,10 +450,7 @@
           `tex_${charId}_window`,
           `tex_${charId}_floor`
         ];
-        // 家具贴图
-        const savedLayout = JSON.parse(localStorage.getItem(`t8_room_layout_${charId}`) || "null");
-        const list = (savedLayout && savedLayout.furnitures) ? savedLayout.furnitures : createDefaultFurnitures();
-        list.forEach((f) => keysToLoad.push(`tex_${charId}_${f.id}`));
+        initialList.forEach((f) => keysToLoad.push(`tex_${charId}_${f.id}`));
 
         for (const k of keysToLoad) {
           const dataUrl = await getIDBTexture(k);
@@ -376,18 +466,22 @@
       loadTextures();
     }, [char?.id]);
 
-    // 保存布局至 localStorage
+    // 保存布局至 localStorage (支持空数组，确保全部回收后持久化)
     const saveLayout = (newList, floorId) => {
       if (!char || !char.id) return;
       try {
         const data = {
-          floorId: floorId || currentFloorId,
+          floorId: floorId || currentFloorIdRef.current,
           furnitures: newList.map((f) => ({
             id: f.id,
             type: f.type,
+            name: f.name,
             x: Math.round(f.x),
             y: Math.round(f.y),
-            flipX: Boolean(f.flipX)
+            w: Math.round(f.w),
+            h: Math.round(f.h),
+            flipX: Boolean(f.flipX),
+            isFloorDeco: Boolean(f.isFloorDeco)
           })),
           updatedAt: Date.now()
         };
@@ -406,10 +500,8 @@
         const base64 = ev.target.result;
         const key = textureTarget.key;
 
-        // 存入 IndexedDB
         await setIDBTexture(key, base64);
 
-        // 缓存到内存 Image
         const img = new Image();
         img.src = base64;
         img.onload = () => {
@@ -422,6 +514,7 @@
         setTextureTarget(null);
       };
       reader.readAsDataURL(file);
+      e.target.value = "";
     };
 
     // 恢复默认贴图 (从 IndexedDB 移除)
@@ -436,7 +529,110 @@
       setTextureTarget(null);
     };
 
-    // 3. 核心物理、碰撞、寻路与渲染主循环
+    // 上传自定义新家具并直接放入房间
+    const handleCustomFurnitureUpload = (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file || !char) return;
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64 = ev.target.result;
+        const presetKey = customUploadPreset in FURNITURE_DEFS ? customUploadPreset : "custom_medium";
+        const def = FURNITURE_DEFS[presetKey];
+        const newId = `f_custom_${Date.now()}`;
+        const texKey = `tex_${char.id}_${newId}`;
+
+        // 存入 IndexedDB
+        await setIDBTexture(texKey, base64);
+
+        const img = new Image();
+        img.src = base64;
+        img.onload = () => {
+          texturePool.current.set(texKey, img);
+        };
+
+        const rawItem = {
+          id: newId,
+          type: presetKey,
+          name: (customUploadName || "").trim() || def.name,
+          x: 310,
+          y: 340,
+          w: def.w,
+          h: def.h,
+          flipX: false,
+          isFloorDeco: Boolean(def.isFloorDeco)
+        };
+        const newItem = normalizeFurnitureItem(rawItem);
+        const nextList = [...furnituresRef.current, newItem];
+        setFurnitures(nextList);
+        saveLayout(nextList);
+        setIsEditMode(true);
+        setSelectedFurnitureId(newItem.id);
+        setShowCustomUploadModal(false);
+        setShowBuildDrawer(false);
+      };
+      reader.readAsDataURL(file);
+      e.target.value = "";
+    };
+
+    // 选中家具操作：回收删除
+    const handleRecycleFurniture = async (targetId) => {
+      const idToRemove = targetId || selectedFurnitureIdRef.current;
+      if (!idToRemove) return;
+      const nextList = furnituresRef.current.filter((f) => f.id !== idToRemove);
+      setFurnitures(nextList);
+      saveLayout(nextList);
+      if (selectedFurnitureIdRef.current === idToRemove) {
+        setSelectedFurnitureId(null);
+      }
+    };
+
+    // 选中家具操作：水平翻转
+    const handleFlipFurniture = (targetId) => {
+      const idToFlip = targetId || selectedFurnitureIdRef.current;
+      if (!idToFlip) return;
+      const nextList = furnituresRef.current.map((f) =>
+        f.id === idToFlip ? { ...f, flipX: !f.flipX } : f
+      );
+      setFurnitures(nextList);
+      saveLayout(nextList);
+    };
+
+    // 选中家具操作：缩放尺寸
+    const handleScaleFurniture = (factor) => {
+      const idToScale = selectedFurnitureIdRef.current;
+      if (!idToScale) return;
+      const nextList = furnituresRef.current.map((f) => {
+        if (f.id !== idToScale) return f;
+        const newW = Math.max(45, Math.min(340, Math.round(f.w * factor)));
+        const newH = Math.max(45, Math.min(340, Math.round(f.h * factor)));
+        return normalizeFurnitureItem({ ...f, w: newW, h: newH });
+      });
+      setFurnitures(nextList);
+      saveLayout(nextList);
+    };
+
+    // 选中家具操作：打开换贴图弹窗
+    const openFurnitureTextureModal = (item) => {
+      if (!item || !char) return;
+      const def = FURNITURE_DEFS[item.type] || FURNITURE_DEFS.custom_medium;
+      setTextureTarget({
+        key: `tex_${char.id}_${item.id}`,
+        name: item.name || def.name,
+        recomSize: `${item.w * 2} × ${item.h * 2} px`,
+        recomRatio: def.recomRatio || "自由比例",
+        recomDesc: def.recomDesc || "推荐透明背景 PNG 图片"
+      });
+    };
+
+    // 恢复初始默认家具布局
+    const handleResetDefaultFurnitures = () => {
+      const defList = createDefaultFurnitures().map(normalizeFurnitureItem);
+      setFurnitures(defList);
+      saveLayout(defList);
+      setSelectedFurnitureId(null);
+    };
+
+    // 3. 核心物理、碰撞、寻路与渲染主循环 (仅依赖 char?.id，避免模式切换重置人物坐标)
     useEffect(() => {
       const canvas = canvasRef.current;
       if (!canvas) return;
@@ -502,10 +698,10 @@
         smoke: []
       };
 
-      // 名士实体
+      // 名士实体 (初始置于房间中下部空旷区，绝不与茶案/软榻重叠)
       const player = {
-        x: 380,
-        y: 400,
+        x: 340,
+        y: 475,
         targetX: null,
         targetY: null,
         speed: 185,
@@ -517,7 +713,7 @@
         bubbleTimer: 4.0
       };
 
-      const say = (text, duration = 3.5) => {
+      const say = (text, duration = 3.2) => {
         player.bubbleText = text;
         player.bubbleTimer = duration;
       };
@@ -546,26 +742,31 @@
         }
       };
 
-      // 碰撞检测算法：检测坐标 (px, py) 是否与房间墙壁或任意家具阻挡体重叠
+      // 碰撞检测算法：检测坐标 (px, py) 是否与墙纸、窗户或任意家具(含软榻/茶案/自定义家具)阻挡体重叠
       const checkCollision = (px, py) => {
-        // 1. 房间边界
-        const minX = ROOM.x + 30;
-        const maxX = ROOM.x + ROOM.w - 30;
-        const minY = ROOM.y + 135;
-        const maxY = ROOM.y + ROOM.h - 22;
+        // 1. 房间四壁与照壁墙面、雕花窗棂边界阻挡
+        const minX = ROOM.x + 36;
+        const maxX = ROOM.x + ROOM.w - 36;
+        const minY = ROOM.y + ROOM.wallH + 34; // 防止人物穿入上方照壁墙纸与窗户
+        const maxY = ROOM.y + ROOM.h - 20;
         if (px < minX || px > maxX || py < minY || py > maxY) return true;
 
-        // 2. 名士底部占地包围盒 (约 34 x 16 px)
-        const pBox = { x: px - 17, y: py - 9, w: 34, h: 18 };
+        // 窗户正下方微凸窗台阻挡区
+        if (px >= ROOM.winX - 16 && px <= ROOM.winX + ROOM.winW + 16 && py < ROOM.y + ROOM.wallH + 44) {
+          return true;
+        }
 
-        // 3. 遍历各家具底部 Collider
+        // 2. 名士底部+下身占地包围盒 (48 x 24 px，匹配放大后的人物宽度)
+        const pBox = { x: px - 24, y: py - 20, w: 48, h: 24 };
+
+        // 3. 遍历各家具(茶案、罗汉软榻、香炉、屏风及自定义家具)底部 Collider
         for (const item of furnituresRef.current) {
-          if (item.footW <= 0 || item.footH <= 0) continue; // 地毯等地物不阻挡通行
+          if (item.isFloorDeco || item.footW <= 0 || item.footH <= 0) continue;
           const fBox = {
-            x: item.x + item.footOffsetX,
-            y: item.y + item.footOffsetY,
-            w: item.footW,
-            h: item.footH
+            x: item.x + (item.footOffsetX || 0),
+            y: item.y + (item.footOffsetY || 0),
+            w: item.footW || item.w,
+            h: item.footH || item.h
           };
           if (
             pBox.x < fBox.x + fBox.w &&
@@ -580,10 +781,9 @@
       };
 
       // 绘制房间底座与背景（墙面、窗景、地板）
-      const drawRoomBackground = (now) => {
-        // 房间外深色环境
+      const drawRoomBackground = () => {
         ctx.fillStyle = "#1E1814";
-        ctx.fillRect(-200, -200, canvas.width + 400, canvas.height + 400);
+        ctx.fillRect(-400, -400, canvas.width + 800, canvas.height + 800);
 
         // 房间古木框架外壳
         drawRoundedRect(ROOM.x - 12, ROOM.y - 12, ROOM.w + 24, ROOM.h + 24, 20, "#543C28", "#332114", 4);
@@ -595,7 +795,7 @@
         const wallX = ROOM.x + 6;
         const wallY = ROOM.y + 6;
         const wallW = ROOM.w - 12;
-        const wallH = 118;
+        const wallH = ROOM.wallH;
 
         if (customWallImg) {
           ctx.save();
@@ -610,10 +810,10 @@
         // 雕花窗棂与窗景 (支持自定义贴图)
         const winKey = `tex_${char?.id}_window`;
         const customWinImg = texturePool.current.get(winKey);
-        const winX = ROOM.x + 230;
-        const winY = ROOM.y + 16;
-        const winW = 180;
-        const winH = 80;
+        const winX = ROOM.winX;
+        const winY = ROOM.winY;
+        const winW = ROOM.winW;
+        const winH = ROOM.winH;
 
         if (customWinImg) {
           ctx.save();
@@ -623,7 +823,6 @@
           ctx.restore();
         } else {
           drawRoundedRect(winX, winY, winW, winH, 4, "#F4EDE1", "#5C3E25", 3);
-          // 默认窗格横竖条纹
           ctx.strokeStyle = "#805835";
           ctx.lineWidth = 2;
           ctx.beginPath();
@@ -637,6 +836,28 @@
           ctx.stroke();
         }
 
+        // 建造模式下：墙纸与窗户也显示可换贴图虚线提示
+        if (isEditModeRef.current) {
+          ctx.save();
+          ctx.strokeStyle = "rgba(214, 168, 110, 0.7)";
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([4, 4]);
+          ctx.strokeRect(winX - 2, winY - 2, winW + 4, winH + 4);
+          ctx.setLineDash([]);
+          ctx.fillStyle = "rgba(46, 36, 28, 0.75)";
+          drawRoundedRect(winX + winW / 2 - 42, winY + winH / 2 - 11, 84, 22, 8, "rgba(46, 36, 28, 0.8)", "#D6A86E", 1);
+          ctx.fillStyle = "#FFF8ED";
+          ctx.font = "bold 10px sans-serif";
+          ctx.textAlign = "center";
+          ctx.textBaseline = "middle";
+          ctx.fillText("🎨 点击换窗景", winX + winW / 2, winY + winH / 2);
+
+          drawRoundedRect(wallX + 16, wallY + 12, 86, 22, 8, "rgba(46, 36, 28, 0.8)", "#D6A86E", 1);
+          ctx.fillStyle = "#FFF8ED";
+          ctx.fillText("🎨 点击换墙纸", wallX + 59, wallY + 23);
+          ctx.restore();
+        }
+
         // 窗外晨曦微光投射斜光束
         ctx.save();
         ctx.beginPath();
@@ -646,7 +867,7 @@
         ctx.lineTo(winX - 60, ROOM.y + ROOM.h - 40);
         ctx.closePath();
         const sunGrad = ctx.createLinearGradient(winX, winY, winX + 80, ROOM.y + ROOM.h);
-        sunGrad.addColorStop(0, "rgba(255, 248, 220, 0.2)");
+        sunGrad.addColorStop(0, "rgba(255, 248, 220, 0.18)");
         sunGrad.addColorStop(1, "rgba(255, 240, 190, 0.02)");
         ctx.fillStyle = sunGrad;
         ctx.fill();
@@ -663,8 +884,9 @@
         ctx.rect(floorLeft, floorTop, floorRight - floorLeft, floorBottom - floorTop);
         ctx.clip();
 
+        const floorId = currentFloorIdRef.current;
         const customFloorImg = texturePool.current.get(`tex_${char?.id}_floor`);
-        if (customFloorImg && currentFloorId === "custom") {
+        if (customFloorImg && floorId === "custom") {
           try {
             const pattern = ctx.createPattern(customFloorImg, "repeat");
             ctx.fillStyle = pattern;
@@ -673,7 +895,7 @@
             ctx.drawImage(customFloorImg, floorLeft, floorTop, floorRight - floorLeft, floorBottom - floorTop);
           }
         } else {
-          const activeFloorDef = BUILTIN_FLOORS.find((f) => f.id === currentFloorId) || BUILTIN_FLOORS[0];
+          const activeFloorDef = BUILTIN_FLOORS.find((f) => f.id === floorId) || BUILTIN_FLOORS[0];
           const plankH = activeFloorDef.plankH || 24;
           let row = 0;
           for (let py = floorTop; py < floorBottom; py += plankH) {
@@ -711,14 +933,11 @@
           ctx.scale(-1, 1);
         }
 
-        // 若拥有自定义贴图，优先渲染用户上传材质
         if (customImg) {
           ctx.drawImage(customImg, 0, 0, item.w, item.h);
         } else {
-          // 默认古风原画渲染
           switch (item.type) {
             case "tea_table": {
-              // 古雅茶案
               ctx.fillStyle = "rgba(40, 25, 15, 0.25)";
               ctx.beginPath();
               ctx.ellipse(item.w / 2, item.h - 4, item.w / 2 + 6, 14, 0, 0, Math.PI * 2);
@@ -731,21 +950,18 @@
               break;
             }
             case "bed": {
-              // 罗汉软榻
               drawRoundedRect(0, 0, item.w, item.h, 8, "#6B492B", "#382312", 3);
               drawRoundedRect(8, 16, item.w - 16, item.h - 24, 6, "#E8DFC8", "#8F7556", 2);
               drawRoundedRect(item.w - 48, 24, 36, 26, 6, "#C77D58", "#7A4628", 2);
               break;
             }
             case "censer": {
-              // 博山香炉
               drawRoundedRect(2, 38, 44, 20, 4, "#5A3D28", "#332114", 2);
               drawRoundedRect(8, 14, 32, 26, 6, "#B59458", "#61481E", 2.5);
               drawRoundedRect(16, 4, 16, 12, 4, "#D4B372", "#61481E", 2);
               break;
             }
             case "screen": {
-              // 四折屏风
               drawRoundedRect(0, 0, item.w, item.h, 4, "rgba(240, 235, 225, 0.92)", "#6E4E2D", 2.5);
               for (let i = 1; i <= 3; i++) {
                 ctx.beginPath();
@@ -758,26 +974,28 @@
               break;
             }
             case "guqin_desk": {
-              // 幽谷琴案
               drawRoundedRect(0, 10, item.w, item.h - 20, 6, "#4A321E", "#28170B", 2.5);
               drawRoundedRect(24, 25, 112, 18, 4, "#2C1B10", "#8F6443", 1.5);
               break;
             }
             case "bookshelf": {
-              // 藏书多宝阁
               drawRoundedRect(0, 0, item.w, item.h, 4, "#583C25", "#322012", 3);
               drawRoundedRect(8, 12, item.w - 16, 45, 2, "#EDE2D0", "#8F6E4C", 1.5);
               drawRoundedRect(8, 65, item.w - 16, 45, 2, "#EDE2D0", "#8F6E4C", 1.5);
               break;
             }
             case "carpet": {
-              // 织锦地毯
               drawRoundedRect(0, 0, item.w, item.h, 16, "rgba(214, 114, 75, 0.45)", "#9C4E2B", 2);
               drawRoundedRect(8, 8, item.w - 16, item.h - 16, 10, "rgba(248, 238, 222, 0.55)", "#B8734A", 1.5);
               break;
             }
             default: {
-              drawRoundedRect(0, 0, item.w, item.h, 6, "#8B6A48", "#4A321C", 2);
+              drawRoundedRect(0, 0, item.w, item.h, 8, "#8B6A48", "#4A321C", 2);
+              ctx.fillStyle = "#F5EFE6";
+              ctx.font = "bold 12px sans-serif";
+              ctx.textAlign = "center";
+              ctx.textBaseline = "middle";
+              ctx.fillText(item.name || "家具", item.w / 2, item.h / 2);
             }
           }
         }
@@ -798,49 +1016,55 @@
           }
         }
 
-        // 建造模式下：被选中的家具显示高亮发光包围盒与微操角标
-        if (isEditMode && selectedFurnitureId === item.id) {
+        // 建造模式下：绘制碰撞区浅色辅助线与选中角标
+        if (isEditModeRef.current) {
+          const isSelected = selectedFurnitureIdRef.current === item.id;
           ctx.save();
-          ctx.strokeStyle = "#D6724B";
-          ctx.lineWidth = 2.5;
-          ctx.setLineDash([5, 4]);
-          ctx.strokeRect(item.x - 3, item.y - 3, item.w + 6, item.h + 6);
-          ctx.setLineDash([]);
+          if (isSelected) {
+            ctx.strokeStyle = "#D6724B";
+            ctx.lineWidth = 2.5;
+            ctx.setLineDash([6, 4]);
+            ctx.strokeRect(item.x - 3, item.y - 3, item.w + 6, item.h + 6);
+            ctx.setLineDash([]);
 
-          // 1. 左上角：删除红色圆钮
-          ctx.fillStyle = "#E04838";
-          ctx.beginPath();
-          ctx.arc(item.x - 4, item.y - 4, 11, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = "#fff";
-          ctx.font = "bold 12px sans-serif";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText("✕", item.x - 4, item.y - 4);
+            // 1. 左上角：回收删除红色圆钮
+            ctx.fillStyle = "#E04838";
+            ctx.beginPath();
+            ctx.arc(item.x - 4, item.y - 4, 13, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 12px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText("✕", item.x - 4, item.y - 4);
 
-          // 2. 右上角：镜像翻转蓝色圆钮
-          ctx.fillStyle = "#3B82F6";
-          ctx.beginPath();
-          ctx.arc(item.x + item.w + 4, item.y - 4, 11, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = "#fff";
-          ctx.fillText("⇄", item.x + item.w + 4, item.y - 4);
+            // 2. 右上角：镜像翻转蓝色圆钮
+            ctx.fillStyle = "#3B82F6";
+            ctx.beginPath();
+            ctx.arc(item.x + item.w + 4, item.y - 4, 13, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.fillText("⇄", item.x + item.w + 4, item.y - 4);
 
-          // 3. 左下角：换贴图橙色圆钮
-          ctx.fillStyle = "#D97706";
-          ctx.beginPath();
-          ctx.arc(item.x - 4, item.y + item.h + 4, 11, 0, Math.PI * 2);
-          ctx.fill();
-          ctx.fillStyle = "#fff";
-          ctx.font = "bold 10px sans-serif";
-          ctx.fillText("🎨", item.x - 4, item.y + item.h + 4);
-
+            // 3. 左下角：换贴图橙色圆钮
+            ctx.fillStyle = "#D97706";
+            ctx.beginPath();
+            ctx.arc(item.x - 4, item.y + item.h + 4, 13, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.fillStyle = "#fff";
+            ctx.font = "bold 11px sans-serif";
+            ctx.fillText("🎨", item.x - 4, item.y + item.h + 4);
+          } else {
+            ctx.strokeStyle = "rgba(214, 168, 110, 0.45)";
+            ctx.lineWidth = 1;
+            ctx.strokeRect(item.x, item.y, item.w, item.h);
+          }
           ctx.restore();
         }
       };
 
-      // 绘制纯净名士小人 (无多余块状物，大号饱满清晰)
-      const drawCharacter = (now) => {
+      // 绘制纯净名士小人
+      const drawCharacter = () => {
         const pX = player.x;
         const pY = player.y;
 
@@ -850,23 +1074,6 @@
         if (avatarImg && avatarImg.width && avatarImg.height) {
           const aspect = avatarImg.width / avatarImg.height;
           drawW = Math.round(Math.min(115, Math.max(55, targetH * aspect)));
-        }
-
-        if (player.pose === "sleeping_bed") {
-          ctx.save();
-          ctx.translate(pX, pY);
-          if (avatarImg) {
-            ctx.save();
-            ctx.globalAlpha = 0.95;
-            ctx.drawImage(avatarImg, -drawW * 0.35, -drawH * 0.45, drawW * 0.72, drawH * 0.72);
-            ctx.restore();
-          }
-          drawRoundedRect(-24, 0, 72, 36, 10, "rgba(214, 114, 75, 0.9)", "#8F4826", 2);
-          ctx.fillStyle = "#F5EFE6";
-          ctx.font = "bold 13px sans-serif";
-          ctx.fillText("Zzz...", 54, -2);
-          ctx.restore();
-          return;
         }
 
         // 脚底自然柔和投影
@@ -948,13 +1155,13 @@
 
         // 虚拟摄像机平滑跟随 (Lerp)
         const cam = camera.current;
-        if (cam.isFollowing && !isEditMode) {
+        if (cam.isFollowing && !isEditModeRef.current) {
           cam.x += (player.x - cam.x) * 0.08;
-          cam.y += (player.y - cam.y) * 0.08;
+          cam.y += ((player.y - 40) - cam.y) * 0.08;
         }
 
         // 名士步进移动与滑动碰撞物理
-        if (!isEditMode && player.targetX !== null && player.targetY !== null) {
+        if (!isEditModeRef.current && player.targetX !== null && player.targetY !== null) {
           const dx = player.targetX - player.x;
           const dy = player.targetY - player.y;
           const dist = Math.sqrt(dx * dx + dy * dy);
@@ -967,18 +1174,14 @@
             const moveX = (dx / dist) * Math.min(step, dist);
             const moveY = (dy / dist) * Math.min(step, dist);
 
-            // 优先双轴前进
             if (!checkCollision(player.x + moveX, player.y + moveY)) {
               player.x += moveX;
               player.y += moveY;
             } else if (!checkCollision(player.x + moveX, player.y)) {
-              // X轴切向滑动
               player.x += moveX;
             } else if (!checkCollision(player.x, player.y + moveY)) {
-              // Y轴切向滑动
               player.y += moveY;
             } else {
-              // 彻底卡住阻挡
               player.targetX = null;
               player.targetY = null;
               player.isMoving = false;
@@ -990,30 +1193,24 @@
             player.targetY = null;
             player.isMoving = false;
           }
-        } else if (!isEditMode) {
+        } else if (!isEditModeRef.current) {
           player.isMoving = false;
         }
 
-        // 清空画布
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        // 应用虚拟摄像机视口变换矩阵 (平移 + 双指捏合缩放)
+        // 应用虚拟摄像机视口变换矩阵
         ctx.save();
         ctx.translate(canvas.width / 2, canvas.height / 2);
         ctx.scale(cam.zoom, cam.zoom);
         ctx.translate(-cam.x, -cam.y);
 
-        // 绘制房间底座与背景
-        drawRoomBackground(currentTime);
+        drawRoomBackground();
 
-        // =====================================================================
-        // 关键准则：统一采用家具底边水平接触线 (Foot Anchor Y) 深度排序渲染
-        // =====================================================================
+        // 统一采用家具底边水平接触线 (Foot Anchor Y) 深度排序渲染
         const renderQueue = [];
 
-        // 1. 压入所有家具
         furnituresRef.current.forEach((item) => {
-          // 地毯作为地面装饰，排在所有立面家具下方
           const footAnchorY = item.isFloorDeco
             ? item.y - 1000
             : item.y + (item.footOffsetY || 0) + (item.footH || item.h);
@@ -1024,13 +1221,11 @@
           });
         });
 
-        // 2. 压入名士小人实体 (以其脚底地面接触线作为基准)
         renderQueue.push({
           anchorY: player.y,
-          draw: () => drawCharacter(currentTime)
+          draw: () => drawCharacter()
         });
 
-        // 3. 升序执行深度排序，从深至浅依次绘制
         renderQueue.sort((a, b) => a.anchorY - b.anchorY);
         renderQueue.forEach((entity) => entity.draw());
 
@@ -1053,7 +1248,6 @@
       let dragFurnitureItem = null;
       let dragOffset = { x: 0, y: 0 };
 
-      // 将屏幕坐标转换至世界坐标
       const toWorldCoords = (clientX, clientY) => {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -1063,12 +1257,11 @@
         const cam = camera.current;
         const worldX = cam.x + (clickX - canvas.width / 2) / cam.zoom;
         const worldY = cam.y + (clickY - canvas.height / 2) / cam.zoom;
-        return { worldX, worldY, screenX: clickX, screenY: clickY };
+        return { worldX, worldY };
       };
 
       const handlePointerDown = (e) => {
         const cam = camera.current;
-        // 双指触控缩放初始化
         if (e.touches && e.touches.length === 2) {
           cam.lastPinchDist = Math.hypot(
             e.touches[0].clientX - e.touches[1].clientX,
@@ -1083,38 +1276,31 @@
         const { worldX, worldY } = toWorldCoords(clientX, clientY);
 
         // A. 建造编辑模式下的交互
-        if (isEditMode) {
-          // 检查是否点击当前选中家具的微操角标
-          if (selectedFurnitureId) {
-            const activeF = furnituresRef.current.find((f) => f.id === selectedFurnitureId);
+        if (isEditModeRef.current) {
+          const curSelId = selectedFurnitureIdRef.current;
+          if (curSelId) {
+            const activeF = furnituresRef.current.find((f) => f.id === curSelId);
             if (activeF) {
-              // 1. 删除角标 (左上角)
-              if (Math.hypot(worldX - (activeF.x - 4), worldY - (activeF.y - 4)) < 16) {
-                const nextList = furnituresRef.current.filter((f) => f.id !== selectedFurnitureId);
+              // 1. 左上角回收删除角标
+              if (Math.hypot(worldX - (activeF.x - 4), worldY - (activeF.y - 4)) < 18) {
+                const nextList = furnituresRef.current.filter((f) => f.id !== curSelId);
                 setFurnitures(nextList);
                 saveLayout(nextList);
                 setSelectedFurnitureId(null);
                 return;
               }
-              // 2. 翻转角标 (右上角)
-              if (Math.hypot(worldX - (activeF.x + activeF.w + 4), worldY - (activeF.y - 4)) < 16) {
+              // 2. 右上角翻转角标
+              if (Math.hypot(worldX - (activeF.x + activeF.w + 4), worldY - (activeF.y - 4)) < 18) {
                 const nextList = furnituresRef.current.map((f) =>
-                  f.id === selectedFurnitureId ? { ...f, flipX: !f.flipX } : f
+                  f.id === curSelId ? { ...f, flipX: !f.flipX } : f
                 );
                 setFurnitures(nextList);
                 saveLayout(nextList);
                 return;
               }
-              // 3. 换材质角标 (左下角)
-              if (Math.hypot(worldX - (activeF.x - 4), worldY - (activeF.y + activeF.h + 4)) < 16) {
-                const def = FURNITURE_DEFS[activeF.type] || FURNITURE_DEFS.tea_table;
-                setTextureTarget({
-                  key: `tex_${char?.id}_${activeF.id}`,
-                  name: activeF.name,
-                  recomSize: def.recomSize,
-                  recomRatio: def.recomRatio,
-                  recomDesc: def.recomDesc
-                });
+              // 3. 左下角换贴图角标
+              if (Math.hypot(worldX - (activeF.x - 4), worldY - (activeF.y + activeF.h + 4)) < 18) {
+                openFurnitureTextureModal(activeF);
                 return;
               }
             }
@@ -1134,7 +1320,25 @@
             }
           }
 
-          // 点在空旷处：解除选中，启动单指拖动平移房间视口
+          // 检查是否点击了窗户 (直接唤起换窗景)
+          if (
+            worldX >= ROOM.winX && worldX <= ROOM.winX + ROOM.winW &&
+            worldY >= ROOM.winY && worldY <= ROOM.winY + ROOM.winH
+          ) {
+            setTextureTarget({ key: `tex_${char?.id}_window`, ...BG_SPECS.window });
+            return;
+          }
+
+          // 检查是否点击了照壁墙纸 (直接唤起换墙纸)
+          if (
+            worldX >= ROOM.x + 6 && worldX <= ROOM.x + ROOM.w - 6 &&
+            worldY >= ROOM.y + 6 && worldY <= ROOM.y + ROOM.wallH
+          ) {
+            setTextureTarget({ key: `tex_${char?.id}_wall`, ...BG_SPECS.wall });
+            return;
+          }
+
+          // 点在空旷处：解除选中，启动单指拖动平移视口
           setSelectedFurnitureId(null);
           cam.isPanning = true;
           cam.panStartX = clientX;
@@ -1148,61 +1352,75 @@
         // B. 漫游探索模式下的交互
         // 1. 点击名士互动对白
         const distToPlayer = Math.hypot(worldX - player.x, worldY - (player.y - 48));
-        if (distToPlayer < 58) {
+        if (distToPlayer < 56) {
           const greetings = [
             `“楼主在此，心自清宁。” 🌸`,
             `“今日风清气爽，愿同楼主闲坐半日。” ✨`,
             `“要为楼主续上一盏新茶么？” 🍵`,
-            `“这间雅居由楼主精心布置，甚是舒服呢~” 🪵`
+            `“这间雅居由楼主精心布置，甚是趁心~” 🪵`
           ];
           say(greetings[Math.floor(Math.random() * greetings.length)]);
           return;
         }
 
-        // 2. 点击各家具触发功能 (如点香、坐榻)
-        for (const item of furnituresRef.current) {
+        // 2. 点击窗户互动
+        if (
+          worldX >= ROOM.winX && worldX <= ROOM.winX + ROOM.winW &&
+          worldY >= ROOM.winY && worldY <= ROOM.winY + ROOM.winH
+        ) {
+          player.targetX = ROOM.winX + ROOM.winW / 2;
+          player.targetY = ROOM.y + ROOM.wallH + 48;
+          setTimeout(() => say("凭窗远眺，清风徐来，令人心旷神怡 🍃"), 350);
+          return;
+        }
+
+        // 3. 点击各家具：走至家具外侧边缘停下并触发轻互动（严守碰撞边界，不穿入软榻/桌子内部）
+        for (let i = furnituresRef.current.length - 1; i >= 0; i--) {
+          const item = furnituresRef.current[i];
+          if (item.isFloorDeco) continue;
           if (
             worldX >= item.x && worldX <= item.x + item.w &&
             worldY >= item.y && worldY <= item.y + item.h
           ) {
-            player.targetX = item.x + item.w / 2;
-            player.targetY = Math.min(ROOM.y + ROOM.h - 30, item.y + item.h + 20);
+            // 计算家具正前方或左侧安全站立点（在碰撞盒外侧）
+            const standX = Math.max(ROOM.x + 40, Math.min(ROOM.x + ROOM.w - 40, item.x + item.w / 2));
+            const standY = Math.min(ROOM.y + ROOM.h - 24, item.y + (item.footOffsetY || 0) + (item.footH || item.h) + 24);
+            player.targetX = standX;
+            player.targetY = standY;
+
             if (item.type === "censer") {
               setTimeout(() => {
                 roomParticles.censerLit = !roomParticles.censerLit;
-                say(roomParticles.censerLit ? "点燃沉香，青烟袅袅，幽香满室 🪔" : "熄了沉香，归于清宁 🍃");
-              }, 400);
+                say(roomParticles.censerLit ? "点燃沉香，青烟袅袅 🪔" : "熄了沉香，归于清宁 🍃");
+              }, 350);
             } else if (item.type === "bed") {
               setTimeout(() => {
-                if (player.pose === "sleeping_bed") {
-                  player.pose = "idle";
-                  say("伸个懒腰，神清气爽！✨");
-                } else {
-                  player.pose = "sleeping_bed";
-                  player.x = item.x + item.w / 2;
-                  player.y = item.y + item.h / 2;
-                  say("卧榻小憩，沉香幽幽入梦来... 🌙", 4.5);
-                }
-              }, 400);
+                say("软榻温软，待倦时便可小憩片刻 🌙");
+              }, 350);
             } else if (item.type === "tea_table") {
               setTimeout(() => {
                 say("沸泉初沸，且烹一壶新茶，与楼主共品 🍵");
-              }, 400);
+              }, 350);
+            } else {
+              setTimeout(() => {
+                say(`查看了【${item.name || "雅室摆件"}】 ✨`);
+              }, 350);
             }
             return;
           }
         }
 
-        // 3. 点击地板寻路走动
+        // 4. 点击地板寻路走动（限制在地板合法范围内，途中遇到任何家具均会被 checkCollision 真实阻挡）
+        const clampedTargetX = Math.max(ROOM.x + 38, Math.min(ROOM.x + ROOM.w - 38, worldX));
+        const clampedTargetY = Math.max(ROOM.y + ROOM.wallH + 36, Math.min(ROOM.y + ROOM.h - 22, worldY));
         player.pose = "idle";
-        player.targetX = worldX;
-        player.targetY = worldY;
+        player.targetX = clampedTargetX;
+        player.targetY = clampedTargetY;
       };
 
       const handlePointerMove = (e) => {
         const cam = camera.current;
 
-        // 双指 Pinch 缩放处理
         if (e.touches && e.touches.length === 2) {
           const dist = Math.hypot(
             e.touches[0].clientX - e.touches[1].clientX,
@@ -1221,11 +1439,11 @@
         const { worldX, worldY } = toWorldCoords(clientX, clientY);
 
         // 建造模式下：拖动摆放家具
-        if (isEditMode && dragFurnitureItem) {
-          const newX = Math.round((worldX - dragOffset.x) / 10) * 10;
-          const newY = Math.round((worldY - dragOffset.y) / 10) * 10;
+        if (isEditModeRef.current && dragFurnitureItem) {
+          const newX = Math.round((worldX - dragOffset.x) / 8) * 8;
+          const newY = Math.round((worldY - dragOffset.y) / 8) * 8;
           const clampedX = Math.max(ROOM.x + 10, Math.min(ROOM.x + ROOM.w - dragFurnitureItem.w - 10, newX));
-          const clampedY = Math.max(ROOM.y + 100, Math.min(ROOM.y + ROOM.h - dragFurnitureItem.h - 10, newY));
+          const clampedY = Math.max(ROOM.y + 90, Math.min(ROOM.y + ROOM.h - dragFurnitureItem.h - 8, newY));
 
           const nextList = furnituresRef.current.map((f) =>
             f.id === dragFurnitureItem.id ? { ...f, x: clampedX, y: clampedY } : f
@@ -1247,18 +1465,24 @@
         const cam = camera.current;
         cam.lastPinchDist = 0;
         cam.isPanning = false;
-        if (isEditMode && dragFurnitureItem) {
+        if (isEditModeRef.current && dragFurnitureItem) {
           saveLayout(furnituresRef.current);
           dragFurnitureItem = null;
         }
       };
 
+      // 支持鼠标滚轮缩放 (PC端辅助测试双指缩放效果)
+      const handleWheel = (e) => {
+        e.preventDefault();
+        const cam = camera.current;
+        const delta = e.deltaY < 0 ? 1.08 : 0.92;
+        cam.zoom = Math.max(0.75, Math.min(2.2, cam.zoom * delta));
+      };
+
       canvas.addEventListener("pointerdown", handlePointerDown);
       canvas.addEventListener("pointermove", handlePointerMove);
       window.addEventListener("pointerup", handlePointerUp);
-      canvas.addEventListener("touchstart", handlePointerDown, { passive: true });
-      canvas.addEventListener("touchmove", handlePointerMove, { passive: true });
-      window.addEventListener("touchend", handlePointerUp);
+      canvas.addEventListener("wheel", handleWheel, { passive: false });
 
       return () => {
         isRunning = false;
@@ -1266,27 +1490,27 @@
         canvas.removeEventListener("pointerdown", handlePointerDown);
         canvas.removeEventListener("pointermove", handlePointerMove);
         window.removeEventListener("pointerup", handlePointerUp);
-        canvas.removeEventListener("touchstart", handlePointerDown);
-        canvas.removeEventListener("touchmove", handlePointerMove);
-        window.removeEventListener("touchend", handlePointerUp);
+        canvas.removeEventListener("wheel", handleWheel);
       };
-    }, [isEditMode, currentFloorId, char]);
+    }, [char?.id]);
 
-    // 添加新家具到房间
+    // 添加预设家具到房间
     const handleAddFurniture = (typeKey) => {
       const def = FURNITURE_DEFS[typeKey];
       if (!def) return;
-      const newItem = {
+      const newItem = normalizeFurnitureItem({
         id: `f_${Date.now()}`,
         type: typeKey,
-        x: 340,
+        name: def.name,
+        x: 310,
         y: 350,
         flipX: false,
         ...def
-      };
+      });
       const nextList = [...furnituresRef.current, newItem];
       setFurnitures(nextList);
       saveLayout(nextList);
+      setIsEditMode(true);
       setSelectedFurnitureId(newItem.id);
       setShowBuildDrawer(false);
     };
@@ -1294,10 +1518,12 @@
     // 重置摄像机视角
     const handleResetCamera = () => {
       camera.current.x = 380;
-      camera.current.y = 410;
+      camera.current.y = 390;
       camera.current.zoom = 1.0;
       camera.current.isFollowing = true;
     };
+
+    const activeSelectedFurniture = furnitures.find((f) => f.id === selectedFurnitureId) || null;
 
     return React.createElement(
       "div",
@@ -1315,7 +1541,7 @@
           WebkitUserSelect: "none"
         }
       },
-      // 顶部典雅导航栏
+      // 顶部导航栏
       React.createElement(
         "div",
         {
@@ -1323,7 +1549,7 @@
             display: "flex",
             justifyContent: "space-between",
             alignItems: "center",
-            padding: "8px 14px",
+            padding: "8px 12px",
             paddingTop: "calc(var(--safe-top, 10px) + 6px)",
             background: "linear-gradient(180deg, rgba(46, 36, 28, 0.95) 0%, rgba(38, 30, 24, 0.88) 100%)",
             borderBottom: "1px solid rgba(190, 150, 105, 0.35)",
@@ -1342,35 +1568,45 @@
               color: "#E8DFC8",
               fontSize: "11.5px",
               fontWeight: "bold",
-              cursor: "pointer",
-              display: "flex",
-              alignItems: "center",
-              gap: "3px"
+              cursor: "pointer"
             }
           },
-          "‹ 返回心纸居"
+          "‹ 返回"
         ),
         React.createElement(
           "div",
           {
             style: {
-              display: "flex",
-              alignItems: "center",
-              gap: "5px",
               color: "#F0E8D8",
-              fontSize: "14px",
-              fontWeight: "bold",
-              letterSpacing: "0.5px"
+              fontSize: "13.5px",
+              fontWeight: "bold"
             }
           },
-          React.createElement("span", { style: { color: "#D4AF37", fontSize: "11px" } }, "❖"),
-          `【${char?.name || "名士"}】专属雅室`,
-          React.createElement("span", { style: { color: "#D4AF37", fontSize: "11px" } }, "❖")
+          `❖ ${char?.name || "名士"}雅室 ❖`
         ),
         React.createElement(
           "div",
-          { style: { display: "flex", gap: "6px" } },
-          // 建造模式切换按钮
+          { style: { display: "flex", gap: "5px" } },
+          React.createElement(
+            "button",
+            {
+              onClick: () => {
+                setCustomUploadName("自定义家具");
+                setShowCustomUploadModal(true);
+              },
+              style: {
+                background: "linear-gradient(135deg, #D97706, #B45309)",
+                border: "none",
+                borderRadius: "12px",
+                padding: "4px 9px",
+                color: "#fff",
+                fontSize: "11px",
+                fontWeight: "bold",
+                cursor: "pointer"
+              }
+            },
+            "+ 上传家具"
+          ),
           React.createElement(
             "button",
             {
@@ -1384,23 +1620,21 @@
                   : "linear-gradient(135deg, #D6724B, #B85832)",
                 border: "none",
                 borderRadius: "12px",
-                padding: "4px 11px",
+                padding: "4px 10px",
                 color: "#fff",
                 fontSize: "11px",
                 fontWeight: "bold",
-                cursor: "pointer",
-                boxShadow: "0 2px 6px rgba(0,0,0,0.25)"
+                cursor: "pointer"
               }
             },
-            isEditMode ? "✓ 完成营造" : "🔨 雅居营造"
+            isEditMode ? "✓ 完成" : "🔨 营造"
           ),
-          // 装修地板
           React.createElement(
             "button",
             {
-              onClick: () => setShowFloorDrawer(!showFloorDrawer),
+              onClick: () => setShowTextureHubModal(true),
               style: {
-                background: "rgba(255, 255, 255, 0.12)",
+                background: "rgba(255, 255, 255, 0.14)",
                 border: "1px solid #D6A86E",
                 borderRadius: "12px",
                 padding: "4px 9px",
@@ -1410,7 +1644,7 @@
                 cursor: "pointer"
               }
             },
-            "🎨 铺地"
+            "🎨 换贴图"
           )
         )
       ),
@@ -1447,14 +1681,14 @@
           }
         }),
 
-        // 浮动摄像机控制按钮
+        // 右上角浮动镜头控制按钮
         React.createElement(
           "div",
           {
             style: {
               position: "absolute",
-              top: "14px",
-              right: "14px",
+              top: "12px",
+              right: "12px",
               display: "flex",
               flexDirection: "column",
               gap: "6px",
@@ -1466,62 +1700,93 @@
             {
               onClick: handleResetCamera,
               style: {
-                background: "rgba(30, 24, 20, 0.75)",
+                background: "rgba(30, 24, 20, 0.8)",
                 border: "1px solid #D6A86E",
-                borderRadius: "20px",
-                padding: "4px 8px",
+                borderRadius: "16px",
+                padding: "4px 9px",
                 color: "#F0E8D8",
                 fontSize: "10.5px",
-                cursor: "pointer",
-                backdropFilter: "blur(6px)"
-              },
-              title: "复位视角"
+                cursor: "pointer"
+              }
             },
-            "🎯 聚焦"
+            "🎯 跟随"
           ),
           React.createElement(
             "button",
             {
               onClick: () => {
-                camera.current.zoom = 1.0;
+                camera.current.zoom = Math.min(2.2, camera.current.zoom + 0.25);
               },
               style: {
-                background: "rgba(30, 24, 20, 0.75)",
+                background: "rgba(30, 24, 20, 0.8)",
                 border: "1px solid #D6A86E",
-                borderRadius: "20px",
-                padding: "4px 8px",
+                borderRadius: "16px",
+                padding: "4px 9px",
                 color: "#F0E8D8",
                 fontSize: "10.5px",
-                cursor: "pointer",
-                backdropFilter: "blur(6px)"
-              },
-              title: "恢复1.0x缩放"
+                cursor: "pointer"
+              }
             },
-            "🔍 1.0x"
+            "🔍 放大"
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => {
+                camera.current.zoom = Math.max(0.75, camera.current.zoom - 0.25);
+              },
+              style: {
+                background: "rgba(30, 24, 20, 0.8)",
+                border: "1px solid #D6A86E",
+                borderRadius: "16px",
+                padding: "4px 9px",
+                color: "#F0E8D8",
+                fontSize: "10.5px",
+                cursor: "pointer"
+              }
+            },
+            "🔎 缩小"
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: () => setShowFloorDrawer(!showFloorDrawer),
+              style: {
+                background: "rgba(30, 24, 20, 0.8)",
+                border: "1px solid #D6A86E",
+                borderRadius: "16px",
+                padding: "4px 9px",
+                color: "#F0E8D8",
+                fontSize: "10.5px",
+                cursor: "pointer"
+              }
+            },
+            "🪵 地板"
           )
         ),
 
-        // 建造模式提示条
+        // 左上角营造快捷工具条
         isEditMode && React.createElement(
           "div",
           {
             style: {
               position: "absolute",
-              top: "14px",
-              left: "14px",
-              background: "rgba(30, 24, 20, 0.85)",
+              top: "12px",
+              left: "12px",
+              background: "rgba(30, 24, 20, 0.88)",
               border: "1px solid #D6724B",
-              borderRadius: "16px",
-              padding: "4px 12px",
+              borderRadius: "14px",
+              padding: "5px 10px",
               color: "#F5EFE6",
               fontSize: "11px",
               display: "flex",
+              flexWrap: "wrap",
               alignItems: "center",
-              gap: "8px",
-              zIndex: 20
+              gap: "6px",
+              zIndex: 20,
+              maxWidth: "80%"
             }
           },
-          React.createElement("span", null, "🛠️ 造景模式：拖拽摆放家具"),
           React.createElement(
             "button",
             {
@@ -1529,69 +1794,210 @@
               style: {
                 background: "linear-gradient(135deg, #D6724B, #B85832)",
                 border: "none",
-                borderRadius: "10px",
-                padding: "2px 8px",
+                borderRadius: "8px",
+                padding: "3px 8px",
                 color: "#fff",
                 fontSize: "10.5px",
                 fontWeight: "bold",
                 cursor: "pointer"
               }
             },
-            "+ 新增家具"
+            "📦 预设家具库"
           ),
           React.createElement(
             "button",
             {
               onClick: () => {
-                setTextureTarget({
-                  key: `tex_${char?.id}_wall`,
-                  ...BG_SPECS.wall
-                });
+                setCustomUploadName("自定义家具");
+                setShowCustomUploadModal(true);
               },
               style: {
-                background: "rgba(255,255,255,0.12)",
-                border: "1px solid #D6A86E",
-                borderRadius: "10px",
-                padding: "2px 8px",
+                background: "linear-gradient(135deg, #D97706, #B45309)",
+                border: "none",
+                borderRadius: "8px",
+                padding: "3px 8px",
                 color: "#fff",
                 fontSize: "10.5px",
+                fontWeight: "bold",
                 cursor: "pointer"
               }
             },
-            "换墙壁"
+            "✨ +上传新家具"
           ),
           React.createElement(
             "button",
             {
-              onClick: () => {
-                setTextureTarget({
-                  key: `tex_${char?.id}_window`,
-                  ...BG_SPECS.window
-                });
-              },
+              onClick: () => setShowTextureHubModal(true),
               style: {
-                background: "rgba(255,255,255,0.12)",
+                background: "rgba(255,255,255,0.14)",
                 border: "1px solid #D6A86E",
-                borderRadius: "10px",
-                padding: "2px 8px",
+                borderRadius: "8px",
+                padding: "3px 8px",
                 color: "#fff",
                 fontSize: "10.5px",
                 cursor: "pointer"
               }
             },
-            "换窗景"
+            "🎨 全屋换贴图"
+          ),
+          React.createElement(
+            "button",
+            {
+              onClick: handleResetDefaultFurnitures,
+              style: {
+                background: "rgba(255,255,255,0.1)",
+                border: "1px solid rgba(214,168,110,0.4)",
+                borderRadius: "8px",
+                padding: "3px 8px",
+                color: "#E8DFC8",
+                fontSize: "10.5px",
+                cursor: "pointer"
+              }
+            },
+            "↺ 恢复初始家具"
+          )
+        ),
+
+        // 底部选中家具悬浮微操栏 (支持换贴图、翻转、缩放、一键回收)
+        isEditMode && activeSelectedFurniture && React.createElement(
+          "div",
+          {
+            style: {
+              position: "absolute",
+              bottom: "14px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              background: "rgba(34, 26, 20, 0.94)",
+              border: "1.5px solid #D6724B",
+              borderRadius: "16px",
+              padding: "8px 12px",
+              display: "flex",
+              flexDirection: "column",
+              gap: "6px",
+              zIndex: 30,
+              width: "92%",
+              maxWidth: "400px",
+              boxShadow: "0 8px 24px rgba(0,0,0,0.5)"
+            }
+          },
+          React.createElement(
+            "div",
+            { style: { display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11.5px", color: "#F5EFE6" } },
+            React.createElement(
+              "span",
+              { style: { fontWeight: "bold", color: "#FBBF24" } },
+              `已选中：【${activeSelectedFurniture.name}】 (推荐贴图 ${activeSelectedFurniture.w * 2}×${activeSelectedFurniture.h * 2})`
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => setSelectedFurnitureId(null),
+                style: { background: "none", border: "none", color: "#D6C7B2", fontSize: "13px", cursor: "pointer" }
+              },
+              "✕"
+            )
+          ),
+          React.createElement(
+            "div",
+            { style: { display: "flex", gap: "6px", justifyContent: "space-between" } },
+            React.createElement(
+              "button",
+              {
+                onClick: () => openFurnitureTextureModal(activeSelectedFurniture),
+                style: {
+                  flex: 1,
+                  background: "linear-gradient(135deg, #D97706, #B45309)",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "5px 6px",
+                  color: "#fff",
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  cursor: "pointer"
+                }
+              },
+              "🎨 换贴图"
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => handleFlipFurniture(activeSelectedFurniture.id),
+                style: {
+                  flex: 1,
+                  background: "#2563EB",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "5px 6px",
+                  color: "#fff",
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  cursor: "pointer"
+                }
+              },
+              "⇄ 翻转"
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => handleScaleFurniture(1.12),
+                style: {
+                  background: "rgba(255,255,255,0.15)",
+                  border: "1px solid #D6A86E",
+                  borderRadius: "8px",
+                  padding: "5px 8px",
+                  color: "#fff",
+                  fontSize: "11px",
+                  cursor: "pointer"
+                }
+              },
+              "➕放大"
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => handleScaleFurniture(0.88),
+                style: {
+                  background: "rgba(255,255,255,0.15)",
+                  border: "1px solid #D6A86E",
+                  borderRadius: "8px",
+                  padding: "5px 8px",
+                  color: "#fff",
+                  fontSize: "11px",
+                  cursor: "pointer"
+                }
+              },
+              "➖缩小"
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => handleRecycleFurniture(activeSelectedFurniture.id),
+                style: {
+                  flex: 1,
+                  background: "#DC2626",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "5px 6px",
+                  color: "#fff",
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  cursor: "pointer"
+                }
+              },
+              "🗑️ 回收"
+            )
           )
         )
       ),
 
-      // 4. 百宝营造阁 (家具添加抽屉)
+      // 4. 百宝营造阁 (预设家具库 + 自定义上传入口)
       showBuildDrawer && React.createElement(
         "div",
         {
           style: {
             background: "linear-gradient(180deg, #FBF8F2 0%, #F3EBD8 100%)",
             borderTop: "2px solid #D6A86E",
-            padding: "12px 16px 20px",
+            padding: "12px 14px 18px",
             zIndex: 100,
             boxShadow: "0 -6px 25px rgba(0,0,0,0.4)"
           }
@@ -1599,7 +2005,7 @@
         React.createElement(
           "div",
           { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" } },
-          React.createElement("div", { style: { fontSize: "13px", fontWeight: "bold", color: "#5C4129" } }, "❖ 百宝营造阁 · 增设家具"),
+          React.createElement("div", { style: { fontSize: "13px", fontWeight: "bold", color: "#5C4129" } }, "❖ 百宝营造阁 · 点击增设家具"),
           React.createElement(
             "button",
             {
@@ -1611,8 +2017,8 @@
         ),
         React.createElement(
           "div",
-          { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px" } },
-          Object.keys(FURNITURE_DEFS).map((key) => {
+          { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "6px", marginBottom: "8px" } },
+          ["tea_table", "bed", "censer", "screen", "guqin_desk", "bookshelf", "carpet"].map((key) => {
             const def = FURNITURE_DEFS[key];
             return React.createElement(
               "button",
@@ -1623,26 +2029,350 @@
                   background: "#fff",
                   border: "1px solid #E6D4BE",
                   borderRadius: "10px",
-                  padding: "8px 4px",
+                  padding: "6px 4px",
                   textAlign: "center",
                   cursor: "pointer"
                 }
               },
-              React.createElement("div", { style: { fontSize: "18px", marginBottom: "2px" } }, def.icon),
-              React.createElement("div", { style: { fontSize: "11px", fontWeight: "bold", color: "#5C4129" } }, def.name)
+              React.createElement("div", { style: { fontSize: "17px" } }, def.icon),
+              React.createElement("div", { style: { fontSize: "10.5px", fontWeight: "bold", color: "#5C4129" } }, def.name),
+              React.createElement("div", { style: { fontSize: "9px", color: "#8C7255" } }, def.recomSize)
             );
+          }),
+          React.createElement(
+            "button",
+            {
+              onClick: () => {
+                setCustomUploadName("自定义家具");
+                setShowCustomUploadModal(true);
+              },
+              style: {
+                background: "linear-gradient(135deg, #FFF7ED 0%, #FFEDD5 100%)",
+                border: "1.5px dashed #D97706",
+                borderRadius: "10px",
+                padding: "6px 4px",
+                textAlign: "center",
+                cursor: "pointer"
+              }
+            },
+            React.createElement("div", { style: { fontSize: "17px" } }, "✨"),
+            React.createElement("div", { style: { fontSize: "10.5px", fontWeight: "bold", color: "#B45309" } }, "+自定义家具"),
+            React.createElement("div", { style: { fontSize: "9px", color: "#D97706" } }, "上传本地图片")
+          )
+        )
+      ),
+
+      // 5. 全屋家具/墙面/窗景一键换贴图与回收总览弹窗
+      showTextureHubModal && React.createElement(
+        "div",
+        {
+          style: {
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.72)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100005,
+            padding: "16px"
+          },
+          onClick: () => setShowTextureHubModal(false)
+        },
+        React.createElement(
+          "div",
+          {
+            style: {
+              background: "linear-gradient(180deg, #FDFBF7 0%, #F4ECE0 100%)",
+              border: "2px solid #D6A86E",
+              borderRadius: "18px",
+              padding: "16px",
+              width: "100%",
+              maxWidth: "400px",
+              maxHeight: "80vh",
+              display: "flex",
+              flexDirection: "column",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
+            },
+            onClick: (e) => e.stopPropagation()
+          },
+          React.createElement(
+            "div",
+            { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" } },
+            React.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", color: "#5C4129" } }, "🎨 全屋贴图更换与家具管理"),
+            React.createElement(
+              "button",
+              {
+                onClick: () => setShowTextureHubModal(false),
+                style: { background: "none", border: "none", fontSize: "16px", color: "#8C7255", cursor: "pointer" }
+              },
+              "✕"
+            )
+          ),
+          React.createElement(
+            "div",
+            { style: { overflowY: "auto", display: "flex", flexDirection: "column", gap: "8px", paddingRight: "2px" } },
+            // 墙面、窗景、地板三项基础结构
+            [
+              { key: `tex_${char?.id}_wall`, icon: "🏞️", ...BG_SPECS.wall },
+              { key: `tex_${char?.id}_window`, icon: "🪟", ...BG_SPECS.window },
+              { key: `tex_${char?.id}_floor`, type: "floor", icon: "🪵", ...BG_SPECS.floor }
+            ].map((bg) =>
+              React.createElement(
+                "div",
+                {
+                  key: bg.key,
+                  style: {
+                    background: "#fff",
+                    border: "1px solid #E6D4BE",
+                    borderRadius: "10px",
+                    padding: "8px 10px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }
+                },
+                React.createElement(
+                  "div",
+                  null,
+                  React.createElement("div", { style: { fontSize: "12px", fontWeight: "bold", color: "#5C4129" } }, `${bg.icon} ${bg.name}`),
+                  React.createElement("div", { style: { fontSize: "10px", color: "#D6724B" } }, `推荐尺寸: ${bg.recomSize} (${bg.recomRatio})`)
+                ),
+                React.createElement(
+                  "button",
+                  {
+                    onClick: () => {
+                      setShowTextureHubModal(false);
+                      setTextureTarget(bg);
+                    },
+                    style: {
+                      background: "linear-gradient(135deg, #D6724B, #B85832)",
+                      border: "none",
+                      borderRadius: "8px",
+                      padding: "5px 10px",
+                      color: "#fff",
+                      fontSize: "10.5px",
+                      fontWeight: "bold",
+                      cursor: "pointer"
+                    }
+                  },
+                  "换贴图"
+                )
+              )
+            ),
+
+            // 房间内所有现有家具列表 (支持换贴图 + 回收)
+            furnitures.map((item) => {
+              const def = FURNITURE_DEFS[item.type] || FURNITURE_DEFS.custom_medium;
+              return React.createElement(
+                "div",
+                {
+                  key: item.id,
+                  style: {
+                    background: "#fff",
+                    border: "1px solid #E6D4BE",
+                    borderRadius: "10px",
+                    padding: "8px 10px",
+                    display: "flex",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }
+                },
+                React.createElement(
+                  "div",
+                  null,
+                  React.createElement("div", { style: { fontSize: "12px", fontWeight: "bold", color: "#5C4129" } }, `${def.icon || "🪑"} ${item.name}`),
+                  React.createElement("div", { style: { fontSize: "10px", color: "#D6724B" } }, `推荐尺寸: ${item.w * 2} × ${item.h * 2} px (${def.recomRatio})`)
+                ),
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", gap: "6px" } },
+                  React.createElement(
+                    "button",
+                    {
+                      onClick: () => {
+                        setShowTextureHubModal(false);
+                        openFurnitureTextureModal(item);
+                      },
+                      style: {
+                        background: "linear-gradient(135deg, #D97706, #B45309)",
+                        border: "none",
+                        borderRadius: "8px",
+                        padding: "5px 10px",
+                        color: "#fff",
+                        fontSize: "10.5px",
+                        fontWeight: "bold",
+                        cursor: "pointer"
+                      }
+                    },
+                    "换贴图"
+                  ),
+                  React.createElement(
+                    "button",
+                    {
+                      onClick: () => handleRecycleFurniture(item.id),
+                      style: {
+                        background: "#FEE2E2",
+                        border: "1px solid #FCA5A5",
+                        borderRadius: "8px",
+                        padding: "5px 8px",
+                        color: "#DC2626",
+                        fontSize: "10.5px",
+                        fontWeight: "bold",
+                        cursor: "pointer"
+                      }
+                    },
+                    "回收"
+                  )
+                )
+              );
+            })
+          )
+        )
+      ),
+
+      // 6. 自定义上传新家具模态弹窗
+      showCustomUploadModal && React.createElement(
+        "div",
+        {
+          style: {
+            position: "fixed",
+            inset: 0,
+            background: "rgba(0,0,0,0.72)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 100010,
+            padding: "18px"
+          },
+          onClick: () => setShowCustomUploadModal(false)
+        },
+        React.createElement(
+          "div",
+          {
+            style: {
+              background: "linear-gradient(180deg, #FDFBF7 0%, #F4ECE0 100%)",
+              border: "2px solid #D6A86E",
+              borderRadius: "18px",
+              padding: "16px 18px",
+              width: "100%",
+              maxWidth: "360px",
+              boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
+            },
+            onClick: (e) => e.stopPropagation()
+          },
+          React.createElement(
+            "div",
+            { style: { fontSize: "14px", fontWeight: "bold", color: "#5C4129", marginBottom: "10px" } },
+            "✨ 上传自定义新家具"
+          ),
+          React.createElement(
+            "div",
+            { style: { marginBottom: "10px" } },
+            React.createElement("div", { style: { fontSize: "11px", color: "#6B5238", marginBottom: "4px" } }, "家具名称："),
+            React.createElement("input", {
+              type: "text",
+              value: customUploadName,
+              onChange: (e) => setCustomUploadName(e.target.value),
+              placeholder: "例如：青铜酒樽 / 懒人软垫",
+              style: {
+                width: "100%",
+                padding: "6px 10px",
+                borderRadius: "8px",
+                border: "1px solid #D6C7B2",
+                fontSize: "12px",
+                color: "#5C4129",
+                boxSizing: "border-box"
+              }
+            })
+          ),
+          React.createElement(
+            "div",
+            { style: { marginBottom: "12px" } },
+            React.createElement("div", { style: { fontSize: "11px", color: "#6B5238", marginBottom: "4px" } }, "规格与碰撞类型（附推荐贴图大小）："),
+            React.createElement(
+              "div",
+              { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" } },
+              [
+                { key: "custom_small", label: "🪴 小型摆件", size: "170×190 (有碰撞)" },
+                { key: "custom_medium", label: "🪑 中型案几", size: "300×220 (有碰撞)" },
+                { key: "custom_large", label: "🏯 大型榻屏", size: "330×350 (有碰撞)" },
+                { key: "carpet", label: "🧶 地面毯垫", size: "440×260 (可踩踏)" }
+              ].map((opt) => {
+                const active = customUploadPreset === opt.key;
+                return React.createElement(
+                  "div",
+                  {
+                    key: opt.key,
+                    onClick: () => setCustomUploadPreset(opt.key),
+                    style: {
+                      background: active ? "#FFF7ED" : "#fff",
+                      border: active ? "1.5px solid #D97706" : "1px solid #E6D4BE",
+                      borderRadius: "8px",
+                      padding: "6px",
+                      cursor: "pointer"
+                    }
+                  },
+                  React.createElement("div", { style: { fontSize: "11px", fontWeight: "bold", color: "#5C4129" } }, opt.label),
+                  React.createElement("div", { style: { fontSize: "9.5px", color: "#D6724B" } }, `推荐 ${opt.size}`)
+                );
+              })
+            )
+          ),
+          React.createElement(
+            "div",
+            { style: { display: "flex", gap: "8px", justifyContent: "flex-end" } },
+            React.createElement(
+              "button",
+              {
+                onClick: () => setShowCustomUploadModal(false),
+                style: {
+                  background: "#EDE4D4",
+                  border: "1px solid #D6C7B2",
+                  borderRadius: "10px",
+                  padding: "6px 12px",
+                  color: "#6B5238",
+                  fontSize: "11px",
+                  cursor: "pointer"
+                }
+              },
+              "取消"
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => customFurnitureInputRef.current && customFurnitureInputRef.current.click(),
+                style: {
+                  background: "linear-gradient(135deg, #D97706, #B45309)",
+                  border: "none",
+                  borderRadius: "10px",
+                  padding: "6px 14px",
+                  color: "#fff",
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  cursor: "pointer"
+                }
+              },
+              "📂 选择图片并摆放"
+            )
+          ),
+          React.createElement("input", {
+            type: "file",
+            ref: customFurnitureInputRef,
+            accept: "image/*",
+            onChange: handleCustomFurnitureUpload,
+            style: { display: "none" }
           })
         )
       ),
 
-      // 5. 材质贴图上传弹窗 (含推荐尺寸/比例指南)
+      // 7. 单个构件材质贴图上传弹窗 (含推荐尺寸/比例指南)
       textureTarget && React.createElement(
         "div",
         {
           style: {
             position: "fixed",
             inset: 0,
-            background: "rgba(0,0,0,0.7)",
+            background: "rgba(0,0,0,0.72)",
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
@@ -1658,17 +2388,17 @@
               background: "linear-gradient(180deg, #FDFBF7 0%, #F4ECE0 100%)",
               border: "2px solid #D6A86E",
               borderRadius: "18px",
-              padding: "18px 20px",
+              padding: "16px 18px",
               width: "100%",
-              maxWidth: "360px",
+              maxWidth: "350px",
               boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
             },
             onClick: (e) => e.stopPropagation()
           },
           React.createElement(
             "div",
-            { style: { fontSize: "14px", fontWeight: "bold", color: "#5C4129", marginBottom: "10px" } },
-            `🎨 自定义换新贴图: 【${textureTarget.name}】`
+            { style: { fontSize: "13.5px", fontWeight: "bold", color: "#5C4129", marginBottom: "8px" } },
+            `🎨 更换贴图: 【${textureTarget.name}】`
           ),
           React.createElement(
             "div",
@@ -1677,16 +2407,16 @@
                 background: "rgba(214, 168, 110, 0.15)",
                 border: "1px solid rgba(214, 168, 110, 0.4)",
                 borderRadius: "10px",
-                padding: "8px 12px",
+                padding: "8px 10px",
                 marginBottom: "12px",
                 fontSize: "11px",
                 color: "#5C4129",
                 lineHeight: "1.6"
               }
             },
-            React.createElement("div", { style: { fontWeight: "bold", color: "#D6724B" } }, `📐 推荐分辨率: ${textureTarget.recomSize}`),
+            React.createElement("div", { style: { fontWeight: "bold", color: "#D6724B" } }, `📐 推荐尺寸: ${textureTarget.recomSize}`),
             React.createElement("div", null, `⚖️ 推荐比例: ${textureTarget.recomRatio}`),
-            React.createElement("div", { style: { color: "#8C7255", marginTop: "2px" } }, textureTarget.recomDesc)
+            React.createElement("div", { style: { color: "#8C7255" } }, textureTarget.recomDesc)
           ),
           React.createElement(
             "div",
@@ -1736,22 +2466,22 @@
         )
       ),
 
-      // 6. 地板材质抽屉
+      // 8. 地板材质抽屉
       showFloorDrawer && React.createElement(
         "div",
         {
           style: {
             background: "linear-gradient(180deg, #FBF8F2 0%, #F3EBD8 100%)",
             borderTop: "2px solid #D6A86E",
-            padding: "14px 18px 22px",
+            padding: "12px 16px 20px",
             zIndex: 100,
             boxShadow: "0 -8px 30px rgba(0,0,0,0.5)"
           }
         },
         React.createElement(
           "div",
-          { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" } },
-          React.createElement("div", { style: { fontSize: "13px", fontWeight: "bold", color: "#5C4129" } }, "❖ 专属雅室 · 地板铺设"),
+          { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" } },
+          React.createElement("div", { style: { fontSize: "13px", fontWeight: "bold", color: "#5C4129" } }, "❖ 地板铺设"),
           React.createElement(
             "button",
             {
@@ -1763,7 +2493,7 @@
         ),
         React.createElement(
           "div",
-          { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginBottom: "12px" } },
+          { style: { display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "8px", marginBottom: "10px" } },
           BUILTIN_FLOORS.map((floor) => {
             const isSelected = currentFloorId === floor.id;
             return React.createElement(
@@ -1777,14 +2507,14 @@
                 style: {
                   background: isSelected ? "linear-gradient(135deg, #FFF8ED 0%, #F9ECE0 100%)" : "#fff",
                   border: isSelected ? "2px solid #D6724B" : "1px solid #E6D4BE",
-                  borderRadius: "12px",
-                  padding: "8px 6px",
+                  borderRadius: "10px",
+                  padding: "6px 4px",
                   textAlign: "center",
                   cursor: "pointer"
                 }
               },
-              React.createElement("div", { style: { fontSize: "18px", marginBottom: "3px" } }, floor.icon),
-              React.createElement("div", { style: { fontSize: "11px", fontWeight: "bold", color: "#5C4129" } }, floor.name)
+              React.createElement("div", { style: { fontSize: "17px" } }, floor.icon),
+              React.createElement("div", { style: { fontSize: "10.5px", fontWeight: "bold", color: "#5C4129" } }, floor.name)
             );
           })
         ),
@@ -1803,14 +2533,14 @@
               background: currentFloorId === "custom" ? "linear-gradient(135deg, #D6724B, #B85832)" : "#EDE4D4",
               border: "1px solid #D6A86E",
               borderRadius: "10px",
-              padding: "7px 12px",
+              padding: "6px 12px",
               color: currentFloorId === "custom" ? "#fff" : "#6B5238",
               fontSize: "11px",
               fontWeight: "bold",
               cursor: "pointer"
             }
           },
-          currentFloorId === "custom" ? "✨ 已应用自定义贴图 (点击重置/更换)" : "+ 上传自定义地砖贴图 (推荐 256×256)"
+          currentFloorId === "custom" ? "✨ 已应用自定义地砖 (点击更换/重置)" : "+ 上传自定义地砖贴图 (推荐 256×256)"
         )
       )
     );
