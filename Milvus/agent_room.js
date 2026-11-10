@@ -326,6 +326,7 @@
     const w = Number(f.w) || def.w;
     const h = Number(f.h) || def.h;
     const isFloorDeco = f.isFloorDeco !== undefined ? f.isFloorDeco : Boolean(def.isFloorDeco);
+    const interactSpeech = typeof f.interactSpeech === "string" ? f.interactSpeech : "";
     if (isFloorDeco) {
       return {
         ...def,
@@ -336,7 +337,8 @@
         footOffsetY: 0,
         footW: 0,
         footH: 0,
-        isFloorDeco: true
+        isFloorDeco: true,
+        interactSpeech
       };
     }
     const scaleX = w / def.w;
@@ -350,7 +352,8 @@
       footOffsetY: Math.round(def.footOffsetY * scaleY),
       footW: Math.max(24, Math.round(def.footW * scaleX)),
       footH: Math.max(24, Math.round(def.footH * scaleY)),
-      isFloorDeco: false
+      isFloorDeco: false,
+      interactSpeech
     };
   };
 
@@ -361,7 +364,10 @@
     const canvasRef = useRef(null);
     const containerRef = useRef(null);
     const textureInputRef = useRef(null);
+    const interactGifInputRef = useRef(null);
     const customFurnitureInputRef = useRef(null);
+    const customFurnitureGifInputRef = useRef(null);
+    const interactGifDomRef = useRef(null);
 
     // 模式切换与UI状态 (同步维护 Ref 供 Canvas 渲染循环无延迟读取)
     const [isEditMode, setIsEditMode] = useState(false);
@@ -375,12 +381,16 @@
     const [showBuildDrawer, setShowBuildDrawer] = useState(false);
     const [showFloorDrawer, setShowFloorDrawer] = useState(false);
     const [showTextureHubModal, setShowTextureHubModal] = useState(false);
-    const [textureTarget, setTextureTarget] = useState(null); // { key, name, recomSize, recomRatio, recomDesc, type }
+    const [textureTarget, setTextureTarget] = useState(null); // { key, furnitureId, name, recomSize, recomRatio, recomDesc, type }
+    const [editingInteractSpeech, setEditingInteractSpeech] = useState("");
+    const [gifVersion, setGifVersion] = useState(0);
 
     // 自定义上传新家具弹窗状态
     const [showCustomUploadModal, setShowCustomUploadModal] = useState(false);
     const [customUploadName, setCustomUploadName] = useState("自定义家具");
     const [customUploadPreset, setCustomUploadPreset] = useState("custom_medium");
+    const [customUploadSpeech, setCustomUploadSpeech] = useState("");
+    const [customUploadGifDataUrl, setCustomUploadGifDataUrl] = useState(null);
 
     // 房间地板
     const [currentFloorId, setCurrentFloorId] = useState("wood");
@@ -392,8 +402,9 @@
     const furnituresRef = useRef(furnitures);
     furnituresRef.current = furnitures;
 
-    // 内存贴图材质池 (key => Image)
+    // 内存贴图材质池 (key => Image) 与家具绑定角色GIF池 (furnitureId => dataUrl)
     const texturePool = useRef(new Map());
+    const gifUrlPool = useRef(new Map());
 
     // 虚拟摄像机状态
     const camera = useRef({
@@ -427,7 +438,7 @@
       if (!char || !char.id) return;
       const charId = char.id;
 
-      let initialList = createDefaultFurnitures();
+      let initialList = createDefaultFurnitures().map(normalizeFurnitureItem);
       try {
         const savedLayout = JSON.parse(localStorage.getItem(`t8_room_layout_${charId}`) || "null");
         if (savedLayout && Array.isArray(savedLayout.furnitures)) {
@@ -443,7 +454,7 @@
         console.warn("[AgentRoom] 读取房间布局失败:", e);
       }
 
-      // 异步读取 IndexedDB 贴图并存入材质池
+      // 异步读取 IndexedDB 贴图与角色交互 GIF 并存入内存池
       const loadTextures = async () => {
         const keysToLoad = [
           `tex_${charId}_wall`,
@@ -462,11 +473,21 @@
             };
           }
         }
+
+        // 读取各家具绑定的角色交互 GIF
+        for (const f of initialList) {
+          const gifKey = `tex_${charId}_${f.id}_gif`;
+          const gifDataUrl = await getIDBTexture(gifKey);
+          if (gifDataUrl && typeof gifDataUrl === "string") {
+            gifUrlPool.current.set(f.id, gifDataUrl);
+          }
+        }
+        setGifVersion((v) => v + 1);
       };
       loadTextures();
     }, [char?.id]);
 
-    // 保存布局至 localStorage (支持空数组，确保全部回收后持久化)
+    // 保存布局至 localStorage (含 interactSpeech 角色特定发言)
     const saveLayout = (newList, floorId) => {
       if (!char || !char.id) return;
       try {
@@ -481,7 +502,8 @@
             w: Math.round(f.w),
             h: Math.round(f.h),
             flipX: Boolean(f.flipX),
-            isFloorDeco: Boolean(f.isFloorDeco)
+            isFloorDeco: Boolean(f.isFloorDeco),
+            interactSpeech: typeof f.interactSpeech === "string" ? f.interactSpeech : ""
           })),
           updatedAt: Date.now()
         };
@@ -489,6 +511,17 @@
       } catch (e) {
         console.warn("[AgentRoom] 保存布局失败:", e);
       }
+    };
+
+    // 保存当前弹窗中编辑的家具特定发言
+    const persistCurrentTargetSpeech = (speechText) => {
+      if (!textureTarget || !textureTarget.furnitureId) return;
+      const targetId = textureTarget.furnitureId;
+      const nextList = furnituresRef.current.map((f) =>
+        f.id === targetId ? { ...f, interactSpeech: (speechText || "").trim() } : f
+      );
+      setFurnitures(nextList);
+      saveLayout(nextList);
     };
 
     // 2. 贴图上传处理 (写入 IndexedDB)
@@ -511,7 +544,9 @@
             saveLayout(furnituresRef.current, "custom");
           }
         };
-        setTextureTarget(null);
+        if (textureTarget.furnitureId) {
+          persistCurrentTargetSpeech(editingInteractSpeech);
+        }
       };
       reader.readAsDataURL(file);
       e.target.value = "";
@@ -526,10 +561,48 @@
         setCurrentFloorId("wood");
         saveLayout(furnituresRef.current, "wood");
       }
-      setTextureTarget(null);
     };
 
-    // 上传自定义新家具并直接放入房间
+    // 家具绑定角色交互 GIF 上传 (写入 IndexedDB)
+    const handleInteractGifUpload = (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file || !textureTarget || !textureTarget.furnitureId || !char) return;
+      const fId = textureTarget.furnitureId;
+      const gifKey = `tex_${char.id}_${fId}_gif`;
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        const base64 = ev.target.result;
+        await setIDBTexture(gifKey, base64);
+        gifUrlPool.current.set(fId, base64);
+        setGifVersion((v) => v + 1);
+      };
+      reader.readAsDataURL(file);
+      e.target.value = "";
+    };
+
+    // 清除家具绑定的角色交互 GIF
+    const handleResetInteractGif = async () => {
+      if (!textureTarget || !textureTarget.furnitureId || !char) return;
+      const fId = textureTarget.furnitureId;
+      const gifKey = `tex_${char.id}_${fId}_gif`;
+      await deleteIDBTexture(gifKey);
+      gifUrlPool.current.delete(fId);
+      setGifVersion((v) => v + 1);
+    };
+
+    // 自定义新家具弹窗：预选绑定角色 GIF
+    const handleCustomFurnitureGifSelect = (e) => {
+      const file = e.target.files && e.target.files[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => {
+        setCustomUploadGifDataUrl(ev.target.result);
+      };
+      reader.readAsDataURL(file);
+      e.target.value = "";
+    };
+
+    // 上传自定义新家具并直接放入房间（同时保存绑定的角色GIF与特定发言）
     const handleCustomFurnitureUpload = (e) => {
       const file = e.target.files && e.target.files[0];
       if (!file || !char) return;
@@ -550,6 +623,14 @@
           texturePool.current.set(texKey, img);
         };
 
+        // 若同时绑定了角色交互 GIF，一并存入 IndexedDB
+        if (customUploadGifDataUrl) {
+          const gifKey = `tex_${char.id}_${newId}_gif`;
+          await setIDBTexture(gifKey, customUploadGifDataUrl);
+          gifUrlPool.current.set(newId, customUploadGifDataUrl);
+          setGifVersion((v) => v + 1);
+        }
+
         const rawItem = {
           id: newId,
           type: presetKey,
@@ -559,7 +640,8 @@
           w: def.w,
           h: def.h,
           flipX: false,
-          isFloorDeco: Boolean(def.isFloorDeco)
+          isFloorDeco: Boolean(def.isFloorDeco),
+          interactSpeech: (customUploadSpeech || "").trim()
         };
         const newItem = normalizeFurnitureItem(rawItem);
         const nextList = [...furnituresRef.current, newItem];
@@ -567,6 +649,8 @@
         saveLayout(nextList);
         setIsEditMode(true);
         setSelectedFurnitureId(newItem.id);
+        setCustomUploadSpeech("");
+        setCustomUploadGifDataUrl(null);
         setShowCustomUploadModal(false);
         setShowBuildDrawer(false);
       };
@@ -611,14 +695,17 @@
       saveLayout(nextList);
     };
 
-    // 选中家具操作：打开换贴图弹窗
+    // 选中家具操作：打开换贴图与角色交互绑定弹窗
     const openFurnitureTextureModal = (item) => {
       if (!item || !char) return;
-      const def = FURNITURE_DEFS[item.type] || FURNITURE_DEFS.custom_medium;
+      const latestItem = furnituresRef.current.find((f) => f.id === item.id) || item;
+      const def = FURNITURE_DEFS[latestItem.type] || FURNITURE_DEFS.custom_medium;
+      setEditingInteractSpeech(latestItem.interactSpeech || "");
       setTextureTarget({
-        key: `tex_${char.id}_${item.id}`,
-        name: item.name || def.name,
-        recomSize: `${item.w * 2} × ${item.h * 2} px`,
+        key: `tex_${char.id}_${latestItem.id}`,
+        furnitureId: latestItem.id,
+        name: latestItem.name || def.name,
+        recomSize: `${latestItem.w * 2} × ${latestItem.h * 2} px`,
         recomRatio: def.recomRatio || "自由比例",
         recomDesc: def.recomDesc || "推荐透明背景 PNG 图片"
       });
@@ -709,11 +796,12 @@
         isMoving: false,
         walkCycle: 0,
         pose: "idle",
+        interactFurnitureId: null,
         bubbleText: `楼主，欢迎造访我的雅室~ ✨`,
         bubbleTimer: 4.0
       };
 
-      const say = (text, duration = 3.2) => {
+      const say = (text, duration = 3.6) => {
         player.bubbleText = text;
         player.bubbleTimer = duration;
       };
@@ -1063,7 +1151,7 @@
         }
       };
 
-      // 绘制纯净名士小人
+      // 绘制纯净名士小人（若正处于家具交互且绑定了角色 GIF，则由同步 DOM <img> 渲染流畅动图）
       const drawCharacter = () => {
         const pX = player.x;
         const pY = player.y;
@@ -1076,35 +1164,42 @@
           drawW = Math.round(Math.min(115, Math.max(55, targetH * aspect)));
         }
 
+        const hasActiveInteractGif =
+          !isEditModeRef.current &&
+          player.interactFurnitureId &&
+          gifUrlPool.current.has(player.interactFurnitureId);
+
         // 脚底自然柔和投影
         ctx.fillStyle = "rgba(40, 25, 15, 0.28)";
         ctx.beginPath();
         ctx.ellipse(pX, pY + 2, Math.max(22, drawW * 0.32), 7, 0, 0, Math.PI * 2);
         ctx.fill();
 
-        ctx.save();
-        ctx.translate(pX, pY);
-
-        if (player.facing === -1) {
-          ctx.scale(-1, 1);
-        }
-
         const bob = player.isMoving ? Math.sin(player.walkCycle * 9) * 3.5 : 0;
 
-        if (avatarImg) {
-          ctx.drawImage(avatarImg, -drawW / 2, -drawH + bob, drawW, drawH);
-        } else {
+        if (!hasActiveInteractGif) {
           ctx.save();
-          drawRoundedRect(-36, -72 + bob, 72, 72, 36, "#EAD7C2", "#8B6544", 2.5);
-          ctx.fillStyle = "#5C4129";
-          ctx.font = "bold 24px sans-serif";
-          ctx.textAlign = "center";
-          ctx.textBaseline = "middle";
-          ctx.fillText((char.name || "名")[0], 0, -36 + bob);
+          ctx.translate(pX, pY);
+
+          if (player.facing === -1) {
+            ctx.scale(-1, 1);
+          }
+
+          if (avatarImg) {
+            ctx.drawImage(avatarImg, -drawW / 2, -drawH + bob, drawW, drawH);
+          } else {
+            ctx.save();
+            drawRoundedRect(-36, -72 + bob, 72, 72, 36, "#EAD7C2", "#8B6544", 2.5);
+            ctx.fillStyle = "#5C4129";
+            ctx.font = "bold 24px sans-serif";
+            ctx.textAlign = "center";
+            ctx.textBaseline = "middle";
+            ctx.fillText((char.name || "名")[0], 0, -36 + bob);
+            ctx.restore();
+          }
+
           ctx.restore();
         }
-
-        ctx.restore();
 
         // 头顶气泡对白
         if (player.bubbleText && player.bubbleTimer > 0) {
@@ -1113,7 +1208,7 @@
           const tw = ctx.measureText(player.bubbleText).width;
           const bw = Math.max(76, tw + 22);
           const bx = pX - bw / 2;
-          const by = pY - drawH - 18 + bob;
+          const by = pY - drawH - 22 + bob;
 
           drawRoundedRect(bx, by, bw, 28, 14, "#FFFBF2", "#8F6443", 1.8);
           ctx.beginPath();
@@ -1238,6 +1333,48 @@
         });
 
         ctx.restore();
+
+        // 同步更新家具交互绑定的动态角色 GIF 图层 (保证多帧 GIF 100% 流畅播放并精确跟随镜头缩放/平移)
+        const gifEl = interactGifDomRef.current;
+        if (gifEl) {
+          const activeFId = !isEditModeRef.current ? player.interactFurnitureId : null;
+          const gifDataUrl = activeFId ? gifUrlPool.current.get(activeFId) : null;
+          if (gifDataUrl && containerRef.current) {
+            const cRect = canvas.getBoundingClientRect();
+            const wrapRect = containerRef.current.getBoundingClientRect();
+            const canvasAspect = canvas.width / canvas.height;
+            const rectAspect = cRect.width / Math.max(1, cRect.height);
+            let renderW = cRect.width;
+            let renderH = cRect.height;
+            if (rectAspect > canvasAspect) {
+              renderW = cRect.height * canvasAspect;
+            } else {
+              renderH = cRect.width / canvasAspect;
+            }
+            const offsetX = (cRect.left - wrapRect.left) + (cRect.width - renderW) / 2;
+            const offsetY = (cRect.top - wrapRect.top) + (cRect.height - renderH) / 2;
+
+            const bob = player.isMoving ? Math.sin(player.walkCycle * 9) * 3.5 : 0;
+            const canvasX = (player.x - cam.x) * cam.zoom + canvas.width / 2;
+            const canvasY = (player.y + bob - cam.y) * cam.zoom + canvas.height / 2;
+            const cssX = offsetX + (canvasX / canvas.width) * renderW;
+            const cssY = offsetY + (canvasY / canvas.height) * renderH;
+            const cssScale = (renderH / canvas.height) * cam.zoom;
+
+            if (gifEl.getAttribute("data-gif-id") !== activeFId || gifEl.src !== gifDataUrl) {
+              gifEl.setAttribute("data-gif-id", activeFId);
+              gifEl.src = gifDataUrl;
+            }
+            gifEl.style.display = "block";
+            gifEl.style.left = `${cssX}px`;
+            gifEl.style.top = `${cssY}px`;
+            gifEl.style.height = `${Math.round(104 * cssScale)}px`;
+            gifEl.style.width = "auto";
+            gifEl.style.transform = `translate(-50%, -100%)${player.facing === -1 ? " scaleX(-1)" : ""}`;
+          } else if (gifEl.style.display !== "none") {
+            gifEl.style.display = "none";
+          }
+        }
 
         animationFrameId = requestAnimationFrame(gameLoop);
       };
@@ -1368,51 +1505,56 @@
           worldX >= ROOM.winX && worldX <= ROOM.winX + ROOM.winW &&
           worldY >= ROOM.winY && worldY <= ROOM.winY + ROOM.winH
         ) {
+          player.interactFurnitureId = null;
           player.targetX = ROOM.winX + ROOM.winW / 2;
           player.targetY = ROOM.y + ROOM.wallH + 48;
           setTimeout(() => say("凭窗远眺，清风徐来，令人心旷神怡 🍃"), 350);
           return;
         }
 
-        // 3. 点击各家具：走至家具外侧边缘停下并触发轻互动（严守碰撞边界，不穿入软榻/桌子内部）
+        // 3. 点击各家具：走至家具旁并触发角色专属交互 GIF 与绑定特定发言
         for (let i = furnituresRef.current.length - 1; i >= 0; i--) {
           const item = furnituresRef.current[i];
-          if (item.isFloorDeco) continue;
           if (
             worldX >= item.x && worldX <= item.x + item.w &&
             worldY >= item.y && worldY <= item.y + item.h
           ) {
-            // 计算家具正前方或左侧安全站立点（在碰撞盒外侧）
             const standX = Math.max(ROOM.x + 40, Math.min(ROOM.x + ROOM.w - 40, item.x + item.w / 2));
-            const standY = Math.min(ROOM.y + ROOM.h - 24, item.y + (item.footOffsetY || 0) + (item.footH || item.h) + 24);
+            const standY = item.isFloorDeco
+              ? Math.max(ROOM.y + ROOM.wallH + 38, Math.min(ROOM.y + ROOM.h - 24, item.y + item.h * 0.65))
+              : Math.min(ROOM.y + ROOM.h - 24, item.y + (item.footOffsetY || 0) + (item.footH || item.h) + 24);
             player.targetX = standX;
             player.targetY = standY;
+            player.interactFurnitureId = item.id;
 
-            if (item.type === "censer") {
-              setTimeout(() => {
+            setTimeout(() => {
+              const latestItem = furnituresRef.current.find((f) => f.id === item.id) || item;
+              if (latestItem.type === "censer") {
                 roomParticles.censerLit = !roomParticles.censerLit;
+              }
+              const rawSpeech = typeof latestItem.interactSpeech === "string" ? latestItem.interactSpeech.trim() : "";
+              if (rawSpeech) {
+                const lines = rawSpeech.split(/[\n|｜]+/).map((s) => s.trim()).filter(Boolean);
+                const chosen = lines.length > 0 ? lines[Math.floor(Math.random() * lines.length)] : rawSpeech;
+                say(chosen, 4.5);
+              } else if (latestItem.type === "censer") {
                 say(roomParticles.censerLit ? "点燃沉香，青烟袅袅 🪔" : "熄了沉香，归于清宁 🍃");
-              }, 350);
-            } else if (item.type === "bed") {
-              setTimeout(() => {
+              } else if (latestItem.type === "bed") {
                 say("软榻温软，待倦时便可小憩片刻 🌙");
-              }, 350);
-            } else if (item.type === "tea_table") {
-              setTimeout(() => {
+              } else if (latestItem.type === "tea_table") {
                 say("沸泉初沸，且烹一壶新茶，与楼主共品 🍵");
-              }, 350);
-            } else {
-              setTimeout(() => {
-                say(`查看了【${item.name || "雅室摆件"}】 ✨`);
-              }, 350);
-            }
+              } else {
+                say(`与【${latestItem.name || "雅室摆件"}】互动 ✨`);
+              }
+            }, 300);
             return;
           }
         }
 
-        // 4. 点击地板寻路走动（限制在地板合法范围内，途中遇到任何家具均会被 checkCollision 真实阻挡）
+        // 4. 点击地板寻路走动（脱离家具交互状态，恢复常规行走立绘）
         const clampedTargetX = Math.max(ROOM.x + 38, Math.min(ROOM.x + ROOM.w - 38, worldX));
         const clampedTargetY = Math.max(ROOM.y + ROOM.wallH + 36, Math.min(ROOM.y + ROOM.h - 22, worldY));
+        player.interactFurnitureId = null;
         player.pose = "idle";
         player.targetX = clampedTargetX;
         player.targetY = clampedTargetY;
@@ -1681,6 +1823,20 @@
           }
         }),
 
+        // 家具交互绑定的动态角色 GIF 同步渲染层 (确保多帧 GIF 动图 100% 流畅播放并跟随镜头缩放平移)
+        React.createElement("img", {
+          ref: interactGifDomRef,
+          alt: "",
+          style: {
+            position: "absolute",
+            display: "none",
+            pointerEvents: "none",
+            zIndex: 15,
+            userSelect: "none",
+            WebkitUserSelect: "none"
+          }
+        }),
+
         // 右上角浮动镜头控制按钮
         React.createElement(
           "div",
@@ -1858,7 +2014,7 @@
           )
         ),
 
-        // 底部选中家具悬浮微操栏 (支持换贴图、翻转、缩放、一键回收)
+        // 底部选中家具悬浮微操栏 (支持换贴图/绑GIF发言、翻转、缩放、一键回收)
         isEditMode && activeSelectedFurniture && React.createElement(
           "div",
           {
@@ -1876,7 +2032,7 @@
               gap: "6px",
               zIndex: 30,
               width: "92%",
-              maxWidth: "400px",
+              maxWidth: "410px",
               boxShadow: "0 8px 24px rgba(0,0,0,0.5)"
             }
           },
@@ -1905,7 +2061,7 @@
               {
                 onClick: () => openFurnitureTextureModal(activeSelectedFurniture),
                 style: {
-                  flex: 1,
+                  flex: 1.3,
                   background: "linear-gradient(135deg, #D97706, #B45309)",
                   border: "none",
                   borderRadius: "8px",
@@ -1916,14 +2072,14 @@
                   cursor: "pointer"
                 }
               },
-              "🎨 换贴图"
+              "🎨 贴图/交互GIF"
             ),
             React.createElement(
               "button",
               {
                 onClick: () => handleFlipFurniture(activeSelectedFurniture.id),
                 style: {
-                  flex: 1,
+                  flex: 0.9,
                   background: "#2563EB",
                   border: "none",
                   borderRadius: "8px",
@@ -1944,7 +2100,7 @@
                   background: "rgba(255,255,255,0.15)",
                   border: "1px solid #D6A86E",
                   borderRadius: "8px",
-                  padding: "5px 8px",
+                  padding: "5px 7px",
                   color: "#fff",
                   fontSize: "11px",
                   cursor: "pointer"
@@ -1960,7 +2116,7 @@
                   background: "rgba(255,255,255,0.15)",
                   border: "1px solid #D6A86E",
                   borderRadius: "8px",
-                  padding: "5px 8px",
+                  padding: "5px 7px",
                   color: "#fff",
                   fontSize: "11px",
                   cursor: "pointer"
@@ -1973,7 +2129,7 @@
               {
                 onClick: () => handleRecycleFurniture(activeSelectedFurniture.id),
                 style: {
-                  flex: 1,
+                  flex: 0.9,
                   background: "#DC2626",
                   border: "none",
                   borderRadius: "8px",
@@ -2098,7 +2254,7 @@
           React.createElement(
             "div",
             { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px" } },
-            React.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", color: "#5C4129" } }, "🎨 全屋贴图更换与家具管理"),
+            React.createElement("div", { style: { fontSize: "14px", fontWeight: "bold", color: "#5C4129" } }, "🎨 全屋贴图更换与交互管理"),
             React.createElement(
               "button",
               {
@@ -2160,9 +2316,11 @@
               )
             ),
 
-            // 房间内所有现有家具列表 (支持换贴图 + 回收)
+            // 房间内所有现有家具列表 (支持换贴图/绑定GIF与发言 + 回收)
             furnitures.map((item) => {
               const def = FURNITURE_DEFS[item.type] || FURNITURE_DEFS.custom_medium;
+              const hasGif = gifVersion >= 0 && gifUrlPool.current.has(item.id);
+              const hasSpeech = Boolean(item.interactSpeech && item.interactSpeech.trim());
               return React.createElement(
                 "div",
                 {
@@ -2179,13 +2337,19 @@
                 },
                 React.createElement(
                   "div",
-                  null,
-                  React.createElement("div", { style: { fontSize: "12px", fontWeight: "bold", color: "#5C4129" } }, `${def.icon || "🪑"} ${item.name}`),
+                  { style: { flex: 1, paddingRight: "6px" } },
+                  React.createElement(
+                    "div",
+                    { style: { fontSize: "12px", fontWeight: "bold", color: "#5C4129", display: "flex", alignItems: "center", gap: "4px", flexWrap: "wrap" } },
+                    `${def.icon || "🪑"} ${item.name}`,
+                    hasGif && React.createElement("span", { style: { fontSize: "9.5px", background: "#FEF3C7", color: "#B45309", border: "1px solid #F59E0B", borderRadius: "6px", padding: "0 4px" } }, "🎭GIF"),
+                    hasSpeech && React.createElement("span", { style: { fontSize: "9.5px", background: "#DCFCE7", color: "#15803D", border: "1px solid #86EFAC", borderRadius: "6px", padding: "0 4px" } }, "💬发言")
+                  ),
                   React.createElement("div", { style: { fontSize: "10px", color: "#D6724B" } }, `推荐尺寸: ${item.w * 2} × ${item.h * 2} px (${def.recomRatio})`)
                 ),
                 React.createElement(
                   "div",
-                  { style: { display: "flex", gap: "6px" } },
+                  { style: { display: "flex", gap: "6px", flexShrink: 0 } },
                   React.createElement(
                     "button",
                     {
@@ -2197,14 +2361,14 @@
                         background: "linear-gradient(135deg, #D97706, #B45309)",
                         border: "none",
                         borderRadius: "8px",
-                        padding: "5px 10px",
+                        padding: "5px 9px",
                         color: "#fff",
                         fontSize: "10.5px",
                         fontWeight: "bold",
                         cursor: "pointer"
                       }
                     },
-                    "换贴图"
+                    "贴图/交互"
                   ),
                   React.createElement(
                     "button",
@@ -2230,7 +2394,7 @@
         )
       ),
 
-      // 6. 自定义上传新家具模态弹窗
+      // 6. 自定义上传新家具模态弹窗 (支持同步绑定角色GIF与特定发言)
       showCustomUploadModal && React.createElement(
         "div",
         {
@@ -2242,7 +2406,7 @@
             alignItems: "center",
             justifyContent: "center",
             zIndex: 100010,
-            padding: "18px"
+            padding: "16px"
           },
           onClick: () => setShowCustomUploadModal(false)
         },
@@ -2253,22 +2417,24 @@
               background: "linear-gradient(180deg, #FDFBF7 0%, #F4ECE0 100%)",
               border: "2px solid #D6A86E",
               borderRadius: "18px",
-              padding: "16px 18px",
+              padding: "15px 16px",
               width: "100%",
-              maxWidth: "360px",
+              maxWidth: "370px",
+              maxHeight: "86vh",
+              overflowY: "auto",
               boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
             },
             onClick: (e) => e.stopPropagation()
           },
           React.createElement(
             "div",
-            { style: { fontSize: "14px", fontWeight: "bold", color: "#5C4129", marginBottom: "10px" } },
+            { style: { fontSize: "14px", fontWeight: "bold", color: "#5C4129", marginBottom: "8px" } },
             "✨ 上传自定义新家具"
           ),
           React.createElement(
             "div",
-            { style: { marginBottom: "10px" } },
-            React.createElement("div", { style: { fontSize: "11px", color: "#6B5238", marginBottom: "4px" } }, "家具名称："),
+            { style: { marginBottom: "8px" } },
+            React.createElement("div", { style: { fontSize: "11px", color: "#6B5238", marginBottom: "3px" } }, "家具名称："),
             React.createElement("input", {
               type: "text",
               value: customUploadName,
@@ -2287,11 +2453,11 @@
           ),
           React.createElement(
             "div",
-            { style: { marginBottom: "12px" } },
-            React.createElement("div", { style: { fontSize: "11px", color: "#6B5238", marginBottom: "4px" } }, "规格与碰撞类型（附推荐贴图大小）："),
+            { style: { marginBottom: "8px" } },
+            React.createElement("div", { style: { fontSize: "11px", color: "#6B5238", marginBottom: "3px" } }, "规格与碰撞类型（附推荐贴图大小）："),
             React.createElement(
               "div",
-              { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "6px" } },
+              { style: { display: "grid", gridTemplateColumns: "1fr 1fr", gap: "5px" } },
               [
                 { key: "custom_small", label: "🪴 小型摆件", size: "170×190 (有碰撞)" },
                 { key: "custom_medium", label: "🪑 中型案几", size: "300×220 (有碰撞)" },
@@ -2308,7 +2474,7 @@
                       background: active ? "#FFF7ED" : "#fff",
                       border: active ? "1.5px solid #D97706" : "1px solid #E6D4BE",
                       borderRadius: "8px",
-                      padding: "6px",
+                      padding: "5px 6px",
                       cursor: "pointer"
                     }
                   },
@@ -2317,6 +2483,63 @@
                 );
               })
             )
+          ),
+          React.createElement(
+            "div",
+            { style: { marginBottom: "8px", background: "rgba(214,168,110,0.12)", border: "1px solid #E6D4BE", borderRadius: "10px", padding: "7px 9px" } },
+            React.createElement(
+              "div",
+              { style: { display: "flex", justifyContent: "space-between", alignItems: "center" } },
+              React.createElement("div", { style: { fontSize: "11px", fontWeight: "bold", color: "#5C4129" } }, "🎭 绑定角色交互 GIF（可选）："),
+              React.createElement(
+                "div",
+                { style: { display: "flex", gap: "5px" } },
+                customUploadGifDataUrl && React.createElement(
+                  "button",
+                  {
+                    onClick: () => setCustomUploadGifDataUrl(null),
+                    style: { background: "#FEE2E2", border: "1px solid #FCA5A5", borderRadius: "6px", padding: "2px 6px", color: "#DC2626", fontSize: "10px", cursor: "pointer" }
+                  },
+                  "清除"
+                ),
+                React.createElement(
+                  "button",
+                  {
+                    onClick: () => customFurnitureGifInputRef.current && customFurnitureGifInputRef.current.click(),
+                    style: { background: "#FEF3C7", border: "1px solid #D97706", borderRadius: "6px", padding: "2px 8px", color: "#B45309", fontSize: "10.5px", fontWeight: "bold", cursor: "pointer" }
+                  },
+                  customUploadGifDataUrl ? "✓ 已选GIF (点击更换)" : "+ 选择角色GIF"
+                )
+              )
+            ),
+            React.createElement("input", {
+              type: "file",
+              ref: customFurnitureGifInputRef,
+              accept: "image/gif,image/*",
+              onChange: handleCustomFurnitureGifSelect,
+              style: { display: "none" }
+            })
+          ),
+          React.createElement(
+            "div",
+            { style: { marginBottom: "10px" } },
+            React.createElement("div", { style: { fontSize: "11px", fontWeight: "bold", color: "#5C4129", marginBottom: "3px" } }, "💬 绑定交互角色特定发言（可选，多行随机触发）："),
+            React.createElement("textarea", {
+              rows: 2,
+              value: customUploadSpeech,
+              onChange: (e) => setCustomUploadSpeech(e.target.value),
+              placeholder: "例如：这尊酒樽造型别致，且与楼主共饮一杯~",
+              style: {
+                width: "100%",
+                padding: "6px 8px",
+                borderRadius: "8px",
+                border: "1px solid #D6C7B2",
+                fontSize: "11.5px",
+                color: "#5C4129",
+                boxSizing: "border-box",
+                resize: "none"
+              }
+            })
           ),
           React.createElement(
             "div",
@@ -2352,7 +2575,7 @@
                   cursor: "pointer"
                 }
               },
-              "📂 选择图片并摆放"
+              "📂 选择家具贴图并摆放"
             )
           ),
           React.createElement("input", {
@@ -2365,7 +2588,7 @@
         )
       ),
 
-      // 7. 单个构件材质贴图上传弹窗 (含推荐尺寸/比例指南)
+      // 7. 单个构件材质贴图更换 + 绑定角色交互 GIF & 特定发言弹窗
       textureTarget && React.createElement(
         "div",
         {
@@ -2377,9 +2600,14 @@
             alignItems: "center",
             justifyContent: "center",
             zIndex: 100010,
-            padding: "20px"
+            padding: "16px"
           },
-          onClick: () => setTextureTarget(null)
+          onClick: () => {
+            if (textureTarget.furnitureId) {
+              persistCurrentTargetSpeech(editingInteractSpeech);
+            }
+            setTextureTarget(null);
+          }
         },
         React.createElement(
           "div",
@@ -2388,74 +2616,249 @@
               background: "linear-gradient(180deg, #FDFBF7 0%, #F4ECE0 100%)",
               border: "2px solid #D6A86E",
               borderRadius: "18px",
-              padding: "16px 18px",
+              padding: "15px 16px",
               width: "100%",
-              maxWidth: "350px",
+              maxWidth: "370px",
+              maxHeight: "86vh",
+              overflowY: "auto",
               boxShadow: "0 10px 30px rgba(0,0,0,0.5)"
             },
             onClick: (e) => e.stopPropagation()
           },
           React.createElement(
             "div",
-            { style: { fontSize: "13.5px", fontWeight: "bold", color: "#5C4129", marginBottom: "8px" } },
-            `🎨 更换贴图: 【${textureTarget.name}】`
-          ),
-          React.createElement(
-            "div",
-            {
-              style: {
-                background: "rgba(214, 168, 110, 0.15)",
-                border: "1px solid rgba(214, 168, 110, 0.4)",
-                borderRadius: "10px",
-                padding: "8px 10px",
-                marginBottom: "12px",
-                fontSize: "11px",
-                color: "#5C4129",
-                lineHeight: "1.6"
-              }
-            },
-            React.createElement("div", { style: { fontWeight: "bold", color: "#D6724B" } }, `📐 推荐尺寸: ${textureTarget.recomSize}`),
-            React.createElement("div", null, `⚖️ 推荐比例: ${textureTarget.recomRatio}`),
-            React.createElement("div", { style: { color: "#8C7255" } }, textureTarget.recomDesc)
-          ),
-          React.createElement(
-            "div",
-            { style: { display: "flex", gap: "8px", justifyContent: "flex-end" } },
+            { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" } },
             React.createElement(
-              "button",
-              {
-                onClick: handleResetTexture,
-                style: {
-                  background: "#EDE4D4",
-                  border: "1px solid #D6C7B2",
-                  borderRadius: "10px",
-                  padding: "6px 12px",
-                  color: "#6B5238",
-                  fontSize: "11px",
-                  fontWeight: "bold",
-                  cursor: "pointer"
-                }
-              },
-              "恢复默认"
+              "div",
+              { style: { fontSize: "13.5px", fontWeight: "bold", color: "#5C4129" } },
+              `🎨 贴图与交互: 【${textureTarget.name}】`
             ),
             React.createElement(
               "button",
               {
-                onClick: () => textureInputRef.current && textureInputRef.current.click(),
+                onClick: () => {
+                  if (textureTarget.furnitureId) {
+                    persistCurrentTargetSpeech(editingInteractSpeech);
+                  }
+                  setTextureTarget(null);
+                },
+                style: { background: "none", border: "none", fontSize: "15px", color: "#8C7255", cursor: "pointer" }
+              },
+              "✕"
+            )
+          ),
+
+          // 模块一：构件/家具自身外观贴图
+          React.createElement(
+            "div",
+            {
+              style: {
+                background: "rgba(214, 168, 110, 0.14)",
+                border: "1px solid rgba(214, 168, 110, 0.4)",
+                borderRadius: "10px",
+                padding: "8px 10px",
+                marginBottom: "10px",
+                fontSize: "11px",
+                color: "#5C4129",
+                lineHeight: "1.5"
+              }
+            },
+            React.createElement("div", { style: { fontWeight: "bold", color: "#D6724B" } }, `📐 推荐尺寸: ${textureTarget.recomSize} (${textureTarget.recomRatio})`),
+            React.createElement("div", { style: { color: "#8C7255", marginBottom: "6px" } }, textureTarget.recomDesc),
+            React.createElement(
+              "div",
+              { style: { display: "flex", gap: "6px", justifyContent: "flex-end" } },
+              React.createElement(
+                "button",
+                {
+                  onClick: handleResetTexture,
+                  style: {
+                    background: "#EDE4D4",
+                    border: "1px solid #D6C7B2",
+                    borderRadius: "8px",
+                    padding: "4px 10px",
+                    color: "#6B5238",
+                    fontSize: "10.5px",
+                    fontWeight: "bold",
+                    cursor: "pointer"
+                  }
+                },
+                "恢复默认贴图"
+              ),
+              React.createElement(
+                "button",
+                {
+                  onClick: () => textureInputRef.current && textureInputRef.current.click(),
+                  style: {
+                    background: "linear-gradient(135deg, #D6724B, #B85832)",
+                    border: "none",
+                    borderRadius: "8px",
+                    padding: "4px 12px",
+                    color: "#fff",
+                    fontSize: "10.5px",
+                    fontWeight: "bold",
+                    cursor: "pointer"
+                  }
+                },
+                "+ 上传外观贴图"
+              )
+            )
+          ),
+
+          // 模块二 & 三：当目标为家具时，支持绑定角色交互 GIF 图与特定发言
+          textureTarget.furnitureId && React.createElement(
+            React.Fragment,
+            null,
+            React.createElement(
+              "div",
+              {
                 style: {
-                  background: "linear-gradient(135deg, #D6724B, #B85832)",
+                  background: "#FFFBEB",
+                  border: "1px solid #FDE68A",
+                  borderRadius: "10px",
+                  padding: "8px 10px",
+                  marginBottom: "10px",
+                  fontSize: "11px",
+                  color: "#5C4129"
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { fontWeight: "bold", color: "#B45309", marginBottom: "4px" } },
+                "🎭 绑定角色交互 GIF 图（点击该家具互动时展示）"
+              ),
+              gifVersion >= 0 && gifUrlPool.current.has(textureTarget.furnitureId)
+                ? React.createElement(
+                    "div",
+                    { style: { display: "flex", alignItems: "center", gap: "10px", marginBottom: "6px" } },
+                    React.createElement("img", {
+                      src: gifUrlPool.current.get(textureTarget.furnitureId),
+                      alt: "角色交互GIF预览",
+                      style: {
+                        height: "54px",
+                        width: "auto",
+                        borderRadius: "8px",
+                        border: "1px solid #F59E0B",
+                        background: "rgba(255,255,255,0.8)"
+                      }
+                    }),
+                    React.createElement("span", { style: { fontSize: "10.5px", color: "#15803D", fontWeight: "bold" } }, "✓ 已绑定角色交互动图")
+                  )
+                : React.createElement(
+                    "div",
+                    { style: { fontSize: "10px", color: "#8C7255", marginBottom: "6px" } },
+                    "未绑定（互动时保持角色默认立绘，支持透明背景 GIF / PNG）"
+                  ),
+              React.createElement(
+                "div",
+                { style: { display: "flex", gap: "6px", justifyContent: "flex-end" } },
+                gifVersion >= 0 && gifUrlPool.current.has(textureTarget.furnitureId) && React.createElement(
+                  "button",
+                  {
+                    onClick: handleResetInteractGif,
+                    style: {
+                      background: "#FEE2E2",
+                      border: "1px solid #FCA5A5",
+                      borderRadius: "8px",
+                      padding: "4px 10px",
+                      color: "#DC2626",
+                      fontSize: "10.5px",
+                      fontWeight: "bold",
+                      cursor: "pointer"
+                    }
+                  },
+                  "清除GIF"
+                ),
+                React.createElement(
+                  "button",
+                  {
+                    onClick: () => interactGifInputRef.current && interactGifInputRef.current.click(),
+                    style: {
+                      background: "linear-gradient(135deg, #D97706, #B45309)",
+                      border: "none",
+                      borderRadius: "8px",
+                      padding: "4px 12px",
+                      color: "#fff",
+                      fontSize: "10.5px",
+                      fontWeight: "bold",
+                      cursor: "pointer"
+                    }
+                  },
+                  "+ 上传角色GIF"
+                )
+              ),
+              React.createElement("input", {
+                type: "file",
+                ref: interactGifInputRef,
+                accept: "image/gif,image/*",
+                onChange: handleInteractGifUpload,
+                style: { display: "none" }
+              })
+            ),
+
+            React.createElement(
+              "div",
+              {
+                style: {
+                  background: "rgba(255,255,255,0.75)",
+                  border: "1px solid #E6D4BE",
+                  borderRadius: "10px",
+                  padding: "8px 10px",
+                  marginBottom: "10px"
+                }
+              },
+              React.createElement(
+                "div",
+                { style: { fontSize: "11px", fontWeight: "bold", color: "#5C4129", marginBottom: "4px" } },
+                "💬 绑定该交互下角色特定发言（支持多行随机触发）："
+              ),
+              React.createElement("textarea", {
+                rows: 2,
+                value: editingInteractSpeech,
+                onChange: (e) => setEditingInteractSpeech(e.target.value),
+                placeholder: "输入点击此家具时角色的专属台词（换行或用 | 分隔可设置多句随机台词）",
+                style: {
+                  width: "100%",
+                  padding: "6px 8px",
+                  borderRadius: "8px",
+                  border: "1px solid #D6C7B2",
+                  fontSize: "11.5px",
+                  color: "#5C4129",
+                  boxSizing: "border-box",
+                  resize: "none"
+                }
+              })
+            )
+          ),
+
+          React.createElement(
+            "div",
+            { style: { display: "flex", justifyContent: "flex-end" } },
+            React.createElement(
+              "button",
+              {
+                onClick: () => {
+                  if (textureTarget.furnitureId) {
+                    persistCurrentTargetSpeech(editingInteractSpeech);
+                  }
+                  setTextureTarget(null);
+                },
+                style: {
+                  width: "100%",
+                  background: "linear-gradient(135deg, #10B981, #059669)",
                   border: "none",
                   borderRadius: "10px",
-                  padding: "6px 14px",
+                  padding: "7px 14px",
                   color: "#fff",
-                  fontSize: "11px",
+                  fontSize: "11.5px",
                   fontWeight: "bold",
                   cursor: "pointer"
                 }
               },
-              "+ 上传贴图"
+              "✓ 保存交互与贴图设置"
             )
           ),
+
           React.createElement("input", {
             type: "file",
             ref: textureInputRef,
