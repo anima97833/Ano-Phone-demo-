@@ -57,8 +57,6 @@
     const [speechText, setSpeechText] = useState("");
     const [speechTimer, setSpeechTimer] = useState(null);
 
-    if (!char) return null;
-
     // 装修控制抽屉
     const [showDecorDrawer, setShowDecorDrawer] = useState(false);
     const [currentFloorId, setCurrentFloorId] = useState("wood");
@@ -74,8 +72,9 @@
       } catch (e) {
         console.warn("读取房间配置失败:", e);
       }
-    }, [char.id]);
-  }, [char?.id]);
+    }, [char?.id]);
+
+    if (!char) return null;
 
   // 保存房间配置
   const saveRoomConfig = (floorId, customPattern) => {
@@ -132,8 +131,7 @@
 
     // 预载人物头像图片
     let avatarImg = null;
-    if (char.avatar) {
-      if (char && char.avatar) {
+    if (char && char.avatar) {
         const img = new Image();
         img.src = char.avatar;
         img.onload = () => { avatarImg = img; };
@@ -962,82 +960,73 @@ const AgentRoomSelectModal = ({ chats = [], onClose, onSelectAgent }) => {
           { style: { textAlign: "center", padding: "30px 10px", color: "#A89078", fontSize: "12px" } },
           "传讯中暂无名士，请先结识名士后再来造访其专属雅居~"
         ) : chats.map(c => {
-          (() => {
-            const effectiveChats = (chats && chats.length > 0) ? chats : [
-              { id: "guest_default_1", name: "少侠喵", personality: "意气风发，行侠仗义", desc: "心纸居常驻名士" },
-              { id: "guest_default_2", name: "仙风喵", personality: "温雅从容，清逸出尘", desc: "心纸居常驻名士" }
-            ];
-            return effectiveChats.map(c => {
-              return React.createElement(
-                "div",
+          return React.createElement(
+            "div",
+            {
+              key: c.id,
+              style: {
+                background: "#fff",
+                border: "1px solid #EBD8BF",
+                borderRadius: "14px",
+                padding: "10px 12px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                boxShadow: "0 2px 6px rgba(0,0,0,0.04)"
+              }
+            },
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 } },
+              React.createElement(
+                typeof window.CharacterAvatarDisplay !== "undefined" ? window.CharacterAvatarDisplay : "img",
                 {
-                  key: c.id,
-                  style: {
-                    background: "#fff",
-                    border: "1px solid #EBD8BF",
-                    borderRadius: "14px",
-                    padding: "10px 12px",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "space-between",
-                    boxShadow: "0 2px 6px rgba(0,0,0,0.04)"
+                  avatar: c.avatar,
+                  name: c.name,
+                  size: 42,
+                  src: c.avatar,
+                  style: { width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }
+                }
+              ),
+              React.createElement(
+                "div",
+                { style: { flex: 1, minWidth: 0 } },
+                React.createElement("div", { style: { fontSize: "13.5px", fontWeight: "bold", color: "#5D442A" } }, c.name),
+                React.createElement("div", { style: { fontSize: "10.5px", color: "#8C7255", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, c.personality || c.desc || "传讯名士")
+              )
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: (e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  console.log("【密探选择】点击造访雅室:", c);
+                  if (typeof onSelectAgent === "function") {
+                    onSelectAgent(c);
                   }
                 },
-                React.createElement(
-                  "div",
-                  { style: { display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 } },
-                  React.createElement(
-                    typeof window.CharacterAvatarDisplay !== "undefined" ? window.CharacterAvatarDisplay : "img",
-                    {
-                      avatar: c.avatar,
-                      name: c.name,
-                      size: 42,
-                      src: c.avatar,
-                      style: { width: "42px", height: "42px", borderRadius: "50%", objectFit: "cover" }
-                    }
-                  ),
-                  React.createElement(
-                    "div",
-                    { style: { flex: 1, minWidth: 0 } },
-                    React.createElement("div", { style: { fontSize: "13.5px", fontWeight: "bold", color: "#5D442A" } }, c.name),
-                    React.createElement("div", { style: { fontSize: "10.5px", color: "#8C7255", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, c.personality || c.desc || "传讯名士")
-                  )
-                ),
-                React.createElement(
-                  "button",
-                  {
-                    onClick: (e) => {
-                      e.preventDefault();
-                      e.stopPropagation();
-                      console.log("【密探选择】点击造访雅室:", c);
-                      if (typeof onSelectAgent === "function") {
-                        onSelectAgent(c);
-                      }
-                    },
-                    style: {
-                      background: "linear-gradient(135deg, #D6724B 0%, #B85832 100%)",
-                      border: "none",
-                      borderRadius: "12px",
-                      padding: "6px 14px",
-                      color: "#fff",
-                      fontSize: "11px",
-                      fontWeight: "bold",
-                      cursor: "pointer",
-                      boxShadow: "0 2px 6px rgba(214, 114, 75, 0.3)"
-                    }
-                  },
-                  "造访雅室 ›"
-                )
-              );
-            })
-        )
-        });
-})()
+                style: {
+                  background: "linear-gradient(135deg, #D6724B 0%, #B85832 100%)",
+                  border: "none",
+                  borderRadius: "12px",
+                  padding: "6px 14px",
+                  color: "#fff",
+                  fontSize: "11px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 6px rgba(214, 114, 75, 0.3)"
+                }
+              },
+              "造访雅室 ›"
+            )
+          );
+        })
       )
-      )
-    );
-  };
+    )
+  );
+};
 
 window.Agent25DPrivateRoomModal = Agent25DPrivateRoomModal;
 window.AgentRoomSelectModal = AgentRoomSelectModal;
-}) ();
+})();
