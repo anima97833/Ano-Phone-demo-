@@ -369,13 +369,15 @@
         background-color: var(--bg-r2);
         display: flex;
         flex-direction: column;
+        padding: 16px 24px;
+        box-sizing: border-box;
       }
       .header-r2 {
         display: flex;
         justify-content: flex-end;
         align-items: center;
-        height: 40px;
-        margin-bottom: 30px;
+        height: 32px;
+        margin-bottom: 16px;
       }
       .battery-container {
         display: flex;
@@ -408,8 +410,8 @@
       .fold-card {
         background: var(--card-bg);
         border-radius: 24px;
-        padding: 20px;
-        margin-bottom: 40px;
+        padding: 16px 20px;
+        margin-bottom: 16px;
         border: var(--border-crisp);
         cursor: pointer;
       }
@@ -419,8 +421,8 @@
           4,
           minmax(0, 1fr)
         ); 
-        gap: 25px 12px; 
-        margin-bottom: 40px;
+        gap: 18px 10px; 
+        margin-bottom: 8px;
         padding: 0 5px; 
       }
       .icon-item {
@@ -470,6 +472,72 @@
         padding: 0 20px;
         justify-content: space-between;
         margin-top: auto;
+      }
+
+      /* ===== 鸢小手机 多页桌面与常驻 Dock 样式 ===== */
+      .desktop-pagination-dots {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 8px;
+        margin: 6px 0 10px 0;
+        user-select: none;
+      }
+
+      .pagination-dot {
+        cursor: pointer;
+        transition: all 0.25s cubic-bezier(0.2, 0, 0, 1);
+      }
+
+      .pagination-dot:hover {
+        transform: scale(1.15);
+      }
+
+      .dock-bar-container {
+        margin-top: auto;
+        width: 100%;
+        display: flex;
+        justify-content: space-around;
+        align-items: center;
+        box-sizing: border-box;
+      }
+
+      .dock-bar-container .icon-item {
+        gap: 4px;
+      }
+
+      .dock-bar-container .icon-box {
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+      }
+
+      .dock-bar-container .icon-label {
+        font-size: 10px;
+        max-width: 50px;
+      }
+
+      .icon-item-placeholder {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+        opacity: 0.35;
+        transition: opacity 0.2s ease;
+      }
+
+      .icon-item-placeholder:hover {
+        opacity: 0.6;
+      }
+
+      .placeholder-box {
+        border: 1.5px dashed var(--olive-crisp, #6d735b) !important;
+        background: rgba(255, 255, 255, 0.3) !important;
+        box-shadow: none !important;
+      }
+
+      .page-extension-header {
+        animation: fadeIn 0.3s ease;
       }
 
       
@@ -12881,4 +12949,55 @@
     opacity: 1;
     transform: scale(1);
   }
+}
+
+
+/* 心纸居左侧榻榻米私室入口热区 */
+.mansion-alcove-door-hotspot {
+  position: absolute;
+  left: 2%;
+  top: 18%;
+  width: 34%;
+  height: 38%;
+  cursor: pointer;
+  z-index: 12;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(circle, rgba(255, 235, 190, 0.42) 0%, rgba(214, 168, 110, 0.12) 65%, transparent 100%);
+  border: none !important;
+  border-radius: 20px;
+  box-shadow: 0 0 24px rgba(255, 225, 170, 0.35);
+  transition: all 0.3s ease;
+  user-select: none;
+  animation: alcoveGlow 3s ease-in-out infinite;
+}
+.mansion-alcove-door-hotspot:hover, .mansion-alcove-door-hotspot:active {
+  transform: scale(1.02);
+  background: radial-gradient(circle, rgba(255, 235, 190, 0.6) 0%, rgba(214, 168, 110, 0.25) 75%, transparent 100%);
+  box-shadow: 0 0 32px rgba(214, 114, 75, 0.6);
+  border: none !important;
+}
+.mansion-door-tag {
+  background: linear-gradient(135deg, #FAF3E6 0%, #F0DFCA 100%);
+  color: #5C4129;
+  font-size: 11px;
+  font-weight: bold;
+  padding: 3px 9px;
+  border-radius: 12px;
+  border: 1px solid #D6A86E;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+  letter-spacing: 0.5px;
+}
+.mansion-door-subtag {
+  color: #7A583A;
+  font-size: 9.5px;
+  margin-top: 3px;
+  font-weight: 600;
+  text-shadow: 0 1px 2px rgba(255,255,255,0.8);
+}
+@keyframes alcoveGlow {
+  0%, 100% { box-shadow: 0 0 15px rgba(255, 225, 170, 0.25); border-color: rgba(214, 168, 110, 0.5); }
+  50% { box-shadow: 0 0 26px rgba(255, 225, 170, 0.55); border-color: rgba(214, 114, 75, 0.9); }
 }

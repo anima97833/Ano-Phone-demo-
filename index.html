@@ -53,7 +53,21 @@
         document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"><\/script>');
       }
     </script>
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS 与 Node Crypto 防报错 Polyfill -->
+    <script>
+      (function() {
+        if (typeof window !== "undefined") {
+          window.Th = window.Th || {
+            createHash: function() {
+              return {
+                update: function() { return this; },
+                digest: function() { return ""; }
+              };
+            }
+          };
+        }
+      })();
+    </script>
     <script src="https://cdn.tailwindcss.com"></script>
     <link
       href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700&amp;family=Be+Vietnam+Pro:wght@400;500;700&amp;display=swap"
@@ -141,15 +155,15 @@
     <!-- D3.js 库 -->
     <script src="https://d3js.org/d3.v7.min.js"></script>
 
-    <link rel="stylesheet" href="Milvus/style.css?v=1788006981180" />
+    <link rel="stylesheet" href="Milvus/style.css?v=1794223200000" />
 
     <!-- IndexedDB 存储模块 -->
-    <script src="Milvus/db.js?v=1788006981180"></script>
+    <script src="Milvus/db.js?v=1794223200000"></script>
     <!-- MCP 扩展引擎模块 -->
-    <script src="Milvus/mcp_store.js?v=1788006981180"></script>
+    <script src="Milvus/mcp_store.js?v=1794223200000"></script>
 
     <!-- 灵犀生境情境微动效样式 -->
-    <link rel="stylesheet" href="Milvus/live_reactions.css?v=1788006981180" />
+    <link rel="stylesheet" href="Milvus/live_reactions.css?v=1794223200000" />
 
     <!-- 构造状态气泡视觉样式 -->
     <link rel="stylesheet" href="Milvus/construct_bubble.css?v=1787564901794" />
@@ -211,6 +225,7 @@
       style="display: none"
     />
 
+
     <!-- 构造状态气泡核心引擎 (在 app.min.js 前加载) -->
     <script src="Milvus/construct_bubble_engine.js?v=3.1.0"></script>
 
@@ -221,10 +236,13 @@
     <script src="Milvus/jquery.min.js"></script>
     <script src="Milvus/turn.min.js"></script>
 
-    <script src="Milvus/app.min.js?v=1788006981180"></script>
+    <!-- 傩·观影时光放映室核心引擎 -->
+    <script src="Milvus/cinema_app.js?v=1794236000000"></script>
+    <script src="Milvus/agent_room.js?v=1794236000000"></script>
+    <script src="Milvus/app.min.js?v=1794236000000"></script>
 
     <!-- 灵犀生境情境视觉引擎 (必须在 app.min.js 之后加载，确保 document.body 已就绪) -->
-    <script src="Milvus/live_reaction_engine.js?v=1788006981180"></script>
+    <script src="Milvus/live_reaction_engine.js?v=1794230626653"></script>
 
     <!-- PWA Service Worker 注册 -->
     <script>

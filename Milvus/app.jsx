@@ -194,6 +194,43 @@ const WaterMirrorAvatar = ({ avatar, avatarId, name, size = 38, fallbackColor = 
 };
 window.WaterMirrorAvatar = WaterMirrorAvatar;
 
+const CharacterAvatarDisplay = ({ avatar, avatarId, name = "?", size = 38, fallbackColor = "#E8C3A8", style = {}, className = "" }) => {
+  return /* @__PURE__ */ React.createElement(
+    "div",
+    {
+      className: className || "",
+      style: {
+        width: typeof size === "number" ? `${size}px` : size,
+        height: typeof size === "number" ? `${size}px` : size,
+        minWidth: typeof size === "number" ? `${size}px` : size,
+        borderRadius: "50%",
+        overflow: "hidden",
+        flexShrink: 0,
+        position: "relative",
+        border: "1.5px solid rgba(255, 255, 255, 0.4)",
+        boxShadow: "0 2px 6px rgba(0,0,0,0.12)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        backgroundColor: fallbackColor,
+        ...style
+      }
+    },
+    /* @__PURE__ */ React.createElement(
+      typeof UniversalAvatarLoader !== "undefined" ? UniversalAvatarLoader : "div",
+      {
+        avatar: avatar,
+        avatarId: avatarId,
+        name: name,
+        fallbackColor: fallbackColor,
+        style: { width: "100%", height: "100%", objectFit: "cover" }
+      }
+    )
+  );
+};
+window.CharacterAvatarDisplay = CharacterAvatarDisplay;
+
+
 
 var T8AvatarLoader = UniversalAvatarLoader;
 const AvatarSourcePicker = ({ open, onClose, onLocalSelect, onUrlConfirm }) => {
@@ -853,7 +890,7 @@ window.sendToLLM = async (messages, customConfigOrChunk, onFinish, onError) => {
     const mcpEnabled = window.mcpHub && window.mcpHub.isMasterEnabled() && !customConfig?.disableMCP && !isJsonRequest;
     const activeTools = mcpEnabled ? window.mcpHub.getActiveTools() : [];
 
-    let currentMessages = [...messages];
+    let currentMessages = [...(messages || [])];
 
     // 强化工具调用感知提示词注入（动态遍历所有内置与外部挂载的 MCP 工具）
     if (activeTools.length > 0) {
@@ -60786,7 +60823,7 @@ const Game2048Page = ({ onBack }) => {
       return;
     }
 
-    const newHist = [...moveHistory];
+    const newHist = [...(moveHistory || [])];
     const prev = newHist.pop();
     const newUl = undoLeft - 1;
 
@@ -89920,7 +89957,7 @@ const OddFarmPage = ({ onBack }) => {
               ...prev,
               [item.id]: (prev[item.id] || 0) + 1
             }));
-            const newOtherField = [...otherFarmData];
+            const newOtherField = [...(otherFarmData || [])];
             newOtherField[index] = null;
             setOtherFarmData(newOtherField);
           }
@@ -90223,7 +90260,7 @@ const OddFarmPage = ({ onBack }) => {
                         ...prev,
                         [item.id]: (prev[item.id] || 0) + 1
                       }));
-                      const newOtherField = [...otherFarmData];
+                      const newOtherField = [...(otherFarmData || [])];
                       newOtherField[currentIndex] = null;
                       setOtherFarmData(newOtherField);
                     }
@@ -90816,7 +90853,7 @@ const OddFarmPage = ({ onBack }) => {
                 const savedProjects = JSON.parse(
                   await dbManager.get("charity_projects") || "[]"
                 );
-                let updatedProjects = [...savedProjects];
+                let updatedProjects = [...(savedProjects || [])];
                 for (const sub of farmSubs) {
                   const donateAmount = Math.floor(
                     order.price * (sub.percentage / 100)
@@ -97109,7 +97146,7 @@ const ChatSettingsModal = ({
           historyMsgs = messages;
         }
         if (historyMsgs && historyMsgs.length > 0) {
-          const sorted = [...historyMsgs].sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+          const sorted = [...(historyMsgs || [])].sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
           const recent = sorted.filter((m) => m.type !== "image" && m.text).slice(-10);
           if (recent.length > 0) {
             conversationContext = `【你与用户最近的真实聊天记录（请务必参考这些对话内容、话题与互动状态发朋友圈）】：\n${recent.map((m) => `${m.isMe ? "用户" : character.name}: ${m.text}`).join("\n")}`;
@@ -102194,8 +102231,8 @@ ${recentHistory || "（暂无历史对话，刚开始聊天）"}
       }
     } catch (e) {
     }
-    const currentHistory = customHistory || (showGroupOfflineScene ? [...messages, ...offlineSessionMessages] : messages);
-    let historyForPrompt = [...currentHistory];
+    const currentHistory = customHistory || (showGroupOfflineScene ? [...(messages || []), ...(offlineSessionMessages || [])] : (messages || []));
+    let historyForPrompt = [...(currentHistory || [])];
     if (lastUserMsg) historyForPrompt.push(lastUserMsg);
     const cutoffTime = Date.now() - memorySettings.globalMemoryDays * 24 * 60 * 60 * 1e3;
     historyForPrompt = historyForPrompt.filter((m) => {
@@ -107229,7 +107266,7 @@ ${recentMessages.slice(-50).map((msg) => `${msg.isMe ? "\u6211" : chatData.name}
                   minute: "2-digit"
                 })
               };
-              const callHistory = [...messages, callContextMsg];
+              const callHistory = [...(messages || []), callContextMsg];
               setTimeout(() => handleAITrigger(callHistory), 50);
             }
           },
@@ -114976,6 +115013,9 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
   const [uploadingTargetCharId, setUploadingTargetCharId] = useState(null);
   const [managingSpritesCharId, setManagingSpritesCharId] = useState(null);
 
+  const [showAgentRoomSelect, setShowAgentRoomSelect] = useState(false);
+  const [activePrivateRoomChar, setActivePrivateRoomChar] = useState(null);
+
   // 运行模式：'casual'（休闲模式，默认） | 'auto'（自主模式）
   const [mansionMode, setMansionMode] = useState(() => {
     return localStorage.getItem('t8_mansion_mode') || 'casual';
@@ -115232,19 +115272,30 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     loadSpecialGiftsFromDB();
 
     try {
+      const currentChatIds = (chats || []).map(c => c.id);
       const savedActiveIds = JSON.parse(localStorage.getItem("t8_mansion_active_ids") || "null");
-      if (Array.isArray(savedActiveIds) && savedActiveIds.length > 0) {
-        setActiveCharIds(savedActiveIds.slice(0, 5));
-        setSpecifiedCharId(savedActiveIds[0]);
-      } else if (chats && chats.length > 0) {
-        const defaultIds = chats.slice(0, Math.min(3, chats.length)).map(c => c.id);
-        setActiveCharIds(defaultIds);
-        setSpecifiedCharId(defaultIds[0]);
-        localStorage.setItem("t8_mansion_active_ids", JSON.stringify(defaultIds));
+      
+      let finalActiveIds = [];
+      if (currentChatIds.length > 0) {
+        // 存在传讯名士列表：严格过滤，只保留当前实际存在的名士ID，自动剔除幽灵/已删角色ID
+        if (Array.isArray(savedActiveIds)) {
+          finalActiveIds = savedActiveIds.filter(id => currentChatIds.includes(id)).slice(0, 5);
+        }
+        // 若之前保存的ID全部失效（或首次进入），自动将当前传讯中的名士安排入住（最多3位）
+        if (finalActiveIds.length === 0) {
+          finalActiveIds = currentChatIds.slice(0, Math.min(3, currentChatIds.length));
+        }
       } else {
-        setActiveCharIds(["guest_default_1", "guest_default_2"]);
-        setSpecifiedCharId("guest_default_1");
+        // 传讯中暂无名士时，才使用预设少侠喵/仙风喵
+        if (Array.isArray(savedActiveIds) && savedActiveIds.length > 0) {
+          finalActiveIds = savedActiveIds.slice(0, 2);
+        } else {
+          finalActiveIds = ["guest_default_1", "guest_default_2"];
+        }
       }
+      setActiveCharIds(finalActiveIds);
+      localStorage.setItem("t8_mansion_active_ids", JSON.stringify(finalActiveIds));
+      setSpecifiedCharId(finalActiveIds[0] || "");
     } catch (e) {
       console.warn("加载心纸居名士列表失败:", e);
     }
@@ -115292,8 +115343,12 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     ];
 
     const currentMap = new Map(characters.map(c => [c.id, c]));
+    const currentChatIds = new Set((chats || []).map(c => c.id));
+    const effectiveIds = (chats && chats.length > 0)
+      ? activeCharIds.filter(id => currentChatIds.has(id))
+      : activeCharIds;
 
-    const newCharacters = activeCharIds.map((charId, idx) => {
+    const newCharacters = effectiveIds.map((charId, idx) => {
       const existing = currentMap.get(charId);
       const chatData = (chats || []).find(c => c.id === charId) || {
         id: charId,
@@ -115337,8 +115392,8 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     });
 
     setCharacters(newCharacters);
-    if (!specifiedCharId && activeCharIds.length > 0) {
-      setSpecifiedCharId(activeCharIds[0]);
+    if (!specifiedCharId && effectiveIds.length > 0) {
+      setSpecifiedCharId(effectiveIds[0]);
     }
   }, [activeCharIds, customSpritesMap, resolvedAvatars, chats]);
 
@@ -115489,25 +115544,32 @@ const HeartPaperMansion = ({ onClose, chats = [] }) => {
     }, 1000);
   };
 
+  // 一键全员歇息
+  const handleClearAllActive = () => {
+    setActiveCharIds([]);
+    localStorage.setItem("t8_mansion_active_ids", JSON.stringify([]));
+    setSpecifiedCharId("");
+  };
+
   // 切换名士入驻状态
   const toggleCharacterActive = (charId) => {
     if (activeCharIds.includes(charId)) {
-      if (activeCharIds.length <= 1) {
-        alert("心纸居中至少需要留驻一位名士陪伴楼主哦~");
-        return;
-      }
       const updated = activeCharIds.filter(id => id !== charId);
       setActiveCharIds(updated);
       localStorage.setItem("t8_mansion_active_ids", JSON.stringify(updated));
-      if (specifiedCharId === charId && updated.length > 0) {
-        setSpecifiedCharId(updated[0]);
+      if (specifiedCharId === charId) {
+        setSpecifiedCharId(updated.length > 0 ? updated[0] : "");
       }
     } else {
-      if (activeCharIds.length >= 5) {
+      const currentChatIds = (chats || []).map(c => c.id);
+      const validCurrent = (currentChatIds.length > 0)
+        ? activeCharIds.filter(id => currentChatIds.includes(id))
+        : activeCharIds;
+      if (validCurrent.length >= 5) {
         alert("心纸居当前最多容纳 5 位名士分身入驻，请先安排其他名士歇息~");
         return;
       }
-      const updated = [...activeCharIds, charId];
+      const updated = [...validCurrent, charId];
       setActiveCharIds(updated);
       localStorage.setItem("t8_mansion_active_ids", JSON.stringify(updated));
       if (!specifiedCharId) {
@@ -116694,6 +116756,17 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
           zIndex: 4
         }
       }),
+      // 左侧榻榻米私室入口热区
+      React.createElement(
+        "div",
+        {
+          className: "mansion-alcove-door-hotspot",
+          onClick: () => setShowAgentRoomSelect(true),
+          title: "密探私室：点击造访各密探专属2.5D交互雅居"
+        },
+        React.createElement("span", { className: "mansion-door-tag" }, "⛩️ 密探私室"),
+        React.createElement("span", { className: "mansion-door-subtag" }, "造访专属雅室 ›")
+      ),
 
       // 角色实体渲染
       characters.map(char => {
@@ -116871,6 +116944,23 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
                 "span",
                 { style: { fontSize: "11px", background: "#d6724b", color: "#fff", padding: "2px 8px", borderRadius: "12px", fontWeight: "bold" } },
                 `入驻 ${activeCharIds.length} / 5 人`
+              ),
+              React.createElement(
+                "button",
+                {
+                  onClick: handleClearAllActive,
+                  style: {
+                    fontSize: "10.5px",
+                    background: "rgba(0,0,0,0.05)",
+                    border: "1px solid #ebd8bf",
+                    color: "#8c7255",
+                    padding: "1px 8px",
+                    borderRadius: "10px",
+                    cursor: "pointer",
+                    fontWeight: "600"
+                  }
+                },
+                "全部歇息"
               )
             ),
             React.createElement("div", { style: { fontSize: "11px", color: "#9c8065", marginTop: "2px" } }, "支持为名士上传多个形态立绘（站/坐/走/跑），自动保存至IndexedDB")
@@ -118195,6 +118285,32 @@ ${persona.recentChat ? `${persona.recentChat}\n` : ""}
           })
         )
       )
+    ),
+    showAgentRoomSelect && React.createElement(
+      (typeof window.AgentRoomSelectModal !== "undefined" ? window.AgentRoomSelectModal : () => {
+        alert("雅居模块加载中，请稍候再试~");
+        setShowAgentRoomSelect(false);
+        return null;
+      }),
+      {
+        chats: chats || [],
+        onClose: () => setShowAgentRoomSelect(false),
+        onSelectAgent: (agent) => {
+          setShowAgentRoomSelect(false);
+          setActivePrivateRoomChar(agent);
+        }
+      }
+    ),
+    activePrivateRoomChar && React.createElement(
+      (typeof window.Agent25DPrivateRoomModal !== "undefined" ? window.Agent25DPrivateRoomModal : () => {
+        alert("密探专属2.5D雅室空间加载中，请稍候再试~");
+        setActivePrivateRoomChar(null);
+        return null;
+      }),
+      {
+        char: activePrivateRoomChar,
+        onClose: () => setActivePrivateRoomChar(null)
+      }
     )
   );
 };
@@ -119203,6 +119319,12 @@ const T8Page = () => {
       if (id === activeChatId) {
         setActiveChatId(null);
       }
+      try {
+        const mansionSaved = JSON.parse(localStorage.getItem("t8_mansion_active_ids") || "[]");
+        if (Array.isArray(mansionSaved) && mansionSaved.includes(id)) {
+          localStorage.setItem("t8_mansion_active_ids", JSON.stringify(mansionSaved.filter(x => x !== id)));
+        }
+      } catch (e) {}
       if (window.chatCharacterStore) {
         try {
           const allItems = await window.chatCharacterStore.getAll();
@@ -119451,7 +119573,7 @@ const T8Page = () => {
           unread: char.firstMessage ? 1 : 0,
           section: "recent",
           status: char.firstMessage ? "unread" : "read",
-          pinned: false,
+          cartridge: char.raw?.bespoke_cartridge || char.raw?.extensions?.ano_cartridge || null,
           profile: {
             name: char.name,
             gender: char.gender || "",
@@ -119465,7 +119587,8 @@ const T8Page = () => {
             style: char.style || "",
             background: char.background || "",
             avatar: avatarReference || null,
-            avatarColor: char.avatarColor || "#EAD6D6"
+            avatarColor: char.avatarColor || "#EAD6D6",
+            cartridge: char.raw?.bespoke_cartridge || char.raw?.extensions?.ano_cartridge || null
           }
         };
         if (char.firstMessage && window.chatHistoryStore) {
@@ -122279,7 +122402,7 @@ const AIBookRecommender = ({ books, onConfirm }) => {
     setRecommendations([]);
     setReactions([]);
     setSelectedRec(null);
-    const shuffled = [...chats].sort(() => 0.5 - Math.random());
+    const shuffled = [...(chats || [])].sort(() => 0.5 - Math.random());
     const selectedChars = shuffled.slice(
       0,
       Math.min(3, Math.max(1, chats.length))
@@ -126135,7 +126258,7 @@ const ThemeSettingsPage = ({
     }
   };
   const handleIconChange = (index, field, value) => {
-    const newIcons = [...currentIcons];
+    const newIcons = [...(currentIcons || [])];
     newIcons[index] = { ...newIcons[index], [field]: value };
     onUpdateIcons(newIcons);
   };
@@ -131394,7 +131517,7 @@ const BackpackPage = ({ onClose }) => {
     return true;
   });
   const totalSlots = Math.max(20, Math.ceil(filteredItems.length / 4) * 4);
-  const displaySlots = [...filteredItems];
+  const displaySlots = [...(filteredItems || [])];
   while (displaySlots.length < totalSlots) {
     displaySlots.push(null);
   }
@@ -132518,8 +132641,8 @@ const MCPToolsSettingsPage = ({ onClose }) => {
         });
       }
       setMasterEnabled(window.mcpHub.isMasterEnabled());
-      setBuiltInTools([...window.mcpHub.builtInTools]);
-      setExternalServers([...window.mcpHub.externalServers]);
+      setBuiltInTools([...(window.mcpHub?.builtInTools || [])]);
+      setExternalServers([...(window.mcpHub?.externalServers || [])]);
     }
   };
 
@@ -134488,8 +134611,8 @@ ${window.currentT12Data}` : "\u7528\u6237\u6B63\u5728\u95F2\u901B\u592A\u75BE\u9
     onClose();
     if (onEndSession) onEndSession();
   };
-  const lastAiMsg = [...messages].reverse().find((m) => !m.isMe);
-  const lastMyMsg = [...messages].reverse().find((m) => m.isMe);
+  const lastAiMsg = [...(messages || [])].reverse().find((m) => !m.isMe);
+  const lastMyMsg = [...(messages || [])].reverse().find((m) => m.isMe);
   return /* @__PURE__ */ React.createElement(
     "div",
     {
@@ -135001,6 +135124,901 @@ const RegistrationModal = ({ onVerified }) => {
       `)
   );
 };
+
+// 安全 Lucide 图标组件：通过 ref + innerHTML 渲染，完全隔离 React 虚拟 DOM，杜绝 removeChild 报错
+const SafeLucideIcon = ({ name, size = 22, color = "#6d735b", style = {}, className = "" }) => {
+  const containerRef = React.useRef(null);
+
+  React.useEffect(() => {
+    if (!containerRef.current) return;
+    const iconName = name || "sparkles";
+    let rendered = false;
+    if (typeof window !== "undefined" && window.lucide) {
+      if (window.lucide.icons) {
+        const camelKey = iconName.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+        const pascalKey = camelKey.charAt(0).toUpperCase() + camelKey.slice(1);
+        const iconDef = window.lucide.icons[iconName] || window.lucide.icons[pascalKey] || window.lucide.icons[camelKey] || window.lucide.icons.Sparkles || window.lucide.icons.Box;
+        if (iconDef && typeof iconDef.toSvg === "function") {
+          try {
+            containerRef.current.innerHTML = iconDef.toSvg({
+              width: size,
+              height: size,
+              stroke: color,
+              "stroke-width": 2,
+              class: className
+            });
+            rendered = true;
+          } catch(e) {}
+        }
+      }
+      if (!rendered && window.lucide.createIcons) {
+        containerRef.current.innerHTML = `<i data-lucide="${iconName}" style="width:${size}px;height:${size}px;stroke:${color}"></i>`;
+        try {
+          window.lucide.createIcons({ root: containerRef.current });
+        } catch(e) {}
+      }
+    }
+  }, [name, size, color, className]);
+
+  return React.createElement("span", {
+    ref: containerRef,
+    style: {
+      display: "inline-flex",
+      alignItems: "center",
+      justifyContent: "center",
+      width: size,
+      height: size,
+      flexShrink: 0,
+      ...style
+    }
+  });
+};
+
+// ==========================================
+// 代号鸢小手机 · 应用中心总货架字典与系统核心定义
+// ==========================================
+const DEFAULT_MASTER_CATALOG = [
+  { id: "weather", actionId: "weather", label: "天气", color: "#85C9D9", icon: "cloud-sun", category: "日常工具", description: "时令节气与各地风云物候气象速览", isSystem: false, isInstalled: true },
+  { id: "forum", actionId: "forum", label: "论坛", color: "#C9C9C1", icon: "palette", category: "社交广场", description: "江湖密报、百晓生热点与广陵八卦汇聚地", isSystem: false, isInstalled: true },
+  { id: "settings", actionId: "settings", label: "设置", color: "#C9C9C1", icon: "settings", category: "系统核心", description: "系统偏好、壁纸美化与通信网络中枢", isSystem: true, isInstalled: true },
+  { id: "calendar", actionId: "calendar", label: "日历", color: "#F2B6B6", icon: "calendar", category: "日常工具", description: "黄历宜忌、四时节气与名士生辰备忘", isSystem: false, isInstalled: true },
+  { id: "msg", actionId: "msg", label: "传讯", color: "#85C9D9", icon: "message-circle", category: "即时通信", description: "密探飞鸽传书、密友私语与心纸居连线", isSystem: false, isInstalled: true },
+  { id: "reader", actionId: "reader", label: "阅读", color: "#9DC9A2", icon: "book-open", category: "闲情文墨", description: "典籍书卷、竹简手札与话本文库阅览", isSystem: false, isInstalled: true },
+  { id: "t12", actionId: "t12", label: "太疾驰", color: "#D9D4B8", icon: "zap", category: "生活商肆", description: "广陵极速跑腿外送与同城奇珍订购", isSystem: false, isInstalled: true },
+  { id: "t11", actionId: "t11", label: "绣衣楼", color: "#F2D06B", icon: "home", category: "府邸机要", description: "绣衣楼楼主办公重地、案牍情报与内务总览", isSystem: false, isInstalled: true },
+  { id: "t9", actionId: "t9", label: "情侣空间", color: "#E0E0E0", icon: "heart", category: "灵犀羁绊", description: "与心仪名士的二人私密小筑与专属日常", isSystem: false, isInstalled: true },
+  { id: "music", actionId: "music", label: "音乐", color: "#85C9D9", icon: "music", category: "闲情文墨", description: "古风汉韵清音雅乐，沉浸式案前随身听", isSystem: false, isInstalled: true },
+  { id: "t13", actionId: "t13", label: "游戏", color: "#F2B6B6", icon: "gamepad-2", category: "闲趣弈戏", description: "风月大富翁、投壶小游戏与休闲娱乐厅", isSystem: false, isInstalled: true },
+  { id: "t10", actionId: "t10", label: "杏林济生", color: "#D1D1D1", icon: "plus-square", category: "日常工具", description: "华佗脉理辨症、本草寻味与问诊调理", isSystem: false, isInstalled: true },
+  { id: "cinema", actionId: "cinema", label: "傩·观影", color: "#B85832", icon: "film", category: "闲情文墨", description: "民国胶卷放映室：名士同行看戏、手写影评札记与时空盘", isSystem: false, isInstalled: true },
+  { id: "appstore", actionId: "appstore", label: "商城", color: "#FAF4E8", icon: "shopping-bag", category: "系统核心", description: "应用中心：自由收纳桌面图标与发现自制新微应用", isSystem: true, isInstalled: true }
+];
+
+const STORE_APP_ITEM = {
+  id: "appstore",
+  actionId: "appstore",
+  label: "商城",
+  color: "#FAF4E8",
+  icon: "shopping-bag",
+  iconImage: "",
+  category: "系统核心",
+  description: "应用中心：收纳与恢复桌面图标，探索并自制新微应用",
+  isSystem: true,
+  isInstalled: true
+};
+
+// 桌面图标长按快捷调度底部抽屉
+const DesktopAppManageModal = ({ item, onClose, onStash, onMoveToPage, currentPage }) => {
+  if (!item) return null;
+  const isSystemApp = item.isSystem || item.actionId === "appstore" || item.actionId === "settings";
+  const targetPage = currentPage === 0 ? 1 : 0;
+
+  return React.createElement(
+    "div",
+    {
+      style: {
+        position: "fixed",
+        inset: 0,
+        backgroundColor: "rgba(30, 24, 20, 0.55)",
+        backdropFilter: "blur(6px)",
+        WebkitBackdropFilter: "blur(6px)",
+        display: "flex",
+        alignItems: "flex-end",
+        justifyContent: "center",
+        padding: "16px",
+        boxSizing: "border-box",
+        zIndex: 99999,
+        animation: "fadeIn 0.2s ease-out"
+      },
+      onClick: onClose
+    },
+    React.createElement(
+      "div",
+      {
+        style: {
+          width: "100%",
+          maxWidth: "400px",
+          borderRadius: "24px",
+          padding: "20px 18px 18px",
+          background: "linear-gradient(180deg, #FAF7F2 0%, #F4ECE1 100%)",
+          border: "1.5px solid #D6A86E",
+          boxShadow: "0 -8px 30px rgba(0,0,0,0.25)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "12px",
+          animation: "slideUp 0.24s cubic-bezier(0.25, 1, 0.5, 1)"
+        },
+        onClick: (e) => e.stopPropagation()
+      },
+      React.createElement(
+        "div",
+        { style: { display: "flex", alignItems: "center", gap: "12px" } },
+        React.createElement(
+          "div",
+          {
+            style: {
+              width: "48px",
+              height: "48px",
+              borderRadius: "14px",
+              background: item.color || "#FAF7F2",
+              boxShadow: "0 4px 12px rgba(0,0,0,0.08)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center"
+            }
+          },
+          item.iconImage ? React.createElement("img", { src: item.iconImage, style: { width: "100%", height: "100%", borderRadius: "14px", objectFit: "cover" } }) :
+          React.createElement(SafeLucideIcon, { name: item.icon || "sparkles", size: 24, color: "#5D442A" })
+        ),
+        React.createElement(
+          "div",
+          { style: { flex: 1, minWidth: 0 } },
+          React.createElement("div", { style: { fontSize: "16px", fontWeight: "bold", color: "#4A3C31" } }, item.label),
+          React.createElement("div", { style: { fontSize: "11px", color: "#8C7255", marginTop: "2px" } }, `当前位于：主屏幕第 ${currentPage + 1} 页`)
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: onClose,
+            style: {
+              background: "rgba(0,0,0,0.06)",
+              border: "none",
+              borderRadius: "50%",
+              width: "28px",
+              height: "28px",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              fontSize: "14px",
+              color: "#6B4A28"
+            }
+          },
+          "✕"
+        )
+      ),
+      React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "8px", marginTop: "4px" } },
+        React.createElement(
+          "button",
+          {
+            onClick: () => { onMoveToPage(item, targetPage); onClose(); },
+            style: {
+              padding: "12px 16px",
+              borderRadius: "14px",
+              border: "1px solid #EBD8BF",
+              background: "#fff",
+              color: "#5D442A",
+              fontSize: "13px",
+              fontWeight: "600",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }
+          },
+          React.createElement("span", { style: { color: "#D6724B" } }, "➜"),
+          `移动至主屏幕第 ${targetPage + 1} 页`
+        ),
+        isSystemApp ? React.createElement(
+          "div",
+          {
+            style: {
+              padding: "10px 14px",
+              borderRadius: "14px",
+              background: "rgba(109, 115, 91, 0.08)",
+              border: "1px solid rgba(109, 115, 91, 0.2)",
+              color: "#7A826E",
+              fontSize: "12px",
+              textAlign: "center"
+            }
+          },
+          "🔒 系统核心应用（常驻保护，不可收纳）"
+        ) : React.createElement(
+          "button",
+          {
+            onClick: () => { onStash(item); onClose(); },
+            style: {
+              padding: "12px 16px",
+              borderRadius: "14px",
+              border: "1px solid rgba(214, 114, 75, 0.35)",
+              background: "rgba(214, 114, 75, 0.08)",
+              color: "#D6724B",
+              fontSize: "13px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "8px"
+            }
+          },
+          React.createElement("span", null, "📥"),
+          "收纳至商城"
+        )
+      )
+    )
+  );
+};
+
+// 代号鸢小手机 · 商城主模态窗口
+const PhoneAppStoreModal = ({
+  isOpen,
+  onClose,
+  catalog = [],
+  installedIcons = [],
+  onStashApp,
+  onRestoreApp,
+  onCreateCustomApp,
+  onDeleteCustomApp
+}) => {
+  if (!isOpen) return null;
+  const [activeTab, setActiveTab] = React.useState("shelf");
+  const [customName, setCustomName] = React.useState("");
+  const [customDesc, setCustomDesc] = React.useState("");
+  const [customIcon, setCustomIcon] = React.useState("sparkles");
+  const [customColor, setCustomColor] = React.useState("#E6A875");
+  const [customIconImage, setCustomIconImage] = React.useState("");
+  const [customHtml, setCustomHtml] = React.useState(`<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body { font-family: -apple-system, sans-serif; background: #FAF7F2; color: #4A3C31; padding: 20px; text-align: center; }
+    .card { background: #fff; border: 1px solid #EBD8BF; border-radius: 16px; padding: 18px; box-shadow: 0 4px 12px rgba(0,0,0,0.04); margin-top: 15px; }
+    button { background: #D6724B; color: #fff; border: none; padding: 10px 22px; border-radius: 20px; font-weight: bold; cursor: pointer; margin-top: 14px; font-size: 13px; box-shadow: 0 2px 8px rgba(214,114,75,0.3); }
+  </style>
+</head>
+<body>
+  <h3>✨ 我的自制微应用</h3>
+  <p style="font-size: 12px; color: #8C7255;">运行在代号鸢小手机安全沙盒中</p>
+  <div class="card">
+    <p id="time-text">轻点下方按钮体验交互：</p>
+    <button onclick="document.getElementById('time-text').innerHTML = '🎉 交互成功！当前时间：<br><b>' + new Date().toLocaleTimeString() + '</b>'">测试互动反馈</button>
+  </div>
+</body>
+</html>`);
+
+  const installedIds = new Set((installedIcons || []).map(i => i.actionId || i.id));
+  const stashedApps = (catalog || []).filter(item => !installedIds.has(item.actionId || item.id) && item.actionId !== "appstore");
+
+  return React.createElement(
+    "div",
+    {
+      className: "settings-overlay open",
+      style: {
+        zIndex: 10000,
+        background: "linear-gradient(180deg, #FBF8F2 0%, #F5EFE6 100%)",
+        display: "flex",
+        flexDirection: "column",
+        overflow: "hidden"
+      }
+    },
+    React.createElement(
+      "div",
+      {
+        className: "settings-nav",
+        style: {
+          background: "rgba(255, 252, 246, 0.88)",
+          backdropFilter: "blur(12px)",
+          borderBottom: "1px solid rgba(214, 168, 110, 0.25)",
+          padding: "10px 16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }
+      },
+      React.createElement(
+        "div",
+        {
+          className: "back-btn",
+          onClick: onClose,
+          style: { cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", color: "#5D442A", fontSize: "14px", fontWeight: "600" }
+        },
+        React.createElement("span", { style: { fontSize: "18px", fontWeight: "bold" } }, "‹"),
+        "桌面"
+      ),
+      React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", alignItems: "center" } },
+        React.createElement("div", { style: { fontSize: "16px", fontWeight: "bold", color: "#4A3C31" } }, "商城"),
+        React.createElement("div", { style: { fontSize: "10.5px", color: "#8C7255", marginTop: "1px" } }, `已摆放 ${installedIcons.length} 款 · 货架收纳 ${stashedApps.length} 款`)
+      ),
+      React.createElement("div", { style: { width: "42px" } })
+    ),
+    React.createElement(
+      "div",
+      {
+        style: {
+          display: "flex",
+          padding: "10px 14px",
+          gap: "8px",
+          background: "rgba(255,255,255,0.45)",
+          borderBottom: "1px solid rgba(214, 168, 110, 0.15)"
+        }
+      },
+      [
+        { id: "shelf", label: `🏪 琳琅货架 (${stashedApps.length})` },
+        { id: "desktop", label: `📱 桌面管理 (${installedIcons.length})` },
+        { id: "create", label: `➕ 导入/新建` }
+      ].map(tab => React.createElement(
+        "button",
+        {
+          key: tab.id,
+          onClick: () => setActiveTab(tab.id),
+          style: {
+            flex: 1,
+            padding: "8px 4px",
+            borderRadius: "14px",
+            border: activeTab === tab.id ? "1.5px solid #D6A86E" : "1px solid rgba(214, 168, 110, 0.2)",
+            background: activeTab === tab.id ? "linear-gradient(135deg, #FAF4E8 0%, #F5E9D3 100%)" : "rgba(255,255,255,0.6)",
+            color: activeTab === tab.id ? "#5D442A" : "#8C7255",
+            fontSize: "12px",
+            fontWeight: activeTab === tab.id ? "bold" : "500",
+            cursor: "pointer",
+            boxShadow: activeTab === tab.id ? "0 2px 8px rgba(214, 168, 110, 0.25)" : "none",
+            transition: "all 0.2s"
+          }
+        },
+        tab.label
+      ))
+    ),
+    React.createElement(
+      "div",
+      { style: { flex: 1, overflowY: "auto", padding: "14px 16px" } },
+      activeTab === "shelf" && (
+        stashedApps.length === 0 ? React.createElement(
+          "div",
+          { style: { textAlign: "center", padding: "50px 20px", color: "#8C7255" } },
+          React.createElement("div", { style: { fontSize: "36px", marginBottom: "10px" } }, "📦"),
+          React.createElement("div", { style: { fontSize: "14px", fontWeight: "bold" } }, "货架当前空空如也"),
+          React.createElement("div", { style: { fontSize: "11px", color: "#A89078", marginTop: "4px" } }, "所有应用均已摆放至主屏幕，您可以在桌面长按图标将其收纳至此~")
+        ) : React.createElement(
+          "div",
+          { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+          stashedApps.map(app => React.createElement(
+            "div",
+            {
+              key: app.id || app.actionId,
+              style: {
+                background: "#fff",
+                border: "1px solid #EBD8BF",
+                borderRadius: "16px",
+                padding: "12px 14px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.03)"
+              }
+            },
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 } },
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "12px",
+                    background: app.color || "#FAF7F2",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0
+                  }
+                },
+                app.iconImage ? React.createElement("img", { src: app.iconImage, style: { width: "100%", height: "100%", borderRadius: "12px", objectFit: "cover" } }) :
+                React.createElement(SafeLucideIcon, { name: app.icon || "sparkles", size: 22, color: "#5D442A" })
+              ),
+              React.createElement(
+                "div",
+                { style: { flex: 1, minWidth: 0 } },
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                  React.createElement("span", { style: { fontSize: "14px", fontWeight: "bold", color: "#4A3C31" } }, app.label),
+                  React.createElement("span", { style: { fontSize: "10px", background: "rgba(214,168,110,0.18)", color: "#9E6830", padding: "1px 6px", borderRadius: "8px" } }, app.category || "应用")
+                ),
+                React.createElement("div", { style: { fontSize: "11px", color: "#8C7255", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, app.description || "代号鸢小手机应用")
+              )
+            ),
+            React.createElement(
+              "button",
+              {
+                onClick: () => onRestoreApp(app),
+                style: {
+                  background: "linear-gradient(135deg, #D6724B 0%, #B85832 100%)",
+                  border: "none",
+                  borderRadius: "14px",
+                  padding: "7px 14px",
+                  color: "#fff",
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  boxShadow: "0 2px 6px rgba(214, 114, 75, 0.3)",
+                  whiteSpace: "nowrap",
+                  marginLeft: "10px"
+                }
+              },
+              "放回桌面 ›"
+            ),
+            String(app.actionId || app.id || "").startsWith("custom_") && React.createElement(
+              "button",
+              {
+                onClick: () => onDeleteCustomApp && onDeleteCustomApp(app),
+                title: "彻底删除此微应用",
+                style: {
+                  background: "rgba(160, 60, 40, 0.08)",
+                  border: "1px solid rgba(160, 60, 40, 0.35)",
+                  borderRadius: "14px",
+                  padding: "6px 10px",
+                  color: "#A03C28",
+                  fontSize: "12px",
+                  fontWeight: "bold",
+                  cursor: "pointer",
+                  whiteSpace: "nowrap",
+                  marginLeft: "6px"
+                }
+              },
+              "删除"
+            )
+          ))
+        )
+      ),
+      activeTab === "desktop" && React.createElement(
+        "div",
+        { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+        installedIcons.map((app, idx) => {
+          const isSystem = app.isSystem || app.actionId === "appstore" || app.actionId === "settings";
+          const pageNum = idx < 12 ? 1 : 2;
+          const slotNum = idx < 12 ? idx + 1 : (idx - 11);
+          return React.createElement(
+            "div",
+            {
+              key: app.id || app.actionId,
+              style: {
+                background: "#fff",
+                border: "1px solid #EBD8BF",
+                borderRadius: "16px",
+                padding: "12px 14px",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                boxShadow: "0 2px 8px rgba(0,0,0,0.03)"
+              }
+            },
+            React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "12px", flex: 1, minWidth: 0 } },
+              React.createElement(
+                "div",
+                {
+                  style: {
+                    width: "42px",
+                    height: "42px",
+                    borderRadius: "12px",
+                    background: app.color || "#FAF7F2",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    flexShrink: 0
+                  }
+                },
+                app.iconImage ? React.createElement("img", { src: app.iconImage, style: { width: "100%", height: "100%", borderRadius: "12px", objectFit: "cover" } }) :
+                React.createElement(SafeLucideIcon, { name: app.icon || "sparkles", size: 22, color: "#5D442A" })
+              ),
+              React.createElement(
+                "div",
+                { style: { flex: 1, minWidth: 0 } },
+                React.createElement(
+                  "div",
+                  { style: { display: "flex", alignItems: "center", gap: "6px" } },
+                  React.createElement("span", { style: { fontSize: "14px", fontWeight: "bold", color: "#4A3C31" } }, app.label),
+                  React.createElement("span", { style: { fontSize: "10px", background: "rgba(109,115,91,0.12)", color: "#565E4E", padding: "1px 6px", borderRadius: "8px" } }, `第 ${pageNum} 页 · 席位 ${slotNum}`)
+                ),
+                React.createElement("div", { style: { fontSize: "11px", color: "#8C7255", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } }, app.description || "摆放在主屏幕的交互应用")
+              )
+            ),
+            isSystem ? React.createElement(
+              "span",
+              {
+                style: {
+                  fontSize: "11px",
+                  color: "#7A826E",
+                  background: "rgba(109,115,91,0.08)",
+                  padding: "5px 10px",
+                  borderRadius: "10px",
+                  fontWeight: "600",
+                  whiteSpace: "nowrap"
+                }
+              },
+              "🔒 系统常驻"
+            ) : React.createElement(
+              "div",
+              { style: { display: "flex", alignItems: "center", gap: "6px" } },
+              React.createElement(
+                "button",
+                {
+                  onClick: () => onStashApp(app.actionId || app.id),
+                  style: {
+                    background: "rgba(214, 114, 75, 0.08)",
+                    border: "1px solid rgba(214, 114, 75, 0.4)",
+                    borderRadius: "12px",
+                    padding: "6px 12px",
+                    color: "#D6724B",
+                    fontSize: "11px",
+                    fontWeight: "bold",
+                    cursor: "pointer",
+                    whiteSpace: "nowrap"
+                  }
+                },
+                "收纳至商城"
+              ),
+              (app.id && app.id.startsWith("custom_")) && React.createElement(
+                "button",
+                {
+                  onClick: () => {
+                    if (confirm(`确定彻底删除自定义应用【${app.label}】吗？`)) {
+                      onDeleteCustomApp(app.id);
+                    }
+                  },
+                  style: {
+                    background: "rgba(200, 50, 50, 0.08)",
+                    border: "none",
+                    borderRadius: "8px",
+                    padding: "6px 8px",
+                    color: "#C33",
+                    fontSize: "12px",
+                    cursor: "pointer"
+                  },
+                  title: "彻底删除此自制微应用"
+                },
+                "🗑️"
+              )
+            )
+          );
+        })
+      ),
+      activeTab === "create" && React.createElement(
+        "div",
+        {
+          style: {
+            background: "#fff",
+            border: "1px solid #EBD8BF",
+            borderRadius: "18px",
+            padding: "16px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "12px",
+            boxShadow: "0 2px 10px rgba(0,0,0,0.03)"
+          }
+        },
+        React.createElement("div", { style: { fontSize: "14.5px", fontWeight: "bold", color: "#4A3C31" } }, "➕ 自制或导入微应用"),
+        React.createElement("div", { style: { fontSize: "11px", color: "#8C7255" } }, "支持直接编写或粘贴标准 HTML 页面，独立运行于小手机沙盒中并上架到桌面。"),
+        React.createElement(
+          "div",
+          null,
+          React.createElement("label", { style: { fontSize: "12px", fontWeight: "bold", color: "#5D442A", display: "block", marginBottom: "4px" } }, "应用名称"),
+          React.createElement("input", {
+            type: "text",
+            placeholder: "例如：今日随笔、灵感锦囊...",
+            value: customName,
+            onChange: (e) => setCustomName(e.target.value),
+            style: { width: "100%", padding: "8px 12px", borderRadius: "10px", border: "1px solid #D6A86E", boxSizing: "border-box", fontSize: "13px" }
+          })
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement("label", { style: { fontSize: "12px", fontWeight: "bold", color: "#5D442A", display: "block", marginBottom: "4px" } }, "功能简介"),
+          React.createElement("input", {
+            type: "text",
+            placeholder: "简短介绍这款微应用的功能...",
+            value: customDesc,
+            onChange: (e) => setCustomDesc(e.target.value),
+            style: { width: "100%", padding: "8px 12px", borderRadius: "10px", border: "1px solid #D6A86E", boxSizing: "border-box", fontSize: "13px" }
+          })
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement("label", { style: { fontSize: "12px", fontWeight: "bold", color: "#5D442A", display: "block", marginBottom: "6px" } }, "图标样式"),
+          React.createElement(
+            "div",
+            { style: { display: "flex", gap: "8px", flexWrap: "wrap" } },
+            ["sparkles", "scroll", "gamepad-2", "compass", "file-text", "music", "calculator", "clock", "book-open", "heart", "cloud-sun", "palette", "zap", "coffee"].map(ic => React.createElement(
+              "button",
+              {
+                key: ic,
+                type: "button",
+                onClick: () => setCustomIcon(ic),
+                style: {
+                  width: "36px",
+                  height: "36px",
+                  borderRadius: "10px",
+                  border: customIcon === ic ? "2px solid #D6724B" : "1px solid #EBD8BF",
+                  background: customIcon === ic ? "rgba(214,114,75,0.12)" : "#fff",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center"
+                }
+              },
+              React.createElement(SafeLucideIcon, { name: ic, size: 18, color: customIcon === ic ? "#D6724B" : "#6B4A28" })
+            ))
+          ),
+          React.createElement(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "10px", marginTop: "10px" } },
+            React.createElement(
+              "div",
+              {
+                style: {
+                  width: "44px", height: "44px", borderRadius: "12px", flexShrink: 0,
+                  border: customIconImage ? "2px solid #D6724B" : "1.5px dashed #D6A86E",
+                  background: customIconImage ? "transparent" : "#FAF7F2",
+                  display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden",
+                  fontSize: "10px", color: "#A89078"
+                }
+              },
+              customIconImage
+                ? React.createElement("img", { src: customIconImage, style: { width: "100%", height: "100%", objectFit: "cover" } })
+                : "无图"
+            ),
+            React.createElement(
+              "label",
+              {
+                style: {
+                  padding: "7px 12px", borderRadius: "12px", border: "1px solid #D6A86E", background: "#fff",
+                  color: "#5D442A", fontSize: "12px", fontWeight: "600", cursor: "pointer"
+                }
+              },
+              "🖼️ 上传自定义图标",
+              React.createElement("input", {
+                type: "file",
+                accept: "image/*",
+                style: { display: "none" },
+                onChange: (e) => {
+                  const file = e.target.files && e.target.files[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  if (file.size > 5 * 1024 * 1024) { alert("图片不能超过 5MB"); return; }
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    // 压缩为 192x192，减小 IndexedDB 占用
+                    const img = new Image();
+                    img.onload = () => {
+                      try {
+                        const S = 192;
+                        const canvas = document.createElement("canvas");
+                        canvas.width = S; canvas.height = S;
+                        const ctx = canvas.getContext("2d");
+                        const scale = Math.max(S / img.width, S / img.height);
+                        const w = img.width * scale, h = img.height * scale;
+                        ctx.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
+                        setCustomIconImage(canvas.toDataURL("image/png"));
+                      } catch (err) {
+                        setCustomIconImage(ev.target.result);
+                      }
+                    };
+                    img.onerror = () => setCustomIconImage(ev.target.result);
+                    img.src = ev.target.result;
+                  };
+                  reader.readAsDataURL(file);
+                }
+              })
+            ),
+            customIconImage && React.createElement(
+              "button",
+              {
+                type: "button",
+                onClick: () => setCustomIconImage(""),
+                style: { background: "none", border: "none", color: "#A03C28", fontSize: "12px", cursor: "pointer" }
+              },
+              "移除"
+            )
+          )
+        ),
+        React.createElement(
+          "div",
+          null,
+          React.createElement(
+            "div",
+            { style: { display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" } },
+            React.createElement("label", { style: { fontSize: "12px", fontWeight: "bold", color: "#5D442A" } }, "HTML 源码 (支持完整 CSS 与 JS)"),
+            React.createElement(
+              "label",
+              {
+                style: {
+                  padding: "4px 10px", borderRadius: "10px", border: "1px solid #D6A86E", background: "#fff",
+                  color: "#5D442A", fontSize: "11px", fontWeight: "600", cursor: "pointer"
+                }
+              },
+              "📄 上传 HTML 文件",
+              React.createElement("input", {
+                type: "file",
+                accept: ".html,.htm,text/html",
+                style: { display: "none" },
+                onChange: (e) => {
+                  const file = e.target.files && e.target.files[0];
+                  e.target.value = "";
+                  if (!file) return;
+                  const reader = new FileReader();
+                  reader.onload = (ev) => {
+                    setCustomHtml(String(ev.target.result || ""));
+                    if (!customName.trim()) {
+                      setCustomName(file.name.replace(/\.(html?|HTML?)$/, ""));
+                    }
+                  };
+                  reader.readAsText(file, "UTF-8");
+                }
+              })
+            )
+          ),
+          React.createElement("textarea", {
+            rows: 8,
+            value: customHtml,
+            onChange: (e) => setCustomHtml(e.target.value),
+            style: { width: "100%", padding: "8px 10px", borderRadius: "10px", border: "1px solid #D6A86E", fontFamily: "monospace", fontSize: "11px", boxSizing: "border-box", background: "#FAF7F2" }
+          })
+        ),
+        React.createElement(
+          "button",
+          {
+            onClick: () => {
+              if (!customName.trim()) {
+                alert("请输入微应用名称！");
+                return;
+              }
+              onCreateCustomApp({
+                name: customName.trim(),
+                description: customDesc.trim() || "自制沙盒微应用",
+                icon: customIcon,
+                color: customColor,
+                html: customHtml,
+                iconImage: customIconImage
+              });
+              setCustomName("");
+              setCustomDesc("");
+              setCustomIconImage("");
+              setActiveTab("desktop");
+            },
+            style: {
+              background: "linear-gradient(135deg, #D6724B 0%, #B85832 100%)",
+              border: "none",
+              borderRadius: "14px",
+              padding: "12px",
+              color: "#fff",
+              fontSize: "14px",
+              fontWeight: "bold",
+              cursor: "pointer",
+              boxShadow: "0 3px 10px rgba(214, 114, 75, 0.35)",
+              marginTop: "6px"
+            }
+          },
+          "✨ 编译并安装至桌面 ›"
+        )
+      )
+    )
+  );
+};
+
+// 自制微应用安全沙盒容器
+const CustomSandboxAppModal = ({ app, onClose }) => {
+  if (!app) return null;
+  const [srcDoc, setSrcDoc] = React.useState(app.htmlContent || app.html || app.customHtml || "");
+
+  React.useEffect(() => {
+    if (srcDoc) return;
+    const aid = app.actionId || app.id;
+    if (aid && typeof dbManager !== "undefined") {
+      dbManager.get("custom_app_html_" + aid).then((code) => {
+        if (code) {
+          setSrcDoc(code);
+        } else {
+          const saved = localStorage.getItem("t8_custom_app_" + aid) || "<p>无内容</p>";
+          setSrcDoc(saved);
+        }
+      }).catch(() => {
+        const saved = localStorage.getItem("t8_custom_app_" + aid) || "<p>无内容</p>";
+        setSrcDoc(saved);
+      });
+    } else if (aid) {
+      const saved = localStorage.getItem("t8_custom_app_" + aid) || "<p>无内容</p>";
+      setSrcDoc(saved);
+    }
+  }, [app, srcDoc]);
+
+  return React.createElement(
+    "div",
+    {
+      className: "settings-overlay open",
+      style: {
+        zIndex: 10005,
+        background: "#FAF7F2",
+        display: "flex",
+        flexDirection: "column"
+      }
+    },
+    React.createElement(
+      "div",
+      {
+        className: "settings-nav",
+        style: {
+          background: "rgba(255, 252, 246, 0.95)",
+          borderBottom: "1px solid #EBD8BF",
+          padding: "10px 16px",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center"
+        }
+      },
+      React.createElement(
+        "div",
+        {
+          className: "back-btn",
+          onClick: onClose,
+          style: { cursor: "pointer", display: "flex", alignItems: "center", gap: "4px", color: "#5D442A", fontSize: "14px", fontWeight: "600" }
+        },
+        React.createElement("span", { style: { fontSize: "18px", fontWeight: "bold" } }, "‹"),
+        "桌面"
+      ),
+      React.createElement("div", { style: { fontSize: "15px", fontWeight: "bold", color: "#4A3C31" } }, app.label || app.name),
+      React.createElement("div", { style: { width: "42px" } })
+    ),
+    React.createElement("iframe", {
+      sandbox: "allow-scripts allow-modals allow-forms",
+      srcDoc: srcDoc || "<p style=\"text-align:center;padding:24px;color:#8C7255;\">正在加载微应用...</p>",
+      style: {
+        flex: 1,
+        width: "100%",
+        border: "none",
+        background: "#FAF7F2"
+      }
+    })
+  );
+};
+// 商城目录持久化：图标图片(base64)与 HTML 源码不写入 localStorage，统一存储于 IndexedDB
+const saveStoreCatalog = (list) => {
+  try {
+    const slim = (list || []).map((it) => {
+      if (!it) return it;
+      let clone = it;
+      let mod = false;
+      if (clone.iconImage && String(clone.iconImage).startsWith("data:")) {
+        clone = { ...clone, iconImage: "", hasIdbIcon: true };
+        mod = true;
+      }
+      if (clone.htmlContent || clone.html || clone.customHtml) {
+        clone = { ...clone, htmlContent: "", html: "", customHtml: "", hasIdbHtml: true };
+        mod = true;
+      }
+      return mod ? clone : it;
+    });
+    localStorage.setItem("t8_app_store_catalog", JSON.stringify(slim));
+  } catch (e) {}
+};
 const MasterApp = () => {
   const [isRegistered, setIsRegistered] = useState(() => {
     return localStorage.getItem("morandi_reg_code_verified") === "true";
@@ -135070,9 +136088,466 @@ const MasterApp = () => {
     { label: "情侣空间", color: "#E0E0E0", icon: "heart", actionId: "t9", iconImage: "" },
     { label: "音乐", color: "#85C9D9", icon: "music", actionId: "music", iconImage: "" },
     { label: "游戏", color: "#F2B6B6", icon: "gamepad-2", actionId: "t13", iconImage: "" },
-    { label: "杏林济生", color: "#D1D1D1", icon: "plus-square", actionId: "t10", iconImage: "" }
+    { label: "杏林济生", color: "#D1D1D1", icon: "plus-square", actionId: "t10", iconImage: "" },
+    { label: "傩·观影", color: "#B85832", icon: "film", actionId: "cinema", iconImage: "" }
   ];
   const [appIcons, setAppIcons] = useState(DEFAULT_ICONS);
+  const [desktopPageIndex, setDesktopPageIndex] = useState(0);
+  const [isStoreOpen, setIsStoreOpen] = useState(false);
+  const [isCinemaOpen, setIsCinemaOpen] = useState(false);
+  const [managingAppItem, setManagingAppItem] = useState(null);
+  const [activeCustomApp, setActiveCustomApp] = useState(null);
+  const [appCatalog, setAppCatalog] = useState(() => {
+    try {
+      const saved = localStorage.getItem("t8_app_store_catalog");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed)) {
+          const existingIds = new Set(parsed.map(x => x.actionId || x.id));
+          const missingDefaults = DEFAULT_MASTER_CATALOG.filter(d => !existingIds.has(d.actionId || d.id));
+          if (missingDefaults.length > 0) {
+            const merged = [...parsed, ...missingDefaults];
+            localStorage.setItem("t8_app_store_catalog", JSON.stringify(merged));
+            return merged;
+          }
+          return parsed;
+        }
+      }
+    } catch (e) {}
+    return DEFAULT_MASTER_CATALOG;
+  });
+
+  const longPressTimerRef = useRef(null);
+  const touchStartPosRef = useRef({ x: 0, y: 0 });
+  const hasFiredLongPressRef = useRef(false);
+
+  const handleIconPointerDown = (item, isDock, e) => {
+    if (isDock) return;
+    if (!item) return;
+    if (item.actionId === "appstore" || item.isSystem) return;
+
+    hasFiredLongPressRef.current = false;
+    const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    touchStartPosRef.current = { x: clientX, y: clientY };
+
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      hasFiredLongPressRef.current = true;
+      if (window.navigator && window.navigator.vibrate) {
+        try { window.navigator.vibrate(40); } catch(err) {}
+      }
+      setManagingAppItem(item);
+    }, 550);
+  };
+
+  const handleIconPointerMove = (e) => {
+    if (!longPressTimerRef.current) return;
+    const clientX = e.clientX || (e.touches && e.touches[0] ? e.touches[0].clientX : 0);
+    const clientY = e.clientY || (e.touches && e.touches[0] ? e.touches[0].clientY : 0);
+    const dx = Math.abs(clientX - touchStartPosRef.current.x);
+    const dy = Math.abs(clientY - touchStartPosRef.current.y);
+    if (dx > 10 || dy > 10) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const handleIconPointerUp = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  // 从 IndexedDB 回填自制微应用的自定义图标图片
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const targets = (appCatalog || []).filter((c) => c && c.hasIdbIcon && !c.iconImage);
+      if (!targets.length || typeof dbManager === "undefined") return;
+      const loaded = {};
+      for (const t of targets) {
+        const id = t.actionId || t.id;
+        try {
+          const img = await dbManager.get(`custom_app_icon_${id}`);
+          if (img) loaded[id] = img;
+        } catch (e) {}
+      }
+      if (cancelled || !Object.keys(loaded).length) return;
+      setAppCatalog((prev) => prev.map((c) => {
+        const id = c.actionId || c.id;
+        return loaded[id] ? { ...c, iconImage: loaded[id] } : c;
+      }));
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const getPageDisplayIcons = (pageIdx) => {
+    const slots = [];
+    if (pageIdx === 0) {
+      for (let i = 0; i < 12; i++) {
+        slots.push(appIcons[i] || null);
+      }
+    } else if (pageIdx === 1) {
+      slots.push(STORE_APP_ITEM);
+      for (let i = 0; i < 11; i++) {
+        slots.push(appIcons[12 + i] || null);
+      }
+    } else {
+      const startIdx = 23 + (pageIdx - 2) * 12;
+      for (let i = 0; i < 12; i++) {
+        slots.push(appIcons[startIdx + i] || null);
+      }
+    }
+    return slots;
+  };
+
+  const handleStashAppToStore = (item) => {
+    if (!item) return;
+    const aid = item.actionId || item.id;
+    if (aid === "appstore" || item.isSystem) {
+      alert("核心应用受到保护，无法收纳至商城。");
+      return;
+    }
+    const newIcons = appIcons.filter(a => (a.actionId || a.id) !== aid && a.label !== item.label);
+    handleUpdateIcons(newIcons);
+
+    setAppCatalog(prev => {
+      let found = false;
+      const next = prev.map(catItem => {
+        if ((catItem.actionId || catItem.id) === aid || catItem.label === item.label) {
+          found = true;
+          return { ...catItem, isInstalled: false };
+        }
+        return catItem;
+      });
+      if (!found) {
+        next.push({
+          ...item,
+          id: aid,
+          actionId: aid,
+          isSystem: false,
+          isInstalled: false
+        });
+      }
+      try {
+        saveStoreCatalog((next));
+      } catch(e) {}
+      return next;
+    });
+    setManagingAppItem(null);
+  };
+
+  const handleRestoreAppToDesktop = (item) => {
+    if (!item) return;
+    const aid = item.actionId || item.id;
+    if (appIcons.some(a => (a.actionId || a.id) === aid || a.label === item.label)) {
+      alert("该应用已在桌面上！");
+      return;
+    }
+    const newIcons = [...appIcons, {
+      label: item.label,
+      color: item.color || "#85C9D9",
+      icon: item.icon || "box",
+      actionId: aid,
+      iconImage: item.iconImage || ""
+    }];
+    handleUpdateIcons(newIcons);
+
+    setAppCatalog(prev => {
+      const next = prev.map(catItem => {
+        if ((catItem.actionId || catItem.id) === aid || catItem.label === item.label) {
+          return { ...catItem, isInstalled: true };
+        }
+        return catItem;
+      });
+      try {
+        saveStoreCatalog((next));
+      } catch(e) {}
+      return next;
+    });
+  };
+
+  const handleCreateCustomApp = ({ name, description, icon, color, html, iconImage }) => {
+    const customId = "custom_" + Date.now();
+    const newApp = {
+      id: customId,
+      actionId: customId,
+      label: name,
+      icon: icon || "sparkles",
+      color: color || "#E6A875",
+      iconImage: iconImage || "",
+      hasIdbIcon: !!iconImage,
+      category: "custom",
+      description: description || "自制微应用",
+      isSystem: false,
+      isInstalled: true,
+      htmlContent: html,
+      customHtml: html
+    };
+
+    try {
+      if (typeof dbManager !== "undefined") {
+        Promise.resolve(dbManager.set(`custom_app_html_${customId}`, html)).catch(() => {});
+        if (iconImage) {
+          Promise.resolve(dbManager.set(`custom_app_icon_${customId}`, iconImage)).catch(() => {});
+        }
+      }
+    } catch(e) {}
+
+    const updatedCatalog = [...appCatalog, newApp];
+    setAppCatalog(updatedCatalog);
+    try {
+      saveStoreCatalog((updatedCatalog));
+    } catch(e) {}
+
+    const newIcons = [...appIcons, {
+      label: newApp.label,
+      color: newApp.color,
+      icon: newApp.icon,
+      actionId: newApp.actionId,
+      iconImage: newApp.iconImage
+    }];
+    handleUpdateIcons(newIcons);
+  };
+
+  const handleDeleteCustomApp = (item) => {
+    if (!item) return;
+    const aid = item.actionId || item.id;
+    if (!aid || !aid.startsWith("custom_")) return;
+
+    if (!window.confirm(`确定要彻底删除微应用「${item.label || item.name}」吗？`)) return;
+
+    try {
+      localStorage.removeItem(`t8_custom_app_${aid}`);
+      if (typeof dbManager !== "undefined") {
+        Promise.resolve(dbManager.remove(`custom_app_icon_${aid}`)).catch(() => {});
+        Promise.resolve(dbManager.remove(`custom_app_html_${aid}`)).catch(() => {});
+      }
+    } catch(e) {}
+
+    const newIcons = appIcons.filter(a => (a.actionId || a.id) !== aid && a.id !== aid);
+    handleUpdateIcons(newIcons);
+
+    const updatedCatalog = appCatalog.filter(c => (c.actionId || c.id) !== aid);
+    setAppCatalog(updatedCatalog);
+    try {
+      saveStoreCatalog((updatedCatalog));
+    } catch(e) {}
+  };
+
+  const handleMoveAppToPage = (item, targetPage) => {
+    if (!item) return;
+    const aid = item.actionId || item.id;
+    const filtered = appIcons.filter(a => (a.actionId || a.id) !== aid && a.label !== item.label);
+    let targetIdx = 0;
+    if (targetPage === 0) {
+      targetIdx = 0;
+    } else if (targetPage === 1) {
+      targetIdx = 12;
+    } else {
+      targetIdx = 23 + (targetPage - 2) * 12;
+    }
+    if (targetIdx > filtered.length) {
+      targetIdx = filtered.length;
+    }
+    filtered.splice(targetIdx, 0, item);
+    handleUpdateIcons(filtered);
+    setDesktopPageIndex(targetPage);
+  };
+
+  const DEFAULT_DOCK_ICONS = [
+    { label: "传讯", color: "#85C9D9", icon: "message-circle", actionId: "msg", iconImage: "" },
+    { label: "绣衣楼", color: "#F2D06B", icon: "home", actionId: "t11", iconImage: "" },
+    { label: "情侣空间", color: "#E0E0E0", icon: "heart", actionId: "t9", iconImage: "" },
+    { label: "设置", color: "#C9C9C1", icon: "settings", actionId: "settings", iconImage: "" }
+  ];
+  const [dockIcons, setDockIcons] = useState(DEFAULT_DOCK_ICONS);
+
+  // 预留小部件生态接口 (Silent Widget Slot Interface)
+  const WidgetSlot = ({ pageIndex, slotId }) => {
+    return null;
+  };
+
+  const handleAppClick = (item) => {
+    if (!item) return;
+    const aid = item.actionId || item.id;
+    const lbl = item.label || "";
+    if (aid === "appstore" || lbl === "商城" || lbl.includes("商城")) {
+      setIsStoreOpen(true);
+      return;
+    }
+    if (aid === "cinema" || lbl === "傩·观影" || lbl.includes("观影")) {
+      setIsCinemaOpen(true);
+      return;
+    }
+    if (aid && aid.startsWith("custom_")) {
+      let fullApp = appCatalog.find(c => (c.actionId || c.id) === aid) || item;
+      const openAppWithCode = (code) => {
+        setActiveCustomApp({ ...fullApp, htmlContent: code, customHtml: code });
+      };
+      if (fullApp.htmlContent || fullApp.html || fullApp.customHtml) {
+        setActiveCustomApp(fullApp);
+        return;
+      }
+      if (typeof dbManager !== "undefined") {
+        dbManager.get(`custom_app_html_${aid}`).then((code) => {
+          if (code) {
+            openAppWithCode(code);
+          } else {
+            const saved = localStorage.getItem(`t8_custom_app_${aid}`) || "<p>无内容</p>";
+            openAppWithCode(saved);
+          }
+        }).catch(() => {
+          const saved = localStorage.getItem(`t8_custom_app_${aid}`) || "<p>无内容</p>";
+          openAppWithCode(saved);
+        });
+      } else {
+        const saved = localStorage.getItem(`t8_custom_app_${aid}`) || "<p>无内容</p>";
+        openAppWithCode(saved);
+      }
+      return;
+    }
+    if (aid === "msg" || aid === "t8" || lbl === "传讯" || lbl.includes("传讯")) {
+      setIsMsgOpen(true);
+    } else if (aid === "reader" || lbl === "阅读" || lbl.includes("阅读")) {
+      setIsReaderOpen(true);
+    } else if (aid === "music" || lbl === "音乐" || lbl.includes("音乐")) {
+      setIsMusicOpen(true);
+    } else if (aid === "t13" || lbl === "游戏" || lbl.includes("游戏")) {
+      setIsT13Open(true);
+    } else if (aid === "t12" || lbl === "太疾驰" || lbl.includes("太疾驰")) {
+      setIsT12Open(true);
+    } else if (aid === "t11" || lbl === "绣衣楼" || lbl.includes("绣衣楼")) {
+      setIsT11Open(true);
+    } else if (aid === "t10" || lbl === "杏林济生" || lbl.includes("杏林")) {
+      setIsT10Open(true);
+    } else if (aid === "t9" || lbl === "情侣空间" || lbl.includes("情侣")) {
+      setIsT9Open(true);
+    } else if (aid === "weather" || lbl === "天气" || lbl.includes("天气")) {
+      setIsWeatherOpen(true);
+    } else if (aid === "calendar" || lbl === "日历" || lbl.includes("日历")) {
+      setIsCalendarOpen(true);
+    } else if (aid === "forum" || lbl === "论坛" || lbl.includes("论坛")) {
+      setIsForumOpen(true);
+    } else if (aid === "settings" || lbl === "设置" || lbl.includes("设置")) {
+      setIsSettingsOpen(true);
+    } else {
+      if (item.onClick) item.onClick();
+      else if (item.url) window.open(item.url, "_blank");
+    }
+  };
+
+  const renderIconItem = (item, key, isDock = false) => {
+    if (!item) {
+      return /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          key,
+          className: "icon-item icon-item-placeholder",
+          style: { opacity: 0.28, pointerEvents: "none" }
+        },
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "icon-box placeholder-box",
+            style: {
+              border: "1.5px dashed var(--olive-crisp, #6d735b)",
+              background: "rgba(255, 255, 255, 0.2)",
+              boxShadow: "none"
+            }
+          },
+          /* @__PURE__ */ React.createElement("span", { style: { fontSize: "16px", color: "var(--olive-crisp, #6d735b)" } }, "+")
+        ),
+        /* @__PURE__ */ React.createElement(
+          "span",
+          { className: "icon-label", style: { opacity: 0.55 } },
+          "留白"
+        )
+      );
+    }
+
+    const actualItem = isDock
+      ? (appIcons.find(a => (a.actionId && a.actionId === item.actionId) || (a.label && a.label === item.label)) || item)
+      : item;
+
+    const isStore = actualItem.actionId === "appstore";
+
+    return /* @__PURE__ */ React.createElement(
+      "div",
+      {
+        key,
+        className: `icon-item ${isDock ? "dock-icon-item" : ""}`,
+        onMouseDown: (e) => handleIconPointerDown(actualItem, isDock, e),
+        onMouseMove: handleIconPointerMove,
+        onMouseUp: handleIconPointerUp,
+        onTouchStart: (e) => handleIconPointerDown(actualItem, isDock, e),
+        onTouchMove: handleIconPointerMove,
+        onTouchEnd: handleIconPointerUp,
+        onTouchCancel: handleIconPointerUp,
+        onClick: (e) => {
+          if (hasFiredLongPressRef.current) {
+            hasFiredLongPressRef.current = false;
+            e.preventDefault();
+            e.stopPropagation();
+            return;
+          }
+          handleAppClick(actualItem);
+        },
+        style: {
+          cursor: "pointer",
+          touchAction: "manipulation",
+          position: "relative"
+        }
+      },
+      /* @__PURE__ */ React.createElement(
+        "div",
+        {
+          className: "icon-box",
+          style: {
+            color: actualItem.color,
+            background: isStore 
+              ? "linear-gradient(135deg, #FAF7F2 0%, #EFE8DD 100%)" 
+              : (actualItem.iconImage ? "transparent" : "#ffffff"),
+            border: isStore ? "1.5px solid rgba(214, 114, 75, 0.35)" : "none",
+            boxShadow: actualItem.iconImage ? "none" : (isStore ? "0 4px 12px rgba(214, 114, 75, 0.12)" : "0 8px 20px rgba(0, 0, 0, 0.02)"),
+            padding: 0
+          }
+        },
+        actualItem.iconImage ? /* @__PURE__ */ React.createElement(
+          "img",
+          {
+            src: actualItem.iconImage,
+            style: {
+              width: "100%",
+              height: "100%",
+              objectFit: "cover",
+              borderRadius: isDock ? "14px" : "16px"
+            },
+            alt: ""
+          }
+        ) : /* @__PURE__ */ React.createElement(SafeLucideIcon, {
+          name: actualItem.icon,
+          size: isDock ? 20 : 22,
+          color: isStore ? "#D6724B" : "#6d735b"
+        })
+      ),
+      /* @__PURE__ */ React.createElement(
+        "span",
+        {
+          className: "icon-label",
+          style: {
+            textShadow: homeBg ? "0 1px 2px rgba(255,255,255,0.8)" : "none",
+            fontWeight: isStore || homeBg ? "bold" : "500",
+            fontSize: isDock ? "10px" : "11px",
+            color: isStore ? "#D6724B" : undefined
+          }
+        },
+        actualItem.label
+      )
+    );
+  };
   const [shoppingSession, setShoppingSession] = useState({
     isActive: false,
     character: null,
@@ -135099,6 +136574,7 @@ const MasterApp = () => {
               if (lbl === "绣衣楼" || lbl.includes("绣衣楼")) return { ...item, actionId: "t11", icon: item.iconImage ? item.icon : "home" };
               if (lbl === "情侣空间" || lbl.includes("情侣空间")) return { ...item, actionId: "t9", icon: item.iconImage ? item.icon : "heart" };
               if (lbl === "杏林济生" || lbl.includes("杏林济生")) return { ...item, actionId: "t10", icon: item.iconImage ? item.icon : "plus-square" };
+              if (lbl === "傩·观影" || lbl.includes("观影")) return { ...item, actionId: "cinema", icon: item.iconImage ? item.icon : "film" };
               return item;
             });
             setAppIcons(list);
@@ -136201,8 +137677,19 @@ const MasterApp = () => {
   const fileInputRef = useRef(null);
   const touchStartY = useRef(0);
   useEffect(() => {
-    if (window.lucide) window.lucide.createIcons();
+    if (window.lucide) {
+      window.lucide.createIcons();
+      setTimeout(() => {
+        if (window.lucide) window.lucide.createIcons();
+      }, 50);
+    }
   }, [
+    desktopPageIndex,
+    isStoreOpen,
+    isCinemaOpen,
+    managingAppItem,
+    activeCustomApp,
+    appIcons,
     isSettingsOpen,
     isWeatherOpen,
     isCalendarOpen,
@@ -136529,13 +138016,13 @@ const MasterApp = () => {
   };
   const handleTouchEnd = (e) => {
     const diff = touchStartY.current - e.changedTouches[0].clientY;
-    if (!isSettingsOpen && !isWeatherOpen && !isCalendarOpen && !isMusicOpen && !isReaderOpen && !isForumOpen && !isMsgOpen && !isT9Open) {
+    if (!isStoreOpen && !isCinemaOpen && !managingAppItem && !activeCustomApp && !isSettingsOpen && !isWeatherOpen && !isCalendarOpen && !isMusicOpen && !isReaderOpen && !isForumOpen && !isMsgOpen && !isT9Open) {
       if (diff > 50 && pageIndex === 0) setPageIndex(1);
       if (diff < -50 && pageIndex === 1) setPageIndex(0);
     }
   };
   const handleWheel = (e) => {
-    if (isSettingsOpen || isWeatherOpen || isCalendarOpen || isMusicOpen || isReaderOpen || isForumOpen || isMsgOpen || isT9Open)
+    if (isStoreOpen || isCinemaOpen || managingAppItem || activeCustomApp || isSettingsOpen || isWeatherOpen || isCalendarOpen || isMusicOpen || isReaderOpen || isForumOpen || isMsgOpen || isT9Open)
       return;
     if (e.deltaY > 0 && pageIndex === 0) setPageIndex(1);
     if (e.deltaY < 0 && pageIndex === 1) setPageIndex(0);
@@ -136858,7 +138345,9 @@ const MasterApp = () => {
           }
         )))),
         foldCardConfig.customCss && /* @__PURE__ */ React.createElement("style", { id: "foldcard-custom-user-css" }, foldCardConfig.customCss),
-        /* @__PURE__ */ React.createElement(
+        /* @__PURE__ */ React.createElement(WidgetSlot, { pageIndex: desktopPageIndex, slotId: "top" }),
+        desktopPageIndex === 0 ? (
+          /* @__PURE__ */ React.createElement(
           "div",
           {
             className: "fold-card",
@@ -136932,116 +138421,103 @@ const MasterApp = () => {
             },
             weatherAdvice && Array.isArray(weatherAdvice.suggestions) && weatherAdvice.suggestions.length > 0 ? /* @__PURE__ */ React.createElement("div", { style: { display: "flex", flexDirection: "column", gap: "6px" } }, weatherAdvice.suggestions.map((item, idx) => /* @__PURE__ */ React.createElement("p", { key: idx, style: { margin: 0, lineHeight: "1.5" } }, /* @__PURE__ */ React.createElement("span", { style: { color: "#6d735b", fontWeight: "bold", marginRight: "6px" } }, "\u2726"), item)), weatherAdvice.characterName && /* @__PURE__ */ React.createElement("div", { style: { textAlign: "right", fontSize: "11px", color: "#8a927a", marginTop: "4px" } }, "\u2014\u2014 \u6765\u81EA ", weatherAdvice.characterName, " \u7684\u5173\u7167")) : /* @__PURE__ */ React.createElement("div", { style: { color: "#8a927a", fontStyle: "italic", textAlign: "center", padding: "8px 0" } }, /* @__PURE__ */ React.createElement("p", { style: { margin: "0 0 4px 0" } }, "\u2726 \u6682\u65E0\u89D2\u8272\u5929\u6C14\u53EE\u5631"), /* @__PURE__ */ React.createElement("p", { style: { margin: 0, fontSize: "11px" } }, "\u53EF\u8FDB\u5165\u300C\u5929\u6C14\u300D\u9009\u62E9\u89D2\u8272\u5E76\u70B9\u51FB\u84DD\u8272\u6E29\u5EA6\u5708\u83B7\u53D6"))
           )
-        ),
-        /* @__PURE__ */ React.createElement("div", { className: "icon-matrix" }, appIcons.map((item, i) => /* @__PURE__ */ React.createElement(
-          "div",
-          {
-            key: i,
-            className: "icon-item",
-            onClick: () => {
-              const aid = item.actionId;
-              const lbl = item.label || "";
-              if (aid === "msg" || aid === "t8" || lbl === "传讯" || lbl.includes("传讯")) {
-                setIsMsgOpen(true);
-              } else if (aid === "reader" || lbl === "阅读" || lbl.includes("阅读")) {
-                setIsReaderOpen(true);
-              } else if (aid === "music" || lbl === "音乐" || lbl.includes("音乐")) {
-                setIsMusicOpen(true);
-              } else if (aid === "t13" || lbl === "游戏" || lbl.includes("游戏")) {
-                setIsT13Open(true);
-              } else if (aid === "t12" || lbl === "太疾驰" || lbl.includes("太疾驰")) {
-                setIsT12Open(true);
-              } else if (aid === "t11" || lbl === "绣衣楼" || lbl.includes("绣衣楼")) {
-                setIsT11Open(true);
-              } else if (aid === "t10" || lbl === "杏林济生" || lbl.includes("杏林")) {
-                setIsT10Open(true);
-              } else if (aid === "t9" || lbl === "情侣空间" || lbl.includes("情侣")) {
-                setIsT9Open(true);
-              } else if (aid === "weather" || lbl === "天气" || lbl.includes("天气")) {
-                setIsWeatherOpen(true);
-              } else if (aid === "calendar" || lbl === "日历" || lbl.includes("日历")) {
-                setIsCalendarOpen(true);
-              } else if (aid === "forum" || lbl === "论坛" || lbl.includes("论坛")) {
-                setIsForumOpen(true);
-              } else if (aid === "settings" || lbl === "设置" || lbl.includes("设置")) {
-                setIsSettingsOpen(true);
-              } else {
-                if (i === 0) setIsWeatherOpen(true);
-                else if (i === 1) setIsForumOpen(true);
-                else if (i === 2) setIsSettingsOpen(true);
-                else if (i === 3) setIsCalendarOpen(true);
-                else if (i === 4) setIsMsgOpen(true);
-                else if (i === 5) setIsReaderOpen(true);
-                else if (i === 6) setIsT12Open(true);
-                else if (i === 7) setIsT11Open(true);
-                else if (i === 8) setIsT9Open(true);
-                else if (i === 9) setIsMusicOpen(true);
-                else if (i === 10) setIsT13Open(true);
-                else if (i === 11) setIsT10Open(true);
-              }
-            }
-          },
+        )
+        ) : (
           /* @__PURE__ */ React.createElement(
             "div",
             {
-              className: "icon-box",
+              className: "page-extension-header",
               style: {
-                color: item.color,
-                background: item.iconImage ? "transparent" : "#ffffff",
-                boxShadow: item.iconImage ? "none" : "0 8px 20px rgba(0, 0, 0, 0.02)",
-                padding: 0
+                padding: "14px 18px",
+                marginBottom: "16px",
+                borderRadius: "20px",
+                background: "rgba(255, 255, 255, 0.45)",
+                backdropFilter: "blur(8px)",
+                WebkitBackdropFilter: "blur(8px)",
+                border: "1px dashed rgba(109, 115, 91, 0.25)",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center"
               }
             },
-            item.iconImage ? /* @__PURE__ */ React.createElement(
-              "img",
-              {
-                src: item.iconImage,
-                style: {
-                  width: "100%",
-                  height: "100%",
-                  objectFit: "cover",
-                  borderRadius: "20px"
-                },
-                alt: ""
-              }
-            ) : (
-              /* 修复：增加 span 包装层，防止 Lucide 替换 DOM 后 React 卸载失败 */
-              /* @__PURE__ */ React.createElement(
-                "span",
-                {
-                  style: {
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center"
-                  }
-                },
-                /* @__PURE__ */ React.createElement(
-                  "i",
-                  {
-                    "data-lucide": item.icon,
-                    style: {
-                      width: 22,
-                      height: 22,
-                      stroke: "#6d735b"
-                    }
-                  }
-                )
-              )
-            )
-          ),
-          /* @__PURE__ */ React.createElement(
-            "span",
-            {
-              className: "icon-label",
-              style: {
-                // [新增] 如果有背景图，给文字加个阴影防止看不清
-                textShadow: homeBg ? "0 1px 2px rgba(255,255,255,0.8)" : "none",
-                fontWeight: homeBg ? "bold" : "500"
-              }
-            },
-            item.label
+            /* @__PURE__ */ React.createElement(
+              "div",
+              null,
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "14px", fontWeight: "600", color: "#3a4233" } }, desktopPageIndex === 1 ? "第 2 页 · 商城与自制" : `第 ${desktopPageIndex + 1} 页 · 留白扩展`),
+              /* @__PURE__ */ React.createElement("div", { style: { fontSize: "11px", color: "#7a826e", marginTop: "2px" } }, desktopPageIndex === 1 ? "常驻商城 · 自由收纳桌面图标与体验自制微应用" : "预留 12 席位 · 支持新增图标与小部件插槽")
+            ),
+            /* @__PURE__ */ React.createElement("span", { style: { fontSize: "18px", color: "#6d735b", opacity: 0.7 } }, "✧")
           )
-        )))
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          { className: "icon-matrix" },
+          getPageDisplayIcons(desktopPageIndex).map((actualIcon, slotIdx) => {
+            const itemKey = actualIcon
+              ? (actualIcon.actionId || actualIcon.id || actualIcon.label || `app-${slotIdx}`)
+              : `empty-p${desktopPageIndex}-s${slotIdx}`;
+            return renderIconItem(actualIcon, itemKey, false);
+          })
+        ),
+        /* @__PURE__ */ React.createElement(WidgetSlot, { pageIndex: desktopPageIndex, slotId: "bottom" }),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "desktop-pagination-dots",
+            style: {
+              display: "flex",
+              justifyContent: "center",
+              alignItems: "center",
+              gap: "8px",
+              margin: "6px 0 10px 0",
+              userSelect: "none"
+            }
+          },
+          Array.from({ length: Math.max(3, desktopPageIndex + 1, Math.ceil((appIcons.length + 1) / 12)) }).map((_, pIdx) => /* @__PURE__ */ React.createElement(
+            "div",
+            {
+              key: pIdx,
+              className: `pagination-dot ${pIdx === desktopPageIndex ? "active" : ""}`,
+              onClick: (e) => {
+                e.stopPropagation();
+                setDesktopPageIndex(pIdx);
+              },
+              title: `切换至第 ${pIdx + 1} 页`,
+              style: {
+                width: pIdx === desktopPageIndex ? "20px" : "8px",
+                height: "8px",
+                borderRadius: "4px",
+                backgroundColor: pIdx === desktopPageIndex ? "var(--olive-crisp, #6d735b)" : "rgba(109, 115, 91, 0.3)",
+                cursor: "pointer",
+                transition: "all 0.25s cubic-bezier(0.2, 0, 0, 1)",
+                boxShadow: pIdx === desktopPageIndex ? "0 1px 4px rgba(109, 115, 91, 0.35)" : "none"
+              }
+            }
+          ))
+        ),
+        /* @__PURE__ */ React.createElement(
+          "div",
+          {
+            className: "dock-bar-container",
+            style: {
+              marginTop: "auto",
+              width: "100%",
+              padding: "8px 10px",
+              background: "rgba(255, 255, 255, 0.65)",
+              backdropFilter: "blur(16px)",
+              WebkitBackdropFilter: "blur(16px)",
+              borderRadius: "22px",
+              border: "1px solid rgba(109, 115, 91, 0.2)",
+              boxShadow: "0 4px 18px rgba(0, 0, 0, 0.04)",
+              display: "flex",
+              justifyContent: "space-around",
+              alignItems: "center",
+              boxSizing: "border-box",
+              zIndex: 5
+            }
+          },
+          dockIcons.map((dItem, dIdx) => renderIconItem(dItem, `dock-${dIdx}`, true))
+        )
       )
     ),
     /* @__PURE__ */ React.createElement("div", { className: `settings-overlay ${isSettingsOpen ? "open" : ""}` }, /* @__PURE__ */ React.createElement("div", { className: "settings-nav" }, /* @__PURE__ */ React.createElement("div", { className: "back-btn", onClick: () => setIsSettingsOpen(false) }, /* @__PURE__ */ React.createElement(
@@ -139258,7 +140734,32 @@ const MasterApp = () => {
           setIsMsgOpen(true);
         }
       }
-    )
+    ),
+    managingAppItem && /* @__PURE__ */ React.createElement(DesktopAppManageModal, {
+      item: managingAppItem,
+      currentPage: desktopPageIndex,
+      onClose: () => setManagingAppItem(null),
+      onStash: handleStashAppToStore,
+      onMoveToPage: handleMoveAppToPage
+    }),
+    isStoreOpen && /* @__PURE__ */ React.createElement(PhoneAppStoreModal, {
+      isOpen: isStoreOpen,
+      onClose: () => setIsStoreOpen(false),
+      catalog: appCatalog,
+      installedIcons: appIcons,
+      onStashApp: handleStashAppToStore,
+      onRestoreApp: handleRestoreAppToDesktop,
+      onCreateCustomApp: handleCreateCustomApp,
+      onDeleteCustomApp: handleDeleteCustomApp
+    }),
+    activeCustomApp && /* @__PURE__ */ React.createElement(CustomSandboxAppModal, {
+      app: activeCustomApp,
+      onClose: () => setActiveCustomApp(null)
+    }),
+    isCinemaOpen && typeof window !== "undefined" && window.NuoCinemaAppModal && /* @__PURE__ */ React.createElement(window.NuoCinemaAppModal, {
+      isOpen: isCinemaOpen,
+      onClose: () => setIsCinemaOpen(false)
+    })
   );
 };
 class ErrorBoundary extends React.Component {
