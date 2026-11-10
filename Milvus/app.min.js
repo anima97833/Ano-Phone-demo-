@@ -135191,6 +135191,10 @@ const DEFAULT_MASTER_CATALOG = [
   { id: "t13", actionId: "t13", label: "游戏", color: "#F2B6B6", icon: "gamepad-2", category: "闲趣弈戏", description: "风月大富翁、投壶小游戏与休闲娱乐厅", isSystem: false, isInstalled: true },
   { id: "t10", actionId: "t10", label: "杏林济生", color: "#D1D1D1", icon: "plus-square", category: "日常工具", description: "华佗脉理辨症、本草寻味与问诊调理", isSystem: false, isInstalled: true },
   { id: "cinema", actionId: "cinema", label: "傩·观影", color: "#B85832", icon: "film", category: "闲情文墨", description: "民国胶卷放映室：名士同行看戏、手写影评札记与时空盘", isSystem: false, isInstalled: true },
+  { id: "gamevault", actionId: "gamevault", label: "傩·游戏", color: "#B85832", icon: "gamepad-2", category: "闲趣弈戏", description: "复古卡带游戏仓：名士在玩、想玩、通关速评与电竞时空罗盘", isSystem: false, isInstalled: true },
+  { id: "radio", actionId: "radio", label: "傩·电台", color: "#B85832", icon: "radio", category: "闲情文墨", description: "复古木质收音机：名士同听、心境点台、节目单与电台时空罗盘", isSystem: false, isInstalled: true },
+  { id: "study", actionId: "study", label: "傩·修业", color: "#B85832", icon: "graduation-cap", category: "闲情文墨", description: "名士B站研习看板：真实课程自选、逐讲打卡、章节手写心得与修业罗盘", isSystem: false, isInstalled: true },
+  { id: "arcade", actionId: "arcade", label: "傩·掌机", color: "#475569", icon: "joystick", category: "闲趣弈戏", description: "复古掌机模拟器：1:1复刻经典掌机手柄操作、SWF卡带即插即玩与沉浸全屏", isSystem: false, isInstalled: true },
   { id: "appstore", actionId: "appstore", label: "商城", color: "#FAF4E8", icon: "shopping-bag", category: "系统核心", description: "应用中心：自由收纳桌面图标与发现自制新微应用", isSystem: true, isInstalled: true }
 ];
 
@@ -136089,12 +136093,20 @@ const MasterApp = () => {
     { label: "音乐", color: "#85C9D9", icon: "music", actionId: "music", iconImage: "" },
     { label: "游戏", color: "#F2B6B6", icon: "gamepad-2", actionId: "t13", iconImage: "" },
     { label: "杏林济生", color: "#D1D1D1", icon: "plus-square", actionId: "t10", iconImage: "" },
-    { label: "傩·观影", color: "#B85832", icon: "film", actionId: "cinema", iconImage: "" }
+    { label: "傩·观影", color: "#B85832", icon: "film", actionId: "cinema", iconImage: "" },
+    { label: "傩·游戏", color: "#B85832", icon: "gamepad-2", actionId: "gamevault", iconImage: "" },
+    { label: "傩·电台", color: "#B85832", icon: "radio", actionId: "radio", iconImage: "" },
+    { label: "傩·修业", color: "#B85832", icon: "graduation-cap", actionId: "study", iconImage: "" },
+    { label: "傩·掌机", color: "#475569", icon: "joystick", actionId: "arcade", iconImage: "" }
   ];
   const [appIcons, setAppIcons] = useState(DEFAULT_ICONS);
   const [desktopPageIndex, setDesktopPageIndex] = useState(0);
   const [isStoreOpen, setIsStoreOpen] = useState(false);
   const [isCinemaOpen, setIsCinemaOpen] = useState(false);
+  const [isGameVaultOpen, setIsGameVaultOpen] = useState(false);
+  const [isRadioOpen, setIsRadioOpen] = useState(false);
+  const [isStudyOpen, setIsStudyOpen] = useState(false);
+  const [isArcadeOpen, setIsArcadeOpen] = useState(false);
   const [managingAppItem, setManagingAppItem] = useState(null);
   const [activeCustomApp, setActiveCustomApp] = useState(null);
   const [appCatalog, setAppCatalog] = useState(() => {
@@ -136382,6 +136394,22 @@ const MasterApp = () => {
       setIsCinemaOpen(true);
       return;
     }
+    if (aid === "gamevault") {
+      setIsGameVaultOpen(true);
+      return;
+    }
+    if (aid === "radio" || lbl === "傩·电台" || lbl.includes("电台")) {
+      setIsRadioOpen(true);
+      return;
+    }
+    if (aid === "study" || lbl === "傩·修业" || lbl.includes("修业")) {
+      setIsStudyOpen(true);
+      return;
+    }
+    if (aid === "arcade" || lbl === "傩·掌机" || lbl.includes("掌机") || lbl.includes("电玩")) {
+      setIsArcadeOpen(true);
+      return;
+    }
     if (aid && aid.startsWith("custom_")) {
       let fullApp = appCatalog.find(c => (c.actionId || c.id) === aid) || item;
       const openAppWithCode = (code) => {
@@ -136415,7 +136443,7 @@ const MasterApp = () => {
       setIsReaderOpen(true);
     } else if (aid === "music" || lbl === "音乐" || lbl.includes("音乐")) {
       setIsMusicOpen(true);
-    } else if (aid === "t13" || lbl === "游戏" || lbl.includes("游戏")) {
+    } else if (aid !== "gamevault" && (aid === "t13" || lbl === "游戏" || (lbl.includes("游戏") && !lbl.includes("傩")))) {
       setIsT13Open(true);
     } else if (aid === "t12" || lbl === "太疾驰" || lbl.includes("太疾驰")) {
       setIsT12Open(true);
@@ -136565,7 +136593,7 @@ const MasterApp = () => {
               if (lbl === "传讯" || lbl.includes("传讯")) return { ...item, actionId: "msg", icon: item.iconImage ? item.icon : "message-circle" };
               if (lbl === "阅读" || lbl.includes("阅读")) return { ...item, actionId: "reader", icon: item.iconImage ? item.icon : "book-open" };
               if (lbl === "音乐" || lbl.includes("音乐")) return { ...item, actionId: "music", icon: item.iconImage ? item.icon : "music" };
-              if (lbl === "游戏" || lbl.includes("游戏")) return { ...item, actionId: "t13", icon: item.iconImage ? item.icon : "gamepad-2" };
+              if (item.actionId !== "gamevault" && !lbl.includes("傩") && (lbl === "游戏" || lbl.includes("游戏"))) return { ...item, actionId: "t13", icon: item.iconImage ? item.icon : "gamepad-2" };
               if (lbl === "日历" || lbl.includes("日历")) return { ...item, actionId: "calendar", icon: item.iconImage ? item.icon : "calendar" };
               if (lbl === "天气" || lbl.includes("天气")) return { ...item, actionId: "weather", icon: item.iconImage ? item.icon : "cloud-sun" };
               if (lbl === "论坛" || lbl.includes("论坛")) return { ...item, actionId: "forum", icon: item.iconImage ? item.icon : "palette" };
@@ -136575,6 +136603,9 @@ const MasterApp = () => {
               if (lbl === "情侣空间" || lbl.includes("情侣空间")) return { ...item, actionId: "t9", icon: item.iconImage ? item.icon : "heart" };
               if (lbl === "杏林济生" || lbl.includes("杏林济生")) return { ...item, actionId: "t10", icon: item.iconImage ? item.icon : "plus-square" };
               if (lbl === "傩·观影" || lbl.includes("观影")) return { ...item, actionId: "cinema", icon: item.iconImage ? item.icon : "film" };
+              if (lbl === "傩·电台" || lbl.includes("电台")) return { ...item, actionId: "radio", icon: item.iconImage ? item.icon : "radio" };
+              if (lbl === "傩·修业" || lbl.includes("修业")) return { ...item, actionId: "study", icon: item.iconImage ? item.icon : "graduation-cap" };
+              if (lbl === "傩·掌机" || lbl.includes("掌机") || lbl.includes("电玩")) return { ...item, actionId: "arcade", icon: item.iconImage ? item.icon : "joystick" };
               return item;
             });
             setAppIcons(list);
@@ -137687,6 +137718,9 @@ const MasterApp = () => {
     desktopPageIndex,
     isStoreOpen,
     isCinemaOpen,
+    isGameVaultOpen,
+    isRadioOpen,
+    isStudyOpen,
     managingAppItem,
     activeCustomApp,
     appIcons,
@@ -138016,13 +138050,13 @@ const MasterApp = () => {
   };
   const handleTouchEnd = (e) => {
     const diff = touchStartY.current - e.changedTouches[0].clientY;
-    if (!isStoreOpen && !isCinemaOpen && !managingAppItem && !activeCustomApp && !isSettingsOpen && !isWeatherOpen && !isCalendarOpen && !isMusicOpen && !isReaderOpen && !isForumOpen && !isMsgOpen && !isT9Open) {
+    if (!isStoreOpen && !isCinemaOpen && !isGameVaultOpen && !isRadioOpen && !isStudyOpen && !isArcadeOpen && !managingAppItem && !activeCustomApp && !isSettingsOpen && !isWeatherOpen && !isCalendarOpen && !isMusicOpen && !isReaderOpen && !isForumOpen && !isMsgOpen && !isT9Open) {
       if (diff > 50 && pageIndex === 0) setPageIndex(1);
       if (diff < -50 && pageIndex === 1) setPageIndex(0);
     }
   };
   const handleWheel = (e) => {
-    if (isStoreOpen || isCinemaOpen || managingAppItem || activeCustomApp || isSettingsOpen || isWeatherOpen || isCalendarOpen || isMusicOpen || isReaderOpen || isForumOpen || isMsgOpen || isT9Open)
+    if (isStoreOpen || isCinemaOpen || isGameVaultOpen || isRadioOpen || isStudyOpen || isArcadeOpen || managingAppItem || activeCustomApp || isSettingsOpen || isWeatherOpen || isCalendarOpen || isMusicOpen || isReaderOpen || isForumOpen || isMsgOpen || isT9Open)
       return;
     if (e.deltaY > 0 && pageIndex === 0) setPageIndex(1);
     if (e.deltaY < 0 && pageIndex === 1) setPageIndex(0);
@@ -140759,6 +140793,22 @@ const MasterApp = () => {
     isCinemaOpen && typeof window !== "undefined" && window.NuoCinemaAppModal && /* @__PURE__ */ React.createElement(window.NuoCinemaAppModal, {
       isOpen: isCinemaOpen,
       onClose: () => setIsCinemaOpen(false)
+    }),
+    isGameVaultOpen && typeof window !== "undefined" && window.NuoGameVaultAppModal && /* @__PURE__ */ React.createElement(window.NuoGameVaultAppModal, {
+      isOpen: isGameVaultOpen,
+      onClose: () => setIsGameVaultOpen(false)
+    }),
+    isRadioOpen && typeof window !== "undefined" && window.NuoRadioAppModal && /* @__PURE__ */ React.createElement(window.NuoRadioAppModal, {
+      isOpen: isRadioOpen,
+      onClose: () => setIsRadioOpen(false)
+    }),
+    isStudyOpen && typeof window !== "undefined" && window.NuoStudyAppModal && /* @__PURE__ */ React.createElement(window.NuoStudyAppModal, {
+      isOpen: isStudyOpen,
+      onClose: () => setIsStudyOpen(false)
+    }),
+    isArcadeOpen && typeof window !== "undefined" && window.NuoArcadeAppModal && /* @__PURE__ */ React.createElement(window.NuoArcadeAppModal, {
+      isOpen: isArcadeOpen,
+      onClose: () => setIsArcadeOpen(false)
     })
   );
 };
