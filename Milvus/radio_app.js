@@ -282,8 +282,74 @@
   ];
 
   // ----------------------------------------------------------------------------
-  // 2. Radio Browser 在线电台检索 API (全球开源免Key)
+  // 2. Radio Browser 在线电台检索 API (全球开源免Key & 名士自主寻波)
   // ----------------------------------------------------------------------------
+  function hashString(str) {
+    let hash = 0;
+    if (!str) return hash;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash) + str.charCodeAt(i);
+      hash |= 0;
+    }
+    return hash;
+  }
+
+  // 名士意图智能检索：支持按关键词、标签与分类全球并发搜台
+  async function searchLiveRadioByIntent({ query = '', tag = '', limit = 6 } = {}) {
+    const servers = ['de1', 'nl1', 'at1'];
+    const cleanKw = String(query || '').trim();
+    const cleanTag = String(tag || '').trim();
+    if (!cleanKw && !cleanTag) return [];
+
+    for (const s of servers) {
+      try {
+        let url = '';
+        if (cleanTag && cleanKw) {
+          url = `https://${s}.api.radio-browser.info/json/stations/search?name=${encodeURIComponent(cleanKw)}&tag=${encodeURIComponent(cleanTag)}&order=votes&reverse=true&limit=${limit}&hidebroken=true`;
+        } else if (cleanTag) {
+          url = `https://${s}.api.radio-browser.info/json/stations/search?tag=${encodeURIComponent(cleanTag)}&order=votes&reverse=true&limit=${limit}&hidebroken=true`;
+        } else {
+          url = `https://${s}.api.radio-browser.info/json/stations/search?name=${encodeURIComponent(cleanKw)}&order=votes&reverse=true&limit=${limit}&hidebroken=true`;
+        }
+
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        const timer = controller ? setTimeout(() => controller.abort(), 6000) : null;
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'YuanPhoneRadio/1.0' },
+          signal: controller ? controller.signal : undefined
+        });
+        if (timer) clearTimeout(timer);
+        if (!res.ok) continue;
+
+        const data = await res.json();
+        if (Array.isArray(data) && data.length > 0) {
+          const valid = data.filter(item => item && item.url_resolved && item.name && item.name.trim());
+          if (valid.length > 0) {
+            return valid.map((item, idx) => {
+              const freq = +(88.0 + (Math.abs(hashString(item.stationuuid || item.name)) % 190) * 0.1).toFixed(1);
+              const tagList = item.tags ? item.tags.split(',').map(t => t.trim()).filter(Boolean) : [];
+              return {
+                id: `rb_${item.stationuuid || ('dyn_' + idx + '_' + Date.now())}`,
+                name: String(item.name).trim(),
+                frequency: `FM ${freq}`,
+                freqMhz: freq,
+                category: 'online',
+                categoryLabel: (cleanTag || tagList[0] || item.country || '在线广播').slice(0, 10),
+                streamUrl: item.url_resolved,
+                backupStreamUrl: item.url || '',
+                description: `${item.country || '全球'} · ${item.codec || 'MP3'} ${item.bitrate ? item.bitrate + 'k' : ''}${item.state ? ' · ' + item.state : ''}`,
+                coverUrl: item.favicon || '',
+                bitrate: item.bitrate ? `${item.bitrate} kbps` : '',
+                genreTags: tagList.length > 0 ? tagList.slice(0, 3) : ['名士寻得', item.country || '在线广播']
+              };
+            });
+          }
+        }
+      } catch (e) {}
+    }
+    return [];
+  }
+
   async function fetchRadioBrowserChina(limit = 20) {
     const servers = ['de1', 'nl1', 'at1'];
     for (const s of servers) {
@@ -730,195 +796,458 @@
     });
   }
 
+  // 保证名士全息人设档案无缺失 (姓名/ID/MBTI/星座/语言风格口癖/性格/背景)
+  function ensureFullCharacterProfile(c) {
+    if (!c) return DEFAULT_LEAD_CHARACTERS[0];
+    const name = String(c.name || c.nickname || '名士').trim();
+    const id = c.id || name;
+
+    let charSettings = {};
+    try {
+      charSettings = JSON.parse(localStorage.getItem('character_settings') || '{}');
+    } catch (e) {}
+    const cs = charSettings[id] || charSettings[name] || {};
+    const prof = c.profile || {};
+
+    const fallback = DEFAULT_LEAD_CHARACTERS.find(d => 
+      d.name === name || 
+      (name.includes('辩') && d.name === '刘辩') || 
+      (name.includes('融') && d.name === '傅融') || 
+      (name.includes('基') && d.name === '袁基') || 
+      (name.includes('策') && d.name === '孙策') || 
+      ((name.includes('慈') || name.includes('师尊')) && d.name === '左慈')
+    ) || DEFAULT_LEAD_CHARACTERS[0];
+
+    return {
+      id,
+      name,
+      avatar: c.avatar || cs.avatar || fallback.avatar || '',
+      avatarColor: c.avatarColor || prof.avatarColor || '#EAD6D6',
+      mbti: prof.mbti || c.mbti || cs.mbti || fallback.mbti || '未知',
+      constellation: prof.constellation || c.constellation || cs.constellation || fallback.constellation || '未知',
+      personality: prof.personality || c.personality || cs.personality || c.desc || fallback.personality || '性格鲜明、深沉真挚',
+      speakingStyle: prof.speakingStyle || prof.style || c.speakingStyle || c.style || cs.speakingStyle || cs.style || fallback.speakingStyle || '专属说话口癖与独特第一人称自称',
+      background: prof.background || prof.bio || c.background || cs.background || c.desc || fallback.background || '《代号鸢》名士，与广陵王在汉末乱世中生死相依、共守广陵。'
+    };
+  }
+
+  // 动态加载系统通讯录与设置中的全量名士档案
+  async function loadAllRadioCharacters() {
+    try {
+      if (typeof window.loadAllCinemaCharacters === 'function') {
+        const list = await window.loadAllCinemaCharacters();
+        if (Array.isArray(list) && list.length > 0) {
+          return list.map(ensureFullCharacterProfile);
+        }
+      }
+    } catch (e) {}
+
+    let list = [];
+    try {
+      const localStored = JSON.parse(localStorage.getItem('t8_chat_list') || '[]');
+      if (Array.isArray(localStored) && localStored.length > 0) {
+        list = localStored.filter(c =>
+          c && typeof c === 'object' && (c.name || c.nickname) &&
+          !String(c.id).startsWith('group') && c.type !== 'group' && c.type !== 'decor' && c.type !== 'moments'
+        );
+      }
+    } catch (e) {}
+
+    if (list.length === 0) {
+      list = DEFAULT_LEAD_CHARACTERS;
+    }
+
+    return list.map(ensureFullCharacterProfile);
+  }
+
+  // 获取用户身份配置库设定与当前开启的世界书条目
   async function getContextInfo() {
-    let userPersona = { name: '楼主', role: '广陵王/绣衣楼主', personality: '聪颖灵动、胸怀天下', background: '统领绣衣楼，密探天下要务' };
+    let userPersona = {
+      name: '楼主',
+      role: '广陵王/绣衣楼主',
+      gender: '女',
+      age: '双十年华',
+      personality: '聪颖灵动、胸怀天下、机敏坚毅、富有决断力',
+      background: '统领绣衣楼，密探天下要务，与各方名士生死相托、共守广陵。',
+      style: '灵动沉稳，威严与温存兼具'
+    };
+
     try {
       const saved = JSON.parse(localStorage.getItem('user_personas') || '[]');
       const activeId = localStorage.getItem('active_persona_id');
-      if (Array.isArray(saved) && saved.length) {
+      if (Array.isArray(saved) && saved.length > 0) {
         const found = activeId ? saved.find(p => String(p.id) === String(activeId)) : saved[0];
         if (found && found.name) {
-          userPersona = { name: String(found.name).trim(), role: found.role || found.name, personality: found.personality || '真诚机敏', background: found.background || '' };
+          userPersona = {
+            name: String(found.name).trim(),
+            role: found.role || found.title || '广陵王/绣衣楼主',
+            gender: found.gender || '女',
+            age: found.age || '',
+            personality: found.personality || '真诚机敏、聪颖坚毅',
+            background: found.background || found.description || found.bio || '统领绣衣楼，密探天下要务，执掌天下机衡。',
+            style: found.style || found.speakingStyle || '灵动沉稳、亲切包容'
+          };
         }
       }
     } catch (e) {}
 
     let worldContext = '';
     try {
-      if (window.getWorldBookContext) worldContext = await window.getWorldBookContext();
-      else if (window.worldBookStore) {
-        const d = await window.worldBookStore.getData();
-        worldContext = typeof d === 'string' ? d : JSON.stringify(d);
+      if (typeof window.getWorldBookContext === 'function') {
+        worldContext = await window.getWorldBookContext();
+      }
+      if (!worldContext && window.worldBookStore) {
+        const data = await window.worldBookStore.getData();
+        if (data && Array.isArray(data.books)) {
+          const activeBooks = data.books.filter(b => b && b.enable);
+          if (activeBooks.length > 0) {
+            worldContext = activeBooks.map(b => `【设定：${b.title}】\n内容：${b.content}`).join('\n\n');
+          }
+        } else if (typeof data === 'string') {
+          worldContext = data;
+        }
       }
     } catch (e) {}
 
-    return { userPersona, worldContext: worldContext || '' };
+    return {
+      userPersona,
+      worldContext: worldContext ? worldContext.slice(0, 1600) : ''
+    };
   }
 
   // ----------------------------------------------------------------------------
-  // 7. AI 业务引擎：名士在听、心境点台、节目单、听后感
+  // 7. AI 业务引擎：名士在听、心境点台、节目单、听后感 (严格遵循人设与世界书)
   // ----------------------------------------------------------------------------
 
-  // 7.1 生成名士此刻在听 (Listening Now)
-  async function generateListeningNowByAI(characters, stationPool) {
+  // 7.1 生成名士此刻在听 (Listening Now - 全息人设与世界书实时心声)
+  async function generateListeningNowByAI(inputCharacters, stationPool) {
+    const characters = (inputCharacters || []).map(ensureFullCharacterProfile);
     const { userPersona, worldContext } = await getContextInfo();
-    const stationDesc = stationPool.map(s => `- ID: "${s.id}", 名字: "${s.name}", 风格: "${s.categoryLabel}", 标签: [${(s.genreTags || []).join(', ')}]`).join('\n');
+
+    const charactersDetail = characters.map((c, i) => `
+【名士 ${i + 1}：${c.name}】
+- 角色姓名与ID：${c.name} (ID: ${c.id})
+- MBTI 性格类型：${c.mbti}
+- 星座：${c.constellation}
+- 语言风格与专属口癖：${c.speakingStyle}
+- 性格特点：${c.personality}
+- 个人背景：${c.background}`).join('\n');
 
     const prompt = [
       {
         role: 'system',
-        content: `你正在沉浸式扮演《代号鸢》中的多位名士。你正在复古木质收音机「傩·电台」中，向广陵王（${userPersona.name}）展示此刻你们分别正在收听哪个电台频道，并留下一句带有专属口癖与心境的短心声。
+        content: `你正在沉浸式深度扮演《代号鸢》中的多位名士。你正在复古木质收音机「傩·电台」中，向广陵王（${userPersona.name}）展示此刻你们分别正在收听什么风格的电台频道，并留下一句带有自身鲜活人设、专属自称与口癖的此刻心声。
 
-【可选电台池（必须严格从中选择 stationId，不可编造ID）】：
-${stationDesc}
+【对方（广陵王/楼主）的身份设定】：
+- 姓名：${userPersona.name}
+- 身份定位：${userPersona.role}
+- 性别/年龄：${userPersona.gender} / ${userPersona.age || '双十年华'}
+- 性格特点：${userPersona.personality}
+- 生平经历背景：${userPersona.background}
+- 互动口吻：${userPersona.style}
 
-【对方（广陵王）身份】：${userPersona.name}（${userPersona.role}，${userPersona.personality}）
-【世界书背景】：${worldContext ? worldContext.slice(0, 400) : '汉末乱世风云，共守广陵。'}
+【世界书当前已开启设定条目】：
+${worldContext ? worldContext : '汉末三国乱世风云，绣衣楼密探天下要务，彼此在乱世中守望相助、执掌机衡。'}
 
-请为以下每位名士各选一个最符合其人设偏好的电台，并写下一句第一人称内心碎语或对楼主说的悄悄话（30-60字）：
-${characters.map(c => `- ${c.name}（${c.mbti}，${c.speakingStyle}）`).join('\n')}
+【全员名士全息人设档案库】：
+${charactersDetail}
 
-必须直接返回合法 JSON 数组（严禁任何Markdown说明或多余废话），格式如下：
+【心声（thought）核心创作法则（严禁违背）】：
+每位名士的第一人称心声（thought，40-75字）必须严格契合该角色的全息人设，绝不可千人一面：
+1. 必须强烈体现角色自身的专属第一人称自称、说话习惯与口癖：
+   - 刘辩：自称“朕”，任性苍凉天真、害怕被丢下、重度依恋楼主、占有欲极强；
+   - 傅融：精打细算、句句算账买房省钱、傲娇嘴硬心软、记账成癖；
+   - 袁基：自称“基”，温润端方、言如棋局博弈、世家贵公子、深情克制而占有欲极强；
+   - 孙策：称呼楼主“广陵王”，自称“本霸王”，烈火骄阳、快意豪爽、大开大合；
+   - 左慈：道骨仙风、言简意赅、充满清冷哲思玄理，出尘绝世唯独将楼主护在心尖。
+2. 必须结合【自身个人背景】与【世界书当前背景】，写出此刻他在收音机电波里听到此声音时，对广陵王（${userPersona.name}）吐露的真实私密内心波动或悄悄话！
+3. 严禁出现“静听风起，此心与君同”、“享受音乐的美好”等与代号鸢名士人设割裂的无灵魂假大空台词！
+
+必须直接返回合法 JSON 数组（严禁任何Markdown说明文本或多余字句），格式如下：
 [
   {
     "charName": "刘辩",
-    "stationId": "big_b_cpop",
-    "thought": "（第一人称心声与口癖）"
+    "query": "cpop",
+    "tag": "lofi",
+    "thought": "（严格符合刘辩第一人称“朕”、口癖自称与世界书情境的生动心声）"
   }
 ]`
       },
-      { role: 'user', content: '请为所有名士生成此刻正在收听的电台及心声，以JSON数组返回。' }
+      { role: 'user', content: '请为所有名士生成此刻正在收听的真实电台检索意向及第一人称专属心声，以JSON数组返回。' }
     ];
 
     const text = await callLLM(prompt);
-    const parsed = extractObjects(text, /["']?stationId["']?\s*:/);
+    const parsed = extractObjects(text, /["']?charName["']?\s*:/);
     const now = Date.now();
-    return parsed.map((item, idx) => {
-      const st = stationPool.find(s => s.id === item.stationId) || stationPool[idx % stationPool.length];
-      return {
+    const discoveredStations = [];
+    const list = [];
+
+    for (let idx = 0; idx < parsed.length; idx++) {
+      const item = parsed[idx];
+      let targetStation = null;
+
+      try {
+        const foundList = await searchLiveRadioByIntent({ query: item.query, tag: item.tag, limit: 4 });
+        if (foundList && foundList.length > 0) {
+          targetStation = foundList[0];
+          if (!stationPool.some(s => s.id === targetStation.id) && !discoveredStations.some(s => s.id === targetStation.id)) {
+            discoveredStations.push(targetStation);
+          }
+        }
+      } catch (e) {}
+
+      if (!targetStation) {
+        targetStation = stationPool[idx % stationPool.length];
+      }
+
+      list.push({
         id: item.charName,
         charName: item.charName,
-        stationId: st.id,
-        stationName: st.name,
+        stationId: targetStation.id,
+        stationName: targetStation.name,
+        station: targetStation,
         thought: item.thought || '静听风起，此心与君同。',
         updatedAt: now
-      };
-    });
+      });
+    }
+
+    return { list, discoveredStations };
   }
 
-  // 7.2 名士心境点台 (AI Recommendations)
-  async function generateRadioPicksByAI(char, stationPool, existingIds = []) {
+  // 7.2 名士心境点台 (AI Recommendations - 全息人设深度安利)
+  async function generateRadioPicksByAI(inputChar, stationPool, existingIds = []) {
+    const char = ensureFullCharacterProfile(inputChar);
     const { userPersona, worldContext } = await getContextInfo();
-    const stationDesc = stationPool.map(s => `- ID: "${s.id}", 名字: "${s.name}", 分类: "${s.categoryLabel}", 标签: [${(s.genreTags || []).join(', ')}], 介绍: "${s.description}"`).join('\n');
 
     const prompt = [
       {
         role: 'system',
-        content: `你正在沉浸式扮演《代号鸢》中的名士【${char.name}】。
+        content: `你正在沉浸式深度扮演《代号鸢》中的名士【${char.name}】。
 你正在复古木质收音机「傩·电台」中，为广陵王（${userPersona.name}）挑选并安利适合与你一同收听的电台频道。
 
-【你的人设全息档案】：
-- 姓名：${char.name} (MBTI: ${char.mbti}, 星座: ${char.constellation})
-- 语言风格与口癖：${char.speakingStyle}
+【你的全息人设配置】：
+- 角色姓名与ID：${char.name} (ID: ${char.id})
+- MBTI 性格类型：${char.mbti}
+- 星座：${char.constellation}
+- 语言风格与专属口癖：${char.speakingStyle}
 - 性格特点：${char.personality}
-- 生平背景：${char.background}
+- 个人背景：${char.background}
 
-【广陵王身份设定】：${userPersona.name} (${userPersona.role}, ${userPersona.personality})
-【世界书背景】：${worldContext ? worldContext.slice(0, 500) : '汉末三国风云，绣衣楼密探天下。'}
+【对方（广陵王/楼主）的身份设定】：
+- 姓名：${userPersona.name}
+- 身份定位：${userPersona.role}
+- 性别/年龄：${userPersona.gender} / ${userPersona.age || '双十年华'}
+- 性格特点：${userPersona.personality}
+- 生平经历背景：${userPersona.background}
+- 互动口吻：${userPersona.style}
 
-【可选真实电台池（严格从中挑选 stationId，必须真实存在）】：
-${stationDesc}
+【世界书当前已开启设定条目】：
+${worldContext ? worldContext : '汉末三国乱世风云，绣衣楼执掌天下密报，彼此在乱世中守望相助。'}
 
 【任务要求】：
-请挑选至少 3 个你最想安利给楼主的电台（尽量避开已推荐的ID: ${existingIds.join(', ') || '无'}）：
-给出：
-1. stationId: 真实匹配池中的ID
-2. reason: 你的第一人称专属推荐语与点台理由（60-120字，强烈体现你的口癖、第一人称自称、情感羁绊或傲娇吐槽）
-3. mood: 心境氛围（如：微醺心动、雨夜抚慰、筹谋对弈、快意驰骋、空灵绝尘）
-4. bestTime: 最适收听时段（如：晨曦、午后茶歇、华灯初上、深夜三更）
-5. tags: 2-3个简短标签
+你现在要亲自为楼主搜寻并安利 3 个最契合你当下心境与人设的声音频道（例如偏爱国风古乐、财经物价、民谣吉他、硬核摇滚、深夜缠绵情歌、虚空玄音等）。
+请给出你想要在全球电台库中检索的声音风格与关键词，并写下第一人称专属安利语：
 
-必须直接返回且只返回合法 JSON 数组（严禁任何Markdown说明），格式如下：
+每条推荐需包含：
+1. query: 检索关键词（如: "piano", "classical", "cpop", "jazz", "guitar", "rock", "china", "news", "ambient", "folk" 等，简明准确）
+2. tag: 风格标签（从以下常用分类中挑选一个最接近的: classical, piano, ambient, lofi, jazz, folk, rock, cpop, news, relaxation, meditation, chinese）
+3. reason: 你的第一人称专属推荐语与点台理由（60-120字，必须强烈体现你的专属自称、语言风格、深层羁绊或傲娇吐槽，严禁客观旁白）
+4. mood: 心境氛围（如：暗夜对弈、微醺心动、雨夜抚慰、筹谋理财、快意驰骋、空灵绝尘）
+5. bestTime: 最适收听时段（如：晨曦、午后茶歇、华灯初上、深夜三更）
+6. tags: 2-3个简短中文心境标签
+
+必须直接返回且只返回合法 JSON 数组（严禁任何Markdown说明文本或多余字句），格式如下：
 [
   {
-    "stationId": "secret_agent",
-    "reason": "（第一人称推荐理由）",
+    "query": "piano",
+    "tag": "classical",
+    "reason": "（第一人称口癖自称推荐理由）",
     "mood": "暗夜博弈",
     "bestTime": "华灯初上",
-    "tags": ["爵士", "谋算"]
+    "tags": ["琴音", "谋算"]
   }
 ]`
       },
-      { role: 'user', content: `请为广陵王挑选至少 3 个你最喜爱的电台，以 JSON 数组返回。` }
+      { role: 'user', content: `请为广陵王挑选并检索至少 3 个你最喜爱的电台，以 JSON 数组返回。` }
     ];
 
     const text = await callLLM(prompt);
-    const parsed = extractObjects(text, /["']?stationId["']?\s*:/);
+    const parsed = extractObjects(text, /["']?reason["']?\s*:/);
     const now = Date.now();
-    return parsed.map((item, idx) => {
-      const st = stationPool.find(s => s.id === item.stationId) || stationPool[idx % stationPool.length];
-      return {
-        id: `pick_${char.id}_${st.id}_${now}_${idx}`,
+    const discoveredStations = [];
+    const chosenIds = new Set(existingIds);
+    const picks = [];
+
+    for (let idx = 0; idx < parsed.length; idx++) {
+      const item = parsed[idx];
+      let targetStation = null;
+
+      // 实时在线搜索真实电台
+      try {
+        const foundList = await searchLiveRadioByIntent({ query: item.query, tag: item.tag, limit: 6 });
+        if (foundList && foundList.length > 0) {
+          targetStation = foundList.find(s => !chosenIds.has(s.id)) || foundList[0];
+          if (targetStation && !stationPool.some(s => s.id === targetStation.id) && !discoveredStations.some(s => s.id === targetStation.id)) {
+            discoveredStations.push(targetStation);
+          }
+        }
+      } catch (e) {
+        console.warn('[NuoRadio] 在线搜台网络波动，使用备选池:', e);
+      }
+
+      // 若未搜出或超时，从已有电台池兜底回退
+      if (!targetStation) {
+        targetStation = stationPool.find(s => !chosenIds.has(s.id)) || stationPool[idx % stationPool.length];
+      }
+
+      chosenIds.add(targetStation.id);
+
+      picks.push({
+        id: `pick_${char.id}_${targetStation.id}_${now}_${idx}`,
         charId: char.id,
         charName: char.name,
         charAvatar: char.avatar || '',
-        stationId: st.id,
-        stationName: st.name,
-        stationFreq: st.frequency,
+        stationId: targetStation.id,
+        stationName: targetStation.name,
+        stationFreq: targetStation.frequency,
+        station: targetStation,
         reason: item.reason || '闲来信手一拨，偶得此音，甚合我意，楼主不妨同听。',
         mood: item.mood || '清雅从容',
         bestTime: item.bestTime || '静夜',
         tags: Array.isArray(item.tags) ? item.tags : ['心境电台'],
         createdAt: now - idx * 1000
-      };
-    });
+      });
+    }
+
+    return { picks, discoveredStations };
   }
 
-  // 7.3 名士四时段节目单 (Schedule)
-  async function generateScheduleByAI(char, stationPool) {
-    const { userPersona } = await getContextInfo();
-    const stationDesc = stationPool.map(s => `"${s.id}"(${s.name})`).join(', ');
+  // 7.3 名士四时段节目单 (Schedule - 深度人设四时电台日程与心声点评)
+  async function generateScheduleByAI(inputChar, stationPool) {
+    const char = ensureFullCharacterProfile(inputChar);
+    const { userPersona, worldContext } = await getContextInfo();
 
     const prompt = [
       {
         role: 'system',
-        content: `你正在沉浸式扮演《代号鸢》名士【${char.name}】（MBTI: ${char.mbti}，语言风格：${char.speakingStyle}）。
-请为你在「傩·电台」中的全天收听日程排定一档专属节目单：分为【晨起/清晨】、【午后/茶歇】、【暮夜/华灯】、【宵禁/深夜】四个时段。
-每个时段必须从以下电台池中挑选一个 stationId：[${stationDesc}]，并给出一句生动的在听心境与吐槽。
+        content: `你正在沉浸式深度扮演《代号鸢》名士【${char.name}】。
+你正在复古木质收音机「傩·电台」中，为广陵王（${userPersona.name}）排定你在收音机中的全天四时段专属收听日程（晨起、午后、暮夜、宵禁），并为每个时段写下一段充满活人感、契合自身独特口癖与人设的真实在听点评。
 
-必须直接返回 JSON 对象（不要任何Markdown）：
+【你的全息人设配置】：
+- 角色姓名与ID：${char.name} (ID: ${char.id})
+- MBTI 性格类型：${char.mbti}
+- 星座：${char.constellation}
+- 语言风格与专属口癖：${char.speakingStyle}
+- 性格特点：${char.personality}
+- 个人背景：${char.background}
+
+【对方（广陵王/楼主）的身份设定】：
+- 姓名：${userPersona.name}
+- 身份定位：${userPersona.role}
+- 性别/年龄：${userPersona.gender} / ${userPersona.age || '双十年华'}
+- 性格特点：${userPersona.personality}
+- 生平经历背景：${userPersona.background}
+- 说话与互动口吻：${userPersona.style}
+
+【世界书当前已开启设定条目】：
+${worldContext ? worldContext : '汉末乱世三国风云，绣衣楼执掌天下密报，广陵王与名士共守广陵、彼此羁绊深沉。'}
+
+【四个时段定义与要求】：
+1. morning (晨起 / 清晨): 拂晓初醒之时，结合你的晨间习性选择电台风格（如 news, cpop, morning, piano 等）
+2. afternoon (午后 / 茶歇): 日午偷闲之刻，选择休憩或品茗电台（如 jazz, acoustic, tea, folk, lofi 等）
+3. evening (暮夜 / 华灯): 华灯初上、案牍劳形之暮，选择舒缓或对弈电台（如 classical, jazz, pop, piano 等）
+4. midnight (宵禁 / 深夜): 三更夜阑、万籁俱寂之宵，选择静谧深邃或助眠电台（如 ambient, sleep, meditation, lofi 等）
+
+【四时点评（comment）核心创作法则（严禁违背）】：
+- 每一个时段的 comment 必须严格以【${char.name}】的第一人称视角，用符合自身语言风格与口癖口吻说出（45-85字）：
+  * 必须体现专属自称与口吻（例如刘辩自称“朕”且任性黏人怕被丢下；袁基自称“基”且温润克制、句如棋局暗藏执念；孙策自称“本霸王”且热烈肆意称呼“广陵王”；傅融句句不离铜钱账簿与买房房契、口嫌体正直；左慈道骨仙风、言简意赅暗藏宠溺护短等）。
+  * 必须充分融入【你的生平经历背景】与【世界书当前开启条目】中乱世/绣衣楼的情境，结合你与广陵王（${userPersona.name}）的特定关系，表达你在这个时段为什么听这个台、是想拉着她同听还是默默陪她。
+  * 严禁任何客观第三方广播旁白、严禁任何千篇一律的机械套话（如“祝你开启新的一天”、“愿优美的音乐陪伴你”等绝对禁止出现）！
+
+必须直接返回合法的 JSON 对象（严禁任何Markdown说明文本或多余字句），格式如下：
 {
-  "morning": { "stationId": "...", "comment": "..." },
-  "afternoon": { "stationId": "...", "comment": "..." },
-  "evening": { "stationId": "...", "comment": "..." },
-  "midnight": { "stationId": "...", "comment": "..." }
+  "morning": { "tag": "news", "query": "morning", "comment": "（符合自身人设口癖的第一人称晨起点评）" },
+  "afternoon": { "tag": "jazz", "query": "tea", "comment": "（符合自身人设口癖的第一人称午后茶歇点评）" },
+  "evening": { "tag": "classical", "query": "piano", "comment": "（符合自身人设口癖的第一人称暮夜华灯点评）" },
+  "midnight": { "tag": "ambient", "query": "sleep", "comment": "（符合自身人设口癖的第一人称宵禁深夜点评）" }
 }`
       },
-      { role: 'user', content: `请为【${char.name}】排定全天四时段电台日程。` }
+      { role: 'user', content: `请为【${char.name}】排定全天四时段专属真实收听日程与第一人称心声点评。` }
     ];
 
     const text = await callLLM(prompt);
     const fixed = repairJSON(text);
-    const parsed = tryParse(fixed);
+    const parsed = tryParse(fixed) || {};
+    const discoveredStations = [];
+    const scheduleResult = {};
+
+    const timeSlots = ['morning', 'afternoon', 'evening', 'midnight'];
+    for (let i = 0; i < timeSlots.length; i++) {
+      const slotKey = timeSlots[i];
+      const slotData = parsed[slotKey] || {};
+      let targetStation = null;
+
+      if (slotData.query || slotData.tag) {
+        try {
+          const found = await searchLiveRadioByIntent({ query: slotData.query, tag: slotData.tag, limit: 3 });
+          if (found && found.length > 0) {
+            targetStation = found[0];
+            if (!stationPool.some(s => s.id === targetStation.id) && !discoveredStations.some(s => s.id === targetStation.id)) {
+              discoveredStations.push(targetStation);
+            }
+          }
+        } catch (e) {}
+      }
+
+      if (!targetStation) {
+        targetStation = stationPool[i % stationPool.length];
+      }
+
+      scheduleResult[slotKey] = {
+        stationId: targetStation.id,
+        stationName: targetStation.name,
+        station: targetStation,
+        comment: slotData.comment || '静候此时，与君共聆。'
+      };
+    }
+
     return {
-      id: char.name,
-      charName: char.name,
-      schedule: parsed,
-      updatedAt: Date.now()
+      scheduleObj: {
+        id: char.name,
+        charName: char.name,
+        schedule: scheduleResult,
+        updatedAt: Date.now()
+      },
+      discoveredStations
     };
   }
 
-  // 7.4 名士听后感 (Review on a Favorite or Custom Station)
-  async function generateStationReviewByAI(char, station) {
-    const { userPersona } = await getContextInfo();
+  // 7.4 名士听后感 (Review on a Favorite or Custom Station - 深度人设点评)
+  async function generateStationReviewByAI(inputChar, station) {
+    const char = ensureFullCharacterProfile(inputChar);
+    const { userPersona, worldContext } = await getContextInfo();
     const prompt = [
       {
         role: 'system',
-        content: `你正在沉浸式扮演《代号鸢》名士【${char.name}】（MBTI: ${char.mbti}，口癖自称：${char.speakingStyle}）。
+        content: `你正在沉浸式扮演《代号鸢》名士【${char.name}】。
+【你的全息人设配置】：
+- 角色姓名与ID：${char.name} (ID: ${char.id})
+- MBTI人格：${char.mbti}
+- 语言风格与专属自称：${char.speakingStyle}
+- 性格特点：${char.personality}
+- 生平背景：${char.background}
+
+【对方（广陵王/楼主）身份设定】：
+- 姓名：${userPersona.name} (${userPersona.role})
+- 性格特征：${userPersona.personality}
+
+【世界书背景】：
+${worldContext ? worldContext.slice(0, 600) : '汉末乱世三国风云，共守广陵。'}
+
 广陵王（${userPersona.name}）在复古收音机「傩·电台」里收藏了一个电台频道：
 - 电台名称：${station.name}
 - 频率或格式：${station.frequency || station.streamUrl}
-- 简介与标签：${station.description || '自定义网络电台'}
+- 简介与标签：${station.description || '网络广播'}
 
 请以你的第一人称与口癖，写一段你陪广陵王听了这个电台后的【真实听后感/傲娇吐槽/温存点评】（60-120字）。
 必须直接输出文字，严禁任何前缀说明。`
@@ -1183,12 +1512,10 @@ ${stationDesc}
       // 加载通讯录与数据库
       const initData = async () => {
         try {
-          if (window.loadAllCinemaCharacters) {
-            const list = await window.loadAllCinemaCharacters();
-            if (isMounted && list && list.length > 0) {
-              setCharacters(list);
-              setSelectedChar(list[0].name);
-            }
+          const list = await loadAllRadioCharacters();
+          if (isMounted && list && list.length > 0) {
+            setCharacters(list);
+            setSelectedChar(list[0].name);
           }
         } catch (e) {}
 
@@ -1254,13 +1581,23 @@ ${stationDesc}
       }
     };
 
-    // 生成名士此刻在听
+    // 生成名士此刻在听 (在线实时寻波)
     const handleGenerateListeningNow = async () => {
       if (isGenerating) return;
       setIsGenerating(true);
-      showToast('📻 正在探查名士们此刻锁定的电台频率...');
+      showToast('📻 正在探查名士们此刻锁定的实时电台频率...');
       try {
-        const list = await generateListeningNowByAI(characters, allStationPool);
+        const res = await generateListeningNowByAI(characters, allStationPool);
+        const list = Array.isArray(res) ? res : (res.list || []);
+        const discovered = res.discoveredStations || [];
+        if (discovered.length > 0) {
+          await putToStore('custom_stations', discovered);
+          setCustomStations(prev => {
+            const map = new Map(prev.map(s => [s.id, s]));
+            discovered.forEach(s => map.set(s.id, s));
+            return Array.from(map.values());
+          });
+        }
         await putToStore('listening_now', list);
         setListeningNowList(list);
         showToast('🎉 名士实时收听状态已同步！');
@@ -1271,15 +1608,25 @@ ${stationDesc}
       }
     };
 
-    // 生成名士心境点台
+    // 生成名士心境点台 (在线实时搜台)
     const handleGeneratePicks = async () => {
       if (isGenerating) return;
       const char = characters.find(c => c.name === selectedChar) || characters[0];
       setIsGenerating(true);
-      showToast(`✨「${char.name}」正在旋动电台旋钮，为你精选心境频道...`);
+      showToast(`✨「${char.name}」正在旋动电台天线，在线为你搜寻心境频道...`);
       try {
         const existingIds = radioPicks.filter(p => p.charName === char.name).map(p => p.stationId);
-        const newPicks = await generateRadioPicksByAI(char, allStationPool, existingIds);
+        const res = await generateRadioPicksByAI(char, allStationPool, existingIds);
+        const newPicks = Array.isArray(res) ? res : (res.picks || []);
+        const discovered = res.discoveredStations || [];
+        if (discovered.length > 0) {
+          await putToStore('custom_stations', discovered);
+          setCustomStations(prev => {
+            const map = new Map(prev.map(s => [s.id, s]));
+            discovered.forEach(s => map.set(s.id, s));
+            return Array.from(map.values());
+          });
+        }
         // 追加并去重
         const seen = new Set(existingIds);
         const fresh = newPicks.filter(p => {
@@ -1293,7 +1640,7 @@ ${stationDesc}
         }
         await putToStore('picks', fresh);
         setRadioPicks(prev => [...fresh, ...prev]);
-        showToast(`🎉「${char.name}」为你推荐了 ${fresh.length} 个专属电台！`);
+        showToast(`🎉「${char.name}」为你搜寻到了 ${fresh.length} 个专属电台！`);
       } catch (e) {
         showToast('推荐失败: ' + (e.message || '网络超时'));
       } finally {
@@ -1301,14 +1648,24 @@ ${stationDesc}
       }
     };
 
-    // 生成名士四时段节目单
+    // 生成名士四时段节目单 (在线排定全天日程)
     const handleGenerateSchedule = async () => {
       if (isGenerating) return;
       const char = characters.find(c => c.name === selectedChar) || characters[0];
       setIsGenerating(true);
-      showToast(`📜 正在为「${char.name}」编排全天收听日程...`);
+      showToast(`📜 正在为「${char.name}」编排全天实时收听日程...`);
       try {
-        const sched = await generateScheduleByAI(char, allStationPool);
+        const res = await generateScheduleByAI(char, allStationPool);
+        const sched = res.scheduleObj ? res.scheduleObj : res;
+        const discovered = res.discoveredStations || [];
+        if (discovered.length > 0) {
+          await putToStore('custom_stations', discovered);
+          setCustomStations(prev => {
+            const map = new Map(prev.map(s => [s.id, s]));
+            discovered.forEach(s => map.set(s.id, s));
+            return Array.from(map.values());
+          });
+        }
         await putToStore('schedules', sched);
         setScheduleMap(prev => ({ ...prev, [char.name]: sched }));
         showToast(`🎉「${char.name}」的四时段节目单已排定！`);
@@ -1652,7 +2009,7 @@ ${stationDesc}
                   key: c.name, onClick: () => {
                     setSelectedChar(c.name);
                     if (nowItem) {
-                      const st = allStationPool.find(s => s.id === nowItem.stationId);
+                      const st = allStationPool.find(s => s.id === nowItem.stationId) || nowItem.station;
                       if (st) handleSelectStation(st, c.name);
                     }
                   },
@@ -1715,7 +2072,7 @@ ${stationDesc}
               h('span', { style: { fontSize: '10.5px', color: '#8C7255' } }, '点击此处，让名士为你安利专属频道')
             )
             : radioPicks.filter(p => p.charName === selectedChar).map(pick => {
-              const st = allStationPool.find(s => s.id === pick.stationId);
+              const st = allStationPool.find(s => s.id === pick.stationId) || pick.station;
               return h('div', {
                 key: pick.id, onClick: () => st && handleSelectStation(st, pick.charName),
                 style: {
@@ -1785,7 +2142,7 @@ ${stationDesc}
             ];
             return slots.map(([key, label, data]) => {
               if (!data) return null;
-              const st = allStationPool.find(item => item.id === data.stationId) || allStationPool[0];
+              const st = allStationPool.find(item => item.id === data.stationId) || data.station || allStationPool[0];
               return h('div', {
                 key, onClick: () => st && handleSelectStation(st, selectedChar),
                 style: {
@@ -1856,15 +2213,20 @@ ${stationDesc}
             ))
           ),
 
-          // 自带电台列表
+          // 寻得与自建电台列表
           customStations.length > 0 && h('div', { style: { display: 'flex', flexDirection: 'column', gap: '6px' } },
-            h('span', { style: { fontSize: '11.5px', fontWeight: 'bold', color: '#7C5832' } }, `📁 我的自建电台 (${customStations.length})`),
+            h('span', { style: { fontSize: '11.5px', fontWeight: 'bold', color: '#7C5832' } }, `📁 寻得与自建电台 (${customStations.length})`),
             customStations.map(st => h('div', {
               key: st.id, onClick: () => handleSelectStation(st, null),
               style: { padding: '10px 12px', borderRadius: '14px', background: '#FFFDF9', border: '1px solid #D6B88A', display: 'flex', flexDirection: 'column', gap: '4px', cursor: 'pointer' }
             },
               h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between' } },
-                h('span', { style: { fontSize: '13px', fontWeight: 'bold', color: '#3E3226' } }, st.name),
+                h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
+                  h('span', { style: { fontSize: '13px', fontWeight: 'bold', color: '#3E3226' } }, st.name),
+                  st.category === 'online'
+                    ? h('span', { style: { fontSize: '9px', background: '#FCEEE3', color: '#B85832', borderRadius: '4px', padding: '1px 5px' } }, '✨名士寻得')
+                    : h('span', { style: { fontSize: '9px', background: '#F5EDE0', color: '#8C5E28', borderRadius: '4px', padding: '1px 5px' } }, '📁自建')
+                ),
                 h('button', {
                   type: 'button', onClick: (e) => { e.stopPropagation(); handleDeleteCustomStation(st.id); },
                   style: { border: 'none', background: 'none', color: '#C0472B', fontSize: '11px', cursor: 'pointer' }
