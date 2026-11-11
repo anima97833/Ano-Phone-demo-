@@ -13,6 +13,100 @@
   const h = React.createElement;
 
   // ----------------------------------------------------------------------------
+  // 通用名士头像组件 (对齐情侣空间：优先直链，其次从 IndexedDB avatarStore 获取，失败以名士首字兜底)
+  // ----------------------------------------------------------------------------
+  const NuoAvatar = ({ avatar, name = '名', color = '#D6724B', size = 16, style = {} }) => {
+    const [imgUrl, setImgUrl] = useState(null);
+    const [isFailed, setIsFailed] = useState(false);
+
+    useEffect(() => {
+      let isMounted = true;
+      setIsFailed(false);
+      if (!avatar) {
+        setImgUrl(null);
+        return;
+      }
+      if (typeof avatar === 'string' && (
+        avatar.startsWith('data:image') ||
+        avatar.startsWith('http://') ||
+        avatar.startsWith('https://') ||
+        avatar.startsWith('blob:') ||
+        avatar.startsWith('/') ||
+        avatar.startsWith('./')
+      )) {
+        setImgUrl(avatar);
+        return;
+      }
+      const fetchAvatar = async () => {
+        try {
+          if (typeof window.resolveAvatarUrl === 'function') {
+            const res = await window.resolveAvatarUrl(avatar, '');
+            if (isMounted && res) {
+              setImgUrl(res);
+              return;
+            }
+          }
+          const store = window.avatarStore || (typeof avatarStore !== 'undefined' ? avatarStore : null);
+          if (store && typeof store.get === 'function') {
+            const item = await store.get(avatar);
+            if (isMounted && item && item.avatarData) {
+              setImgUrl(item.avatarData);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('[NuoRadio] 头像读取失败:', e);
+        }
+        if (isMounted) setIsFailed(true);
+      };
+      fetchAvatar();
+      return () => { isMounted = false; };
+    }, [avatar]);
+
+    const baseStyle = {
+      width: `${size}px`,
+      height: `${size}px`,
+      borderRadius: '50%',
+      flexShrink: 0,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      ...style
+    };
+
+    if (imgUrl && !isFailed) {
+      return h('img', {
+        src: imgUrl,
+        alt: name,
+        onError: () => setIsFailed(true),
+        style: {
+          width: '100%',
+          height: '100%',
+          borderRadius: '50%',
+          objectFit: 'cover',
+          display: 'block'
+        }
+      });
+    }
+
+    return h(
+      'div',
+      {
+        style: {
+          ...baseStyle,
+          background: color || '#D6724B',
+          color: '#fff',
+          fontSize: `${Math.max(8, Math.round(size * 0.55))}px`,
+          fontWeight: 'bold',
+          lineHeight: 1
+        }
+      },
+      (name || '名')[0]
+    );
+  };
+
+  // ----------------------------------------------------------------------------
   // 1. 常量与预设高可靠电台池
   // ----------------------------------------------------------------------------
   const DB_NAME = 't8_radio';
@@ -1561,8 +1655,12 @@ ${stationDesc}
                     display: 'flex', alignItems: 'center', gap: '6px'
                   }
                 },
-                  c.avatar ? h('img', { src: c.avatar, style: { width: '22px', height: '22px', borderRadius: '50%', objectFit: 'cover' } })
-                    : h('div', { style: { width: '22px', height: '22px', borderRadius: '50%', background: '#D6724B', color: '#fff', fontSize: '10px', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, c.name[0]),
+                  h(NuoAvatar, {
+                    avatar: c.avatar,
+                    name: c.name,
+                    color: c.avatarColor,
+                    size: 22
+                  }),
                   h('div', { style: { display: 'flex', flexDirection: 'column' } },
                     h('span', { style: { fontSize: '11px', fontWeight: 'bold', color: isSel ? '#B85832' : '#4A3C31' } }, c.name),
                     h('span', { style: { fontSize: '9px', color: '#8C7255', maxWidth: '80px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, nowItem ? nowItem.stationName : '未锁定')
@@ -1843,9 +1941,12 @@ ${stationDesc}
                 border: '1px solid #D6B88A', display: 'flex', alignItems: 'center', gap: '10px'
               }
             },
-              compassData.bestMatch.char.avatar
-                ? h('img', { src: compassData.bestMatch.char.avatar, style: { width: '40px', height: '40px', borderRadius: '50%', objectFit: 'cover' } })
-                : h('div', { style: { width: '40px', height: '40px', borderRadius: '50%', background: '#D6724B', color: '#fff', fontSize: '18px', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, compassData.bestMatch.char.name[0]),
+              h(NuoAvatar, {
+                avatar: compassData.bestMatch.char.avatar,
+                name: compassData.bestMatch.char.name,
+                color: compassData.bestMatch.char.avatarColor,
+                size: 40
+              }),
               h('div', { style: { display: 'flex', flexDirection: 'column' } },
                 h('span', { style: { fontSize: '11px', color: '#8C5E28', fontWeight: 'bold' } }, '🎧 广陵最佳耳机搭子'),
                 h('span', { style: { fontSize: '14px', fontWeight: 'bold', color: '#B85832' } }, `${compassData.bestMatch.char.name} ·「${compassData.bestMatch.title}」`),
@@ -1867,9 +1968,12 @@ ${stationDesc}
               style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px dashed rgba(214,168,110,0.2)' }
             },
               h('div', { style: { display: 'flex', alignItems: 'center', gap: '8px' } },
-                item.char.avatar
-                  ? h('img', { src: item.char.avatar, style: { width: '26px', height: '26px', borderRadius: '50%', objectFit: 'cover' } })
-                  : h('div', { style: { width: '26px', height: '26px', borderRadius: '50%', background: '#D6724B', color: '#fff', fontSize: '11px', display: 'flex', alignItems: 'center', justifyContent: 'center' } }, item.char.name[0]),
+                h(NuoAvatar, {
+                  avatar: item.char.avatar,
+                  name: item.char.name,
+                  color: item.char.avatarColor,
+                  size: 26
+                }),
                 h('div', { style: { display: 'flex', flexDirection: 'column' } },
                   h('div', { style: { display: 'flex', alignItems: 'center', gap: '6px' } },
                     h('span', { style: { fontSize: '12px', fontWeight: 'bold', color: '#3E3226' } }, item.char.name),

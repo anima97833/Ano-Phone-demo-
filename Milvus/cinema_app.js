@@ -10,6 +10,101 @@
   const { useState, useEffect, useRef } = React;
 
   // ----------------------------------------------------------------------------
+  // 通用名士头像组件 (对齐情侣空间：优先直链，其次从 IndexedDB avatarStore 获取，失败或缺失以名士首字兜底)
+  // ----------------------------------------------------------------------------
+  const NuoAvatar = ({ avatar, name = '名', color = '#D6724B', size = 16, style = {} }) => {
+    const [imgUrl, setImgUrl] = useState(null);
+    const [isFailed, setIsFailed] = useState(false);
+
+    useEffect(() => {
+      let isMounted = true;
+      setIsFailed(false);
+      if (!avatar) {
+        setImgUrl(null);
+        return;
+      }
+      if (typeof avatar === 'string' && (
+        avatar.startsWith('data:image') ||
+        avatar.startsWith('http://') ||
+        avatar.startsWith('https://') ||
+        avatar.startsWith('blob:') ||
+        avatar.startsWith('/') ||
+        avatar.startsWith('./')
+      )) {
+        setImgUrl(avatar);
+        return;
+      }
+      // 走异步读库 (window.resolveAvatarUrl 或 avatarStore)
+      const fetchAvatar = async () => {
+        try {
+          if (typeof window.resolveAvatarUrl === 'function') {
+            const res = await window.resolveAvatarUrl(avatar, '');
+            if (isMounted && res) {
+              setImgUrl(res);
+              return;
+            }
+          }
+          const store = window.avatarStore || (typeof avatarStore !== 'undefined' ? avatarStore : null);
+          if (store && typeof store.get === 'function') {
+            const item = await store.get(avatar);
+            if (isMounted && item && item.avatarData) {
+              setImgUrl(item.avatarData);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('[NuoCinema] 头像读取失败:', e);
+        }
+        if (isMounted) setIsFailed(true);
+      };
+      fetchAvatar();
+      return () => { isMounted = false; };
+    }, [avatar]);
+
+    const baseStyle = {
+      width: `${size}px`,
+      height: `${size}px`,
+      borderRadius: '50%',
+      flexShrink: 0,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      ...style
+    };
+
+    if (imgUrl && !isFailed) {
+      return React.createElement('img', {
+        src: imgUrl,
+        alt: name,
+        onError: () => setIsFailed(true),
+        style: {
+          width: '100%',
+          height: '100%',
+          borderRadius: '50%',
+          objectFit: 'cover',
+          display: 'block'
+        }
+      });
+    }
+
+    return React.createElement(
+      'div',
+      {
+        style: {
+          ...baseStyle,
+          background: color || '#D6724B',
+          color: '#fff',
+          fontSize: `${Math.max(8, Math.round(size * 0.55))}px`,
+          fontWeight: 'bold',
+          lineHeight: 1
+        }
+      },
+      (name || '名')[0]
+    );
+  };
+
+  // ----------------------------------------------------------------------------
   // 1. 在线免Key影视检索引擎 (基于 JustWatch 公开反代接口)
   // ----------------------------------------------------------------------------
   const JUSTWATCH_API = 'https://imdb.iamidiotareyoutoo.com/justwatch';
@@ -923,11 +1018,12 @@ ${worldContext ? worldContext.slice(0, 600) : '汉末三国风云，绣衣楼执
                 letterSpacing: '0.5px'
               }
             },
-            movie.companionAvatar ? React.createElement('img', {
-              src: movie.companionAvatar,
-              alt: movie.companionName,
-              style: { width: '12px', height: '12px', borderRadius: '50%', objectFit: 'cover' }
-            }) : null,
+            React.createElement(NuoAvatar, {
+              avatar: movie.companionAvatar,
+              name: movie.companionName,
+              size: 13,
+              style: { marginRight: '2px' }
+            }),
             movie.companionName + ' · 评'
           ),
           movie.comment
@@ -1580,18 +1676,12 @@ ${worldContext ? worldContext.slice(0, 600) : '汉末三国风云，绣衣楼执
                   flexShrink: 0
                 }
               },
-              c.avatar ? React.createElement('img', {
-                src: c.avatar,
-                alt: c.name,
-                style: { width: '16px', height: '16px', borderRadius: '50%', objectFit: 'cover' }
-              }) : React.createElement('div', {
-                style: {
-                  width: '16px', height: '16px', borderRadius: '50%',
-                  background: c.avatarColor || '#D6724B',
-                  color: '#fff', fontSize: '9px', display: 'flex',
-                  alignItems: 'center', justifyContent: 'center', fontWeight: 'bold'
-                }
-              }, (c.name || '名')[0]),
+              React.createElement(NuoAvatar, {
+                avatar: c.avatar,
+                name: c.name,
+                color: c.avatarColor,
+                size: 16
+              }),
               c.name
             );
           })

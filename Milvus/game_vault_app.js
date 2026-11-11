@@ -12,6 +12,100 @@
   const h = React.createElement;
 
   // ----------------------------------------------------------------------------
+  // 通用名士头像组件 (对齐情侣空间：优先直链，其次从 IndexedDB avatarStore 获取，失败以名士首字兜底)
+  // ----------------------------------------------------------------------------
+  const NuoAvatar = ({ avatar, name = '名', color = '#D6724B', size = 16, style = {} }) => {
+    const [imgUrl, setImgUrl] = useState(null);
+    const [isFailed, setIsFailed] = useState(false);
+
+    useEffect(() => {
+      let isMounted = true;
+      setIsFailed(false);
+      if (!avatar) {
+        setImgUrl(null);
+        return;
+      }
+      if (typeof avatar === 'string' && (
+        avatar.startsWith('data:image') ||
+        avatar.startsWith('http://') ||
+        avatar.startsWith('https://') ||
+        avatar.startsWith('blob:') ||
+        avatar.startsWith('/') ||
+        avatar.startsWith('./')
+      )) {
+        setImgUrl(avatar);
+        return;
+      }
+      const fetchAvatar = async () => {
+        try {
+          if (typeof window.resolveAvatarUrl === 'function') {
+            const res = await window.resolveAvatarUrl(avatar, '');
+            if (isMounted && res) {
+              setImgUrl(res);
+              return;
+            }
+          }
+          const store = window.avatarStore || (typeof avatarStore !== 'undefined' ? avatarStore : null);
+          if (store && typeof store.get === 'function') {
+            const item = await store.get(avatar);
+            if (isMounted && item && item.avatarData) {
+              setImgUrl(item.avatarData);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('[NuoGame] 头像读取失败:', e);
+        }
+        if (isMounted) setIsFailed(true);
+      };
+      fetchAvatar();
+      return () => { isMounted = false; };
+    }, [avatar]);
+
+    const baseStyle = {
+      width: `${size}px`,
+      height: `${size}px`,
+      borderRadius: '50%',
+      flexShrink: 0,
+      display: 'inline-flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      overflow: 'hidden',
+      ...style
+    };
+
+    if (imgUrl && !isFailed) {
+      return h('img', {
+        src: imgUrl,
+        alt: name,
+        onError: () => setIsFailed(true),
+        style: {
+          width: '100%',
+          height: '100%',
+          borderRadius: '50%',
+          objectFit: 'cover',
+          display: 'block'
+        }
+      });
+    }
+
+    return h(
+      'div',
+      {
+        style: {
+          ...baseStyle,
+          background: color || '#D6724B',
+          color: '#fff',
+          fontSize: `${Math.max(8, Math.round(size * 0.55))}px`,
+          fontWeight: 'bold',
+          lineHeight: 1
+        }
+      },
+      (name || '名')[0]
+    );
+  };
+
+  // ----------------------------------------------------------------------------
   // 1. 常量与配置
   // ----------------------------------------------------------------------------
   const DB_NAME = 't8_game_vault';
@@ -673,9 +767,11 @@ ${worldContext ? worldContext.slice(0, 600) : '汉末三国风云，绣衣楼执
           }, game.comment),
           h('div', { style: { display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'auto', gap: '6px' } },
             h('div', { style: { display: 'flex', alignItems: 'center', gap: '4px', minWidth: 0 } },
-              game.charAvatar
-                ? h('img', { src: game.charAvatar, alt: game.charName, style: { width: '15px', height: '15px', borderRadius: '50%', objectFit: 'cover' } })
-                : h('div', { style: { width: '15px', height: '15px', borderRadius: '50%', background: '#D6724B', color: '#fff', fontSize: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' } }, (game.charName || '名')[0]),
+              h(NuoAvatar, {
+                avatar: game.charAvatar,
+                name: game.charName,
+                size: 15
+              }),
               h('span', { style: { fontSize: '10px', color: '#8C5E28', fontWeight: 'bold', whiteSpace: 'nowrap' } }, game.charName)
             ),
             h('div', { style: { display: 'flex', gap: '5px' } },
@@ -736,9 +832,12 @@ ${worldContext ? worldContext.slice(0, 600) : '汉末三国风云，绣衣楼执
 
     const card = { background: '#FFFDF8', border: '1px solid rgba(214,168,110,0.4)', borderRadius: '14px', padding: '10px 12px', boxShadow: '0 2px 8px rgba(140,114,85,0.08)' };
     const sectionTitle = (t) => h('div', { style: { fontSize: '12px', fontWeight: 'bold', color: '#7C5832', marginBottom: '6px' } }, t);
-    const avatarEl = (c, size) => c.avatar
-      ? h('img', { src: c.avatar, alt: c.name, style: { width: size + 'px', height: size + 'px', borderRadius: '50%', objectFit: 'cover' } })
-      : h('div', { style: { width: size + 'px', height: size + 'px', borderRadius: '50%', background: c.avatarColor || '#D6724B', color: '#fff', fontSize: (size / 2) + 'px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' } }, (c.name || '名')[0]);
+    const avatarEl = (c, size) => h(NuoAvatar, {
+      avatar: c.avatar,
+      name: c.name,
+      color: c.avatarColor,
+      size: size
+    });
 
     return h('div', {
       onClick: onClose,
@@ -1061,9 +1160,12 @@ ${worldContext ? worldContext.slice(0, 600) : '汉末三国风云，绣衣楼执
     const overview = calcStats(scoped, characters, loadTitlesCache());
     const statsAll = calcStats(games, characters, loadTitlesCache());
 
-    const avatarMini = (c) => c.avatar
-      ? h('img', { src: c.avatar, alt: c.name, style: { width: '16px', height: '16px', borderRadius: '50%', objectFit: 'cover' } })
-      : h('div', { style: { width: '16px', height: '16px', borderRadius: '50%', background: c.avatarColor || '#D6724B', color: '#fff', fontSize: '9px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 'bold' } }, (c.name || '名')[0]);
+    const avatarMini = (c) => h(NuoAvatar, {
+      avatar: c.avatar,
+      name: c.name,
+      color: c.avatarColor,
+      size: 16
+    });
 
     const chip = (key, label, avatar) => {
       const sel = selectedChar === key;
