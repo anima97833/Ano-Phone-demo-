@@ -4859,6 +4859,9 @@
     <!-- 顶部 Header -->
     <header class="app-header">
       <div class="header-content active" id="header-campus">
+        <div class="global-back-to-phone-btn" title="返回小手机" style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #fff5f5; border: 1px solid rgba(255, 142, 142, 0.45); color: #d9534f; cursor: pointer; margin-right: 8px; flex-shrink: 0; box-shadow: 0 1px 4px rgba(255, 142, 142, 0.18); font-size: 13px; transition: transform 0.15s ease;">
+          <i class="fas fa-chevron-left"></i>
+        </div>
         <div
           id="campusBrandTitle"
           class="campus-editable"
@@ -4890,12 +4893,18 @@
         >
       </div>
       <div class="header-content" id="header-service">
+        <div class="global-back-to-phone-btn" title="返回小手机" style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #fff5f5; border: 1px solid rgba(255, 142, 142, 0.45); color: #d9534f; cursor: pointer; margin-right: 8px; flex-shrink: 0; box-shadow: 0 1px 4px rgba(255, 142, 142, 0.18); font-size: 13px; transition: transform 0.15s ease;">
+          <i class="fas fa-chevron-left"></i>
+        </div>
         <div class="search-bar">
           <i class="fas fa-search" style="margin-right: 8px"></i
           ><span>查找学宫服务...</span>
         </div>
       </div>
       <div class="header-content" id="header-academy">
+        <div class="global-back-to-phone-btn" title="返回小手机" style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #fff5f5; border: 1px solid rgba(255, 142, 142, 0.45); color: #d9534f; cursor: pointer; margin-right: 8px; flex-shrink: 0; box-shadow: 0 1px 4px rgba(255, 142, 142, 0.18); font-size: 13px; transition: transform 0.15s ease;">
+          <i class="fas fa-chevron-left"></i>
+        </div>
         <div style="font-weight: bold" class="ac-editable" contenteditable="false">学宫圈</div>
         <div class="search-bar" style="margin: 0 10px; height: 32px;">
           <i class="fas fa-search" style="margin-right: 6px; font-size: 12px;"></i>
@@ -4914,6 +4923,9 @@
         >
       </div>
       <div class="header-content" id="header-message">
+        <div class="global-back-to-phone-btn" title="返回小手机" style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #fff5f5; border: 1px solid rgba(255, 142, 142, 0.45); color: #d9534f; cursor: pointer; margin-right: 8px; flex-shrink: 0; box-shadow: 0 1px 4px rgba(255, 142, 142, 0.18); font-size: 13px; transition: transform 0.15s ease;">
+          <i class="fas fa-chevron-left"></i>
+        </div>
         <div style="font-weight: bold">学宫讯息处</div>
         <i
           class="fas fa-user-plus"
@@ -4923,6 +4935,9 @@
         ></i>
       </div>
       <div class="header-content" id="header-mine" style="justify-content: space-between;">
+        <div class="global-back-to-phone-btn" title="返回小手机" style="display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 50%; background: #fff5f5; border: 1px solid rgba(255, 142, 142, 0.45); color: #d9534f; cursor: pointer; margin-right: 8px; flex-shrink: 0; box-shadow: 0 1px 4px rgba(255, 142, 142, 0.18); font-size: 13px; transition: transform 0.15s ease;">
+          <i class="fas fa-chevron-left"></i>
+        </div>
         <span
           id="mineEditToggleBtn"
           title="自定义编辑"
@@ -8464,6 +8479,19 @@
           });
         }
 
+        
+        // 全局顶部返回小手机按钮监听
+        document.querySelectorAll(".global-back-to-phone-btn").forEach(btn => {
+          btn.addEventListener("click", (e) => {
+            e.stopPropagation();
+            if (window.parent && window.parent !== window) {
+              window.parent.postMessage({ type: "ACADEMY_CLOSE_MODAL" }, "*");
+            } else {
+              window.location.href = "./index.html";
+            }
+          });
+        });
+
         // 校园顶部搜索框过滤
         document.getElementById("campusSearchInput")?.addEventListener("input", function() {
           if (isCampusEditing) saveCampusDomToData();
@@ -8574,7 +8602,7 @@
                   '</div>' +
                   '<span style="font-size: 10.5px; color: #999;">' + (c.time || "刚刚") + '</span>' +
                 '</div>' +
-                '<div style="font-size: 12.5px; color: #4a3b3b; line-height: 1.55; word-break: break-word;">' + (c.text || "") + '</div>' +
+                '<div style="font-size: 12.5px; color: #4a3b3b; line-height: 1.55; word-break: break-word;">' + (c.text || c.content || c.comment || "前排围观吃瓜中，坐等太学明日小报后续～") + '</div>' +
               '</div>' +
               '<div class="comment-like-btn" data-comment-idx="' + idx + '" style="cursor: pointer; display: flex; flex-direction: column; align-items: center; font-size: 10.5px; color: ' + (c.liked ? "#e11d48" : "#999") + '; margin-left: 4px; padding: 2px 4px;">' +
                 '<i class="fa' + (c.liked ? "s" : "r") + ' fa-heart"></i>' +
@@ -8730,7 +8758,7 @@
           });
         });
 
-        document.getElementById("closeFeedDetail").addEventListener("click", () => {
+        document.getElementById("closeFeedDetail")?.addEventListener("click", () => {
           if (isFeedDetailEditing) document.getElementById("editFeedDetailBtn").click();
           feedModal.classList.remove("show");
         });
@@ -19005,21 +19033,91 @@
                     : (it.genreTag || genreTagMap[genre] || "【号外·辟雍小报】");
 
                   const rawComments = Array.isArray(it.comments) ? it.comments : [];
-                  const cleanComments = rawComments.length > 0
-                    ? rawComments.map((c, cIdx) => ({
-                        id: c.id || `c_${i}_${cIdx}`,
-                        author: c.author || "辟雍同窗",
-                        avatarSeed: c.avatarSeed || `seed_${(i + cIdx) % 8}`,
-                        time: c.time || "刚刚",
-                        text: c.text || "",
-                        likes: typeof c.likes === "number" ? c.likes : Math.floor(Math.random() * 50 + 10),
-                        liked: Boolean(c.liked)
-                      }))
+                  const campusAuthorPool = [
+                    "万舍吃瓜第一线",
+                    "礼乐系路人琴生",
+                    "演武场拾箭校尉",
+                    "算学系借钱生",
+                    "兰台抄书学童",
+                    "常满仓排队生",
+                    "观星台摸鱼道童",
+                    "南阙巡夜校尉小号"
+                  ];
+                  const fallbackTextPool = isSpecial
+                    ? [
+                        `破案了！平日少言寡语的${data.charName}今天居然写了这么长一篇手记…`,
+                        "前排围观，文中笔锋所指之事，莫非与某位同窗知己有关？",
+                        "求内幕细说！这篇专栏写得实在耐人寻味，太想知道后续了！",
+                        "给大佬递茶，后排坐等太学明日小报跟进！"
+                      ]
                     : [
-                        { id: `c_${i}_1`, author: "万舍吃瓜第一线", avatarSeed: "Felix", time: "10分钟前", text: isSpecial ? `破案了！平日少言寡语的${data.charName}今天居然写了这么长一篇手记…` : "破案了！昨天课后我就看到当事人往常满仓去了！", likes: 36, liked: false },
-                        { id: `c_${i}_2`, author: "礼乐系路人琴生", avatarSeed: "Aneka", time: "5分钟前", text: isSpecial ? "前排围观，文中笔锋所指之事，莫非与某位同窗知己有关？" : "前排围观，今日太学茶肆都在议论这桩事呢。", likes: 28, liked: false },
-                        { id: `c_${i}_3`, author: "匿名学子", avatarSeed: "Jude", time: "刚刚", text: "求内幕细说！太想知道后续了！", likes: 19, liked: false }
+                        "破案了！昨天课后我就看到当事人往常满仓去了！",
+                        "前排围观，今日太学茶肆都在议论这桩事呢。",
+                        "求内幕细说！到底字条上写了谁的名字？",
+                        "难怪今天西席先生脸色不对，原来事出有因！",
+                        "给大佬递茶，后排坐等太学明日小报跟进！"
                       ];
+
+                  const normalizeItemComment = (c, cIdx) => {
+                    if (!c) {
+                      return {
+                        id: `c_${i}_${cIdx}`,
+                        author: campusAuthorPool[(i + cIdx) % campusAuthorPool.length],
+                        avatarSeed: `seed_${(i + cIdx) % 8}`,
+                        time: "刚刚",
+                        text: fallbackTextPool[(i + cIdx) % fallbackTextPool.length],
+                        likes: Math.floor(Math.random() * 40 + 15),
+                        liked: false
+                      };
+                    }
+                    if (typeof c === "string") {
+                      let author = campusAuthorPool[(i + cIdx) % campusAuthorPool.length];
+                      let text = c.trim();
+                      if (text.includes("：")) {
+                        const parts = text.split("：");
+                        if (parts[0].length < 15) {
+                          author = parts[0].trim();
+                          text = parts.slice(1).join("：").trim();
+                        }
+                      } else if (text.includes(":")) {
+                        const parts = text.split(":");
+                        if (parts[0].length < 15) {
+                          author = parts[0].trim();
+                          text = parts.slice(1).join(":").trim();
+                        }
+                      }
+                      return {
+                        id: `c_${i}_${cIdx}`,
+                        author: author || campusAuthorPool[(i + cIdx) % campusAuthorPool.length],
+                        avatarSeed: `seed_${(i + cIdx) % 8}`,
+                        time: "刚刚",
+                        text: text || fallbackTextPool[(i + cIdx) % fallbackTextPool.length],
+                        likes: Math.floor(Math.random() * 40 + 15),
+                        liked: false
+                      };
+                    }
+                    const rawText = c.text || c.content || c.comment || c.msg || c.message || c.body || c.desc || c.detail || "";
+                    const rawAuthor = c.author || c.user || c.name || c.nickname || c.username || c.student || "";
+                    const finalText = String(rawText).trim() || fallbackTextPool[(i + cIdx) % fallbackTextPool.length];
+                    const finalAuthor = (rawAuthor && rawAuthor !== "辟雍同窗") ? rawAuthor : campusAuthorPool[(i + cIdx) % campusAuthorPool.length];
+
+                    return {
+                      id: c.id || `c_${i}_${cIdx}`,
+                      author: finalAuthor,
+                      avatarSeed: c.avatarSeed || `seed_${(i + cIdx) % 8}`,
+                      avatarUrl: c.avatarUrl || "",
+                      roleBadge: c.roleBadge || "",
+                      isUser: Boolean(c.isUser),
+                      time: c.time || "刚刚",
+                      text: finalText,
+                      likes: typeof c.likes === "number" ? c.likes : Math.floor(Math.random() * 40 + 15),
+                      liked: Boolean(c.liked)
+                    };
+                  };
+
+                  const cleanComments = rawComments.length > 0
+                    ? rawComments.map((c, cIdx) => normalizeItemComment(c, cIdx))
+                    : [0, 1, 2, 3].map(idx => normalizeItemComment(null, idx));
 
                   const fullContent = it.fullContent || it.fullDesc || it.desc || "";
                   const desc = it.desc || (fullContent ? fullContent.slice(0, 48) + "..." : "");
@@ -19740,7 +19838,7 @@ ${moduleKey === "campus" ? "\n" +
   "   - 【绝不读取名士信息】：这部分资讯纯粹为太学公共舆论场，绝不需要读取名士信息与私聊，保持全校公共舆论场的独立性、客观性与世界观广阔度！\n" +
   "   - 【体裁自适应口吻】：口吻严格符合该条目自身的体裁（官方公告 official 严肃公文体，辟雍小报 gossip 夸张抓马体，同窗爆料 daily 生动吐槽体，学林专栏 interview 访谈纪要体）；\n" +
   "   - fullContent: 200~300 字深度报道长文；desc: 35~55 字精炼摘要；\n" +
-  "   - comments: 3~5 条纯路人辟雍同窗吃瓜神评（纯路人围观视角，不对玩家做直接点名）。" : ""}\n\n=== 输出格式铁律（极其重要） ===
+  "   - comments: 3~5 条纯路人辟雍同窗吃瓜神评（每条对象必须包含 author 与 text 字段，文字内容放入 text 字段，如 { \"author\": \"万舍吃瓜第一线\", \"text\": \"破案了！...\" }，绝不能返回空文字！纯路人围观视角，不对玩家做直接点名）。" : ""}\n\n=== 输出格式铁律（极其重要） ===
 1. 你必须且只能输出一个合法的纯 JSON 对象，不要包含任何 Markdown 代码块标记或多余解释文字。
 2. JSON 结构必须为：
 {
