@@ -75,18 +75,22 @@
     };
 
     if (imgUrl && !isFailed) {
-      return h('img', {
-        src: imgUrl,
-        alt: name,
-        onError: () => setIsFailed(true),
-        style: {
-          width: '100%',
-          height: '100%',
-          borderRadius: '50%',
-          objectFit: 'cover',
-          display: 'block'
-        }
-      });
+      return h(
+        'div',
+        { style: baseStyle },
+        h('img', {
+          src: imgUrl,
+          alt: name,
+          onError: () => setIsFailed(true),
+          style: {
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            objectFit: 'cover',
+            display: 'block'
+          }
+        })
+      );
     }
 
     return h(
@@ -98,7 +102,8 @@
           color: '#fff',
           fontSize: `${Math.max(8, Math.round(size * 0.55))}px`,
           fontWeight: 'bold',
-          lineHeight: 1
+          lineHeight: 1,
+          userSelect: 'none'
         }
       },
       (name || '名')[0]
@@ -373,9 +378,17 @@
       const cs = settings[id] || settings[name] || {};
       const prof = c.profile || {};
       const fb = DEFAULT_LEAD_CHARACTERS.find((d) => d.name === name) || {};
+      let customAvatar = '';
+      try {
+        const customMap = JSON.parse(localStorage.getItem('t8_mansion_custom_avatars') || '{}');
+        if (customMap[id] && customMap[id].length > 0) {
+          customAvatar = customMap[id][0];
+        }
+      } catch (e) {}
+
       return {
         id, name,
-        avatar: c.avatar || c.avatarUrl || prof.avatar || cs.avatar || '',
+        avatar: customAvatar || c.avatar || c.avatarUrl || prof.avatar || cs.avatar || '',
         avatarColor: c.avatarColor || prof.avatarColor || '#EAD6D6',
         mbti: prof.mbti || c.mbti || cs.mbti || fb.mbti || '未知',
         constellation: prof.constellation || c.constellation || cs.constellation || fb.constellation || '未知',
@@ -1085,7 +1098,30 @@ ${worldContext ? worldContext.slice(0, 600) : '汉末三国风云，绣衣楼执
         } catch (e) { console.error('刷新名士列表异常:', e); }
       };
       refreshCharacters();
-      loadAllGames().then((list) => { if (alive) setGames(list); });
+      loadAllGames().then(async (list) => {
+        if (!alive) return;
+        // 自动校准旧卡带里的 charAvatar，若缺失或失效则根据 charName 自动匹配补齐
+        try {
+          const allChars = await loadAllConfiguredCharacters();
+          let changed = false;
+          const healed = (list || []).map((g) => {
+            if (!g.charAvatar && g.charName) {
+              const matched = allChars.find((c) => c.name === g.charName);
+              if (matched && matched.avatar) {
+                changed = true;
+                return { ...g, charAvatar: matched.avatar };
+              }
+            }
+            return g;
+          });
+          if (changed) {
+            saveGames(healed);
+          }
+          setGames(healed);
+        } catch (e) {
+          setGames(list || []);
+        }
+      });
       window.addEventListener('reloadChats', refreshCharacters);
       return () => { alive = false; window.removeEventListener('reloadChats', refreshCharacters); };
     }, []);

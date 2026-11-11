@@ -66,6 +66,10 @@
     const baseStyle = {
       width: `${size}px`,
       height: `${size}px`,
+      minWidth: `${size}px`,
+      maxWidth: `${size}px`,
+      minHeight: `${size}px`,
+      maxHeight: `${size}px`,
       borderRadius: '50%',
       flexShrink: 0,
       display: 'inline-flex',
@@ -76,18 +80,22 @@
     };
 
     if (imgUrl && !isFailed) {
-      return h('img', {
-        src: imgUrl,
-        alt: name,
-        onError: () => setIsFailed(true),
-        style: {
-          width: '100%',
-          height: '100%',
-          borderRadius: '50%',
-          objectFit: 'cover',
-          display: 'block'
-        }
-      });
+      return h(
+        'div',
+        { style: baseStyle },
+        h('img', {
+          src: imgUrl,
+          alt: name,
+          onError: () => setIsFailed(true),
+          style: {
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            objectFit: 'cover',
+            display: 'block'
+          }
+        })
+      );
     }
 
     return h(

@@ -10,19 +10,22 @@
   const { useState, useEffect, useRef } = React;
 
   // ----------------------------------------------------------------------------
-  // 通用名士头像组件 (对齐情侣空间：优先直链，其次从 IndexedDB avatarStore 获取，失败或缺失以名士首字兜底)
+  // 0. 通用头像异步解析与安全渲染组件 (对齐情侣空间 T8AvatarLoader / resolveAvatarUrl 机制)
   // ----------------------------------------------------------------------------
-  const NuoAvatar = ({ avatar, name = '名', color = '#D6724B', size = 16, style = {} }) => {
-    const [imgUrl, setImgUrl] = useState(null);
-    const [isFailed, setIsFailed] = useState(false);
+  const NuoAvatar = ({ avatar, name = '名', size = 16, fallbackColor = '#D6724B', style = {} }) => {
+    const [avatarUrl, setAvatarUrl] = useState(null);
+    const [hasError, setHasError] = useState(false);
 
     useEffect(() => {
       let isMounted = true;
-      setIsFailed(false);
+      setHasError(false);
+
       if (!avatar) {
-        setImgUrl(null);
+        setAvatarUrl(null);
         return;
       }
+
+      // 分支 A：直接可用的 URL (Base64、http/https、相对路径、blob)
       if (typeof avatar === 'string' && (
         avatar.startsWith('data:image') ||
         avatar.startsWith('http://') ||
@@ -31,16 +34,17 @@
         avatar.startsWith('/') ||
         avatar.startsWith('./')
       )) {
-        setImgUrl(avatar);
+        setAvatarUrl(avatar);
         return;
       }
-      // 走异步读库 (window.resolveAvatarUrl 或 avatarStore)
-      const fetchAvatar = async () => {
+
+      // 分支 B：如果是 avatarId 或保存在 IndexedDB 的头像 key，调用全局解析器
+      const resolve = async () => {
         try {
           if (typeof window.resolveAvatarUrl === 'function') {
             const res = await window.resolveAvatarUrl(avatar, '');
             if (isMounted && res) {
-              setImgUrl(res);
+              setAvatarUrl(res);
               return;
             }
           }
@@ -48,56 +52,61 @@
           if (store && typeof store.get === 'function') {
             const item = await store.get(avatar);
             if (isMounted && item && item.avatarData) {
-              setImgUrl(item.avatarData);
+              setAvatarUrl(item.avatarData);
               return;
             }
           }
         } catch (e) {
-          console.warn('[NuoCinema] 头像读取失败:', e);
+          console.warn('[NuoCinema] 头像加载失败:', e);
         }
-        if (isMounted) setIsFailed(true);
+        if (isMounted) setAvatarUrl(null);
       };
-      fetchAvatar();
+
+      resolve();
       return () => { isMounted = false; };
     }, [avatar]);
 
-    const baseStyle = {
-      width: `${size}px`,
-      height: `${size}px`,
+    const containerStyle = {
+      width: size + 'px',
+      height: size + 'px',
       borderRadius: '50%',
+      overflow: 'hidden',
       flexShrink: 0,
       display: 'inline-flex',
       alignItems: 'center',
       justifyContent: 'center',
-      overflow: 'hidden',
       ...style
     };
 
-    if (imgUrl && !isFailed) {
-      return React.createElement('img', {
-        src: imgUrl,
-        alt: name,
-        onError: () => setIsFailed(true),
-        style: {
-          width: '100%',
-          height: '100%',
-          borderRadius: '50%',
-          objectFit: 'cover',
-          display: 'block'
-        }
-      });
+    if (avatarUrl && !hasError) {
+      return React.createElement(
+        'div',
+        { style: containerStyle },
+        React.createElement('img', {
+          src: avatarUrl,
+          alt: name,
+          onError: () => setHasError(true),
+          style: {
+            width: '100%',
+            height: '100%',
+            borderRadius: '50%',
+            objectFit: 'cover',
+            display: 'block'
+          }
+        })
+      );
     }
 
     return React.createElement(
       'div',
       {
         style: {
-          ...baseStyle,
-          background: color || '#D6724B',
+          ...containerStyle,
+          background: fallbackColor,
           color: '#fff',
-          fontSize: `${Math.max(8, Math.round(size * 0.55))}px`,
+          fontSize: Math.max(8, Math.round(size * 0.55)) + 'px',
           fontWeight: 'bold',
-          lineHeight: 1
+          userSelect: 'none'
         }
       },
       (name || '名')[0]
@@ -472,7 +481,15 @@
         ((name.includes('慈') || name.includes('师尊')) && d.name === '左慈')
       ) || {};
 
-      const avatar = c.avatar || c.avatarUrl || prof.avatar || cs.avatar || '';
+      let customAvatar = '';
+      try {
+        const customMap = JSON.parse(localStorage.getItem('t8_mansion_custom_avatars') || '{}');
+        if (customMap[id] && customMap[id].length > 0) {
+          customAvatar = customMap[id][0];
+        }
+      } catch (e) {}
+
+      const avatar = customAvatar || c.avatar || c.avatarUrl || prof.avatar || cs.avatar || '';
       const avatarColor = c.avatarColor || prof.avatarColor || '#EAD6D6';
       const mbti = prof.mbti || c.mbti || cs.mbti || fallback.mbti || '未知';
       const constellation = prof.constellation || c.constellation || cs.constellation || fallback.constellation || '未知';
@@ -1022,7 +1039,7 @@ ${worldContext ? worldContext.slice(0, 600) : '汉末三国风云，绣衣楼执
               avatar: movie.companionAvatar,
               name: movie.companionName,
               size: 13,
-              style: { marginRight: '2px' }
+              fallbackColor: '#D6724B'
             }),
             movie.companionName + ' · 评'
           ),
@@ -1459,8 +1476,29 @@ ${worldContext ? worldContext.slice(0, 600) : '汉末三国风云，绣衣楼执
       };
 
       refreshCharacters();
-      loadCinemaTickets().then((list) => {
-        if (isMounted) setMovies(list);
+      loadCinemaTickets().then(async (list) => {
+        if (!isMounted) return;
+        // 自动校准旧票根里的 companionAvatar，若为空或失效则从当前 characters 中补全
+        try {
+          const allChars = await loadAllConfiguredCharacters();
+          let changed = false;
+          const healed = (list || []).map(m => {
+            if (!m.companionAvatar && m.companionName) {
+              const matched = allChars.find(c => c.name === m.companionName);
+              if (matched && matched.avatar) {
+                changed = true;
+                return { ...m, companionAvatar: matched.avatar };
+              }
+            }
+            return m;
+          });
+          if (changed) {
+            saveAllCinemaTickets(healed);
+          }
+          setMovies(healed);
+        } catch (e) {
+          setMovies(list || []);
+        }
       });
 
       // 监听传讯角色变动事件
@@ -1679,8 +1717,8 @@ ${worldContext ? worldContext.slice(0, 600) : '汉末三国风云，绣衣楼执
               React.createElement(NuoAvatar, {
                 avatar: c.avatar,
                 name: c.name,
-                color: c.avatarColor,
-                size: 16
+                size: 16,
+                fallbackColor: c.avatarColor || '#D6724B'
               }),
               c.name
             );
