@@ -1,8 +1,9 @@
 // 鸢小手机 Service Worker
-const CACHE_NAME = 'yuan-phone-pwa-v1794301000000';
+const CACHE_NAME = 'yuan-phone-pwa-v1794302000000';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
+  './今日学宫.html',
   './manifest.json',
   './Milvus/style.css',
   './Milvus/cinema_app.js',
@@ -10,6 +11,7 @@ const ASSETS_TO_CACHE = [
   './Milvus/radio_app.js',
   './Milvus/study_app.js',
   './Milvus/arcade_app.js',
+  './Milvus/academy_app.js',
   './Milvus/app.min.js',
   './Milvus/agent_room.js',
   './Milvus/db.js',
