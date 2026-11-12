@@ -17344,29 +17344,47 @@
 
           const contactMeta = chatContactsMeta[chatId] || { name: "学宫同窗", desc: "辟雍学子" };
           const partnerDisplayName = isDefaultTeacherChat ? curP.chatPartnerName : contactMeta.name;
+          const isAIConv = Boolean(contactMeta.isAIConv);
+          const targetCharName = contactMeta.targetCharName || curP.name;
 
-          document.getElementById("chatTitle").innerText = `${partnerDisplayName}（当前视角：${curP.name}）`;
+          if (isAIConv) {
+            document.getElementById("chatTitle").innerText = `${partnerDisplayName} · 与 ${targetCharName} 传书`;
+          } else {
+            document.getElementById("chatTitle").innerText = `${partnerDisplayName}（当前视角：${curP.name}）`;
+          }
 
-          let chatHtml = `
-            <div style="background:var(--primary-light); color:var(--primary-active); font-size:11px; padding:6px 12px; border-radius:8px; margin-bottom:12px; text-align:center;">
-              <i class="fas fa-comments"></i> 正在与 <b>${partnerDisplayName}</b> 对话（直接点击气泡文字也可自由修改）
-            </div>
-            <div id="chatScrollBox" style="flex:1; padding-bottom:20px; overflow-y:auto;">
-          `;
+          let chatHtml = isAIConv
+            ? `
+              <div style="background:var(--primary-light); color:var(--primary-active); font-size:11px; padding:7px 12px; border-radius:10px; margin-bottom:12px; text-align:center; border: 0.5px solid rgba(194,65,12,0.18);">
+                <i class="fas fa-scroll"></i> <b>${partnerDisplayName}</b> 与 <b>${targetCharName}</b> 的太学传书
+                ${contactMeta.serviceRefEvent ? `<div style="font-size:10px; color:#888; margin-top:2px;">📌 联动太学行事：${contactMeta.serviceRefEvent}</div>` : ""}
+              </div>
+              <div id="chatScrollBox" style="flex:1; padding-bottom:20px; overflow-y:auto;">
+            `
+            : `
+              <div style="background:var(--primary-light); color:var(--primary-active); font-size:11px; padding:6px 12px; border-radius:8px; margin-bottom:12px; text-align:center;">
+                <i class="fas fa-comments"></i> 正在与 <b>${partnerDisplayName}</b> 对话（直接点击气泡文字也可自由修改）
+              </div>
+              <div id="chatScrollBox" style="flex:1; padding-bottom:20px; overflow-y:auto;">
+            `;
 
           chats.forEach((chat) => {
             const isSentByMe = isTeacherView ? chat.sender === "teacher" : chat.sender === "me";
             const alignClass = isSentByMe ? "justify-content:flex-end" : "justify-content:flex-start";
             const bubbleClass = isSentByMe
-              ? "background:var(--primary-color); color:white;"
-              : "background:#e9e9eb; color:#333;";
+              ? "background:linear-gradient(135deg, #c2410c, #b93838); color:white; border-bottom-right-radius:2px;"
+              : "background:#f0f0f3; color:#2d2d2d; border-bottom-left-radius:2px; border:0.5px solid #e2e2e6;";
+            const speakerLabel = isSentByMe ? (isAIConv ? targetCharName : curP.name) : partnerDisplayName;
 
             chatHtml += `
-              <div style="display:flex; ${alignClass}; margin-bottom:6px;">
-                <div contenteditable="true" style="max-width:75%; padding:9px 13px; border-radius:12px; font-size:14px; line-height:1.4; outline:none; ${bubbleClass}">${chat.content}</div>
+              <div style="display:flex; ${alignClass}; margin-bottom:2px;">
+                <span style="font-size:10px; color:#888; padding:0 4px;">${speakerLabel}</span>
               </div>
-              <div style="display:flex; ${alignClass}; margin-bottom:14px;">
-                <span style="font-size:10px; color:#999;">${chat.time}</span>
+              <div style="display:flex; ${alignClass}; margin-bottom:3px;">
+                <div contenteditable="true" style="max-width:76%; padding:9px 13px; border-radius:12px; font-size:13.5px; line-height:1.45; outline:none; box-shadow:0 1px 3px rgba(0,0,0,0.04); ${bubbleClass}">${chat.content}</div>
+              </div>
+              <div style="display:flex; ${alignClass}; margin-bottom:10px;">
+                <span style="font-size:10px; color:#999; padding:0 4px;">${chat.time || "刚刚"}</span>
               </div>
             `;
           });
@@ -18232,8 +18250,9 @@
             document.head.appendChild(style);
           }
 
-          // 1. 本地持久化架构升级：IndexedDB (t8_academy_db) + 内存缓存 (memoryAIData) + 互斥编辑锁 (MODULE_EDIT_CONFIG)
+          // 1. 本地持久化架构升级：100% IndexedDB (t8_academy_db) + 内存缓存 (memoryAIData) + 零 localStorage 占用
           let memoryAIData = null;
+          let isIDBReady = false;
 
           function openAcademyIDB() {
             return new Promise((resolve) => {
@@ -18291,39 +18310,33 @@
           function loadPersistedAIData() {
             if (memoryAIData && typeof memoryAIData === "object") {
               if (memoryAIData.companionCharId) companionCharId = memoryAIData.companionCharId;
+              if (memoryAIData.currentPersonaId) currentPersonaId = memoryAIData.currentPersonaId;
               memoryAIData.personas = memoryAIData.personas || {};
               return memoryAIData;
             }
-            try {
-              const raw = localStorage.getItem(AI_STORAGE_KEY);
-              if (raw) {
-                const parsed = JSON.parse(raw);
-                if (parsed && typeof parsed === "object") {
-                  if (parsed.companionCharId) companionCharId = parsed.companionCharId;
-                  parsed.personas = parsed.personas || {};
-                  memoryAIData = parsed;
-                  // 顺手写入 IndexedDB 做数据迁移
-                  idbPutAIMemory("all_data", parsed).catch(() => {});
-                  return parsed;
-                }
-              }
-            } catch (e) {}
-            memoryAIData = { companionCharId: "liubian", personas: {} };
+            memoryAIData = {
+              currentPersonaId: currentPersonaId || "guangling",
+              companionCharId: companionCharId || "liubian",
+              personas: {}
+            };
             return memoryAIData;
           }
 
           function savePersistedAIData(storeObj) {
+            if (!storeObj || typeof storeObj !== "object") return;
+            storeObj.currentPersonaId = currentPersonaId;
+            storeObj.companionCharId = companionCharId;
+            storeObj.personas = storeObj.personas || {};
             memoryAIData = storeObj;
-            // 1. 核心持久化存入 IndexedDB（容量高达数 GB，永不发生 QuotaExceededError）
-            idbPutAIMemory("all_data", storeObj).catch(() => {});
+            // 核心持久化 100% 存入 IndexedDB（容量高达数 GB，永不发生 QuotaExceededError）
+            idbPutAIMemory("all_data", storeObj).catch((err) => {
+              console.warn("[AcademyAIBridge] IndexedDB 写入异常:", err);
+            });
 
-            // 2. 尝试向 localStorage 同步轻量摘要，超限时不抛报错阻断逻辑
+            // 彻底释放 localStorage 5MB 宝贵空间，避免 QuotaExceededError
             try {
-              localStorage.setItem(AI_STORAGE_KEY, JSON.stringify(storeObj));
-            } catch (e) {
-              // 若 localStorage 已达到 5MB 瓶颈，清理该 key 释放配额，完全由 IndexedDB 接管
-              try { localStorage.removeItem(AI_STORAGE_KEY); } catch (err) {}
-            }
+              localStorage.removeItem(AI_STORAGE_KEY);
+            } catch (err) {}
           }
 
           function getActiveStateBucketKey() {
@@ -18337,6 +18350,7 @@
 
           function saveModuleAIData(moduleKey, payload) {
             const store = loadPersistedAIData();
+            store.currentPersonaId = currentPersonaId;
             store.companionCharId = companionCharId;
             const bucketKey = getActiveStateBucketKey();
             if (!store.personas[bucketKey]) store.personas[bucketKey] = {};
@@ -18983,6 +18997,36 @@
             `;
           }
 
+          // 构造学宫讯息处「多角色群像传书对话流」专用上下文（穿透读取教务服务大厅 service 已生成的事项）
+          function getMessageModuleSpecialPrompt(character, activePersona, stage) {
+            const serviceData = typeof getModuleAIData === "function" ? getModuleAIData("service") : null;
+            let serviceContext = "";
+            if (serviceData && Array.isArray(serviceData.items) && serviceData.items.length > 0) {
+              serviceContext = "【当前名士在「教务服务大厅」已生成的近期行事备忘与待办（极其重要！本页生成的 5~8 组对话中，必须有针对性地从中选取具体事件，作为别人来找名士传书沟通的直接由头与因果背景）】：\n" +
+                serviceData.items.map((it, idx) => `  * 事项 ${idx + 1}：${it.title} [${it.tag || "教务服务"}]（时间：${it.time || "日中"}）—— 说明：${it.desc}`).join("\n");
+            } else {
+              serviceContext = `【当前名士在辟雍太学的近期行事备忘】：\n  * 事项 1：常满仓打包桂花酪浆与炙肉点心带回斋舍\n  * 事项 2：藏书阁借阅《辟雍太学礼仪志》《星象秘录》核账还书\n  * 事项 3：向博士官寺荀攸夫子提交返校消假说明与校外采买登记\n  * 事项 4：演武场借领长弓与骑射校场场地预约\n  * 事项 5：辟雍马车往返洛阳城南门与槐市日程备忘`;
+            }
+
+            return "\n" +
+              "=== 【特别核心指令：学宫讯息处「多角色群像传书对话流」（选项 A · 纯粹名士社交圈）】 ===\n" +
+              `本次「学宫讯息处」必须生成 5~8 组独立完整的会话（items 数组长度严格在 5~8 之间）！\n` +
+              `每组会话必须代表一位不同圈层的学宫人物（同舍室友、常满仓掌膳管事、藏书使、演武教头、博士夫子、经学生等）与【${character.name}】的日常私信往来传书。\n\n` +
+              `${serviceContext}\n\n` +
+              "★ 【每组会话的对话生成铁律（极其重要）】：\n" +
+              "1. 每组会话的 messages 数组必须严格包含 6 到 8 句话（不得少于 6 句，不得多于 8 句），形成完整的情景往来短剧（两人有来有回的互动拉扯，绝非单句问答）！\n" +
+              "2. 说话人交替：sender 字段严格区分：\n" +
+              "   - \"partner\": 对方学宫人物说的话；\n" +
+              `   - \"char\": 当前名士【${character.name}】说的话；\n` +
+              "3. 名士口吻绝不 OOC（最高优先级）：\n" +
+              `   - 凡是 sender: \"char\" 的台词，必须 100% 采用【${character.name}】的 6 维人设、MBTI（${character.mbti}）、星座（${character.constellation}）、专属语言风格与口癖（${character.speakingStyle}，性格: ${character.personality}）！\n` +
+              `   - 例如刘辩自称“朕”，任性、娇纵、独占欲强、对旁人不耐烦，只对广陵王相关的事极度上心；傅融算盘不离手、每文钱都锱铢必较催账；袁基温雅谦和、滴水不漏、深藏不露；\n` +
+              "4. 对方身份鲜活生动：\n" +
+              "   - 凡是 sender: \"partner\" 的台词，必须严格符合东汉辟雍太学的身份（如掌膳的圆滑谨慎、典籍使的书呆执着、同舍室友的八卦起哄、教头的刚正洪亮）；\n" +
+              "5. 因果清晰，严丝合缝：对话必须紧密扣紧上方列出的「教务服务事项」或东汉学宫日常生活（策论辩难、常满仓占座抢点心、斋舍宵禁查寝、还书超期、借马射箭等）；\n" +
+              "6. 字段完整：每条 item 必须包含 contactId, partnerName, partnerTitle, serviceRefEvent, summaryTopic, lastTime, messages 等字段！";
+          }
+
           // 10. 定义全站 17 个页面/子模块的 5~8 条数据落盘与应用器
           const MODULE_SPECS = {
             campus: {
@@ -19238,34 +19282,116 @@
             message: {
               name: "学宫讯息处",
               bannerHost: "#page-message",
-              schemaDesc: `生成 5~8 条该名士与你在学宫讯息处的校园传书/教务通知会话消息，每条包含：sender ("char" 表示名士发出的消息, "me" 表示玩家或同窗回应), title (如"兰台夜读邀约"|"常满仓留膳"), content (35~75字符合名士口癖的私信内容，紧密呼应传讯聊天记录), time (如"刚刚"|"辰时三刻")`,
+              schemaDesc: `生成 5~8 组【别人与该名士在学宫讯息处的往来传书会话】（严格执行【选项 A · 完整替换会话流】）。
+每条 item 代表一个独立的会话，必须包含字段：
+- contactId: 唯一字符串ID（如 "msg_conv_1", "msg_conv_2" 等）
+- partnerName: 对方姓名（5~8个不同圈层的鲜活学宫人物，如"郝管事（常满仓）"、"张主簿（藏书阁）"、"陆修（礼乐系琴生）"、"曹校尉（演武场）"、"公孙弘（经学博士）"、"崔少府（舍长）"等）
+- partnerTitle: 对方头衔身份标签（如"太学掌膳"、"典籍主事"、"辟雍琴生"、"演武教头"、"首席博士"等，6字以内）
+- partnerAvatarSeed: 头像种子（如 "seed_p1"）
+- serviceRefEvent: 本对话严格呼应的「服务大厅」已生成行事备忘或待办（如"常满仓打包桂花酪浆核账"、"藏书阁借阅《星象秘录》超期"等）
+- summaryTopic: 6~12字对话主题（如"桂花酪浆留膳备忘"、"古籍借还催书"等）
+- lastTime: 最新时间（如"刚刚"、"酉时三刻"）
+- messages: 【极其核心铁律】：必须包含严格 6 到 8 句话的完整往来对话数组！
+  每句话包含：
+  * sender: "partner"（对方所说）或 "char"（当前选定名士所说）
+  * text: 25~60字生动具体的对话台词（名士台词严格遵循专属口癖与性格，对方台词符合太学身份）
+  * time: 时辰时间戳（如"酉时一刻"、"酉时二刻"）`,
               apply: (data) => {
                 const items = Array.isArray(data.items) ? data.items : [];
-                const chatId = `char_chat_${data.charId}`;
-                if (!chatContactsMeta[chatId]) {
-                  chatContactsMeta[chatId] = {
-                    id: chatId,
-                    name: data.charName,
-                    desc: "辟雍名士 · 灵犀传书",
-                    avatar: data.charAvatar
+                const pageMessage = document.getElementById("page-message");
+                if (!pageMessage || items.length === 0) return items;
+
+                // 选项 A：隐藏默认的名士联系人，只展示本次生成的 5~8 组真实社交会话（保留系统通知）
+                pageMessage.querySelectorAll('.msg-item[data-type="chat"]:not([data-ai-conv="true"])').forEach(el => {
+                  el.style.display = "none";
+                });
+                pageMessage.querySelectorAll('.msg-item[data-ai-conv="true"]').forEach(el => {
+                  el.remove();
+                });
+
+                items.forEach((conv, idx) => {
+                  const convId = conv.contactId || `msg_conv_${data.charId}_${idx}`;
+                  conv.contactId = convId;
+                  const partnerName = conv.partnerName || `学宫同窗 ${idx + 1}`;
+                  const partnerTitle = conv.partnerTitle || "辟雍同窗";
+                  const avatarSeed = conv.partnerAvatarSeed || `p_${idx}_${encodeURIComponent(partnerName)}`;
+                  const avatarUrl = conv.partnerAvatar || `https://api.dicebear.com/9.x/fun-emoji/svg?seed=${avatarSeed}`;
+
+                  chatContactsMeta[convId] = {
+                    id: convId,
+                    name: partnerName,
+                    desc: `${partnerTitle} · 与${data.charName}传书`,
+                    avatar: avatarUrl,
+                    partnerTitle: partnerTitle,
+                    summaryTopic: conv.summaryTopic || "",
+                    serviceRefEvent: conv.serviceRefEvent || "",
+                    isAIConv: true,
+                    targetCharName: data.charName
                   };
-                }
-                chatRecords[chatId] = items.map(it => ({
-                  sender: it.sender === "me" ? "me" : "friend",
-                  content: it.content || it.title || "",
-                  time: it.time || "刚刚"
-                }));
-                const lastMsg = items[items.length - 1];
-                const msgItem = document.querySelector(`#page-message .msg-item[data-id="${chatId}"]`);
-                if (msgItem && lastMsg) {
-                  const previewEl = msgItem.querySelector(".msg-preview-text");
-                  const timeEl = msgItem.querySelector(".msg-time-text");
-                  if (previewEl) previewEl.innerText = lastMsg.content || "";
-                  if (timeEl) timeEl.innerText = lastMsg.time || "刚刚";
-                }
+
+                  const rawMsgs = Array.isArray(conv.messages) && conv.messages.length > 0 ? conv.messages : [
+                    { sender: "partner", text: "今日太学讲筵，不知足下何时前去？", time: "辰时一刻" },
+                    { sender: "char", text: "催什么？朕自有分寸。", time: "辰时二刻" }
+                  ];
+
+                  chatRecords[convId] = rawMsgs.map(m => {
+                    const isChar = m.sender === "char" || m.sender === "me";
+                    return {
+                      sender: isChar ? "me" : "friend",
+                      speakerName: isChar ? data.charName : partnerName,
+                      content: m.text || m.content || "",
+                      time: m.time || "刚刚"
+                    };
+                  });
+
+                  const lastMsg = rawMsgs[rawMsgs.length - 1];
+                  const lastMsgText = lastMsg ? (lastMsg.text || lastMsg.content || "") : (conv.preview || "");
+                  const lastTime = conv.lastTime || (lastMsg && lastMsg.time) || "刚刚";
+
+                  const itemEl = document.createElement("div");
+                  itemEl.className = "msg-item";
+                  itemEl.dataset.type = "chat";
+                  itemEl.dataset.id = convId;
+                  itemEl.dataset.aiConv = "true";
+                  itemEl.style.cursor = "pointer";
+
+                  itemEl.innerHTML = `
+                    <div class="msg-avatar" style="background-image:url('${avatarUrl}'); background-size:cover; background-position:center; background-color:#ffeedd; border:1.5px solid rgba(194,65,12,0.25); position:relative;">
+                      <span style="position:absolute; bottom:-3px; right:-3px; background:var(--primary-color); color:white; font-size:9px; padding:0 3px; border-radius:3px; transform:scale(0.85);">${partnerTitle.slice(0, 2)}</span>
+                    </div>
+                    <div style="flex: 1; min-width: 0;">
+                      <div style="display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 3px;">
+                        <div style="display: flex; align-items: center; gap: 5px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                          <span style="font-weight: bold; font-size: 13.5px; color: #222;">${partnerName}</span>
+                          <span style="font-size: 10px; color: var(--primary-active); background: var(--primary-light); padding: 1px 6px; border-radius: 10px; border: 0.5px solid rgba(194,65,12,0.2); white-space: nowrap;">${partnerTitle}</span>
+                          ${conv.summaryTopic ? `<span style="font-size: 9.5px; color: #777; background: #f3f3f5; padding: 1px 5px; border-radius: 6px; white-space: nowrap;">[${conv.summaryTopic}]</span>` : ""}
+                        </div>
+                        <span class="msg-time-text" style="font-size: 10px; color: #999; margin-left: 6px; white-space: nowrap;">${lastTime}</span>
+                      </div>
+                      <div class="msg-preview-text" style="font-size: 12px; color: #666; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                        ${lastMsgText}
+                      </div>
+                    </div>
+                  `;
+
+                  itemEl.addEventListener("click", () => {
+                    openDualPerspectiveChat(convId);
+                  });
+
+                  pageMessage.appendChild(itemEl);
+                });
+
                 renderModuleBanner("message", "#page-message", { ...data, itemCount: items.length });
+                return items;
               },
               reset: () => {
+                const pageMessage = document.getElementById("page-message");
+                if (pageMessage) {
+                  pageMessage.querySelectorAll('.msg-item[data-ai-conv="true"]').forEach(el => el.remove());
+                  pageMessage.querySelectorAll('.msg-item[data-type="chat"]:not([data-ai-conv="true"])').forEach(el => {
+                    el.style.display = "";
+                  });
+                }
                 renderModuleBanner("message", "#page-message", null);
               }
             },
@@ -19818,6 +19944,7 @@ ${recentChatHistory || `（近期传讯中，${character.name}正与${activePers
 - 当前所在页面：【${spec.name}】
 - 当前学宫时辰：【${stage.label}】（${stage.desc}）
 ${perspectiveInstruction}
+${moduleKey === "message" ? getMessageModuleSpecialPrompt(character, activePersona, stage) : ""}
 ${moduleKey === "campus" ? "\n" +
   "=== 【特别核心指令：校园资讯双轨生成模型（方案 A · 焦点专栏置顶 + 大盘公报混合流）】 ===\n" +
   "本次「今日校园·校园资讯」必须生成 5~8 条资讯，且严格按【两大分类】结构化输出：\n\n" +
@@ -19927,6 +20054,7 @@ ${moduleKey === "campus" ? "\n" +
                 companionCharId = selectEl.value;
                 const store = loadPersistedAIData();
                 store.companionCharId = companionCharId;
+                store.currentPersonaId = currentPersonaId;
                 savePersistedAIData(store);
                 updateAllCapsuleLabels();
                 restoreAllModulesForActiveContext();
@@ -19997,6 +20125,11 @@ ${moduleKey === "campus" ? "\n" +
 
           // 13. 恢复当前分身/伴读名士在所有模块已持久化的 AI 内容
           function restoreAllModulesForActiveContext() {
+            // 如果 IndexedDB 尚未完成首次异步加载，且内存中无任何数据，切勿盲目 reset 页面数据
+            const isMemoryEmpty = !memoryAIData || !memoryAIData.personas || Object.keys(memoryAIData.personas).length === 0;
+            if (!isIDBReady && isMemoryEmpty) {
+              return;
+            }
             Object.keys(MODULE_SPECS).forEach(moduleKey => {
               const spec = MODULE_SPECS[moduleKey];
               const saved = getModuleAIData(moduleKey);
@@ -20020,6 +20153,12 @@ ${moduleKey === "campus" ? "\n" +
           const baseSwitchPersona = switchPersona;
           switchPersona = function (targetId) {
             baseSwitchPersona(targetId);
+            currentPersonaId = targetId;
+            if (isIDBReady && memoryAIData) {
+              memoryAIData.currentPersonaId = targetId;
+              memoryAIData.companionCharId = companionCharId;
+              savePersistedAIData(memoryAIData);
+            }
             updateAllCapsuleLabels();
             restoreAllModulesForActiveContext();
           };
@@ -20349,6 +20488,21 @@ ${phoneChatHistory || "（日常传讯往来密切）"}
                   });
                   if (isDefaultTeacherChat) curP.chatPreview = cleanReply;
                   updateMsgListPreview(cleanReply, "刚刚");
+                  if (contactMeta.isAIConv && typeof getModuleAIData === "function" && typeof saveModuleAIData === "function") {
+                    const savedMsg = getModuleAIData("message");
+                    if (savedMsg && Array.isArray(savedMsg.items)) {
+                      const targetConv = savedMsg.items.find(it => (it.contactId === chatId || `msg_conv_${savedMsg.charId}_${it.id}` === chatId));
+                      if (targetConv) {
+                        targetConv.messages = chats.map(c => ({
+                          sender: c.sender === "me" ? "char" : "partner",
+                          text: c.content,
+                          time: c.time
+                        }));
+                        targetConv.lastTime = "刚刚";
+                        saveModuleAIData("message", savedMsg);
+                      }
+                    }
+                  }
                   if (chatModal.classList.contains("show") && document.getElementById("chatTitle").innerText.includes(partnerDisplayName)) {
                     openDualPerspectiveChat(chatId);
                   }
@@ -20443,9 +20597,29 @@ ${phoneChatHistory || "（日常传讯往来密切）"}
 
           // 启动时优先从 IndexedDB (t8_academy_db) 预热内存缓存，彻底解决刷新丢失与 localStorage 配额问题
           idbGetAIMemory("all_data").then((savedDB) => {
-            if (savedDB && typeof savedDB === "object" && savedDB.personas) {
-              memoryAIData = savedDB;
-              if (savedDB.companionCharId) companionCharId = savedDB.companionCharId;
+            isIDBReady = true;
+            let dataToUse = savedDB;
+            if (!dataToUse || !dataToUse.personas || Object.keys(dataToUse.personas).length === 0) {
+              try {
+                const oldRaw = localStorage.getItem(AI_STORAGE_KEY);
+                if (oldRaw) {
+                  const oldParsed = JSON.parse(oldRaw);
+                  if (oldParsed && typeof oldParsed === "object" && oldParsed.personas) {
+                    dataToUse = oldParsed;
+                    idbPutAIMemory("all_data", oldParsed).catch(() => {});
+                  }
+                }
+              } catch (e) {}
+            }
+            try { localStorage.removeItem(AI_STORAGE_KEY); } catch (e) {}
+
+            if (dataToUse && typeof dataToUse === "object" && dataToUse.personas) {
+              memoryAIData = dataToUse;
+              if (dataToUse.companionCharId) companionCharId = dataToUse.companionCharId;
+              if (dataToUse.currentPersonaId) currentPersonaId = dataToUse.currentPersonaId;
+              if (personasData.some(p => p.id === currentPersonaId)) {
+                baseSwitchPersona(currentPersonaId);
+              }
               restoreAllModulesForActiveContext();
               updateAllCapsuleLabels();
             }
@@ -20458,6 +20632,11 @@ ${phoneChatHistory || "（日常传讯往来密切）"}
             } catch (e) {}
           }
           syncCharactersDeepFromPhone(false).then((deepInfo) => {
+            if (memoryAIData && memoryAIData.currentPersonaId && personasData.some(p => p.id === memoryAIData.currentPersonaId)) {
+              if (currentPersonaId !== memoryAIData.currentPersonaId) {
+                switchPersona(memoryAIData.currentPersonaId);
+              }
+            }
             if (window.parent && window.parent !== window) {
               try {
                 window.parent.postMessage({ type: "ACADEMY_BRIDGE_READY", ...(deepInfo || initInfo) }, "*");
