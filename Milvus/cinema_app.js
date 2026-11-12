@@ -408,6 +408,15 @@
       speakingStyle: '第一人称“老夫”或“我”，清冷超然、道骨仙风、言简意赅、充满哲思玄理',
       personality: '隐鸢阁阁主，出尘绝世，寿算不知几何，看淡沧海桑田，唯独将楼主护在心尖',
       background: '道门至尊，守护天下秘宝与天命运转，对楼主亦师亦伴亦护道人。'
+    },
+    {
+      name: '张飞',
+      id: 'zhangfei',
+      mbti: 'ESFP',
+      constellation: '白羊座',
+      speakingStyle: '第一人称自称“俺”或“老张”，粗豪爽朗、直截了当、嗓门宏大、重情重义、心细护短',
+      personality: '勇冠三军、粗中有细、豪迈率真，外表威风凛凛实则心思体贴，极度护短，重诺轻生',
+      background: '幽州名将，随刘备转战天下，于广陵协助防务，喜好烈酒、操练军士与书画相通。'
     }
   ];
 
@@ -478,7 +487,8 @@
         (name.includes('融') && d.name === '傅融') || 
         (name.includes('基') && d.name === '袁基') || 
         (name.includes('策') && d.name === '孙策') || 
-        ((name.includes('慈') || name.includes('师尊')) && d.name === '左慈')
+        ((name.includes('慈') || name.includes('师尊')) && d.name === '左慈') ||
+        (name.includes('飞') && d.name === '张飞')
       ) || {};
 
       let customAvatar = '';

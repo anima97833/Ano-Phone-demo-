@@ -106014,12 +106014,13 @@ ${recentMessages.slice(-50).map((msg) => `${msg.isMe ? "\u6211" : chatData.name}
               {
                 style: {
                   fontSize: "13px",
-                  color: msg.tap ? "#8c8293" : "#8c8293",
+                  color: msg.tap ? "#8c8293" : "#000000",
                   lineHeight: "1.6",
-                  background: msg.tap ? "transparent" : "rgba(255,255,255,0.4)",
+                  background: msg.tap ? "transparent" : "#ffffff",
                   padding: msg.tap ? "0" : "4px 12px",
                   borderRadius: msg.tap ? "0" : "12px",
-                  border: msg.tap ? "none" : "1px solid rgba(0,0,0,0.02)",
+                  border: msg.tap ? "none" : "1px solid rgba(0,0,0,0.06)",
+                  boxShadow: msg.tap ? "none" : "0 1px 2px rgba(0,0,0,0.06)",
                   maxWidth: "85%",
                   cursor: msg.tap ? "default" : "pointer",
                   fontStyle: msg.tap ? "italic" : "normal"
