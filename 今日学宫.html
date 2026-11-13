@@ -6464,26 +6464,26 @@
             <div>
               <div class="dm-status-tag">
                 <span style="width: 6px; height: 6px; border-radius: 50%; background: var(--primary-color);"></span>
-                <span class="dm-editable" contenteditable="false">在斋状态良好</span>
+                <span id="dmStatusText" class="dm-editable" contenteditable="false">在斋状态良好</span>
               </div>
-              <div style="font-size: 20px; font-weight: bold; color: #222; margin-bottom: 6px;" class="dm-editable" contenteditable="false">广陵王，晚上好！</div>
+              <div id="dmGreetingText" style="font-size: 20px; font-weight: bold; color: #222; margin-bottom: 6px;" class="dm-editable" contenteditable="false">广陵王，晚上好！</div>
               <div style="font-size: 12px; color: #666; display: flex; align-items: center; gap: 4px;">
                 <i class="fas fa-map-marker-alt" style="color: var(--primary-color);"></i>
-                <span class="dm-editable" contenteditable="false">万舍一号楼 102 · 1号榻</span>
+                <span id="dmLocationText" class="dm-editable" contenteditable="false">万舍一号楼 102 · 1号榻</span>
               </div>
             </div>
-            <div class="dm-avatar-circle dm-editable" contenteditable="false" title="点击可修改姓氏">广</div>
+            <div id="dmAvatarChar" class="dm-avatar-circle dm-editable" contenteditable="false" title="点击可修改姓氏">广</div>
           </div>
 
           <!-- 102 宿舍空间概览 -->
           <div class="dm-card">
             <div class="dm-section-title">
               <div class="dm-title-left">
-                <span class="dm-editable" contenteditable="false">102 斋舍空间概览</span>
+                <span id="dmOverviewTitle" class="dm-editable" contenteditable="false">102 斋舍空间概览</span>
               </div>
               <div class="dm-score-pill">
                 <span>●</span>
-                <span class="dm-editable" contenteditable="false">内务 优秀 · 92分</span>
+                <span id="dmScorePillText" class="dm-editable" contenteditable="false">内务 优秀 · 92分</span>
               </div>
             </div>
 
@@ -6491,16 +6491,16 @@
               <div style="display: flex; justify-content: space-between; font-size: 11px; color: #888; margin-bottom: 6px;">
                 <span class="dm-editable" contenteditable="false">我的榻位与同窗 (点击切换查看)</span>
                 <span id="dmDoorAccessBtn" style="background: var(--primary-light); color: var(--primary-color); font-weight: bold; padding: 3px 10px; border-radius: 12px; cursor: pointer; border: 1px solid #ffd6d6;" title="点击刷符牒开启斋舍门禁">
-                  <i class="fas fa-door-open"></i> <span class="dm-editable" contenteditable="false">乾字斋 · 刷符牒门禁</span>
+                  <i class="fas fa-door-open"></i> <span id="dmDoorAccessText" class="dm-editable" contenteditable="false">乾字斋 · 刷符牒门禁</span>
                 </span>
               </div>
               <div id="dmBedListContainer"></div>
 
               <!-- 适度增添：斋舍雅室环境微件 -->
               <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 10px; border-top: 1px dashed #e2e8f0; font-size: 11px; color: #64748b;">
-                <span><i class="fas fa-bolt" style="color: #f59e0b; margin-right: 4px;"></i>剩余烛火度：<b class="dm-editable" contenteditable="false" style="color: #333;">86.5 度</b></span>
+                <span><i class="fas fa-bolt" style="color: #f59e0b; margin-right: 4px;"></i>剩余烛火度：<b id="dmCandlePowerText" class="dm-editable" contenteditable="false" style="color: #333;">86.5 度</b></span>
                 <span id="dmLightRemindBtn" style="color: var(--primary-color); cursor: pointer; font-weight: bold;">
-                  <i class="fas fa-moon"></i> <span class="dm-editable" contenteditable="false">亥时三刻熄烛</span>
+                  <i class="fas fa-moon"></i> <span id="dmCurfewRemindText" class="dm-editable" contenteditable="false">亥时三刻熄烛</span>
                 </span>
               </div>
             </div>
@@ -6553,7 +6553,7 @@
                 <i class="fas fa-exchange-alt" style="color: #10b981; font-size: 12px;"></i>
               </div>
               <div style="font-size: 17px; font-weight: bold; color: #222; margin-bottom: 4px;" class="dm-editable" id="dmTransferStatusText" contenteditable="false">通过</div>
-              <div style="font-size: 11px; color: #666;" class="dm-editable" contenteditable="false">万舍一号楼 102</div>
+              <div id="dmTransferLocText" style="font-size: 11px; color: #666;" class="dm-editable" contenteditable="false">万舍一号楼 102</div>
             </div>
 
             <div class="dm-card" style="margin-bottom: 0; cursor: pointer;" id="dmHygieneCardBtn">
@@ -6562,10 +6562,10 @@
                 <i class="far fa-star" style="color: #f59e0b; font-size: 13px;"></i>
               </div>
               <div style="display: flex; align-items: center; gap: 6px; margin-bottom: 4px;">
-                <span style="font-size: 17px; font-weight: bold; color: #10b981;" class="dm-editable" contenteditable="false">92分</span>
-                <span style="background: #e6f9f0; color: #10b981; font-size: 10px; padding: 1px 6px; border-radius: 6px; font-weight: bold;" class="dm-editable" contenteditable="false">优秀</span>
+                <span id="dmHygieneScoreText" style="font-size: 17px; font-weight: bold; color: #10b981;" class="dm-editable" contenteditable="false">92分</span>
+                <span id="dmHygieneGradeText" style="background: #e6f9f0; color: #10b981; font-size: 10px; padding: 1px 6px; border-radius: 6px; font-weight: bold;" class="dm-editable" contenteditable="false">优秀</span>
               </div>
-              <div style="font-size: 11px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" class="dm-editable" contenteditable="false">内务整齐，书案洁净。</div>
+              <div id="dmHygieneCommentText" style="font-size: 11px; color: #666; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;" class="dm-editable" contenteditable="false">内务整齐，书案洁净。</div>
             </div>
           </div>
         </div>
@@ -6591,6 +6591,12 @@
             </div>
             <button id="dmSubmitRepairBtn" class="publish-footer-btn" style="background: var(--primary-color); color: #fff;">提交修缮工单</button>
           </div>
+          <div class="dm-card" style="margin-top: 12px;">
+            <div class="dm-section-title">
+              <div class="dm-title-left"><span>待办修缮与历史报修单（点击填入草稿）</span></div>
+            </div>
+            <div id="dmRepairRecordsContainer"></div>
+          </div>
         </div>
 
         <!-- 视图3：调宿申请子页 -->
@@ -6609,6 +6615,12 @@
             </div>
             <button id="dmSubmitTransferBtn" class="publish-footer-btn" style="background: #10b981; color: #fff;">提交迁斋申请</button>
           </div>
+          <div class="dm-card" style="margin-top: 12px;">
+            <div class="dm-section-title">
+              <div class="dm-title-left"><span>推荐空斋与迁调记录（点击填入意向）</span></div>
+            </div>
+            <div id="dmTransferRecordsContainer"></div>
+          </div>
         </div>
 
         <!-- 视图4：卫生台账与我的住宿档案 -->
@@ -6617,20 +6629,7 @@
             <div class="dm-section-title">
               <div class="dm-title-left"><span>历次内务评定台账</span></div>
             </div>
-            <div style="padding: 10px 0; border-bottom: 1px solid #f1f5f9; display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <div style="font-weight: bold; font-size: 14px;" class="dm-editable" contenteditable="false">第12周 斋舍大检</div>
-                <div style="font-size: 12px; color: #888; margin-top: 2px;" class="dm-editable" contenteditable="false">评语：内务整齐，垃圾桶已清，书卷归位。</div>
-              </div>
-              <span style="color: #10b981; font-weight: bold; font-size: 16px;" class="dm-editable" contenteditable="false">92分</span>
-            </div>
-            <div style="padding: 10px 0; display: flex; justify-content: space-between; align-items: center;">
-              <div>
-                <div style="font-weight: bold; font-size: 14px;" class="dm-editable" contenteditable="false">第11周 斋舍大检</div>
-                <div style="font-size: 12px; color: #888; margin-top: 2px;" class="dm-editable" contenteditable="false">评语：轩窗明净，茶具摆放有序。</div>
-              </div>
-              <span style="color: #10b981; font-weight: bold; font-size: 16px;" class="dm-editable" contenteditable="false">95分</span>
-            </div>
+            <div id="dmHygieneLogsContainer"></div>
           </div>
         </div>
       </div>
@@ -7564,6 +7563,14 @@
           </div>
         </div>
         <div id="stMyClubsContainer"></div>
+
+        <!-- 5. 社团公告栏 -->
+        <div class="st-section-bar" style="margin-top: 18px;">
+          <div class="ab-sec-title">
+            <span class="st-editable" contenteditable="false">社团公告</span>
+          </div>
+        </div>
+        <div id="stClubNoticesContainer"></div>
       </div>
     </div>
 
@@ -8653,7 +8660,7 @@
             editBtn.title = "自定义编辑";
           }
 
-          document.getElementById("detailChangeImgBtn").style.display = "none";
+          document.getElementById("detailChangeImgBtn").style.display = "inline-flex";
           ["detailTitle", "detailDesc", "detailTag", "detailTime"].forEach(id => {
             const el = document.getElementById(id);
             if (el) {
@@ -8748,13 +8755,23 @@
           }
         });
 
+        const detailImgEl = document.getElementById("detailImg");
+        if (detailImgEl) {
+          detailImgEl.style.cursor = "pointer";
+          detailImgEl.title = "点击更换配图";
+          detailImgEl.addEventListener("click", () => {
+            document.getElementById("detailChangeImgBtn")?.click();
+          });
+        }
+
         document.getElementById("detailChangeImgBtn")?.addEventListener("click", () => {
           if (!currentOpenFeedItem) return;
           pickImageSource((newSrc) => {
             currentOpenFeedItem.img = newSrc;
             document.getElementById("detailImg").src = newSrc;
             renderFeed();
-            showToast("详情配图已更换！");
+            persistFeedCommentsUpdate();
+            showToast("详情配图已更换并保存！");
           });
         });
 
@@ -10684,11 +10701,15 @@
           comments.forEach((comment) => {
             const commentElement = document.createElement("div");
             commentElement.className = "comment-item";
+            const avatarStyle = comment.avatar ? `background-image:url('${comment.avatar}'); background-size:cover; background-position:center;` : "";
+            const badgeHtml = comment.userType === "character"
+              ? `<span style="font-size:9.5px; color:white; background:linear-gradient(135deg, #c2410c, #b93838); padding:1px 5px; border-radius:6px; margin-left:4px; font-weight:normal;">名士</span>`
+              : (comment.userType === "student" ? `<span style="font-size:9.5px; color:#666; background:#eef0f3; padding:1px 5px; border-radius:6px; margin-left:4px; font-weight:normal;">辟雍同窗</span>` : "");
             commentElement.innerHTML = `
               <div class="comment-user" style="justify-content:space-between;">
                 <div style="display:flex; align-items:center;">
-                  <div class="comment-user-avatar"></div>
-                  <div class="comment-username" contenteditable="true">${comment.user}</div>
+                  <div class="comment-user-avatar" style="${avatarStyle}"></div>
+                  <div class="comment-username" contenteditable="true">${comment.user} ${badgeHtml}</div>
                   <div class="comment-time" contenteditable="true">${comment.time}</div>
                 </div>
                 <button class="card-action-btn delete del-cmt-btn" data-id="${comment.id}">删除</button>
@@ -10731,9 +10752,12 @@
         function sendComment() {
           const content = commentInput.value.trim();
           if (!content) return;
+          const curP = (typeof getCurrentPersona === "function" ? getCurrentPersona() : null) || { name: "广陵王" };
           const newComment = {
             id: Date.now(),
-            user: document.getElementById("mineUserName")?.innerText.trim() || "广陵王",
+            user: curP.name || document.getElementById("mineUserName")?.innerText.trim() || "广陵王",
+            userType: "user",
+            avatar: curP.avatar || "",
             content: content,
             time: "刚刚",
             likes: 0
@@ -10743,6 +10767,17 @@
           loadComments(currentPostId);
           commentInput.value = "";
           updatePostComments(currentPostId, 1);
+          if (typeof getModuleAIData === "function" && typeof saveModuleAIData === "function") {
+            const savedAcademy = getModuleAIData("academy");
+            if (savedAcademy && Array.isArray(savedAcademy.items)) {
+              const targetPost = savedAcademy.items.find((it, idx) => (9600 + idx === currentPostId || it.id === currentPostId));
+              if (targetPost) {
+                targetPost.commentList = postComments[currentPostId];
+                targetPost.comments = postComments[currentPostId].length;
+                saveModuleAIData("academy", savedAcademy);
+              }
+            }
+          }
           showToast("评论已发送");
         }
 
@@ -13257,6 +13292,57 @@
           }
         ];
 
+        let dmProfileData = {
+          greeting: "广陵王，晚上好！",
+          statusText: "在斋状态良好",
+          avatarChar: "广",
+          buildingRoom: "万舍一号楼 102 · 1号榻",
+          defaultRoom: "一号楼 102",
+          overviewTitle: "102 斋舍空间概览",
+          scoreLabel: "内务 优秀 · 92分",
+          doorAccessLabel: "乾字斋 · 刷符牒门禁",
+          candlePower: "86.5 度",
+          curfewRemind: "亥时三刻熄烛",
+          transferStatus: "通过",
+          transferLocation: "万舍一号楼 102",
+          hygieneScore: "92分",
+          hygieneGrade: "优秀",
+          hygieneComment: "内务整齐，书案洁净。"
+        };
+
+        let dmRepairRecordsData = [
+          { id: 1, type: "门窗锁具", desc: "东侧轩窗插销微松，夜风入室微凉。", status: "待报修", time: "今日申时" },
+          { id: 2, type: "灯烛电路", desc: "书案铜灯灯油将尽，请补充灯油与烛芯。", status: "已受理", time: "昨日酉时" }
+        ];
+
+        let dmTransferRecordsData = [
+          { id: 1, target: "竹林二号楼 204 · 3号榻", reason: "近兰台藏书阁，便于夜间研读。", status: "可申请", tag: "空榻推荐" },
+          { id: 2, target: "万舍一号楼 102 · 1号榻", reason: "原斋舍朝向佳且同窗融洽，暂维持现状。", status: "通过", tag: "当前审批" }
+        ];
+
+        let dmHygieneLogsData = [
+          { weekTitle: "第12周 斋舍大检", comment: "评语：内务整齐，垃圾桶已清，书卷归位。", score: "92分" },
+          { weekTitle: "第11周 斋舍大检", comment: "评语：轩窗明净，茶具摆放有序。", score: "95分" }
+        ];
+
+        function persistDormSystemAIData() {
+          try {
+            if (typeof getActiveCharId === "function" && typeof loadModuleAIData === "function" && typeof saveModuleAIData === "function") {
+              const charId = getActiveCharId();
+              if (!charId) return;
+              loadModuleAIData("dormSystem", charId).then(existing => {
+                if (!existing) return;
+                existing.profile = JSON.parse(JSON.stringify(dmProfileData));
+                existing.repairRecords = JSON.parse(JSON.stringify(dmRepairRecordsData));
+                existing.transferRecords = JSON.parse(JSON.stringify(dmTransferRecordsData));
+                existing.hygieneLogs = JSON.parse(JSON.stringify(dmHygieneLogsData));
+                existing.items = JSON.parse(JSON.stringify(dmOrdersData));
+                saveModuleAIData("dormSystem", charId, existing);
+              }).catch(() => {});
+            }
+          } catch (e) {}
+        }
+
         function saveDmDomToData() {
           document.querySelectorAll("#dmBedListContainer .dm-bed-card").forEach(el => {
             const id = parseInt(el.dataset.id);
@@ -13385,6 +13471,91 @@
             orderContainer.appendChild(card);
           });
 
+          // 3. 同步顶部问候、斋舍概览与底部双卡片
+          const setTxt = (id, val) => { const el = document.getElementById(id); if (el && val !== undefined) el.innerText = val; };
+          setTxt("dmStatusText", dmProfileData.statusText);
+          setTxt("dmGreetingText", dmProfileData.greeting);
+          setTxt("dmLocationText", dmProfileData.buildingRoom);
+          setTxt("dmAvatarChar", dmProfileData.avatarChar);
+          setTxt("dmOverviewTitle", dmProfileData.overviewTitle);
+          setTxt("dmScorePillText", dmProfileData.scoreLabel);
+          setTxt("dmDoorAccessText", dmProfileData.doorAccessLabel);
+          setTxt("dmCandlePowerText", dmProfileData.candlePower);
+          setTxt("dmCurfewRemindText", dmProfileData.curfewRemind);
+          setTxt("dmTransferStatusText", dmProfileData.transferStatus);
+          setTxt("dmTransferLocText", dmProfileData.transferLocation);
+          setTxt("dmHygieneScoreText", dmProfileData.hygieneScore);
+          setTxt("dmHygieneGradeText", dmProfileData.hygieneGrade);
+          setTxt("dmHygieneCommentText", dmProfileData.hygieneComment);
+
+          // 4. 渲染修缮记录/推荐单
+          const repContainer = document.getElementById("dmRepairRecordsContainer");
+          if (repContainer) {
+            repContainer.innerHTML = "";
+            (dmRepairRecordsData || []).forEach(rec => {
+              const row = document.createElement("div");
+              row.style.cssText = "padding:10px 0; border-bottom:1px solid #f1f5f9; cursor:pointer;";
+              row.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <span style="font-weight:bold; font-size:13px; color:#222;">[${rec.type}]</span>
+                  <span style="font-size:11px; color:var(--primary-color); font-weight:bold;">${rec.status || "待处理"} · ${rec.time || "近期"}</span>
+                </div>
+                <div style="font-size:12px; color:#666; line-height:1.5;">${rec.desc}</div>
+              `;
+              row.addEventListener("click", () => {
+                const sel = document.getElementById("dmRepairTypeInput");
+                const txt = document.getElementById("dmRepairDescInput");
+                if (sel && Array.from(sel.options).some(o => o.value === rec.type)) sel.value = rec.type;
+                if (txt) txt.value = rec.desc || "";
+                showToast("已填入修缮草稿，可直接修改或提交");
+              });
+              repContainer.appendChild(row);
+            });
+          }
+
+          // 5. 渲染迁斋推荐与申请记录
+          const trContainer = document.getElementById("dmTransferRecordsContainer");
+          if (trContainer) {
+            trContainer.innerHTML = "";
+            (dmTransferRecordsData || []).forEach(tr => {
+              const row = document.createElement("div");
+              row.style.cssText = "padding:10px 0; border-bottom:1px solid #f1f5f9; cursor:pointer;";
+              row.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <span style="font-weight:bold; font-size:13px; color:#222;">${tr.target}</span>
+                  <span style="font-size:11px; color:#10b981; font-weight:bold;">${tr.tag || "推荐"} · ${tr.status || "可申请"}</span>
+                </div>
+                <div style="font-size:12px; color:#666; line-height:1.5;">${tr.reason}</div>
+              `;
+              row.addEventListener("click", () => {
+                const inp = document.getElementById("dmTransferTargetInput");
+                const rsn = document.getElementById("dmTransferReasonInput");
+                if (inp) inp.value = tr.target || "";
+                if (rsn) rsn.value = tr.reason || "";
+                showToast("已填入迁斋意向，可直接修改或提交");
+              });
+              trContainer.appendChild(row);
+            });
+          }
+
+          // 6. 渲染卫生评定台账
+          const hygContainer = document.getElementById("dmHygieneLogsContainer");
+          if (hygContainer) {
+            hygContainer.innerHTML = "";
+            (dmHygieneLogsData || []).forEach(log => {
+              const row = document.createElement("div");
+              row.style.cssText = "padding:10px 0; border-bottom:1px solid #f1f5f9; display:flex; justify-content:space-between; align-items:center; gap:10px;";
+              row.innerHTML = `
+                <div style="flex:1; min-width:0;">
+                  <div style="font-weight:bold; font-size:14px;" class="dm-editable" ${editAttr}>${log.weekTitle}</div>
+                  <div style="font-size:12px; color:#888; margin-top:2px;" class="dm-editable" ${editAttr}>${log.comment}</div>
+                </div>
+                <span style="color:#10b981; font-weight:bold; font-size:16px; white-space:nowrap;" class="dm-editable" ${editAttr}>${log.score}</span>
+              `;
+              hygContainer.appendChild(row);
+            });
+          }
+
           // 更新未完工角标
           const pendingCount = dmOrdersData.filter(o => o.step < 3).length;
           document.getElementById("dmRepairBadge").innerText = pendingCount;
@@ -13424,10 +13595,14 @@
             id: Date.now(),
             type: desc ? `${type} (${desc.slice(0, 8)})` : type,
             code: "BX" + Date.now(),
-            room: "一号楼 102",
+            room: dmProfileData.defaultRoom || "一号楼 102",
             step: 1
           });
+          if (desc) {
+            dmRepairRecordsData.unshift({ id: Date.now(), type, desc, status: "待处理", time: "刚刚" });
+          }
           document.getElementById("dmRepairDescInput").value = "";
+          persistDormSystemAIData();
           renderDormSystemAll();
           switchDmSubview("home");
           showToast("修缮工单已提交，可在首页点击步骤切换进度！");
@@ -13436,7 +13611,12 @@
         // 提交调宿申请
         document.getElementById("dmSubmitTransferBtn")?.addEventListener("click", () => {
           const target = document.getElementById("dmTransferTargetInput").value.trim() || "二号楼 204";
-          document.getElementById("dmTransferStatusText").innerText = "审核中";
+          const reason = document.getElementById("dmTransferReasonInput").value.trim() || "作息协调";
+          dmProfileData.transferStatus = "审核中";
+          dmProfileData.transferLocation = target;
+          dmTransferRecordsData.unshift({ id: Date.now(), target, reason, status: "审核中", tag: "新提交" });
+          persistDormSystemAIData();
+          renderDormSystemAll();
           switchDmSubview("home");
           showToast(`已提交迁往「${target}」的申请`);
         });
@@ -15775,7 +15955,9 @@
             id: 101,
             name: "文学社",
             slogan: "一起读书，分享热爱",
+            icon: "fa-feather-alt",
             members: 86,
+            memberComposition: "太学诗赋生为主，兼有数名乐府同窗",
             president: "清河小崔",
             joined: true,
             intro: "研习汉魏风骨与诗词策论，每旬举办一次读书品茗沙龙。"
@@ -15784,12 +15966,48 @@
             id: 102,
             name: "洛南茗社",
             slogan: "以茶为媒，以道为契",
+            icon: "fa-mug-hot",
             members: 64,
+            memberComposition: "诸院雅士及好茶同窗",
             president: "碧螺春",
             joined: true,
             intro: "习茶礼、辨水品，共赴清集。"
           }
         ];
+
+        // 预设社团公告数据
+        let stClubNoticesData = [
+          {
+            id: 201,
+            club: "文学社",
+            title: "冬至诗会征稿启事",
+            time: "今日辰时",
+            content: "本周六杏坛东亭举办冬至诗会，请已报名同窗自备咏雪诗稿一篇。"
+          },
+          {
+            id: 202,
+            club: "洛南茗社",
+            title: "新茶品鉴席位调整通知",
+            time: "昨日申时",
+            content: "因堂内席位有限，本次茶会仅限前20名已留席同窗入内，请准时赴约。"
+          }
+        ];
+
+        function persistClubActivityAIData() {
+          try {
+            if (typeof getActiveCharId === "function" && typeof loadModuleAIData === "function" && typeof saveModuleAIData === "function") {
+              const charId = getActiveCharId();
+              if (!charId) return;
+              loadModuleAIData("clubActivity", charId).then(existing => {
+                if (!existing) return;
+                existing.items = JSON.parse(JSON.stringify(stActivitiesData));
+                existing.clubs = JSON.parse(JSON.stringify(stMyClubsData));
+                existing.notices = JSON.parse(JSON.stringify(stClubNoticesData));
+                saveModuleAIData("clubActivity", charId, existing);
+              }).catch(() => {});
+            }
+          } catch (e) {}
+        }
 
         function saveStDomToData() {
           document.querySelectorAll("#stHotActivitiesContainer .st-act-card").forEach(card => {
@@ -15852,6 +16070,7 @@
                     <div class="st-act-meta">
                       <i class="fas fa-map-marker-alt"></i>
                       <span class="st-a-loc ${editClass}" ${editAttr}>${act.location}</span>
+                      <span style="margin-left:8px; color:var(--primary-color); font-weight:500;">· ${act.signedCount ?? 12}/${act.capacity ?? 30}人</span>
                     </div>
                   </div>
                   <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 6px;">
@@ -15864,19 +16083,24 @@
                 card.querySelector(".st-status-btn").addEventListener("click", (e) => {
                   e.stopPropagation();
                   if (stIsEditing) return; // 编辑模式下允许直接改按钮文字
+                  const cap = Number(act.capacity) || 30;
+                  let cnt = Number(act.signedCount ?? 12);
                   if (act.statusKey === "open") {
                     act.statusKey = "joined";
                     act.statusText = "已报名";
+                    act.signedCount = Math.min(cap, cnt + 1);
                     showToast(`已成功报名「${act.title}」！`);
                   } else if (act.statusKey === "joined") {
                     act.statusKey = "open";
                     act.statusText = "报名中";
+                    act.signedCount = Math.max(0, cnt - 1);
                     showToast(`已取消报名「${act.title}」`);
                   } else {
                     act.statusKey = "open";
                     act.statusText = "报名中";
                     showToast(`「${act.title}」已开启报名通道！`);
                   }
+                  persistClubActivityAIData();
                   renderClubActivityAll();
                 });
 
@@ -15912,11 +16136,12 @@
               card.innerHTML = `
                 <div style="display: flex; align-items: center; gap: 14px; flex: 1; min-width: 0;">
                   <div class="st-club-avatar">
-                    <i class="fas fa-users"></i>
+                    ${club.icon && club.icon.startsWith("fa-") ? `<i class="fas ${club.icon}"></i>` : (club.icon ? `<span style="font-size:20px;">${club.icon}</span>` : `<i class="fas fa-users"></i>`)}
                   </div>
                   <div style="flex: 1; min-width: 0;">
                     <div style="font-size: 16px; font-weight: bold; color: #2d2a38; margin-bottom: 4px;" class="st-c-name ${editClass}" ${editAttr}>${club.name}</div>
                     <div style="font-size: 12px; color: #8a8899;" class="st-c-slogan ${editClass}" ${editAttr}>${club.slogan}</div>
+                    ${club.memberComposition ? `<div style="font-size: 11px; color: var(--primary-color); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${club.memberComposition}</div>` : ""}
                   </div>
                 </div>
                 <div style="display: flex; align-items: center; gap: 6px;">
@@ -15943,6 +16168,28 @@
               clubContainer.appendChild(card);
             });
           }
+
+          // 3. 渲染社团公告
+          const noticeContainer = document.getElementById("stClubNoticesContainer");
+          if (noticeContainer) {
+            noticeContainer.innerHTML = "";
+            if (!stClubNoticesData || stClubNoticesData.length === 0) {
+              noticeContainer.innerHTML = `<div style="text-align:center; padding:16px; color:#9693a6; font-size:12px;">暂无社团公告</div>`;
+            } else {
+              stClubNoticesData.forEach(n => {
+                const nCard = document.createElement("div");
+                nCard.style.cssText = "background:#fff; border-radius:12px; padding:12px 14px; margin-bottom:10px; box-shadow:0 2px 8px rgba(0,0,0,0.03); border-left:3px solid var(--primary-color);";
+                nCard.innerHTML = `
+                  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                    <span style="font-size:13px; font-weight:bold; color:#2d2a38;">[${n.club || "社团"}] ${n.title}</span>
+                    <span style="font-size:11px; color:#9693a6;">${n.time || "近期"}</span>
+                  </div>
+                  <div style="font-size:12px; color:#666; line-height:1.5;">${n.content}</div>
+                `;
+                noticeContainer.appendChild(nCard);
+              });
+            }
+          }
         }
 
         // 打开单个活动详情与报名弹窗
@@ -15958,29 +16205,61 @@
                 <div><b>【举办日期】</b>${act.month}${act.day}日 (${act.week}) ${act.time}</div>
                 <div><b>【活动地点】</b>${act.location}</div>
                 <div><b>【主办社团】</b>${act.club || "学宫社团联合会"}</div>
+                <div><b>【名额统计】</b>已报名 <span style="color:var(--primary-color); font-weight:bold;">${act.signedCount ?? 12} / ${act.capacity ?? 30}</span> 人</div>
+                ${Array.isArray(act.participants) && act.participants.length ? `<div><b>【已报名同窗】</b>${act.participants.join("、")}</div>` : ""}
                 <div><b>【当前状态】</b><span style="color:var(--primary-color); font-weight:bold;">${act.statusText}</span></div>
               </div>
             </div>
-            <div style="font-size:13px; color:#555; line-height:1.7; margin-bottom:18px;">
+            <div style="font-size:13px; color:#555; line-height:1.7; margin-bottom:16px;">
               <b>【活动详情】</b>${act.desc || "丰富学宫课余生活，欢迎诸生踊跃参与。"}
             </div>
-            <button id="stModalJoinToggleBtn" class="publish-footer-btn" style="background:${act.statusKey === 'joined' ? '#f0f2f5' : 'var(--primary-color)'}; color:${act.statusKey === 'joined' ? '#666' : '#fff'}; border-radius:20px;">
+            <button id="stModalJoinToggleBtn" class="publish-footer-btn" style="background:${act.statusKey === 'joined' ? '#f0f2f5' : 'var(--primary-color)'}; color:${act.statusKey === 'joined' ? '#666' : '#fff'}; border-radius:20px; margin-bottom:16px;">
               ${act.statusKey === 'joined' ? '已报名 · 点击取消报名' : '立即报名参加'}
             </button>
+            <div style="border-top:1px solid #eee; padding-top:14px;">
+              <div style="font-size:13px; font-weight:bold; color:#2d2a38; margin-bottom:10px;">活动讨论区</div>
+              <div id="stActCommentsList" style="max-height:180px; overflow-y:auto; margin-bottom:10px;">
+                ${(Array.isArray(act.comments) && act.comments.length) ? act.comments.map(c => `
+                  <div style="background:#f8f7fc; padding:8px 10px; border-radius:10px; margin-bottom:8px; font-size:12px;">
+                    <span style="font-weight:bold; color:var(--primary-color);">${c.author || "同窗"}${c.role ? `（${c.role}）` : ""}：</span>
+                    <span style="color:#444;">${c.text}</span>
+                  </div>
+                `).join("") : `<div style="font-size:12px; color:#9693a6; text-align:center; padding:8px;">暂无讨论，快来抢占沙发~</div>`}
+              </div>
+              <div style="display:flex; gap:8px;">
+                <input id="stActCommentInput" type="text" placeholder="写下你的期待或提问..." style="flex:1; padding:8px 12px; border:1px solid #e2e0ec; border-radius:18px; font-size:12px; outline:none;" />
+                <button id="stActCommentSendBtn" style="padding:8px 14px; background:var(--primary-color); color:#fff; border:none; border-radius:18px; font-size:12px; cursor:pointer;">发送</button>
+              </div>
+            </div>
           `;
 
           document.getElementById("stModalJoinToggleBtn").addEventListener("click", () => {
+            const cap = Number(act.capacity) || 30;
+            let cnt = Number(act.signedCount ?? 12);
             if (act.statusKey === "joined") {
               act.statusKey = "open";
               act.statusText = "报名中";
+              act.signedCount = Math.max(0, cnt - 1);
               showToast("已取消报名");
             } else {
               act.statusKey = "joined";
               act.statusText = "已报名";
+              act.signedCount = Math.min(cap, cnt + 1);
               showToast(`报名成功！请准时前往${act.location}`);
             }
+            persistClubActivityAIData();
             renderClubActivityAll();
             document.getElementById("stSubModal").classList.remove("show");
+          });
+
+          document.getElementById("stActCommentSendBtn").addEventListener("click", () => {
+            const inp = document.getElementById("stActCommentInput");
+            const txt = (inp?.value || "").trim();
+            if (!txt) return;
+            if (!Array.isArray(act.comments)) act.comments = [];
+            act.comments.push({ author: "我", role: "太学生", text: txt });
+            persistClubActivityAIData();
+            openStActDetailModal(act.id);
           });
 
           document.getElementById("stSubModal").classList.add("show");
@@ -15995,12 +16274,13 @@
           body.innerHTML = `
             <div style="display:flex; align-items:center; gap:14px; background:#f8f7fc; padding:16px; border-radius:14px; margin-bottom:16px;">
               <div class="st-club-avatar" style="width:56px; height:56px; font-size:26px;">
-                <i class="fas fa-users"></i>
+                ${club.icon && club.icon.startsWith("fa-") ? `<i class="fas ${club.icon}"></i>` : (club.icon ? `<span>${club.icon}</span>` : `<i class="fas fa-users"></i>`)}
               </div>
               <div>
                 <div style="font-size:18px; font-weight:bold; color:#2d2a38;">${club.name}</div>
                 <div style="font-size:12px; color:#8a8899; margin-top:2px;">${club.slogan}</div>
                 <div style="font-size:11px; color:var(--primary-color); margin-top:4px;">社长：${club.president || '广陵王'} · 社员 ${club.members || 50} 人</div>
+                ${club.memberComposition ? `<div style="font-size:11px; color:#666; margin-top:2px;">成员构成：${club.memberComposition}</div>` : ""}
               </div>
             </div>
             <div style="font-size:13px; color:#555; line-height:1.7; margin-bottom:18px;">
@@ -18109,6 +18389,7 @@
             feedData: JSON.parse(JSON.stringify(feedData)),
             academyHot: JSON.parse(JSON.stringify(academyPosts.hot)),
             academyNew: JSON.parse(JSON.stringify(academyPosts.new)),
+            postComments: JSON.parse(JSON.stringify(postComments)),
             mineBillsData: JSON.parse(JSON.stringify(mineBillsData)),
             mineFavsData: JSON.parse(JSON.stringify(mineFavsData)),
             kkExamsData: JSON.parse(JSON.stringify(kkExamsData)),
@@ -18120,6 +18401,10 @@
             abNoticesData: JSON.parse(JSON.stringify(abNoticesData)),
             dmBedsData: JSON.parse(JSON.stringify(dmBedsData)),
             dmOrdersData: JSON.parse(JSON.stringify(dmOrdersData)),
+            dmProfileData: JSON.parse(JSON.stringify(dmProfileData)),
+            dmRepairRecordsData: JSON.parse(JSON.stringify(dmRepairRecordsData)),
+            dmTransferRecordsData: JSON.parse(JSON.stringify(dmTransferRecordsData)),
+            dmHygieneLogsData: JSON.parse(JSON.stringify(dmHygieneLogsData)),
             erRoomsData: JSON.parse(JSON.stringify(erRoomsData)),
             mcRoutesData: JSON.parse(JSON.stringify(mcRoutesData)),
             mcRideRecords: JSON.parse(JSON.stringify(mcRideRecords)),
@@ -18127,6 +18412,7 @@
             pjCoursesData: JSON.parse(JSON.stringify(pjCoursesData)),
             stActivitiesData: JSON.parse(JSON.stringify(stActivitiesData)),
             stMyClubsData: JSON.parse(JSON.stringify(stMyClubsData)),
+            stClubNoticesData: JSON.parse(JSON.stringify(stClubNoticesData)),
             wjSurveysData: JSON.parse(JSON.stringify(wjSurveysData)),
             wjFillRecordsData: JSON.parse(JSON.stringify(wjFillRecordsData)),
             groupActivities: JSON.parse(JSON.stringify(groupActivities))
@@ -18911,6 +19197,7 @@
               body: JSON.stringify({
                 model: config.model || "gpt-4o-mini",
                 messages,
+                stream: false,
                 temperature: temp
               })
             });
@@ -18918,7 +19205,30 @@
               const errTxt = await res.text();
               throw new Error(`API Error ${res.status}: ${errTxt.slice(0, 120)}`);
             }
-            const data = await res.json();
+            const rawBody = await res.text();
+            const cleanBody = rawBody
+              .split(/\r?\n/)
+              .filter(line => !line.trim().startsWith(":"))
+              .join("\n")
+              .trim();
+            if (cleanBody.startsWith("data:")) {
+              let streamedText = "";
+              for (const line of cleanBody.split(/\r?\n/)) {
+                const trimmed = line.trim();
+                if (!trimmed.startsWith("data:")) continue;
+                const payloadStr = trimmed.slice(5).trim();
+                if (!payloadStr || payloadStr === "[DONE]") continue;
+                try {
+                  const chunk = JSON.parse(payloadStr);
+                  streamedText += chunk.choices?.[0]?.delta?.content || chunk.choices?.[0]?.message?.content || "";
+                } catch (e) {}
+              }
+              return streamedText;
+            }
+            const firstBrace = cleanBody.indexOf("{");
+            const lastBrace = cleanBody.lastIndexOf("}");
+            const jsonStr = (firstBrace !== -1 && lastBrace > firstBrace) ? cleanBody.slice(firstBrace, lastBrace + 1) : cleanBody;
+            const data = JSON.parse(jsonStr);
             return data.choices?.[0]?.message?.content || "";
           }
 
@@ -18936,7 +19246,47 @@
               const repaired = cleaned
                 .replace(/,\s*([\]}])/g, "$1")
                 .replace(/[\r\n]+/g, " ");
-              return JSON.parse(repaired);
+              try {
+                return JSON.parse(repaired);
+              } catch (e2) {
+                // 智能修复字符串内部未转义的英文双引号
+                let out = "";
+                let inStr = false;
+                let esc = false;
+                for (let i = 0; i < repaired.length; i++) {
+                  const ch = repaired[i];
+                  if (esc) {
+                    out += ch;
+                    esc = false;
+                    continue;
+                  }
+                  if (ch === "\\") {
+                    out += ch;
+                    esc = true;
+                    continue;
+                  }
+                  if (ch === '"') {
+                    if (!inStr) {
+                      inStr = true;
+                      out += ch;
+                    } else {
+                      // 判断后面是否是合法的 JSON 分隔符 (: , } ])
+                      let j = i + 1;
+                      while (j < repaired.length && /\s/.test(repaired[j])) j++;
+                      const nextCh = repaired[j];
+                      if (!nextCh || nextCh === "," || nextCh === "}" || nextCh === "]" || nextCh === ":") {
+                        inStr = false;
+                        out += ch;
+                      } else {
+                        out += '”';
+                      }
+                    }
+                  } else {
+                    out += ch;
+                  }
+                }
+                return JSON.parse(out);
+              }
             }
           }
 
@@ -18995,6 +19345,51 @@
                 <div class="academy-ai-note-text">${bannerData.bannerNote}</div>
               </div>
             `;
+          }
+
+                    // 构造学宫圈「议题驱动 · 全名士群像朋友圈与神评修罗场」专用上下文
+          function getAcademyModuleSpecialPrompt(character, activePersona, stage) {
+            const topicTitleEl = document.getElementById("academyTopicTitle");
+            const rawTopicText = topicTitleEl ? topicTitleEl.innerText.trim() : "";
+            const isCustomTopic = rawTopicText && !rawTopicText.includes("期末周") && !rawTopicText.includes("射策真的学不动了");
+
+            const allChars = (cachedPhoneCharacters && cachedPhoneCharacters.length > 0)
+              ? cachedPhoneCharacters
+              : (typeof DEFAULT_LEAD_CHARACTERS !== "undefined" ? DEFAULT_LEAD_CHARACTERS : []);
+
+            const charsProfilesStr = allChars.map((c, i) => [
+              `★ 候选名士 ${i + 1}：${c.name} (ID: ${c.id})`,
+              `- MBTI 性格类型：${c.mbti || "ENFP"}`,
+              `- 星座：${c.constellation || "水象/风象"}`,
+              `- 语言风格与专属口癖：${c.speakingStyle || "第一人称独特口吻"}`,
+              `- 性格特点：${c.personality || "个性鲜明"}`,
+              `- 个人背景与太学身份：${c.background || "辟雍太学名士"}（院系身份：${c.academyMajor || "辟雍名士"}）`
+            ].join("\n")).join("\n\n");
+
+            const topicGuidance = isCustomTopic
+              ? `【用户已锁定的学宫圈核心议题/Tag】：\n  * 核心议题：“${rawTopicText}”（用户已在学宫圈指定该核心议题，所有名士发布的动态与评论区互掐必须紧扣该话题！保留在 topicTitle 字段）`
+              : `【热点议题生成要求】：\n  * 请结合世界书与东汉辟雍太学校园背景，由你首先提炼出 1 个兼具古风与校园抓马感的大热点事件标题（如：#常满仓冬至宴争夺战#、#博士官寺经学月考泄题疑云#、#骑射校场惊现白鹄烈马#、#兰台夜半琴声巡夜谜案#、#太学膳堂枣糕保卫战#等），填入 "topicTitle" 字段；\n  * 同时在 "topicStats" 中生成合理的校园热度数据（heat 如"3.8万"，discuss 如"4280"，follow 如"1200"）；`;
+
+            return "\n" +
+              "=== 【特别核心指令：学宫圈「议题驱动 · 全名士群像朋友圈与神评修罗场」（选项 1）】 ===\n" +
+              "本次「学宫圈」必须生成 3~5 位名士围绕同一个太学校园大热点发布的群像动态，并且在评论区引爆名士之间的互掐与同窗起哄！\n\n" +
+              topicGuidance + "\n\n" +
+              "【传讯全量名士档案库（发帖与评论必须严格符合自身 6 维角色配置）】：\n" +
+              charsProfilesStr + "\n\n" +
+              "★ 【动态发帖与评论区互掐生成铁律（极其极其重要）】：\n" +
+              "1. 发帖分布：从上方名士列表中，选取 3 到 5 位名士 各发布 1 条朋友圈动态（items 数组长度在 3~5 之间）；\n" +
+              "2. 【发帖口吻绝不 OOC（最高优先级）】：\n" +
+              "   - 动态正文（content 50~100字）必须 100% 贯彻该名士自身的 6 维角色配置（姓名与ID、MBTI、星座、语言风格与专属口癖、性格特点、个人背景与太学院系）！\n" +
+              "   - 如刘辩自称“朕”且任性娇纵黏人、只在乎广陵王；傅融句句算盘算钱粮折旧；袁基自称“基”温雅周全如棋局；孙策自称“小爷”或“本霸王”豪爽约架跑马；左慈道骨仙风超然世外；\n" +
+              "   - 正文必须融入话题标签（如 #常满仓冬至宴争夺战#）；\n" +
+              "3. 【评论区名士互掐与同窗起哄（灵魂所在）】：\n" +
+              "   - 每条动态的 commentList 数组中，必须严格包含 3 到 5 条评论：\n" +
+              "   - 其中 2 到 3 条 必须由其他名士以第一人称自称与专属口癖撰写（彼此针锋相对、算账罚款、提醒夫子戒尺、起哄或约架！例如傅融在刘辩动态下算违规罚款，袁基温和规劝避开巡夜，孙策嘲笑磨蹭）；\n" +
+              "     字段：user (名士姓名), userType: \"character\", charId: 名士ID, content: 神评文字 (20~50字), time: \"刚刚\", likes: 整数 (80~500);\n" +
+              "   - 其中 1 到 2 条 必须由辟雍路人同窗（称号如“万舍吃瓜第一线”、“算学系借钱生”、“礼乐系琴生”、“演武场拾箭校尉”等）在旁边煽风点火、围观起哄！\n" +
+              "     字段：user (同窗称号), userType: \"student\", content: 起哄吐槽文字 (15~40字), time: \"刚刚\", likes: 整数 (10~99);\n" +
+              "4. bannerNote: 写一段以当前选定名士视角看学宫圈今日大热点的内心吐槽或给广陵王的手札（50~80字）。\n" +
+  "5. 【纯中文与防复读铁律】：正文、话题标签与所有评论必须 100% 使用地道中文，严禁夹杂任何英文单词（如 leaked 等）或无意义符号；严禁机械重复同一词组或刷屏式复读，每条评论必须句式与内容各不相同！\n";
           }
 
           // 构造学宫讯息处「多角色群像传书对话流」专用上下文（穿透读取教务服务大厅 service 已生成的事项）
@@ -19244,36 +19639,126 @@
             academy: {
               name: "学宫圈动态",
               bannerHost: "#academyFeedContainer",
-              schemaDesc: `生成 5~8 条学宫圈校园动态帖子，每条包含：authorName (发帖人姓名，主要为该名士本人或相熟同窗), college (如"文学院"|"算学系"|"礼乐系"|"骑射系"|"博士官寺"), content (45~90字动态正文，带 #话题 标签，体现角色语言风格与传讯聊天记忆), time (如"刚刚"|"15分钟前"), likes (80~999整数), comments (10~99整数)`,
+              schemaDesc: `生成学宫圈群像朋友圈数据，包含：
+topicTitle: 校园大热点标题（如 "#常满仓冬至宴争夺战"）
+topicStats: { heat: "3.8万", discuss: "4280", follow: "1200" }
+items: 3~5条名士动态数组，每条包含：
+- charId: 名士ID
+- authorName: 发帖名士姓名
+- college: 名士院系身份（如 "文学院 · 辟雍同桌"）
+- content: 50~100字正文（严格结合名士6维人设口吻与话题标签）
+- time: 如 "刚刚" 或 "5分钟前"
+- likes: 整数 (150~999)
+- comments: 整数 (3~5)
+- commentList: 3~5条精彩神评数组，每条包含：
+  * user: 评论人（其他名士姓名或路人同窗称号）
+  * userType: "character" (名士) 或 "student" (同窗)
+  * charId: 名士ID (名士必填)
+  * content: 20~50字第一人称神评台词（名士互掐或路人起哄）
+  * time: 如 "刚刚" 或 "2分钟前"
+  * likes: 整数 (20~500)`,
               apply: (data) => {
+                const topicTitle = data.topicTitle || (data.topic && data.topic.title);
+                if (topicTitle) {
+                  const titleEl = document.getElementById("academyTopicTitle");
+                  if (titleEl) titleEl.innerText = topicTitle;
+                }
+                const stats = data.topicStats || (data.topic && data.topic.stats);
+                if (stats) {
+                  const heatVal = document.querySelector("#academyHeatStat .academy-stat-value");
+                  const discussVal = document.querySelector("#academyDiscussStat .academy-stat-value");
+                  const followVal = document.querySelector("#academyFollowStat .academy-stat-value");
+                  if (heatVal && stats.heat) heatVal.innerText = stats.heat;
+                  if (discussVal && stats.discuss) discussVal.innerText = stats.discuss;
+                  if (followVal && stats.follow) followVal.innerText = stats.follow;
+                }
+
                 const items = Array.isArray(data.items) ? data.items : [];
-                const newPosts = items.map((it, i) => ({
-                  id: 9500 + i,
-                  user: {
-                    id: 900 + i,
-                    name: it.authorName || data.charName,
-                    avatar: (!it.authorName || it.authorName === data.charName)
-                      ? data.charAvatar
-                      : `https://api.dicebear.com/9.x/personas/svg?seed=${encodeURIComponent(it.authorName)}`,
-                    college: it.college || "辟雍太学"
-                  },
-                  content: it.content || "",
-                  images: [],
-                  time: it.time || `${(i + 1) * 5}分钟前`,
-                  likes: parseInt(it.likes, 10) || (120 + i * 35),
-                  comments: parseInt(it.comments, 10) || (18 + i * 6),
-                  shares: 9 + i * 2,
-                  collected: false,
-                  liked: true
-                }));
+                const chars = (cachedPhoneCharacters && cachedPhoneCharacters.length > 0) ? cachedPhoneCharacters : DEFAULT_LEAD_CHARACTERS;
+
+                const cleanAcademyText = (raw, fallback) => {
+                  let s = String(raw || "").replace(/\bleaked\b/gi, "泄题").trim();
+                  if (!s) return fallback;
+                  // 检测连续重复词组（如“泄题 题目 泄题 题目...”或任意短语连复3次及以上）
+                  const loopPattern = /([\u4e00-\u9fa5A-Za-z0-9\s，。！？]{2,14}?)\1{2,}/g;
+                  if (loopPattern.test(s)) {
+                    const collapsed = s.replace(loopPattern, "$1").trim();
+                    if (collapsed.length < 8 || collapsed.length < s.length * 0.45) {
+                      return fallback;
+                    }
+                    s = collapsed;
+                  }
+                  return s;
+                };
+
+                const fallbackComments = [
+                  "此事在学宫闹得沸沸扬扬，诸位同窗还是谨言慎行罢。",
+                  "且慢下定论，待兰台与博士官寺查明再说不迟。",
+                  "前排围观！今天学宫瓜田属实热闹，不知后续如何收场。"
+                ];
+
+                const newPosts = items.map((it, i) => {
+                  const authorChar = chars.find(c => c.id === it.charId || c.name === it.authorName);
+                  const authorAvatar = (authorChar && authorChar.avatar) || it.authorAvatar || `https://api.dicebear.com/9.x/personas/svg?seed=${encodeURIComponent(it.authorName || i)}`;
+                  const postId = 9600 + i;
+
+                  if (Array.isArray(it.commentList) && it.commentList.length > 0) {
+                    postComments[postId] = it.commentList.map((cmt, cIdx) => {
+                      const cmtChar = chars.find(c => c.id === cmt.charId || c.name === cmt.user);
+                      const cmtAvatar = (cmtChar && cmtChar.avatar) || cmt.avatar || (cmt.userType === "student" ? `https://api.dicebear.com/9.x/fun-emoji/svg?seed=${encodeURIComponent(cmt.user)}` : `https://api.dicebear.com/9.x/personas/svg?seed=${encodeURIComponent(cmt.user)}`);
+                      return {
+                        id: Date.now() + i * 100 + cIdx,
+                        user: cmt.user,
+                        userType: cmt.userType || (cmtChar ? "character" : "student"),
+                        avatar: cmtAvatar,
+                        content: cleanAcademyText(cmt.content, fallbackComments[(i + cIdx) % fallbackComments.length]),
+                        time: cmt.time || "刚刚",
+                        likes: parseInt(cmt.likes, 10) || Math.floor(Math.random() * 80 + 20)
+                      };
+                    });
+                  }
+
+                  return {
+                    id: postId,
+                    charId: it.charId || (authorChar && authorChar.id),
+                    user: {
+                      id: 900 + i,
+                      name: it.authorName || (authorChar && authorChar.name) || "辟雍名士",
+                      avatar: authorAvatar,
+                      college: it.college || (authorChar && authorChar.academyMajor) || "辟雍太学"
+                    },
+                    content: cleanAcademyText(it.content, `${topicTitle || "#今日学宫热点#"} 诸位同窗如何看待此事？`),
+                    images: [],
+                    time: it.time || `${(i + 1) * 3}分钟前`,
+                    likes: parseInt(it.likes, 10) || (180 + i * 40),
+                    comments: Array.isArray(it.commentList) ? it.commentList.length : (parseInt(it.comments, 10) || 4),
+                    shares: 12 + i * 3,
+                    collected: false,
+                    liked: true
+                  };
+                });
+
                 academyPosts.hot = [...newPosts, ...JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.academyHot))];
                 academyPosts.new = [...newPosts, ...JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.academyNew))];
                 loadAcademyPosts(currentAcademyTab);
                 renderModuleBanner("academy", "#page-academy", { ...data, itemCount: newPosts.length });
+                return items;
               },
               reset: () => {
+                const titleEl = document.getElementById("academyTopicTitle");
+                if (titleEl) titleEl.innerText = "#期末周 射策真的学不动了";
+                const heatVal = document.querySelector("#academyHeatStat .academy-stat-value");
+                const discussVal = document.querySelector("#academyDiscussStat .academy-stat-value");
+                const followVal = document.querySelector("#academyFollowStat .academy-stat-value");
+                if (heatVal) heatVal.innerText = "1万";
+                if (discussVal) discussVal.innerText = "2000";
+                if (followVal) followVal.innerText = "1800";
                 academyPosts.hot = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.academyHot));
                 academyPosts.new = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.academyNew));
+                if (INITIAL_SNAPSHOTS.postComments) {
+                  Object.keys(postComments).forEach(k => delete postComments[k]);
+                  Object.assign(postComments, JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.postComments)));
+                }
                 loadAcademyPosts(currentAcademyTab);
                 renderModuleBanner("academy", "#page-academy", null);
               }
@@ -19629,28 +20114,74 @@
             dormSystem: {
               name: "辟雍斋舍宿管系统",
               bannerHost: "#dormSystemModal .slide-content",
-              schemaDesc: `生成 5~8 条斋舍起居陈设与宿管报修/查寝互动记录，每条包含：bedName (榻位主人或物事名称), role (如"当前"|"同窗"|"伴读"|"雅陈"), bedNo (20~45字，描述榻位陈设細節或留给你的字条), orderType (宿管事项类型，如"轩窗添香"|"炭盆加炭"|"门锁核验"|"宵夜投递"), orderCode (单号或简短说明，如"已由傅融核销"|"亥时三刻送达")`,
+              schemaDesc: `【重要人设约束】所有生成内容必须严格贴合当前名士的角色配置（角色姓名与ID、MBTI性格类型、星座、语言风格、性格特点、个人背景）及近期传讯记忆。请同时返回 profile、repairRecords、transferRecords、hygieneLogs 与 items：
+1) profile (对象)：包含 greeting(必须直接使用当前密探/名士的正常本名问候语，如"XXX，晚上好！"，不得使用玩家身份配置库里的名字或别称), statusText(在斋状态如"在斋状态良好"), avatarChar(当前密探/名士本名的首字), buildingRoom(具体楼栋房间与床榻如"万舍一号楼 102 · 1号榻"), defaultRoom(工单默认房间如"一号楼 102"), overviewTitle(概览标题), scoreLabel(内务评分如"内务 优秀 · 92分"), doorAccessLabel(门禁名称), candlePower(剩余烛火度如"86.5 度"), curfewRemind(熄烛提醒如"亥时三刻熄烛"), transferStatus("通过"|"审核中"|"已归档"), transferLocation(调宿动态地点), hygieneScore(如"92分"), hygieneGrade("优秀"|"良好"), hygieneComment(10~20字卫生评语)；
+2) repairRecords (3~4条修缮记录/草稿建议)：每条含 type("水管卫浴"|"门窗锁具"|"案几床榻"|"灯烛电路"), desc(25~50字名士口吻报修说明), status("待报修"|"已受理"|"已完工"), time；
+3) transferRecords (3~4条迁斋推荐或申请记录)：每条含 target(意向斋舍与床榻), reason(25~50字名士口吻迁调缘由), status("可申请"|"审核中"|"通过"), tag("空榻推荐"|"同窗邀约"|"当前审批")；
+4) hygieneLogs (3~4条历次内务评定台账)：每条含 weekTitle(如"第12周 斋舍大检"), comment(评语), score(如"92分")；
+5) items (5~8条榻位与宿管工单记录)：每条含 bedName(【铁律】必须是具体的人物姓名！第1条为密探/玩家本人姓名，第2条为当前名士姓名，其余为同斋其他真实名士或同窗的具体人名，严禁出现纯物事名称), role(身份如"当前"|"舍长"|"同窗"|"伴读"), bedNo(20~45字榻位号与陈设细节或留给你的字条), orderType, orderCode`,
               apply: (data) => {
+                const agentName = data.charName || "广陵王";
+                const personaName = data.personaName || (typeof getUserPersonasFromPhone === "function" && getUserPersonasFromPhone()?.activePersona?.name) || "广陵王";
+                if (data.profile && typeof data.profile === "object") {
+                  dmProfileData = { ...INITIAL_SNAPSHOTS.dmProfileData, ...data.profile };
+                }
+                if (!dmProfileData.greeting || !dmProfileData.greeting.includes(agentName)) {
+                  dmProfileData.greeting = `${agentName}，晚上好！`;
+                }
+                dmProfileData.avatarChar = agentName.charAt(0) || "广";
+                if (Array.isArray(data.repairRecords) && data.repairRecords.length > 0) {
+                  dmRepairRecordsData = data.repairRecords.map((r, i) => ({
+                    id: 6850 + i,
+                    type: r.type || "门窗锁具",
+                    desc: r.desc || "",
+                    status: r.status || "待报修",
+                    time: r.time || "近期"
+                  }));
+                }
+                if (Array.isArray(data.transferRecords) && data.transferRecords.length > 0) {
+                  dmTransferRecordsData = data.transferRecords.map((t, i) => ({
+                    id: 6870 + i,
+                    target: t.target || "兰台二号楼 205 · 2号榻",
+                    reason: t.reason || "",
+                    status: t.status || "可申请",
+                    tag: t.tag || "空榻推荐"
+                  }));
+                }
+                if (Array.isArray(data.hygieneLogs) && data.hygieneLogs.length > 0) {
+                  dmHygieneLogsData = data.hygieneLogs.map((h) => ({
+                    weekTitle: h.weekTitle || "斋舍大检",
+                    comment: h.comment || "评语：内务整齐。",
+                    score: h.score || "92分"
+                  }));
+                }
                 const items = Array.isArray(data.items) ? data.items : [];
-                dmBedsData = items.slice(0, 4).map((it, i) => ({
-                  id: 6700 + i,
-                  tag: i === 0 ? "主" : "雅",
-                  name: it.bedName || data.charName,
-                  role: it.role || (i === 0 ? "当前" : "同窗"),
-                  bedNo: it.bedNo || "万舍雅榻",
-                  active: i === 0
-                }));
+                dmBedsData = items.slice(0, 4).map((it, i) => {
+                  const bedPersonName = (it.bedName && String(it.bedName).trim()) || (i === 0 ? personaName : (i === 1 ? data.charName : `同窗${i}`));
+                  return {
+                    id: 6700 + i,
+                    tag: i === 0 ? "我" : bedPersonName.charAt(0),
+                    name: bedPersonName,
+                    role: it.role || (i === 0 ? "当前" : "同窗"),
+                    bedNo: it.bedNo || `${i + 1}号榻 · 万舍雅榻`,
+                    active: i === 0
+                  };
+                });
                 dmOrdersData = items.map((it, i) => ({
                   id: 6800 + i,
                   type: it.orderType || it.bedName || "斋舍内务",
                   code: it.orderCode || it.bedNo || `BX202611110${i + 1}`,
-                  room: "一号楼 102",
+                  room: dmProfileData.defaultRoom || "一号楼 102",
                   step: (i % 3) + 1
                 }));
                 renderDormSystemAll();
                 renderModuleBanner("dormSystem", "#dormSystemModal .slide-content", { ...data, itemCount: items.length });
               },
               reset: () => {
+                dmProfileData = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.dmProfileData));
+                dmRepairRecordsData = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.dmRepairRecordsData));
+                dmTransferRecordsData = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.dmTransferRecordsData));
+                dmHygieneLogsData = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.dmHygieneLogsData));
                 dmBedsData = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.dmBedsData));
                 dmOrdersData = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.dmOrdersData));
                 renderDormSystemAll();
@@ -19770,8 +20301,33 @@
             clubActivity: {
               name: "洛南社团雅集",
               bannerHost: "#clubActivityModal .slide-content",
-              schemaDesc: `生成 5~8 场由该名士筹办或邀你同往的太学社团雅集活动，每条包含：month (如"11月"), day (如"18"), week (如"周六"), title (雅集活动名称), time (如"14:00 – 17:00"), location (活动地点), statusKey ("open"|"joined"|"soon"), statusText (如"已为你留席"|"报名中"), club (所属社团名), desc (40~75字活动详情与名士私心邀约)`,
+              schemaDesc: `【重要人设约束】所有生成的社团、公告、雅集活动与评论区互动，必须严格贴合当前名士的角色配置（角色姓名与ID、MBTI性格类型、星座、语言风格、性格特点、个人背景）。除 items 外，请同时返回 clubs 与 notices 字段：
+1) clubs (2~4个该名士创建或常驻的社团卡片)：每条包含 name(社团名), slogan(口号), icon(FontAwesome类名如"fa-feather-alt"或单个emoji), president(社长/主理人), members(数字人数), memberComposition(成员构成简述), joined(true), intro(30~60字社团简介)；
+2) notices (2~3条已报名社团的最新公告)：每条包含 club(所属社团名), title(公告标题), time(如"今日辰时"), content(30~60字公告内容)；
+3) items (5~8场由该名士筹办或邀你同往的太学社团雅集活动)：每条包含 month(如"11月"), day(如"18"), week(如"周六"), title(雅集活动名称), time(如"14:00 – 17:00"), location(活动地点), statusKey("open"|"joined"|"soon"), statusText(如"已为你留席"|"报名中"), club(所属社团名), capacity(数字总名额如30), signedCount(数字已报名人数), participants(2~4个已报名名士/同窗名字数组), desc(40~75字活动详情与名士私心邀约), comments(2~3条评论对象数组，每条含 author, role, text)`,
               apply: (data) => {
+                if (Array.isArray(data.clubs) && data.clubs.length > 0) {
+                  stMyClubsData = data.clubs.map((c, i) => ({
+                    id: 7650 + i,
+                    name: c.name || `太学雅社 ${i + 1}`,
+                    slogan: c.slogan || "以雅会友",
+                    icon: c.icon || "fa-users",
+                    members: Number(c.members) || 48,
+                    memberComposition: c.memberComposition || "太学诸生",
+                    president: c.president || data.charName || "名士",
+                    joined: c.joined !== false,
+                    intro: c.intro || ""
+                  }));
+                }
+                if (Array.isArray(data.notices) && data.notices.length > 0) {
+                  stClubNoticesData = data.notices.map((n, i) => ({
+                    id: 7680 + i,
+                    club: n.club || "太学风雅社",
+                    title: n.title || `社团通知 ${i + 1}`,
+                    time: n.time || "今日",
+                    content: n.content || ""
+                  }));
+                }
                 const items = Array.isArray(data.items) ? data.items : [];
                 stActivitiesData = items.map((it, i) => ({
                   id: 7600 + i,
@@ -19784,7 +20340,11 @@
                   statusKey: ["open", "joined", "soon"].includes(it.statusKey) ? it.statusKey : (i < 2 ? "joined" : "open"),
                   statusText: it.statusText || (i < 2 ? "已留席" : "报名中"),
                   club: it.club || "太学风雅社",
-                  desc: it.desc || ""
+                  capacity: Number(it.capacity) || 30,
+                  signedCount: Number(it.signedCount ?? (10 + i * 2)),
+                  participants: Array.isArray(it.participants) ? it.participants : [],
+                  desc: it.desc || "",
+                  comments: Array.isArray(it.comments) ? it.comments : []
                 }));
                 stShowAllActs = true;
                 renderClubActivityAll();
@@ -19792,6 +20352,8 @@
               },
               reset: () => {
                 stActivitiesData = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.stActivitiesData));
+                stMyClubsData = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.stMyClubsData));
+                stClubNoticesData = JSON.parse(JSON.stringify(INITIAL_SNAPSHOTS.stClubNoticesData));
                 stShowAllActs = false;
                 renderClubActivityAll();
                 renderModuleBanner("clubActivity", "#clubActivityModal .slide-content", null);
@@ -19944,6 +20506,7 @@ ${recentChatHistory || `（近期传讯中，${character.name}正与${activePers
 - 当前所在页面：【${spec.name}】
 - 当前学宫时辰：【${stage.label}】（${stage.desc}）
 ${perspectiveInstruction}
+${moduleKey === "academy" ? getAcademyModuleSpecialPrompt(character, activePersona, stage) : ""}
 ${moduleKey === "message" ? getMessageModuleSpecialPrompt(character, activePersona, stage) : ""}
 ${moduleKey === "campus" ? "\n" +
   "=== 【特别核心指令：校园资讯双轨生成模型（方案 A · 焦点专栏置顶 + 大盘公报混合流）】 ===\n" +
@@ -19968,17 +20531,29 @@ ${moduleKey === "campus" ? "\n" +
   "   - comments: 3~5 条纯路人辟雍同窗吃瓜神评（每条对象必须包含 author 与 text 字段，文字内容放入 text 字段，如 { \"author\": \"万舍吃瓜第一线\", \"text\": \"破案了！...\" }，绝不能返回空文字！纯路人围观视角，不对玩家做直接点名）。" : ""}\n\n=== 输出格式铁律（极其重要） ===
 1. 你必须且只能输出一个合法的纯 JSON 对象，不要包含任何 Markdown 代码块标记或多余解释文字。
 2. JSON 结构必须为：
-{
+${moduleKey === "clubActivity" ? `{
+  "bannerNote": "以【${character.name}】第一人称自称与专属口癖写出的一段此刻在该页面的心声或留给${activePersona.name}的手札（50~90字，必须融合近期传讯聊天话题与自身性格）",
+  "clubs": [ ... ],
+  "notices": [ ... ],
+  "items": [ ... ]
+}` : (moduleKey === "dormSystem" ? `{
+  "bannerNote": "以【${character.name}】第一人称自称与专属口癖写出的一段此刻在该页面的心声或留给${activePersona.name}的手札（50~90字，必须融合近期传讯聊天话题与自身性格）",
+  "profile": { ... },
+  "repairRecords": [ ... ],
+  "transferRecords": [ ... ],
+  "hygieneLogs": [ ... ],
+  "items": [ ... ]
+}` : `{
   "bannerNote": "以【${character.name}】第一人称自称与专属口癖写出的一段此刻在该页面的心声或留给${activePersona.name}的手札（50~90字，必须融合近期传讯聊天话题与自身性格）",
   "items": [ ... ]
-}
-3. **数量硬性要求**：\`items\` 数组必须包含 **5 到 8 条** 内容丰富、绝不重复的条目（长度严格在 5~8 之间）！
-4. \`items\` 每条目的字段要求：${spec.schemaDesc}。`;
+}`)}
+3. **数量硬性要求**：\`items\` 数组必须包含 **5 到 8 条** 内容丰富、绝不重复的条目（长度严格在 5~8 之间）！${moduleKey === "clubActivity" ? "同时必须返回 2~4 个 clubs 与 2~3 条 notices！" : (moduleKey === "dormSystem" ? "同时必须返回 profile 对象，以及各 3~4 条的 repairRecords、transferRecords、hygieneLogs！" : "")}
+4. 字段要求：${spec.schemaDesc}。`;
 
               const rawReply = await askAI([
                 { role: "system", content: sysPrompt },
-                { role: "user", content: `请立即为【${character.name}】生成「${spec.name}」页面的 JSON 数据（包含 bannerNote 以及 5~8 条 items）。只输出纯 JSON 对象：` }
-              ]);
+                { role: "user", content: `请立即为【${character.name}】生成「${spec.name}」页面的 JSON 数据（包含 bannerNote${moduleKey === "clubActivity" ? "、clubs、notices" : (moduleKey === "dormSystem" ? "、profile、repairRecords、transferRecords、hygieneLogs" : "")} 以及 5~8 条 items）。只输出纯 JSON 对象：` }
+              ], moduleKey === "academy" ? { temperature: 0.7 } : {});
 
               const parsed = parseAIJson(rawReply);
               const items = Array.isArray(parsed.items) ? parsed.items.slice(0, 8) : [];
@@ -19992,7 +20567,16 @@ ${moduleKey === "campus" ? "\n" +
                 charId: character.id,
                 charName: character.name,
                 charAvatar: character.avatar,
+                personaName: activePersona.name,
                 bannerNote: parsed.bannerNote || `${character.name}已在「${spec.name}」为你留下一份专属手札。`,
+                topicTitle: parsed.topicTitle || (parsed.topic && parsed.topic.title) || null,
+                topicStats: parsed.topicStats || (parsed.topic && parsed.topic.stats) || null,
+                clubs: Array.isArray(parsed.clubs) ? parsed.clubs : null,
+                notices: Array.isArray(parsed.notices) ? parsed.notices : null,
+                profile: (parsed.profile && typeof parsed.profile === "object") ? parsed.profile : null,
+                repairRecords: Array.isArray(parsed.repairRecords) ? parsed.repairRecords : null,
+                transferRecords: Array.isArray(parsed.transferRecords) ? parsed.transferRecords : null,
+                hygieneLogs: Array.isArray(parsed.hygieneLogs) ? parsed.hygieneLogs : null,
                 items
               };
 
