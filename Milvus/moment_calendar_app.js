@@ -727,6 +727,8 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
     }
     let periodText = "";
     const completedHabits = [];
+    const slackedHabits = [];
+    const chaosHabits = [];
     const flowLabelMap = { light: "偏少", medium: "适中", heavy: "偏多" };
 
     for (const def of userHabitDefs) {
@@ -747,6 +749,12 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
           if (log.note && String(log.note).trim()) parts.push(String(log.note).trim());
           periodText = parts.length > 0 ? `经期中（${parts.join("，")}）` : "经期中";
         }
+      } else if (log.status === "slacked") {
+        const note = log.note && String(log.note).trim() ? `（${String(log.note).trim()}）` : "";
+        slackedHabits.push(`${def.name || "习惯"}${note}`);
+      } else if (log.status === "chaos") {
+        const note = log.note && String(log.note).trim() ? `（${String(log.note).trim()}）` : "";
+        chaosHabits.push(`${def.name || "习惯"}${note}`);
       } else if (log.done || log.status === "done" || log.checked) {
         const note = log.note && String(log.note).trim() ? `（${String(log.note).trim()}）` : "";
         completedHabits.push(`${def.name || "习惯"}${note}`);
@@ -756,11 +764,15 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
     const segments = [];
     if (periodText) segments.push(periodText);
     if (completedHabits.length > 0) segments.push(`已完成习惯打卡：${completedHabits.join("、")}`);
+    if (slackedHabits.length > 0) segments.push(`偷懒摸鱼的习惯：${slackedHabits.join("、")}`);
+    if (chaosHabits.length > 0) segments.push(`意外翻车的习惯：${chaosHabits.join("、")}`);
     const summaryText = segments.join("；");
     return {
       hasAny: segments.length > 0,
       periodText,
       completedHabits,
+      slackedHabits,
+      chaosHabits,
       summaryText
     };
   }
@@ -1237,6 +1249,7 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
     const [periodDraftOn, setPeriodDraftOn] = useState(true);
     const [periodDraftFlow, setPeriodDraftFlow] = useState("medium");
     const [periodDraftSymptoms, setPeriodDraftSymptoms] = useState([]);
+    const [habitDraftStatus, setHabitDraftStatus] = useState("done"); // "done" | "slacked" | "chaos"
     const [habitDraftNote, setHabitDraftNote] = useState("");
     const [habitSaveNotice, setHabitSaveNotice] = useState(false);
 
@@ -1252,6 +1265,7 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
 
     // P2 状态：月度心情罐子统计 + 摇一摇小轮盘 + 经期关怀 + 导出 + 今日未记横幅
     const [showStatsView, setShowStatsView] = useState(false);
+    const [showHabitStats, setShowHabitStats] = useState(false);
     const [showWheelPanel, setShowWheelPanel] = useState(false);
     const [wheelScope, setWheelScope] = useState("both"); // "both" | "user" | "char"
     const [jarShakeSignal, setJarShakeSignal] = useState(0);
@@ -1688,6 +1702,7 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
                   onClick: () => {
                     setActiveTab(t.id);
                     setShowStatsView(false);
+                    setShowHabitStats(false);
                     setSelectedDate(null);
                     setHabitSelectedDate(null);
                     setErrorMsg("");
@@ -2007,6 +2022,9 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
         setPeriodDraftSymptoms(Array.isArray(log?.symptoms) ? log.symptoms : []);
         setHabitDraftNote(log?.note || "");
       } else {
+        setHabitDraftStatus(
+          log?.status && ["done", "slacked", "chaos"].includes(log.status) ? log.status : "done"
+        );
         setHabitDraftNote(log?.note || "");
       }
     };
@@ -2150,11 +2168,11 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
       }
     };
 
-    const handleToggleUserHabitLog = async (checked) => {
+    const handleToggleUserHabitLog = async (checkedOrStatus) => {
       if (!activeHabit || !habitSelectedDate) return;
       const logId = `${activeHabit.id}_${habitSelectedDate}`;
       try {
-        if (!checked) {
+        if (!checkedOrStatus) {
           if (global.momentCalendarStore && typeof global.momentCalendarStore.deleteHabitLog === "function") {
             await global.momentCalendarStore.deleteHabitLog(logId);
           }
@@ -2164,12 +2182,23 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
             return next;
           });
         } else {
+          const finalStatus =
+            typeof checkedOrStatus === "string" && ["done", "slacked", "chaos"].includes(checkedOrStatus)
+              ? checkedOrStatus
+              : ["done", "slacked", "chaos"].includes(habitDraftStatus)
+              ? habitDraftStatus
+              : "done";
+          const statusLabelMap = {
+            done: "已完成",
+            slacked: "摸鱼了",
+            chaos: "意外翻车"
+          };
           const rec = {
             id: logId,
             habitId: activeHabit.id,
             date: habitSelectedDate,
-            status: "done",
-            statusLabel: "已完成",
+            status: finalStatus,
+            statusLabel: statusLabelMap[finalStatus] || "已完成",
             note: habitDraftNote.trim(),
             updatedAt: Date.now()
           };
@@ -2309,6 +2338,21 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
         return activeHabit?.type === "period" ? !!l?.isPeriod : l?.status === "done";
       }).length;
 
+      if (showHabitStats && global.HabitStatsJarEngine && global.HabitStatsJarEngine.HabitStatsView) {
+        return h(global.HabitStatsJarEngine.HabitStatsView, {
+          charId,
+          charName,
+          year: habitYear,
+          monthIndex: habitMonth,
+          onShiftMonth: handleShiftHabitMonth,
+          onBack: () => setShowHabitStats(false),
+          activeHabit,
+          activeOwnerTab: habitOwnerTab,
+          onExportNode: handleExportNodeAsPng,
+          isExporting: isExportingImg
+        });
+      }
+
       return h(
         "div",
         {
@@ -2363,65 +2407,75 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
               );
             })
           ),
-          habitOwnerTab === "user"
-            ? h(
-                "div",
-                { style: { display: "flex", alignItems: "center", gap: "6px" } },
-                h(
+          h(
+            "div",
+            { style: { display: "flex", alignItems: "center", gap: "6px" } },
+            global.HabitStatsJarEngine &&
+              global.HabitStatsJarEngine.StatsIconButton &&
+              h(global.HabitStatsJarEngine.StatsIconButton, {
+                active: showHabitStats,
+                onClick: () => setShowHabitStats(true)
+              }),
+            habitOwnerTab === "user"
+              ? h(
+                  React.Fragment,
+                  null,
+                  h(
+                    "button",
+                    {
+                      type: "button",
+                      onClick: () => flashSyncToast("🔗 已跨角色共享"),
+                      title: "我的习惯与经期记录已自动跨角色同步，切换角色无需重复打卡",
+                      style: {
+                        border: "1px solid #D7E5D8",
+                        background: "#F3F9F4",
+                        color: "#4C7A50",
+                        fontSize: "11.5px",
+                        borderRadius: "999px",
+                        padding: syncToast ? "3px 8px" : "3px 7px",
+                        cursor: "pointer",
+                        display: "inline-flex",
+                        alignItems: "center",
+                        gap: "3px"
+                      }
+                    },
+                    syncToast || "🔗"
+                  ),
+                  h(
+                    "button",
+                    {
+                      onClick: () => setShowAddHabitForm((v) => !v),
+                      style: {
+                        border: "1px solid #E5E0D8",
+                        background: "#FFFFFF",
+                        color: "#44403C",
+                        fontSize: "11.5px",
+                        borderRadius: "999px",
+                        padding: "4px 10px",
+                        cursor: "pointer"
+                      }
+                    },
+                    showAddHabitForm ? "✕" : "+"
+                  )
+                )
+              : h(
                   "button",
                   {
-                    type: "button",
-                    onClick: () => flashSyncToast("🔗 已跨角色共享"),
-                    title: "我的习惯与经期记录已自动跨角色同步，切换角色无需重复打卡",
+                    onClick: handleGenerateCharHabits,
+                    disabled: isGeneratingHabits,
                     style: {
-                      border: "1px solid #D7E5D8",
-                      background: "#F3F9F4",
-                      color: "#4C7A50",
-                      fontSize: "11.5px",
-                      borderRadius: "999px",
-                      padding: syncToast ? "3px 8px" : "3px 7px",
-                      cursor: "pointer",
-                      display: "inline-flex",
-                      alignItems: "center",
-                      gap: "3px"
-                    }
-                  },
-                  syncToast || "🔗"
-                ),
-                h(
-                  "button",
-                  {
-                    onClick: () => setShowAddHabitForm((v) => !v),
-                    style: {
-                      border: "1px solid #E5E0D8",
-                      background: "#FFFFFF",
-                      color: "#44403C",
+                      border: "1px solid #E2B46D",
+                      background: isGeneratingHabits ? "#F3E6CE" : "#FFF8EB",
+                      color: "#9A5B13",
                       fontSize: "11.5px",
                       borderRadius: "999px",
                       padding: "4px 10px",
-                      cursor: "pointer"
+                      cursor: isGeneratingHabits ? "not-allowed" : "pointer"
                     }
                   },
-                  showAddHabitForm ? "✕" : "+"
+                  isGeneratingHabits ? "生成中…" : habitDefs.length > 0 ? "+ 再生成一组" : `生成 ${charName} 习惯`
                 )
-              )
-            : h(
-                "button",
-                {
-                  onClick: handleGenerateCharHabits,
-                  disabled: isGeneratingHabits,
-                  style: {
-                    border: "1px solid #E2B46D",
-                    background: isGeneratingHabits ? "#F3E6CE" : "#FFF8EB",
-                    color: "#9A5B13",
-                    fontSize: "11.5px",
-                    borderRadius: "999px",
-                    padding: "4px 10px",
-                    cursor: isGeneratingHabits ? "not-allowed" : "pointer"
-                  }
-                },
-                isGeneratingHabits ? "生成中…" : habitDefs.length > 0 ? "+ 再生成一组" : `生成 ${charName} 习惯`
-              )
+          )
         ),
 
         // 新增用户自定义习惯表单
@@ -2735,9 +2789,7 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
                 { style: { fontSize: "11px", color: "#A8A29E" } },
                 activeHabit.type === "period"
                   ? "实粉=经期 · 虚粉=预计"
-                  : habitOwnerTab === "char"
-                  ? "✓完成 · 💤摸鱼 · !翻车"
-                  : "点击日期打卡"
+                  : "✓完成 · 💤摸鱼 · !翻车"
               )
             ),
             h(
@@ -3110,11 +3162,73 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
             ? h(
                 "div",
                 { style: { display: "flex", flexDirection: "column", gap: "10px" } },
+                h(
+                  "div",
+                  { style: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "8px" } },
+                  [
+                    {
+                      key: "done",
+                      badge: "✓",
+                      label: "顺利完成",
+                      activeBg: activeHabit.color || "#6B8E78",
+                      activeBorder: `1.5px solid ${activeHabit.color || "#6B8E78"}`,
+                      activeColor: "#FFFFFF"
+                    },
+                    {
+                      key: "slacked",
+                      badge: "💤",
+                      label: "偷懒摸鱼",
+                      activeBg: "#F3F4F6",
+                      activeBorder: "1.5px dashed #6B7280",
+                      activeColor: "#374151"
+                    },
+                    {
+                      key: "chaos",
+                      badge: "!",
+                      label: "意外翻车",
+                      activeBg: "#FEE2E2",
+                      activeBorder: "1.5px solid #DC2626",
+                      activeColor: "#B91C1C"
+                    }
+                  ].map((opt) => {
+                    const isActive = habitDraftStatus === opt.key;
+                    return h(
+                      "button",
+                      {
+                        key: opt.key,
+                        type: "button",
+                        onClick: () => setHabitDraftStatus(opt.key),
+                        style: {
+                          display: "flex",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: "4px",
+                          padding: "8px 6px",
+                          borderRadius: "10px",
+                          background: isActive ? opt.activeBg : "#FAF9F7",
+                          border: isActive ? opt.activeBorder : "1px solid #E5E0D8",
+                          color: isActive ? opt.activeColor : "#78716C",
+                          fontSize: "12.5px",
+                          fontWeight: isActive ? 700 : 500,
+                          cursor: "pointer",
+                          transition: "all 0.15s ease"
+                        }
+                      },
+                      h("span", null, opt.badge),
+                      h("span", null, opt.label)
+                    );
+                  })
+                ),
                 h("input", {
                   type: "text",
                   value: habitDraftNote,
                   onChange: (e) => setHabitDraftNote(e.target.value),
-                  placeholder: "写一句打卡小记（可选）…",
+                  placeholder:
+                    habitDraftStatus === "slacked"
+                      ? "今天怎么摸鱼了？写一句坦白局（可选）…"
+                      : habitDraftStatus === "chaos"
+                      ? "今天怎么翻车了？记录一下小插曲（可选）…"
+                      : "写一句打卡小记（可选）…",
                   style: {
                     width: "100%",
                     boxSizing: "border-box",
@@ -3131,20 +3245,38 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
                   h(
                     "button",
                     {
-                      onClick: () => handleToggleUserHabitLog(true),
+                      onClick: () => handleToggleUserHabitLog(habitDraftStatus),
                       style: {
                         flex: 1,
                         border: "none",
                         borderRadius: "10px",
                         padding: "10px",
-                        background: habitSaveNotice ? "#5E8C61" : activeHabit.color || "#6B8E78",
+                        background: habitSaveNotice
+                          ? "#5E8C61"
+                          : habitDraftStatus === "slacked"
+                          ? "#6B7280"
+                          : habitDraftStatus === "chaos"
+                          ? "#DC2626"
+                          : activeHabit.color || "#6B8E78",
                         color: "#FFFFFF",
                         fontSize: "13px",
                         fontWeight: 600,
                         cursor: "pointer"
                       }
                     },
-                    habitSaveNotice ? "✓ 已打卡" : existingLog ? "更新打卡备注" : "✓ 完成今日打卡"
+                    habitSaveNotice
+                      ? "✓ 已保存记录"
+                      : habitDraftStatus === "slacked"
+                      ? existingLog
+                        ? "💤 更新为摸鱼"
+                        : "💤 标记今日摸鱼"
+                      : habitDraftStatus === "chaos"
+                      ? existingLog
+                        ? "! 更新为翻车"
+                        : "! 标记今日翻车"
+                      : existingLog
+                      ? "✓ 更新打卡记录"
+                      : "✓ 完成今日打卡"
                   ),
                   existingLog &&
                     h(
@@ -3161,7 +3293,7 @@ ${worldContext ? `- 世界书背景：${worldContext}` : ""}`;
                           cursor: "pointer"
                         }
                       },
-                      "取消打卡"
+                      "清除记录"
                     )
                 )
               )

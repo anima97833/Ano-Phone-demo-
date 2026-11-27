@@ -131,6 +131,11 @@
       lines.push(
         "8. 悄悄记下心愿：当对方无意间流露出一个真诚的愿望或想一起做的事（如想去某地、想吃某物、想要某份陪伴），你可在句末悄悄附带 [记入愿望:简短心愿]（如：[记入愿望:带主公去看江南的雪]），系统会替你暗中存入情侣愿望清单，且不剧透。"
       );
+      const _now = new Date();
+      const _todayStr = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
+      lines.push(
+        `8b. 悄悄记下重要日子筹备秘密惊喜：当对方在聊天中提到一个即将到来的重要日子（如生日、纪念日、节日、考试或重要约定日），你可在句末悄悄附带 [记入秘密惊喜:日子名称|YYYY-MM-DD]（今天是 ${_todayStr}，请换算成公历 YYYY-MM-DD，如：[记入秘密惊喜:你的生日|2026-12-08]），系统会替你在情侣空间暗中筹备并封存到那天揭晓，绝不剧透。普通闲聊切勿滥用。`
+      );
     }
     if (prefs.enableRecallCombo) {
       lines.push(
@@ -734,6 +739,7 @@
   const RE_CAL_CANCEL = /[\[【]\s*(?:日程取消|取消日程|作废日程)\s*[:：]\s*([^\]】]{1,80})[\]】]/g;
   const RE_CAL_UPDATE = /[\[【]\s*(?:更新日程|日历更新)\s*[:：]\s*([^\]】]{2,120})[\]】]/g;
   const RE_WISH = /[\[【]\s*(?:记入愿望|悄悄记入愿望|许愿|加入愿望清单)\s*[:：]\s*([^\]】]{2,100})[\]】]/g;
+  const RE_SECRET_SURPRISE = /[\[【]\s*(?:记入秘密惊喜|秘密惊喜|筹备惊喜)\s*[:：]\s*([^\]】|｜,，]{1,24})\s*[|｜,，]\s*(\d{4}[-/.]\d{1,2}[-/.]\d{1,2})\s*[\]】]/g;
 
   function processSoloReplyMessages(aiMsgs, ctx) {
     if (!Array.isArray(aiMsgs) || aiMsgs.length === 0) return aiMsgs;
@@ -750,6 +756,7 @@
     let calCount = 0;
     let calTransitionCount = 0;
     let wishCount = 0;
+    let surpriseCount = 0;
     let prevWasRecall = false;
 
     const output = [];
@@ -1042,6 +1049,38 @@
               type: "narration",
               tap: true,
               text: `${charName}似乎悄悄记下了一个心愿`,
+              isMe: false,
+              time: nowTime
+            });
+          }
+        }
+        return "";
+      });
+
+      // 3b) [记入秘密惊喜:日子名称|YYYY-MM-DD]（单轮上限 1 条，后台静默筹备，不剧透）
+      txt = txt.replace(RE_SECRET_SURPRISE, (_, rawOccasion, rawDate) => {
+        if (
+          prefs.enableSecretWish &&
+          surpriseCount < 1 &&
+          global.CoupleSurpriseEngine &&
+          typeof global.CoupleSurpriseEngine.triggerSecretSurpriseFromChat === "function"
+        ) {
+          const normDate = global.CoupleSurpriseEngine.normalizeDateStr(rawDate);
+          const todayS = global.CoupleSurpriseEngine.getLocalDateStr(nowDate);
+          if (normDate && normDate >= todayS) {
+            surpriseCount += 1;
+            global.CoupleSurpriseEngine.triggerSecretSurpriseFromChat({
+              charId,
+              charName,
+              taCharacter: chatData,
+              occasionName: String(rawOccasion || "").trim(),
+              revealDate: normDate
+            }).catch(() => {});
+            systemNotes.push({
+              id: allocNumericId(),
+              type: "narration",
+              tap: true,
+              text: `${charName}似乎悄悄把一个重要日子记在了心里`,
               isMe: false,
               time: nowTime
             });
