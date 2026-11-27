@@ -1280,7 +1280,12 @@
                 }
               },
               "更多开屏推送（节气问候 / 名士生辰 / 纪念日海报）预留位已就绪"
-            )
+            ),
+
+        // 情侣空间四维智能提醒设置区（心情日记 / 习惯打卡 / 每日一问 / 秘密惊喜到日）
+        global.CoupleReminderPushEngine &&
+          global.CoupleReminderPushEngine.SettingsSection &&
+          h(global.CoupleReminderPushEngine.SettingsSection, null)
       ),
 
       h(UpdateSplashPosterModal, {
@@ -1340,6 +1345,11 @@
       global.SeasonalPushUI &&
         global.SeasonalPushUI.QueueHost &&
         h(global.SeasonalPushUI.QueueHost, {
+          waitForUpdateClosed: !gateReady || open || updatePending
+        }),
+      global.CoupleReminderPushEngine &&
+        global.CoupleReminderPushEngine.AutoReminderHost &&
+        h(global.CoupleReminderPushEngine.AutoReminderHost, {
           waitForUpdateClosed: !gateReady || open || updatePending
         }),
       global.GuanglingNewsStudio &&
