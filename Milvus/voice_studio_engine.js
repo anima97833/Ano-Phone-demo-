@@ -1351,10 +1351,17 @@
           React.createElement(
             "select",
             { value: cfg.fishModel || "s2.1-pro", onChange: (e) => update({ fishModel: e.target.value }), style: inputStyle },
-            React.createElement("option", { value: "s2.1-pro" }, "模型：s2.1-pro（推荐，情感表现力最强）"),
+            React.createElement("option", { value: "s2.1-pro-free" }, "模型：s2.1-pro-free（官方免费，同款音质）"),
+            React.createElement("option", { value: "s2.1-pro" }, "模型：s2.1-pro（付费旗舰，情感表现力最强）"),
             React.createElement("option", { value: "s2-pro" }, "模型：s2-pro"),
             React.createElement("option", { value: "s1" }, "模型：s1（经典）")
-          )
+          ),
+          cfg.fishModel === "s2.1-pro-free" &&
+            React.createElement(
+              "div",
+              { style: { fontSize: "11px", lineHeight: 1.5, color: "#6B655D", padding: "2px 4px" } },
+              "说明：s2.1-pro-free 与 s2.1-pro 同款模型且 $0 免费，需填写 Fish Audio API Key，但不保证高峰延迟（TTFA）与隐私协议（DPA）。"
+            )
         ),
       cfg.ttsProvider === "minimax" &&
         React.createElement(
