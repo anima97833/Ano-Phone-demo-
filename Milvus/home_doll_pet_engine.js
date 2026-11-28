@@ -195,6 +195,7 @@
       longPressTimer: null
     };
     var lastTapAt = 0;
+    var mountSeq = 0;
 
     function getStore() {
       return global.HomeDollPetStore || null;
@@ -479,6 +480,7 @@
     }
 
     async function mountCurrentPet() {
+      var mySeq = ++mountSeq;
       var st = getStore();
       if (!st) return;
       cfg = st.getConfig();
@@ -493,6 +495,7 @@
       }
 
       var allPets = await st.listAllPets();
+      if (mySeq !== mountSeq) return;
       var chosen = cfg.activePetId
         ? allPets.find(function (p) { return String(p.id) === String(cfg.activePetId); })
         : null;
