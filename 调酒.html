@@ -1,0 +1,3229 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>曲水流觞 · 东汉微醺酒肆</title>
+<style>
+  :root {
+    --bg-ink: #1C2026;
+    --bg-slate: #262C35;
+    --paper-warm: #F6F0E4;
+    --paper-card: #FBF8F1;
+    --lacquer-dark: #2B211C;
+    --lacquer-mid: #634F43;
+    --lacquer-light: #9A8475;
+    --cinnabar: #B84336;
+    --cinnabar-soft: #F7E8E5;
+    --gold: #C89B4B;
+    --gold-bright: #E4BD72;
+    --celadon: #5A8B82;
+    --celadon-soft: #E9F2F0;
+    --border-warm: #DFD3BF;
+    --border-gold: rgba(200, 155, 75, 0.42);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; height: 100dvh; overflow: hidden;
+    background: radial-gradient(circle at 50% 20%, #2D3540 0%, #171B21 100%);
+    font-family: "Songti SC", "STSong", "Noto Serif SC", "Source Han Serif SC", -apple-system, BlinkMacSystemFont, "PingFang SC", serif;
+    color: var(--lacquer-dark);
+  }
+  #app {
+    display: flex; flex-direction: column; width: 100%; max-width: 520px; height: 100%;
+    margin: 0 auto; position: relative;
+    background: #1B2027;
+    box-shadow: 0 0 48px rgba(0, 0, 0, 0.45);
+  }
+
+  /* 顶部漆金栏 */
+  .top-header {
+    flex-shrink: 0; padding: 7px 11px 6px;
+    background: linear-gradient(180deg, rgba(247, 241, 229, 0.97) 0%, rgba(242, 234, 219, 0.96) 100%);
+    border-bottom: 1px solid var(--border-warm);
+    box-shadow: 0 2px 10px rgba(24, 18, 14, 0.14);
+    z-index: 20;
+  }
+  .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; gap: 6px; }
+  .brand-title { font-size: 15px; font-weight: 800; color: var(--lacquer-dark); letter-spacing: 0.8px; display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .brand-title span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header-actions { display: flex; gap: 5px; align-items: center; flex-shrink: 0; }
+  .icon-btn {
+    width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--border-warm);
+    background: var(--paper-card); color: var(--lacquer-mid);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    font-family: inherit; transition: all 0.18s;
+  }
+  .icon-btn:active { transform: scale(0.92); }
+  .icon-btn.text-pill { width: auto; padding: 0 9px; border-radius: 14px; font-size: 11px; font-weight: 700; }
+
+  .coop-bar { display: flex; align-items: center; gap: 5px; margin-bottom: 5px; overflow-x: auto; scrollbar-width: none; }
+  .coop-bar::-webkit-scrollbar { display: none; }
+  .coop-select { flex: 0 0 auto; max-width: 110px; padding: 3px 7px; border-radius: 9px; border: 1px solid var(--border-warm); background: var(--paper-card); color: var(--lacquer-dark); font-size: 11px; font-weight: 700; font-family: inherit; }
+  .coop-btn { flex: 0 0 auto; padding: 3px 9px; border-radius: 9px; border: 1px solid var(--cinnabar); background: var(--cinnabar-soft); color: var(--cinnabar); font-size: 11px; font-weight: 700; font-family: inherit; cursor: pointer; white-space: nowrap; }
+  .coop-btn.primary { background: var(--cinnabar); color: #FFF; }
+
+  /* 6 步精细工艺进度条 */
+  .stepper {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px;
+    background: rgba(255, 252, 245, 0.85); border: 1px solid var(--border-warm);
+    border-radius: 14px; padding: 3px; font-size: 10.5px; font-weight: 700; color: var(--lacquer-light);
+  }
+  .step-item {
+    text-align: center; cursor: pointer; padding: 3px 2px; border-radius: 10px;
+    transition: all 0.2s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .step-item.active { color: #FFF; background: linear-gradient(135deg, #B84336 0%, #963228 100%); box-shadow: 0 2px 6px rgba(184, 67, 54, 0.26); }
+  .step-item.done { color: var(--celadon); background: var(--celadon-soft); }
+
+  /* 舞台区 */
+  .stage-wrap {
+    flex: 1 1 0; min-height: 0; position: relative;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+  }
+  #drinkCanvas {
+    width: 100%; height: 100%;
+    max-width: 100%; max-height: 100%;
+    object-fit: contain; touch-action: none; display: block;
+  }
+
+  /* 舞台右上角氛围灯切换 & 左下角风味浮条 */
+  .stage-top-tools {
+    position: absolute; top: 10px; right: 10px; z-index: 12;
+    display: flex; gap: 5px; align-items: center;
+  }
+  .scene-pill {
+    padding: 4px 10px; border-radius: 14px;
+    background: rgba(28, 32, 38, 0.62); backdrop-filter: blur(6px);
+    border: 1px solid rgba(228, 189, 114, 0.36); color: #F5EBD6;
+    font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit;
+    transition: all 0.18s;
+  }
+  .scene-pill:active { transform: scale(0.94); }
+
+  .flavor-hud {
+    position: absolute; left: 10px; bottom: 10px; z-index: 12;
+    background: rgba(24, 27, 33, 0.68); backdrop-filter: blur(6px);
+    border: 1px solid rgba(228, 189, 114, 0.32); border-radius: 12px;
+    padding: 5px 8px; color: #F4EAD6; font-size: 10px;
+    display: flex; flex-direction: column; gap: 3px; min-width: 104px;
+    pointer-events: none;
+  }
+  .flavor-row { display: flex; align-items: center; gap: 5px; }
+  .flavor-lbl { width: 22px; color: #D9C9AE; font-weight: 700; }
+  .flavor-bar { flex: 1; height: 4px; background: rgba(255,255,255,0.14); border-radius: 3px; overflow: hidden; }
+  .flavor-fill { height: 100%; border-radius: 3px; transition: width 0.25s ease; }
+
+  .stage-hint-pill {
+    position: absolute; right: 10px; bottom: 10px; z-index: 12;
+    padding: 4px 10px; border-radius: 12px;
+    background: rgba(24, 27, 33, 0.66); backdrop-filter: blur(6px);
+    border: 1px solid rgba(228, 189, 114, 0.3); color: #F3E7CE;
+    font-size: 10.5px; font-weight: 700; pointer-events: none;
+    max-width: 58%; text-align: right;
+  }
+
+  /* 底部宣纸控制坞 */
+  .bottom-dock {
+    flex-shrink: 0;
+    background: linear-gradient(180deg, #FAF5EB 0%, #F2E9D8 100%);
+    border-top: 1.5px solid var(--border-gold);
+    border-radius: 20px 20px 0 0;
+    padding: 9px 12px calc(9px + env(safe-area-inset-bottom));
+    box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.28);
+    z-index: 20; display: flex; flex-direction: column; gap: 7px;
+  }
+  .dock-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .dock-instruction { font-size: 12.5px; font-weight: 800; color: var(--lacquer-dark); letter-spacing: 0.4px; }
+  .dock-sub-tabs { display: flex; gap: 5px; align-items: center; }
+  .sub-tab {
+    padding: 3px 9px; border-radius: 12px; border: 1px solid var(--border-warm);
+    background: #FFFDF8; color: var(--lacquer-mid); font-size: 11px; font-weight: 700;
+    cursor: pointer; font-family: inherit; transition: all 0.16s; white-space: nowrap;
+  }
+  .sub-tab.active { background: var(--lacquer-dark); color: #F5E7C8; border-color: var(--lacquer-dark); }
+
+  /* 水平滚动选项卡片（器皿、冰型、装饰等） */
+  .options-scroll { display: flex; gap: 8px; overflow-x: auto; padding: 2px 1px; scrollbar-width: none; align-items: stretch; }
+  .options-scroll::-webkit-scrollbar { display: none; }
+  .thumb-card {
+    flex: 0 0 auto; min-width: 72px; padding: 6px 8px; border-radius: 14px;
+    background: var(--paper-card); border: 1.5px solid var(--border-warm);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+    cursor: pointer; transition: all 0.18s;
+  }
+  .thumb-card:active { transform: scale(0.95); }
+  .thumb-card.active {
+    border-color: var(--cinnabar); background: #FFF8F6;
+    box-shadow: 0 3px 10px rgba(184, 67, 54, 0.14);
+  }
+  .thumb-card canvas { display: block; }
+  .thumb-label { font-size: 11px; font-weight: 800; color: var(--lacquer-dark); white-space: nowrap; }
+  .thumb-sub { font-size: 9.5px; color: var(--lacquer-light); white-space: nowrap; }
+
+  /* 酒液 4×2 网格 */
+  .wine-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; width: 100%; }
+  .wine-pill {
+    display: flex; align-items: center; gap: 5px; padding: 6px 7px; border-radius: 14px;
+    background: var(--paper-card); border: 1.5px solid var(--border-warm); cursor: pointer;
+    box-shadow: 0 2px 5px rgba(43, 33, 28, 0.05); transition: all 0.15s; touch-action: none;
+  }
+  .wine-pill:active, .wine-pill.pouring {
+    transform: scale(0.95); border-color: var(--cinnabar); background: #FFF5F3;
+    box-shadow: 0 0 0 2px rgba(184, 67, 54, 0.22);
+  }
+  .wine-dot {
+    width: 15px; height: 15px; border-radius: 50%; flex-shrink: 0;
+    border: 1px solid rgba(43, 33, 28, 0.16);
+    box-shadow: inset 0 2px 3px rgba(255,255,255,0.45);
+  }
+  .wine-meta { display: flex; flex-direction: column; min-width: 0; }
+  .wine-name { font-size: 11px; font-weight: 800; color: var(--lacquer-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .wine-dens { font-size: 9px; color: var(--lacquer-light); }
+
+  /* 底部按钮行 */
+  .dock-action-row { display: flex; justify-content: space-between; align-items: center; gap: 7px; flex-wrap: nowrap; }
+  .small-pill-btn {
+    padding: 6px 10px; border-radius: 14px; border: 1.2px solid var(--border-warm);
+    background: var(--paper-card); color: var(--lacquer-mid);
+    font-size: 11px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap;
+  }
+  .small-pill-btn:active { transform: scale(0.95); }
+  .small-pill-btn.active { border-color: var(--celadon); background: var(--celadon-soft); color: #2D5E56; }
+  .primary-next-btn {
+    margin-left: auto; padding: 7px 15px; border-radius: 16px;
+    border: 1.5px solid #963228;
+    background: linear-gradient(135deg, #C44D3F 0%, #A33529 100%);
+    color: #FFF8EE; font-size: 12px; font-weight: 800; letter-spacing: 0.5px;
+    cursor: pointer; font-family: inherit; white-space: nowrap;
+    box-shadow: 0 4px 10px rgba(163, 53, 41, 0.28);
+  }
+  .primary-next-btn:active { transform: scale(0.96); }
+
+  /* 名士气泡 */
+  .coop-speaker-pill { position: absolute; left: 10px; top: 10px; z-index: 18; display: none; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--gold); background: rgba(250, 245, 235, 0.94); color: var(--cinnabar); font-size: 11px; font-weight: 700; cursor: pointer; }
+  .coop-speaker-pill.show { display: inline-flex; }
+  .coop-bubble { position: absolute; left: 12px; right: 12px; top: 10px; z-index: 19; background: rgba(251, 247, 239, 0.97); border: 1.5px solid var(--gold); border-radius: 16px; padding: 9px 12px; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28); display: none; flex-direction: column; gap: 5px; }
+  .coop-bubble.show { display: flex; }
+
+  /* 弹窗 */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(16, 18, 22, 0.62); backdrop-filter: blur(5px); z-index: 50; display: none; align-items: center; justify-content: center; padding: 14px; }
+  .modal-overlay.show { display: flex; }
+  .card-modal { width: 100%; max-width: 400px; background: var(--paper-warm); border-radius: 22px; border: 1.5px solid var(--border-gold); padding: 15px; box-shadow: 0 22px 54px rgba(0, 0, 0, 0.36); display: flex; flex-direction: column; gap: 9px; max-height: 92dvh; overflow-y: auto; align-items: center; }
+  .card-input, .card-textarea { width: 100%; border: 1px solid var(--border-warm); background: #FFFDF9; border-radius: 10px; padding: 7px 10px; font-size: 12.5px; color: var(--lacquer-dark); font-family: inherit; outline: none; }
+  .card-textarea { resize: none; height: 52px; }
+  .sig-pad-wrap { width: 100%; border: 1px dashed var(--lacquer-light); border-radius: 10px; background: #FFFDF9; position: relative; height: 70px; overflow: hidden; }
+  #sigCanvas { width: 100%; height: 100%; touch-action: none; display: block; }
+  .sig-hint { position: absolute; top: 5px; left: 8px; font-size: 10px; color: var(--lacquer-light); pointer-events: none; }
+  .sig-clear { position: absolute; top: 4px; right: 6px; font-size: 10px; padding: 2px 7px; border-radius: 7px; background: var(--paper-warm); border: 1px solid var(--border-warm); color: var(--lacquer-mid); cursor: pointer; }
+  .poster-img { width: 100%; max-width: 310px; border-radius: 12px; border: 1.5px solid var(--border-gold); box-shadow: 0 10px 26px rgba(24, 18, 14, 0.18); }
+  .poster-view-tabs { display: none; width: 100%; gap: 6px; padding: 3px; background: rgba(43, 33, 28, 0.06); border-radius: 12px; }
+  .poster-view-tabs.show { display: flex; }
+  .poster-tab-btn { flex: 1; border: none; background: transparent; color: var(--lacquer-mid); font-size: 11.5px; font-weight: 700; padding: 6px 8px; border-radius: 9px; cursor: pointer; font-family: inherit; transition: all 0.18s; }
+  .poster-tab-btn.active { background: #FFFDF9; color: var(--cinnabar); box-shadow: 0 2px 6px rgba(43, 33, 28, 0.1); }
+  .poster-notes-page { display: none; width: 100%; max-height: 360px; overflow-y: auto; flex-direction: column; gap: 7px; padding: 4px 2px; }
+  .poster-notes-page.show { display: flex; }
+  .poster-note-item { background: #FFFDF9; border: 1px solid var(--border-warm); border-left: 3px solid var(--cinnabar); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 3px; }
+  .poster-note-head { display: flex; justify-content: space-between; align-items: center; gap: 6px; font-size: 11px; font-weight: 800; color: var(--cinnabar); }
+  .poster-note-choice { font-size: 10.5px; color: var(--lacquer-light); }
+  .poster-note-line { font-size: 12px; line-height: 1.55; color: var(--lacquer-dark); }
+  .poster-feedback-row { display: none; width: 100%; gap: 6px; align-items: center; }
+  .poster-feedback-row.show { display: flex; }
+  .btn-cinnabar-large { width: 100%; padding: 10px; border-radius: 14px; border: 1.5px solid #8E2D23; background: linear-gradient(135deg, #C44D3F 0%, #A33529 100%); color: #FFF8EE; font-size: 13.5px; font-weight: 800; cursor: pointer; font-family: inherit; }
+  .btn-outline-large { width: 100%; padding: 9px; border-radius: 14px; border: 1.2px solid var(--border-warm); background: #FFFDF9; color: var(--lacquer-dark); font-size: 12.5px; font-weight: 700; cursor: pointer; font-family: inherit; }
+  .history-list { width: 100%; display: flex; flex-direction: column; gap: 9px; max-height: 60dvh; overflow-y: auto; }
+  .history-card { display: flex; gap: 9px; align-items: center; background: #FFFDF9; border: 1.2px solid var(--border-warm); border-radius: 13px; padding: 8px; }
+  .history-thumb { width: 52px; height: 70px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-warm); flex-shrink: 0; }
+  .history-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .history-title { font-size: 12.5px; font-weight: 800; color: var(--lacquer-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-desc { font-size: 10.5px; color: var(--lacquer-mid); line-height: 1.35; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+  .history-time { font-size: 9.5px; color: var(--lacquer-light); }
+  .history-ops { display: flex; flex-direction: column; gap: 4px; }
+  .hidden { display: none !important; }
+
+  /* 手机短屏紧凑适配 */
+  @media (max-height: 760px) {
+    .top-header { padding: 5px 10px 5px; }
+    .header-row { margin-bottom: 4px; }
+    .brand-title { font-size: 13.5px; }
+    .coop-bar { margin-bottom: 4px; }
+    .stepper { font-size: 9.5px; padding: 2px; }
+    .step-item { padding: 2px 1px; }
+    .bottom-dock { padding: 7px 10px calc(7px + env(safe-area-inset-bottom)); gap: 5px; }
+    .dock-instruction { font-size: 11.5px; }
+    .thumb-card { min-width: 64px; padding: 4px 6px; }
+    .wine-grid { gap: 5px; }
+    .wine-pill { padding: 5px 6px; }
+    .wine-name { font-size: 10.5px; }
+    .flavor-hud { padding: 4px 7px; font-size: 9.5px; min-width: 92px; }
+  }
+  @media (max-width: 390px) {
+    .wine-grid { grid-template-columns: repeat(4, 1fr); gap: 4px; }
+    .wine-pill { padding: 5px 4px; gap: 3px; }
+    .wine-dot { width: 13px; height: 13px; }
+    .wine-dens { display: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header class="top-header">
+    <div class="header-row">
+      <div class="brand-title">
+        <button class="icon-btn" id="backToWorkshopBtn" title="返回择坊" style="width:25px;height:25px;font-size:13px;font-weight:800;">‹</button>
+        <svg width="19" height="19" viewBox="0 0 24 24" fill="none">
+          <path d="M5 5H19L12 13V19M8 19H16" stroke="#2B211C" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          <path d="M7.6 8.2H16.4L12 13L7.6 8.2Z" fill="#C89B4B" fill-opacity="0.72"/>
+        </svg>
+        <span>曲水流觞 · 东汉微醺酒肆</span>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn text-pill" id="openHistoryBtn">酒谱</button>
+        <button class="icon-btn" id="soundToggleBtn" title="音效开关">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        </button>
+        <button class="icon-btn" id="resetGameBtn" title="重新调配">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="coop-bar" id="coopBar">
+      <select class="coop-select" id="coopCharSelect"><option value="">同步名士中…</option></select>
+      <select class="coop-select" id="coopModeSelect" style="max-width:116px;">
+        <option value="user_make_char_eat">我调·TA饮</option>
+        <option value="relay_coop">你一杓·TA一杓</option>
+        <option value="char_make_user_eat">TA调·敬我</option>
+      </select>
+      <button class="coop-btn" id="coopSwapTurnBtn" style="display:none;">我先手</button>
+      <button class="coop-btn primary" id="coopActionBtn" style="display:none;">请TA调酒</button>
+    </div>
+
+    <div class="stepper" id="stepperBar">
+      <span class="step-item active" data-step="0">择器</span>
+      <span class="step-item" data-step="1">冰料</span>
+      <span class="step-item" data-step="2">注酒</span>
+      <span class="step-item" data-step="3">搅和</span>
+      <span class="step-item" data-step="4">点睛</span>
+      <span class="step-item" data-step="5">封存</span>
+    </div>
+  </header>
+
+  <div class="stage-wrap">
+    <canvas id="drinkCanvas" width="720" height="760"></canvas>
+
+    <!-- 雅境氛围切换（取代社媒风音效条） -->
+    <div class="stage-top-tools">
+      <button type="button" class="scene-pill" id="sceneThemeBtn">景致：烛影夜轩</button>
+    </div>
+
+    <!-- 实时风味平衡指示 -->
+    <div class="flavor-hud" id="flavorHud">
+      <div class="flavor-row"><span class="flavor-lbl">甘甜</span><div class="flavor-bar"><div class="flavor-fill" id="barSweet" style="width:0%;background:#E4BD72;"></div></div></div>
+      <div class="flavor-row"><span class="flavor-lbl">清酸</span><div class="flavor-bar"><div class="flavor-fill" id="barSour" style="width:0%;background:#7FC49A;"></div></div></div>
+      <div class="flavor-row"><span class="flavor-lbl">花果</span><div class="flavor-bar"><div class="flavor-fill" id="barFloral" style="width:0%;background:#E08A92;"></div></div></div>
+      <div class="flavor-row"><span class="flavor-lbl">酒韵</span><div class="flavor-bar"><div class="flavor-fill" id="barAbv" style="width:0%;background:#99A8D6;"></div></div></div>
+    </div>
+
+    <!-- 舞台操作提示 -->
+    <div class="stage-hint-pill" id="stageHintPill">择一雅器，可选挂边与冰杯凝露</div>
+
+    <!-- 名士说话气泡 -->
+    <button class="coop-speaker-pill" id="coopSpeakerPill" type="button">
+      <span id="coopPillName">名士</span><span style="font-size:10px;">▸</span>
+    </button>
+    <div class="coop-bubble" id="coopBubble">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:12px;font-weight:800;color:var(--cinnabar);" id="coopBubbleName">名士</span>
+          <span style="font-size:10px;padding:1px 7px;border-radius:999px;background:var(--cinnabar-soft);color:var(--cinnabar);font-weight:700;" id="coopBubbleTag">调酒中</span>
+        </div>
+        <button type="button" id="coopBubbleCollapseBtn" style="border:none;background:transparent;color:var(--lacquer-mid);font-size:11px;font-weight:700;cursor:pointer;">收起 ▴</button>
+      </div>
+      <div id="coopBubbleText" style="font-size:12px;line-height:1.55;color:var(--lacquer-dark);"></div>
+      <div id="coopBubbleActions" style="display:none;gap:8px;margin-top:2px;">
+        <button type="button" class="coop-btn primary" id="coopNextStepBtn" style="flex:1;padding:5px 10px;">看下一步</button>
+        <button type="button" class="coop-btn" id="coopSkipAnimBtn" style="padding:5px 10px;">直达成品</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 底部操作面板 -->
+  <div class="bottom-dock" id="bottomDock"></div>
+</div>
+
+<!-- 题写酒名与毛笔落款弹窗 -->
+<div class="modal-overlay" id="cardModal">
+  <div class="card-modal">
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;color:var(--lacquer-dark);">曲水题名 · 封存酒笺</h3>
+      <button class="icon-btn" id="closeCardModalBtn">×</button>
+    </div>
+    <input type="text" class="card-input" id="drinkTitleInput" maxlength="14" placeholder="为这杯佳酿题名" value="月下流霞">
+    <input type="text" class="card-input" id="drinkToInput" maxlength="18" placeholder="敬赠知音" value="致：微醺知音">
+    <textarea class="card-textarea" id="drinkMsgInput" maxlength="64" placeholder="写下一句祝酒词...">葡萄美酒夜光杯，欲饮琵琶马上催。愿与君共此良宵。</textarea>
+    <div class="sig-pad-wrap">
+      <span class="sig-hint">在此处挥毫落款（随笔速呈现真实毛笔粗细）</span>
+      <button class="sig-clear" id="clearSigBtn">重书</button>
+      <canvas id="sigCanvas" width="340" height="70"></canvas>
+    </div>
+    <button type="button" class="btn-cinnabar-large" id="saveCardBtn">生成收藏酒卡并入酒谱</button>
+  </div>
+</div>
+
+<!-- 收藏酒卡导出弹窗 -->
+<div class="modal-overlay" id="posterModal">
+  <div class="card-modal">
+    <div class="poster-view-tabs" id="posterViewTabs">
+      <button type="button" class="poster-tab-btn active" id="tabPosterImg">微醺酒笺</button>
+      <button type="button" class="poster-tab-btn" id="tabPosterNotes">TA 的调酒心意</button>
+    </div>
+    <img id="posterImage" class="poster-img" alt="专属特调酒卡">
+    <div class="poster-notes-page" id="posterNotesPage"></div>
+    <div style="font-size:13px;font-weight:800;color:var(--lacquer-dark);text-align:center;" id="posterFlavorLine">佳酿已成，可赠知音共饮。</div>
+    <div id="posterReviewBox" style="display:none;width:100%;background:#FFF8F6;border:1.2px solid #E4B7B0;border-radius:12px;padding:8px 10px;font-size:12px;line-height:1.55;"></div>
+    <div class="poster-feedback-row" id="posterUserFeedbackRow">
+      <input type="text" class="card-input" id="userFeedbackInput" maxlength="80" placeholder="尝一口，告诉 TA 这杯喝起来如何…" style="flex:1;">
+      <button type="button" class="coop-btn primary" id="sendUserFeedbackBtn" style="padding:7px 11px;white-space:nowrap;">告诉TA</button>
+    </div>
+    <button type="button" class="btn-cinnabar-large" id="downloadPosterBtn">保存高清酒卡 ↓</button>
+    <div style="display:flex;gap:7px;width:100%;">
+      <button type="button" class="btn-outline-large" id="askCharTasteBtn" style="flex:1;font-size:11.5px;padding:8px 6px;">请名士品评</button>
+      <button type="button" class="btn-outline-large" id="saveBackpackBtn" style="flex:0.85;font-size:11.5px;padding:8px 6px;">收入行囊</button>
+      <button type="button" class="btn-outline-large" id="openForwardModalBtn" style="flex:0.95;font-size:11.5px;padding:8px 6px;">赠予好友</button>
+    </div>
+    <div style="display:flex;gap:9px;width:100%;">
+      <button type="button" class="btn-outline-large" id="continueDecorBtn" style="flex:1;">继续微调</button>
+      <button type="button" class="btn-outline-large" id="remakeDrinkBtn" style="flex:1;">再调一杯</button>
+    </div>
+    <div id="posterActionToast" style="font-size:11px;color:var(--cinnabar);font-weight:700;min-height:14px;"></div>
+  </div>
+</div>
+
+<!-- 酒谱手账弹窗（IndexedDB 持久化） -->
+<div class="modal-overlay" id="historyModal">
+  <div class="card-modal">
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;color:var(--lacquer-dark);">曲水酒谱 · 历次佳酿</h3>
+      <button class="icon-btn" id="closeHistoryModalBtn">×</button>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+</div>
+
+<!-- 分享给好友弹窗 -->
+<div class="modal-overlay" id="forwardModal">
+  <div class="card-modal">
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;color:var(--lacquer-dark);">飞鸽传书 · 敬赠佳酿</h3>
+      <button class="icon-btn" id="closeForwardModalBtn">×</button>
+    </div>
+    <select class="card-input" id="forwardCharSelect"><option value="">选择传讯名士</option></select>
+    <input type="text" class="card-input" id="forwardNoteInput" maxlength="40" placeholder="附上一句赠言（选填）" value="新调了一杯微醺佳酿，邀君共酌。">
+    <button type="button" class="btn-cinnabar-large" id="confirmForwardBtn">送出佳酿</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  'use strict';
+
+  /* ============================================================================
+   * 0. 工具函数与声学引擎 (Web Audio 拟真调酒音效)
+   * ============================================================================ */
+  const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+
+  function hexToRgb(hex) {
+    const h = hex.replace('#', '');
+    return [parseInt(h.slice(0, 2), 16), parseInt(h.slice(2, 4), 16), parseInt(h.slice(4, 6), 16)];
+  }
+  function rgbCss(r, g, b, a = 1) {
+    return `rgba(${Math.round(clamp(r, 0, 255))},${Math.round(clamp(g, 0, 255))},${Math.round(clamp(b, 0, 255))},${clamp(a, 0, 1).toFixed(3)})`;
+  }
+
+  class DrinkSoundEngine {
+    constructor() { this.ctx = null; this.enabled = true; this.pourNode = null; this.pourGain = null; this.pourFilter = null; }
+    init() {
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) this.ctx = new AC();
+      }
+      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    }
+    startPour(fillRatio = 0.2, slowMode = false) {
+      if (!this.enabled) return;
+      this.init(); if (!this.ctx || this.pourNode) return;
+      const bufSize = this.ctx.sampleRate * 2;
+      const buf = this.ctx.createBuffer(1, bufSize, this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < bufSize; i++) d[i] = (Math.random() * 2 - 1) * 0.45;
+      const src = this.ctx.createBufferSource(); src.buffer = buf; src.loop = true;
+      const bp = this.ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.Q.value = slowMode ? 7.5 : 4.2;
+      bp.frequency.value = (slowMode ? 520 : 380) + fillRatio * 540;
+      const g = this.ctx.createGain(); g.gain.value = 0.001;
+      g.gain.linearRampToValueAtTime(slowMode ? 0.07 : 0.13, this.ctx.currentTime + 0.08);
+      src.connect(bp); bp.connect(g); g.connect(this.ctx.destination); src.start();
+      this.pourNode = src; this.pourFilter = bp; this.pourGain = g;
+    }
+    updatePour(fillRatio, slowMode) {
+      if (!this.pourFilter || !this.ctx) return;
+      const targetF = (slowMode ? 520 : 380) + fillRatio * 620 + Math.sin(performance.now() * 0.025) * 45;
+      this.pourFilter.frequency.setTargetAtTime(targetF, this.ctx.currentTime, 0.05);
+    }
+    stopPour() {
+      if (!this.pourNode || !this.ctx) return;
+      try {
+        this.pourGain.gain.setTargetAtTime(0.0001, this.ctx.currentTime, 0.04);
+        const n = this.pourNode; setTimeout(() => { try { n.stop(); } catch (_) {} }, 120);
+      } catch (_) {}
+      this.pourNode = null; this.pourFilter = null; this.pourGain = null;
+    }
+    playClink(freq = 1680, vol = 0.08) {
+      if (!this.enabled) return;
+      this.init(); if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator(); const g = this.ctx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(freq, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 0.92, now + 0.18);
+      g.gain.setValueAtTime(vol, now); g.gain.exponentialRampToValueAtTime(0.0008, now + 0.22);
+      osc.connect(g); g.connect(this.ctx.destination); osc.start(now); osc.stop(now + 0.24);
+    }
+    playMuddle() {
+      if (!this.enabled) return;
+      this.init(); if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator(); const g = this.ctx.createGain();
+      osc.type = 'triangle'; osc.frequency.setValueAtTime(160, now);
+      osc.frequency.exponentialRampToValueAtTime(68, now + 0.12);
+      g.gain.setValueAtTime(0.16, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.14);
+      osc.connect(g); g.connect(this.ctx.destination); osc.start(now); osc.stop(now + 0.15);
+    }
+    playPop(freq = 540) {
+      if (!this.enabled) return;
+      this.init(); if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const osc = this.ctx.createOscillator(); const g = this.ctx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(freq * 0.72, now);
+      osc.frequency.exponentialRampToValueAtTime(freq * 1.28, now + 0.09);
+      g.gain.setValueAtTime(0.09, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.11);
+      osc.connect(g); g.connect(this.ctx.destination); osc.start(now); osc.stop(now + 0.12);
+    }
+    playChime() {
+      if (!this.enabled) return;
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => setTimeout(() => this.playClink(f, 0.055), i * 85));
+    }
+  }
+  const sfx = new DrinkSoundEngine();
+
+  /* ============================================================================
+   * 1. 数据目录：场景主题、器皿、挂边、冰型、捣料、酒液(含物理密度)、点睛饰品
+   * ============================================================================ */
+  const SCENE_THEMES = [
+    {
+      id: 'candle_pavilion', name: '烛影夜轩',
+      bgTop: '#1A1F28', bgMid: '#262B35', bgBot: '#1E1A18',
+      lanternGlow: 'rgba(235, 175, 92, 0.24)', moonColor: '#EFE4C8',
+      screenStroke: 'rgba(218, 184, 126, 0.14)',
+      tableTop: '#33241C', tableEdge: '#211610', tableSheen: 'rgba(235, 188, 120, 0.16)',
+      coasterFill: '#455A56', coasterRim: '#C89B4B',
+      glassStroke: 'rgba(242, 236, 224, 0.62)', glassSpec: 'rgba(255, 250, 240, 0.72)'
+    },
+    {
+      id: 'moon_bamboo', name: '月下竹岚',
+      bgTop: '#132229', bgMid: '#1E353E', bgBot: '#172226',
+      lanternGlow: 'rgba(165, 214, 210, 0.20)', moonColor: '#E5F2EE',
+      screenStroke: 'rgba(170, 214, 206, 0.14)',
+      tableTop: '#262F30', tableEdge: '#171E1F', tableSheen: 'rgba(178, 222, 216, 0.15)',
+      coasterFill: '#3B4D48', coasterRim: '#A5C7BE',
+      glassStroke: 'rgba(226, 245, 242, 0.65)', glassSpec: 'rgba(244, 255, 252, 0.74)'
+    },
+    {
+      id: 'warm_tea_day', name: '曲水晴昼',
+      bgTop: '#E9DFCE', bgMid: '#DDD0BA', bgBot: '#C9B89D',
+      lanternGlow: 'rgba(255, 244, 214, 0.45)', moonColor: '#FFF7E4',
+      screenStroke: 'rgba(128, 102, 74, 0.16)',
+      tableTop: '#7B5A42', tableEdge: '#543B29', tableSheen: 'rgba(255, 244, 222, 0.22)',
+      coasterFill: '#6D867E', coasterRim: '#C89B4B',
+      glassStroke: 'rgba(110, 96, 82, 0.55)', glassSpec: 'rgba(255, 255, 255, 0.84)'
+    }
+  ];
+
+  const HAN_GLASSES = [
+    {
+      id: 'goblet', name: '夜光高脚杯', sub: '流霞郁金',
+      topY: 196, botY: 454, stemBotY: 618,
+      rimRx: 102, midRx: 118, botRx: 44, baseRx: 72,
+      tint: 'rgba(245, 248, 246, 0.14)', shape: 'goblet'
+    },
+    {
+      id: 'yushang', name: '朱漆羽觞', sub: '汉代耳杯',
+      topY: 274, botY: 472, stemBotY: 560,
+      rimRx: 132, midRx: 116, botRx: 66, baseRx: 78,
+      tint: 'rgba(182, 54, 38, 0.14)', shape: 'yushang', hasEars: true
+    },
+    {
+      id: 'coupe', name: '琉璃蝶口盏', sub: '广口闻香',
+      topY: 224, botY: 404, stemBotY: 618,
+      rimRx: 136, midRx: 120, botRx: 34, baseRx: 70,
+      tint: 'rgba(242, 248, 252, 0.15)', shape: 'coupe'
+    },
+    {
+      id: 'rocks', name: '冰裂古典杯', sub: '厚底老冰',
+      topY: 244, botY: 548, stemBotY: 586,
+      rimRx: 106, midRx: 102, botRx: 92, baseRx: 94,
+      tint: 'rgba(230, 242, 240, 0.14)', shape: 'rocks'
+    },
+    {
+      id: 'celadon', name: '青瓷莲花爵', sub: '温润玉盏',
+      topY: 214, botY: 468, stemBotY: 616,
+      rimRx: 98, midRx: 114, botRx: 48, baseRx: 74,
+      tint: 'rgba(136, 184, 170, 0.22)', shape: 'celadon'
+    }
+  ];
+
+  const RIM_CRUSTS = [
+    { id: 'none', name: '素净杯口', color: null, specks: [] },
+    { id: 'sea_salt', name: '海盐霜边', color: '#F3F6F8', specks: ['#FFFFFF', '#DCE6EC', '#E9F0F4'] },
+    { id: 'osmanthus_sugar', name: '桂花糖霜', color: '#F2C96B', specks: ['#FFF4D2', '#E8A838', '#D98624'] },
+    { id: 'plum_powder', name: '乌梅朱砂', color: '#B84A44', specks: ['#D87A72', '#91302C', '#F2C4BE'] },
+    { id: 'matcha_salt', name: '青茗盐边', color: '#84B07A', specks: ['#B6D6AE', '#648F5B', '#EDF5EA'] }
+  ];
+
+  const ICE_TYPES = [
+    { id: 'none', name: '去冰', sub: '温润原味' },
+    { id: 'sphere', name: '老冰球', sub: '慢融澄澈' },
+    { id: 'cubes', name: '凌阴方冰', sub: '清脆撞杯' },
+    { id: 'crushed', name: '碎雪刨冰', sub: '绵密冰沙' }
+  ];
+
+  const MUDDLE_INGREDIENTS = [
+    { id: 'mint', name: '鲜薄荷', color: '#4A9C64', juice: '#62B87A', sweet: 0.05, sour: 0.05, floral: 0.35 },
+    { id: 'green_plum', name: '脆青梅', color: '#86B856', juice: '#A4D16B', sweet: 0.15, sour: 0.42, floral: 0.15 },
+    { id: 'blood_orange', name: '鲜橙瓣', color: '#E8743B', juice: '#F28E46', sweet: 0.28, sour: 0.30, floral: 0.18 },
+    { id: 'white_peach', name: '白桃肉', color: '#F0B6B8', juice: '#F4A6AE', sweet: 0.38, sour: 0.08, floral: 0.28 },
+    { id: 'osmanthus', name: '金桂瓣', color: '#E6A732', juice: '#F0BC4D', sweet: 0.25, sour: 0.02, floral: 0.45 },
+    { id: 'hibiscus', name: '洛神萼', color: '#B52B46', juice: '#D13B58', sweet: 0.12, sour: 0.38, floral: 0.32 }
+  ];
+
+  // 8 款带物理密度(density)与瓶身配色的酒液
+  const WINE_PALETTE = [
+    { id: 'osmanthus_honey', name: '桂花蜜露', color: '#E5A22E', alpha: 0.88, density: 1.32, bottle: '#7D4B16', label: '#F6E6BF', sweet: 0.85, sour: 0.08, floral: 0.78, abv: 0.05, tag: '重·沉底' },
+    { id: 'hibiscus_syrup', name: '洛神石榴', color: '#C7344E', alpha: 0.86, density: 1.26, bottle: '#6B1829', label: '#FADCE2', sweet: 0.62, sour: 0.52, floral: 0.55, abv: 0.08, tag: '重·沉底' },
+    { id: 'green_plum', name: '青梅冰酿', color: '#7BB65E', alpha: 0.78, density: 1.09, bottle: '#345834', label: '#E7F2DC', sweet: 0.45, sour: 0.74, floral: 0.40, abv: 0.32, tag: '中·清冽' },
+    { id: 'tangerine', name: '丹橘蜜酒', color: '#EA7A47', alpha: 0.82, density: 1.05, bottle: '#8C3F1E', label: '#FCE7D6', sweet: 0.56, sour: 0.44, floral: 0.48, abv: 0.28, tag: '中·果香' },
+    { id: 'grape_wine', name: '西域葡酿', color: '#8E3568', alpha: 0.84, density: 1.00, bottle: '#4B1D3B', label: '#F3DFEC', sweet: 0.38, sour: 0.32, floral: 0.58, abv: 0.58, tag: '中·微醺' },
+    { id: 'butterfly_pea', name: '蝶豆青岚', color: '#4A6EC2', alpha: 0.78, density: 0.95, bottle: '#223561', label: '#DDE7FA', sweet: 0.18, sour: 0.16, floral: 0.68, abv: 0.22, tag: '轻·浮层' },
+    { id: 'lychee_dew', name: '荔枝玉露', color: '#F2B8C2', alpha: 0.68, density: 0.92, bottle: '#8A5260', label: '#FDF0F2', sweet: 0.64, sour: 0.14, floral: 0.62, abv: 0.25, tag: '轻·浮层' },
+    { id: 'pear_spirit', name: '梨花白', color: '#DFEBF0', alpha: 0.52, density: 0.86, bottle: '#485A63', label: '#F2F7F9', sweet: 0.14, sour: 0.10, floral: 0.34, abv: 0.88, tag: '最轻·烈' }
+  ];
+
+  const GARNISH_CATALOG = [
+    { id: 'lime_wheel', name: '青柠轮片', mode: 'both', r: 27 },
+    { id: 'orange_half', name: '血橙半月', mode: 'both', r: 30 },
+    { id: 'peach_wedge', name: '白桃果角', mode: 'both', r: 24 },
+    { id: 'strawberry', name: '草莓切面', mode: 'both', r: 22 },
+    { id: 'blueberry_cluster', name: '蓝莓三颗', mode: 'in', r: 19 },
+    { id: 'mint_sprig', name: '鲜薄荷尖', mode: 'both', r: 25 },
+    { id: 'rosemary', name: '迷迭香枝', mode: 'rim', r: 34 },
+    { id: 'osmanthus_sprig', name: '金桂花枝', mode: 'both', r: 26 },
+    { id: 'hibiscus_petal', name: '洛神干花', mode: 'both', r: 22 },
+    { id: 'bamboo_skewer', name: '竹签串梅', mode: 'rim', r: 36 }
+  ];
+
+  const STIRRER_TYPES = [
+    { id: 'none', name: '无饮具' },
+    { id: 'lotus_stem', name: '翡翠荷茎' },
+    { id: 'bamboo_chip', name: '湘妃竹筹' },
+    { id: 'brass_spoon', name: '鎏金吧勺' },
+    { id: 'glass_straw', name: '琉璃吸管' }
+  ];
+
+  const AROMA_TYPES = [
+    { id: 'none', name: '无雾气' },
+    { id: 'citrus_mist', name: '柑橘喷雾' },
+    { id: 'incense_smoke', name: '沉香冷烟' }
+  ];
+
+  /* ============================================================================
+   * 2. IndexedDB 酒谱持久化仓库
+   * ============================================================================ */
+  const DB_NAME = 'HanDrinkWorkshopDB';
+  const DB_STORE = 'drinks';
+  function openDrinkDB() {
+    return new Promise((resolve, reject) => {
+      if (!window.indexedDB) return reject(new Error('No IndexedDB'));
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains(DB_STORE)) {
+          db.createObjectStore(DB_STORE, { keyPath: 'id' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error);
+    });
+  }
+  async function saveDrinkToDB(record) {
+    try {
+      const db = await openDrinkDB();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        tx.objectStore(DB_STORE).put(record);
+        tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+      });
+    } catch (_) {
+      try {
+        const arr = JSON.parse(localStorage.getItem('han_drink_history') || '[]');
+        arr.unshift(record);
+        localStorage.setItem('han_drink_history', JSON.stringify(arr.slice(0, 18)));
+      } catch (__) {}
+    }
+  }
+  async function loadDrinksFromDB() {
+    try {
+      const db = await openDrinkDB();
+      const items = await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readonly');
+        const req = tx.objectStore(DB_STORE).getAll();
+        req.onsuccess = () => resolve(req.result || []);
+        req.onerror = () => reject(req.error);
+      });
+      return items.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } catch (_) {
+      try { return JSON.parse(localStorage.getItem('han_drink_history') || '[]'); } catch (__) { return []; }
+    }
+  }
+  async function deleteDrinkFromDB(id) {
+    try {
+      const db = await openDrinkDB();
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction(DB_STORE, 'readwrite');
+        tx.objectStore(DB_STORE).delete(id);
+        tx.oncomplete = resolve; tx.onerror = () => reject(tx.error);
+      });
+    } catch (_) {
+      try {
+        const arr = JSON.parse(localStorage.getItem('han_drink_history') || '[]').filter(x => x.id !== id);
+        localStorage.setItem('han_drink_history', JSON.stringify(arr));
+      } catch (__) {}
+    }
+  }
+
+  /* ============================================================================
+   * 3. 真实 2D 网格流体混合引擎 (Plume Vortex + Density Buoyancy + Advection)
+   * ============================================================================ */
+  class Fluid2DEngine {
+    constructor(nx = 32, ny = 48) {
+      this.nx = nx; this.ny = ny;
+      const n = nx * ny;
+      this.r = new Float32Array(n);
+      this.g = new Float32Array(n);
+      this.b = new Float32Array(n);
+      this.a = new Float32Array(n);
+      this.d = new Float32Array(n); // 密度
+      this.vx = new Float32Array(n);
+      this.vy = new Float32Array(n);
+      // 暂存双缓冲
+      this._r = new Float32Array(n); this._g = new Float32Array(n);
+      this._b = new Float32Array(n); this._a = new Float32Array(n);
+      this._d = new Float32Array(n);
+      this.fillLevel = 0; // 0..0.92
+      this.foamLevel = 0; // 0..0.14 摇晃/直冲产生的绵密酒沫
+      this.sloshAngle = 0;
+      this.sloshVel = 0;
+      this.wavePhase = 0;
+      // 离屏渲染缓冲
+      this.offCanvas = document.createElement('canvas');
+      this.offCanvas.width = nx; this.offCanvas.height = ny;
+      this.offCtx = this.offCanvas.getContext('2d');
+      this.imgData = this.offCtx.createImageData(nx, ny);
+      this.reset();
+    }
+    idx(x, y) { return y * this.nx + x; }
+    reset() {
+      this.r.fill(0); this.g.fill(0); this.b.fill(0); this.a.fill(0);
+      this.d.fill(1.0); this.vx.fill(0); this.vy.fill(0);
+      this.fillLevel = 0; this.foamLevel = 0; this.sloshAngle = 0; this.sloshVel = 0;
+    }
+    // 捣压鲜果在杯底渗出原汁
+    injectMuddleJuice(hexColor, amount = 0.035) {
+      const [cr, cg, cb] = hexToRgb(hexColor);
+      const prevFill = this.fillLevel;
+      this.fillLevel = Math.min(0.90, this.fillLevel + amount);
+      const maxRow = Math.max(2, Math.floor(this.fillLevel * this.ny));
+      const injectRows = Math.min(maxRow, 6);
+      for (let y = 0; y < injectRows; y++) {
+        for (let x = 0; x < this.nx; x++) {
+          const i = this.idx(x, y);
+          const w = (1 - y / (injectRows + 1)) * (0.45 + Math.random() * 0.35);
+          if (this.a[i] < 0.05) {
+            this.r[i] = cr; this.g[i] = cg; this.b[i] = cb; this.a[i] = 0.85; this.d[i] = 1.24;
+          } else {
+            this.r[i] = lerp(this.r[i], cr, w * 0.65);
+            this.g[i] = lerp(this.g[i], cg, w * 0.65);
+            this.b[i] = lerp(this.b[i], cb, w * 0.65);
+            this.a[i] = Math.min(0.95, lerp(this.a[i], 0.88, w * 0.5));
+            this.d[i] = lerp(this.d[i], 1.24, w * 0.5);
+          }
+          // 捣压向外微涌
+          const dx = (x - this.nx * 0.5) / (this.nx * 0.5);
+          this.vx[i] += dx * 0.35;
+          this.vy[i] += 0.28;
+        }
+      }
+      if (prevFill < 0.02) this.sloshVel += 0.015;
+    }
+    // 核心注酒：slowFloat=true 贴壁缓分层；false 直冲羽流+双涡环卷吸
+    pourStep(wine, deltaFill, slowFloat = false, normPourX = 0.54) {
+      if (this.fillLevel >= 0.90) return false;
+      const [cr, cg, cb] = hexToRgb(wine.color);
+      const ca = wine.alpha || 0.82;
+      const cd = wine.density || 1.0;
+
+      const prevTop = Math.floor(this.fillLevel * this.ny);
+      this.fillLevel = Math.min(0.90, this.fillLevel + deltaFill);
+      const newTop = Math.max(prevTop + 1, Math.floor(this.fillLevel * this.ny));
+
+      const px = clamp(Math.floor(normPourX * this.nx), 4, this.nx - 5);
+
+      // 1) 填充新增液层
+      for (let y = prevTop; y < Math.min(this.ny, newTop + 1); y++) {
+        for (let x = 0; x < this.nx; x++) {
+          const i = this.idx(x, y);
+          if (this.a[i] < 0.05) {
+            this.r[i] = cr; this.g[i] = cg; this.b[i] = cb; this.a[i] = ca; this.d[i] = cd;
+          } else {
+            const blend = slowFloat ? 0.55 : 0.72;
+            this.r[i] = lerp(this.r[i], cr, blend);
+            this.g[i] = lerp(this.g[i], cg, blend);
+            this.b[i] = lerp(this.b[i], cb, blend);
+            this.a[i] = lerp(this.a[i], ca, blend);
+            this.d[i] = lerp(this.d[i], cd, blend);
+          }
+        }
+      }
+
+      // 2) 若是直冲模式：注入下冲羽流 (Plume) 与左右双侧涡环卷吸
+      if (!slowFloat && newTop > 3) {
+        const plumeDepth = Math.min(newTop, Math.max(6, Math.floor(11 + (cd - 0.85) * 20)));
+        for (let dy = 0; dy < plumeDepth; dy++) {
+          const y = newTop - 1 - dy;
+          if (y < 0) break;
+          const depthT = dy / plumeDepth;
+          const radius = Math.floor(2.2 + depthT * 4.5);
+          for (let dx = -radius; dx <= radius; dx++) {
+            const x = px + dx;
+            if (x < 0 || x >= this.nx) continue;
+            const dist = Math.abs(dx) / (radius + 0.5);
+            const strength = (1 - dist) * (1 - depthT * 0.58) * 0.44;
+            const i = this.idx(x, y);
+            this.r[i] = lerp(this.r[i], cr, strength);
+            this.g[i] = lerp(this.g[i], cg, strength);
+            this.b[i] = lerp(this.b[i], cb, strength);
+            this.a[i] = lerp(this.a[i], ca, strength);
+            this.d[i] = lerp(this.d[i], cd, strength);
+            // 中心向下冲，两侧向外翻卷形成经典双涡环
+            this.vy[i] -= (1 - dist) * 1.15 * (1 - depthT * 0.4);
+            this.vx[i] += Math.sign(dx || (Math.random() - 0.5)) * (0.25 + depthT * 0.85) * (1 - dist * 0.5);
+          }
+        }
+        this.foamLevel = Math.min(0.06, this.foamLevel + deltaFill * 0.08);
+        this.sloshVel += (Math.random() - 0.5) * 0.009;
+      } else {
+        // 缓流模式：几乎无湍流，微弱水平铺展
+        const y = Math.min(this.ny - 1, Math.max(0, newTop - 1));
+        for (let x = 0; x < this.nx; x++) {
+          const i = this.idx(x, y);
+          this.vx[i] += (x > px ? 0.14 : -0.14);
+        }
+        this.sloshVel += (Math.random() - 0.5) * 0.002;
+      }
+      return true;
+    }
+    // 吧勺搅拌注入涡旋剪切速度场
+    stirAt(normX, normY, dx, dy) {
+      const topRow = Math.floor(this.fillLevel * this.ny);
+      if (topRow < 2) return;
+      const cx = clamp(normX * this.nx, 1, this.nx - 2);
+      const cy = clamp(normY * this.ny, 1, topRow - 1);
+      const rad = 7.5;
+      for (let y = 0; y < topRow; y++) {
+        for (let x = 0; x < this.nx; x++) {
+          const ddx = x - cx, ddy = y - cy;
+          const dist = Math.hypot(ddx, ddy);
+          if (dist < rad) {
+            const f = (1 - dist / rad);
+            const i = this.idx(x, y);
+            // 沿拖动方向推流 + 垂直切向微涡旋
+            this.vx[i] += dx * f * 0.95 - ddy * 0.06 * f;
+            this.vy[i] += dy * f * 0.72 + ddx * 0.06 * f;
+          }
+        }
+      }
+      this.sloshVel += clamp(dx * 0.008, -0.025, 0.025);
+    }
+    // 摇酒壶摇和：剧烈混合 + 生成绵密酒沫
+    shakePulse(intensity = 1.0) {
+      const topRow = Math.floor(this.fillLevel * this.ny);
+      if (topRow < 2) return;
+      for (let y = 0; y < topRow; y++) {
+        for (let x = 0; x < this.nx; x++) {
+          const i = this.idx(x, y);
+          const ang = (x * 0.35 + y * 0.27 + performance.now() * 0.01);
+          this.vx[i] += Math.cos(ang) * 1.35 * intensity;
+          this.vy[i] += Math.sin(ang) * 1.15 * intensity;
+        }
+      }
+      this.foamLevel = Math.min(0.13, this.foamLevel + 0.012 * intensity);
+      this.sloshVel += (Math.random() - 0.5) * 0.08 * intensity;
+    }
+    // 每帧流体步进：半拉格朗日平流 + 密度浮沉交换 + 粘性扩散
+    step() {
+      this.wavePhase += 0.065;
+      this.sloshVel += -this.sloshAngle * 0.14;
+      this.sloshVel *= 0.89;
+      this.sloshAngle = clamp(this.sloshAngle + this.sloshVel, -0.26, 0.26);
+
+      const topRow = Math.floor(this.fillLevel * this.ny);
+      if (topRow < 2) return;
+
+      const nx = this.nx;
+      // 1) 浮力密度驱动：重液略下沉、轻液略上浮（带微扰形成自然丝缕）
+      for (let y = 1; y < topRow; y++) {
+        for (let x = 0; x < nx; x++) {
+          const i = this.idx(x, y);
+          const below = this.idx(x, y - 1);
+          const diffD = this.d[i] - this.d[below];
+          if (diffD > 0.03) {
+            const sinkForce = Math.min(0.45, diffD * 0.85);
+            this.vy[i] -= sinkForce;
+            this.vy[below] += sinkForce * 0.8;
+            // 瑞利-泰勒微扰，让下沉糖浆拉出丝缕而非整块下坠
+            const swirl = Math.sin(x * 0.9 + y * 0.5 + this.wavePhase) * 0.12;
+            this.vx[i] += swirl;
+          }
+        }
+      }
+
+      // 2) 半拉格朗日平流 (Semi-Lagrangian Advection)
+      for (let y = 0; y < topRow; y++) {
+        for (let x = 0; x < nx; x++) {
+          const i = this.idx(x, y);
+          const sx = clamp(x - this.vx[i] * 0.42, 0, nx - 1.001);
+          const sy = clamp(y - this.vy[i] * 0.42, 0, topRow - 1.001);
+          const x0 = Math.floor(sx), y0 = Math.floor(sy);
+          const x1 = Math.min(nx - 1, x0 + 1), y1 = Math.min(topRow - 1, y0 + 1);
+          const tx = sx - x0, ty = sy - y0;
+
+          const i00 = this.idx(x0, y0), i10 = this.idx(x1, y0);
+          const i01 = this.idx(x0, y1), i11 = this.idx(x1, y1);
+          const w00 = (1 - tx) * (1 - ty), w10 = tx * (1 - ty), w01 = (1 - tx) * ty, w11 = tx * ty;
+
+          this._r[i] = this.r[i00] * w00 + this.r[i10] * w10 + this.r[i01] * w01 + this.r[i11] * w11;
+          this._g[i] = this.g[i00] * w00 + this.g[i10] * w10 + this.g[i01] * w01 + this.g[i11] * w11;
+          this._b[i] = this.b[i00] * w00 + this.b[i10] * w10 + this.b[i01] * w01 + this.b[i11] * w11;
+          this._a[i] = this.a[i00] * w00 + this.a[i10] * w10 + this.a[i01] * w01 + this.a[i11] * w11;
+          this._d[i] = this.d[i00] * w00 + this.d[i10] * w10 + this.d[i01] * w01 + this.d[i11] * w11;
+        }
+      }
+
+      // 3) 极轻微分子扩散 + 速度衰减（保持分层与拉丝不被洗平）
+      for (let y = 0; y < topRow; y++) {
+        for (let x = 0; x < nx; x++) {
+          const i = this.idx(x, y);
+          const speed = Math.hypot(this.vx[i], this.vy[i]);
+          const diff = clamp(0.008 + speed * 0.032, 0.008, 0.08);
+          const xl = x > 0 ? i - 1 : i, xr = x < nx - 1 ? i + 1 : i;
+          const yd = y > 0 ? i - nx : i, yu = y < topRow - 1 ? i + nx : i;
+          this.r[i] = lerp(this._r[i], (this._r[xl] + this._r[xr] + this._r[yd] + this._r[yu]) * 0.25, diff);
+          this.g[i] = lerp(this._g[i], (this._g[xl] + this._g[xr] + this._g[yd] + this._g[yu]) * 0.25, diff);
+          this.b[i] = lerp(this._b[i], (this._b[xl] + this._b[xr] + this._b[yd] + this._b[yu]) * 0.25, diff);
+          this.a[i] = lerp(this._a[i], (this._a[xl] + this._a[xr] + this._a[yd] + this._a[yu]) * 0.25, diff);
+          this.d[i] = lerp(this._d[i], (this._d[xl] + this._d[xr] + this._d[yd] + this._d[yu]) * 0.25, diff);
+          // 边界阻尼
+          this.vx[i] *= 0.87;
+          this.vy[i] *= 0.87;
+        }
+      }
+    }
+    // 导出离屏贴图（y=0 为杯底，贴图底部对应杯底）
+    updateTexture() {
+      const data = this.imgData.data;
+      const topRow = Math.floor(this.fillLevel * this.ny);
+      for (let py = 0; py < this.ny; py++) {
+        const y = this.ny - 1 - py;
+        for (let x = 0; x < this.nx; x++) {
+          const p = (py * this.nx + x) * 4;
+          if (y >= topRow) {
+            data[p] = 0; data[p + 1] = 0; data[p + 2] = 0; data[p + 3] = 0;
+          } else {
+            const i = this.idx(x, y);
+            data[p] = clamp(this.r[i], 0, 255);
+            data[p + 1] = clamp(this.g[i], 0, 255);
+            data[p + 2] = clamp(this.b[i], 0, 255);
+            data[p + 3] = clamp(this.a[i] * 255, 0, 255);
+          }
+        }
+      }
+      this.offCtx.putImageData(this.imgData, 0, 0);
+    }
+    getSurfaceRgb() {
+      const topRow = Math.max(0, Math.floor(this.fillLevel * this.ny) - 1);
+      let sr = 0, sg = 0, sb = 0, cnt = 0;
+      for (let x = 4; x < this.nx - 4; x++) {
+        const i = this.idx(x, topRow);
+        if (this.a[i] > 0.05) { sr += this.r[i]; sg += this.g[i]; sb += this.b[i]; cnt++; }
+      }
+      return cnt ? [sr / cnt, sg / cnt, sb / cnt] : [220, 175, 110];
+    }
+    getAvgRgb() {
+      const topRow = Math.floor(this.fillLevel * this.ny);
+      let sr = 0, sg = 0, sb = 0, cnt = 0;
+      for (let y = 0; y < topRow; y += 2) {
+        for (let x = 4; x < this.nx - 4; x += 2) {
+          const i = this.idx(x, y);
+          if (this.a[i] > 0.05) { sr += this.r[i]; sg += this.g[i]; sb += this.b[i]; cnt++; }
+        }
+      }
+      return cnt ? [sr / cnt, sg / cnt, sb / cnt] : [220, 175, 110];
+    }
+  }
+
+  /* ============================================================================
+   * 4. 全局状态与画布引用
+   * ============================================================================ */
+  const canvas = document.getElementById('drinkCanvas');
+  const ctx = canvas.getContext('2d');
+  const CX = 360;
+  const liquid = new Fluid2DEngine(32, 48);
+
+  const state = {
+    step: 0, // 0:择器挂杯 1:落冰捣料 2:倾壶注酒 3:搅和起沫 4:雅趣点睛 5:题名封存
+    sceneIdx: 0,
+    glass: HAN_GLASSES[0],
+    rimCrust: RIM_CRUSTS[0],
+    chilled: true,
+    iceType: ICE_TYPES[2], // 默认凌阴方冰
+    icePieces: [],
+    muddleItems: [], // 杯底鲜料 {id, name, color, juice, x, y, r, rot, crush: 0..1}
+    muddlerAnim: 0, // 0..1 捣棒下压动画
+    glassSketchImg: null,
+    glassSketchTitle: '',
+    pourMode: 'direct', // 'direct' | 'float'
+    activePourWine: null,
+    bottleTilt: 0, // 0..1
+    bottleWine: WINE_PALETTE[0],
+    pourLog: {}, // { wineName: amount }
+    mixTool: 'spoon', // 'spoon' | 'shaker'
+    stirPos: { active: false, x: CX, y: 340, vx: 0, vy: 0 },
+    stirCount: 0,
+    shakerAnim: 0,
+    garnishTab: 'in', // 'in' | 'rim' | 'stirrer' | 'aroma'
+    inWineItems: [],
+    rimItems: [],
+    dragItem: null, // { list: 'in'|'rim', idx, ox, oy }
+    stirrer: STIRRER_TYPES[1],
+    aroma: AROMA_TYPES[0],
+    bubbles: [],
+    motes: [],
+    condensationDrops: [],
+    card: {
+      title: '月下流霞',
+      to: '致：微醺知音',
+      msg: '葡萄美酒夜光杯，欲饮琵琶马上催。愿与君共此良宵。',
+      sigDataUrl: ''
+    }
+  };
+
+  // 初始化环境漂浮光尘与冷凝水珠
+  for (let i = 0; i < 22; i++) {
+    state.motes.push({ x: Math.random() * 720, y: Math.random() * 520, r: 1 + Math.random() * 2.1, sp: 0.15 + Math.random() * 0.35, ph: Math.random() * Math.PI * 2 });
+  }
+  for (let i = 0; i < 16; i++) {
+    state.condensationDrops.push({ u: (Math.random() - 0.5) * 1.55, v: 0.15 + Math.random() * 0.72, r: 1.5 + Math.random() * 2.2, vy: 0.0005 + Math.random() * 0.0012 });
+  }
+
+  function rebuildIcePieces() {
+    state.icePieces = [];
+    const g = state.glass;
+    const t = state.iceType.id;
+    if (t === 'none') return;
+    if (t === 'sphere') {
+      state.icePieces.push({ kind: 'sphere', rx: 0, ry: 0.32, size: Math.min(46, g.botRx * 0.78), rot: 0.2 });
+    } else if (t === 'cubes') {
+      const spots = [[-0.36, 0.22, -0.22], [0.34, 0.26, 0.26], [-0.04, 0.44, 0.12], [0.24, 0.56, -0.18]];
+      spots.forEach(([rx, ry, rot]) => state.icePieces.push({ kind: 'cube', rx, ry, size: 28, rot }));
+    } else if (t === 'crushed') {
+      for (let i = 0; i < 18; i++) {
+        state.icePieces.push({
+          kind: 'shard',
+          rx: (Math.random() - 0.5) * 1.35,
+          ry: 0.08 + Math.random() * 0.65,
+          size: 11 + Math.random() * 9,
+          rot: Math.random() * Math.PI * 2
+        });
+      }
+    }
+  }
+  rebuildIcePieces();
+
+  /* ============================================================================
+   * 5. 杯型几何数学与精致手绘图形库（0 Emoji）
+   * ============================================================================ */
+  function getGlassHalfWidthAtY(glass, y) {
+    const t = clamp((y - glass.topY) / Math.max(1, glass.botY - glass.topY), 0, 1);
+    if (glass.shape === 'coupe') {
+      return lerp(glass.rimRx, glass.botRx, Math.pow(t, 1.45));
+    }
+    if (glass.shape === 'rocks') {
+      return lerp(glass.rimRx, glass.botRx, t);
+    }
+    // 郁金香/羽觞/青瓷：平滑二阶贝塞尔宽腹曲线
+    const u = 1 - t;
+    return u * u * glass.rimRx + 2 * u * t * glass.midRx + t * t * glass.botRx;
+  }
+
+  function traceGlassBowlPath(c, glass, inset = 0) {
+    const ty = glass.topY + inset * 0.5;
+    const by = glass.botY - inset;
+    const rTop = Math.max(10, glass.rimRx - inset);
+    const rMid = Math.max(10, glass.midRx - inset);
+    const rBot = Math.max(8, glass.botRx - inset);
+    const midY = lerp(ty, by, glass.shape === 'coupe' ? 0.68 : 0.55);
+
+    c.beginPath();
+    c.moveTo(CX - rTop, ty);
+    if (glass.shape === 'rocks') {
+      c.lineTo(CX - rBot, by - 14);
+      c.quadraticCurveTo(CX - rBot, by, CX - rBot + 16, by);
+      c.lineTo(CX + rBot - 16, by);
+      c.quadraticCurveTo(CX + rBot, by, CX + rBot, by - 14);
+      c.lineTo(CX + rTop, ty);
+    } else {
+      c.quadraticCurveTo(CX - rMid, midY, CX - rBot, by - 6);
+      c.quadraticCurveTo(CX, by + 10, CX + rBot, by - 6);
+      c.quadraticCurveTo(CX + rMid, midY, CX + rTop, ty);
+    }
+    c.closePath();
+  }
+
+  // 绘制手绘缩略图（杯型/冰型/装饰/挂边）
+  function renderVesselThumb(cvs, glass) {
+    const c = cvs.getContext('2d');
+    c.clearRect(0, 0, cvs.width, cvs.height);
+    c.save();
+    c.translate(cvs.width * 0.5, cvs.height * 0.52);
+    const scale = 0.088;
+    c.scale(scale, scale);
+    c.translate(-CX, -(glass.topY + glass.stemBotY) * 0.5);
+
+    if (glass.hasEars) {
+      [-1, 1].forEach(dir => {
+        c.fillStyle = '#9E2A1B'; c.strokeStyle = '#D9A13B'; c.lineWidth = 10;
+        c.beginPath(); c.ellipse(CX + dir * (glass.rimRx + 14), glass.topY + 26, 22, 11, dir * 0.2, 0, Math.PI * 2);
+        c.fill(); c.stroke();
+      });
+    }
+    if (glass.stemBotY - glass.botY > 30) {
+      c.strokeStyle = '#6B584A'; c.lineWidth = 14; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(CX, glass.botY); c.lineTo(CX, glass.stemBotY - 8); c.stroke();
+    }
+    c.fillStyle = 'rgba(200, 155, 75, 0.25)'; c.strokeStyle = '#6B584A'; c.lineWidth = 10;
+    c.beginPath(); c.ellipse(CX, glass.stemBotY - 4, glass.baseRx, 14, 0, 0, Math.PI * 2); c.fill(); c.stroke();
+
+    traceGlassBowlPath(c, glass, 0);
+    c.fillStyle = glass.id === 'celadon' ? 'rgba(130, 180, 166, 0.35)' : (glass.id === 'yushang' ? 'rgba(184, 67, 54, 0.24)' : 'rgba(210, 225, 228, 0.38)');
+    c.fill();
+    c.strokeStyle = '#4A3930'; c.lineWidth = 12; c.stroke();
+    c.beginPath(); c.ellipse(CX, glass.topY, glass.rimRx, 16, 0, 0, Math.PI * 2); c.stroke();
+    c.restore();
+  }
+
+  // 高质感手绘配饰（0 Emoji，含果肉纹理、叶脉、光泽）
+  function drawGarnishGraphic(c, id, x, y, scale = 1, rot = 0) {
+    c.save();
+    c.translate(x, y);
+    c.rotate(rot);
+    c.scale(scale, scale);
+
+    if (id === 'lime_wheel' || id === 'orange_half') {
+      const isOrange = id === 'orange_half';
+      const r = isOrange ? 28 : 24;
+      const startA = isOrange ? Math.PI : 0;
+      const endA = Math.PI * 2;
+      // 外皮
+      c.fillStyle = isOrange ? '#D95829' : '#4E8C3B';
+      c.beginPath(); c.arc(0, 0, r, startA, endA); if (isOrange) c.closePath(); c.fill();
+      // 白瓤
+      c.fillStyle = '#FAF5E6';
+      c.beginPath(); c.arc(0, 0, r - 3.2, startA, endA); if (isOrange) c.closePath(); c.fill();
+      // 瓣状果肉
+      const segs = isOrange ? 6 : 8;
+      const span = (endA - startA) / segs;
+      for (let i = 0; i < segs; i++) {
+        const a0 = startA + i * span + 0.08;
+        const a1 = startA + (i + 1) * span - 0.08;
+        const grad = c.createRadialGradient(0, 0, 2, 0, 0, r - 5);
+        if (isOrange) { grad.addColorStop(0, '#F5A442'); grad.addColorStop(0.65, '#E35634'); grad.addColorStop(1, '#B82924'); }
+        else { grad.addColorStop(0, '#D4F09A'); grad.addColorStop(1, '#7CBF4E'); }
+        c.fillStyle = grad;
+        c.beginPath(); c.moveTo(0, 0); c.arc(0, 0, r - 5.2, a0, a1); c.closePath(); c.fill();
+      }
+      // 汁水反光点
+      c.fillStyle = 'rgba(255,255,255,0.45)';
+      c.beginPath(); c.arc(-r * 0.25, -r * 0.25, 2.2, 0, Math.PI * 2); c.fill();
+    } else if (id === 'peach_wedge') {
+      const g = c.createLinearGradient(-20, -14, 20, 14);
+      g.addColorStop(0, '#FFF1DF'); g.addColorStop(0.6, '#F7B7B2'); g.addColorStop(1, '#DF6D7A');
+      c.fillStyle = g;
+      c.beginPath();
+      c.moveTo(-22, 6); c.quadraticCurveTo(0, -18, 22, 6);
+      c.quadraticCurveTo(0, 18, -22, 6); c.closePath(); c.fill();
+      c.strokeStyle = 'rgba(205, 86, 98, 0.55)'; c.lineWidth = 1.6; c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.4)';
+      c.beginPath(); c.ellipse(-5, -1, 7, 2.2, -0.2, 0, Math.PI * 2); c.fill();
+    } else if (id === 'strawberry') {
+      const g = c.createRadialGradient(0, -4, 2, 0, 2, 22);
+      g.addColorStop(0, '#F5626E'); g.addColorStop(1, '#B81E32');
+      c.fillStyle = g;
+      c.beginPath();
+      c.moveTo(0, 19); c.bezierCurveTo(-19, 8, -21, -13, -8, -16);
+      c.quadraticCurveTo(0, -12, 8, -16); c.bezierCurveTo(21, -13, 19, 8, 0, 19); c.fill();
+      // 淡粉果心
+      c.fillStyle = 'rgba(255, 228, 228, 0.78)';
+      c.beginPath(); c.moveTo(0, 10); c.bezierCurveTo(-7, 2, -7, -7, 0, -9); c.bezierCurveTo(7, -7, 7, 2, 0, 10); c.fill();
+      // 绿萼片
+      c.fillStyle = '#4B8E44';
+      for (let i = -2; i <= 2; i++) {
+        c.beginPath(); c.ellipse(i * 4.2, -16, 4.5, 2.2, i * 0.25, 0, Math.PI * 2); c.fill();
+      }
+      // 细籽
+      c.fillStyle = '#FCE6A6';
+      [[-8, -2], [8, -2], [-5, 6], [5, 6], [0, 12]].forEach(([sx, sy]) => {
+        c.beginPath(); c.ellipse(sx, sy, 1, 1.5, 0, 0, Math.PI * 2); c.fill();
+      });
+    } else if (id === 'blueberry_cluster') {
+      [[-8, 3, 9.5], [7, 5, 8.8], [0, -7, 9.2]].forEach(([bx, by, br]) => {
+        const g = c.createRadialGradient(bx - 3, by - 3, 1, bx, by, br);
+        g.addColorStop(0, '#6B7CC4'); g.addColorStop(0.55, '#354385'); g.addColorStop(1, '#1A224A');
+        c.fillStyle = g;
+        c.beginPath(); c.arc(bx, by, br, 0, Math.PI * 2); c.fill();
+        // 白霜高光与花萼星点
+        c.fillStyle = 'rgba(218, 232, 255, 0.45)';
+        c.beginPath(); c.arc(bx - 2.6, by - 2.6, 2.4, 0, Math.PI * 2); c.fill();
+      });
+    } else if (id === 'mint_sprig') {
+      c.strokeStyle = '#366E41'; c.lineWidth = 2.2; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(0, 16); c.quadraticCurveTo(2, 0, 0, -14); c.stroke();
+      const leaves = [[-11, 2, -0.55, 13, 6.5], [11, 0, 0.55, 13, 6.5], [0, -12, 0, 7.5, 12]];
+      leaves.forEach(([lx, ly, lr, rx, ry]) => {
+        c.save(); c.translate(lx, ly); c.rotate(lr);
+        const g = c.createLinearGradient(-rx, 0, rx, 0);
+        g.addColorStop(0, '#3C8549'); g.addColorStop(1, '#79C46F');
+        c.fillStyle = g;
+        c.beginPath(); c.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); c.fill();
+        c.strokeStyle = 'rgba(220, 250, 210, 0.5)'; c.lineWidth = 1;
+        c.beginPath(); c.moveTo(-rx * 0.7, 0); c.lineTo(rx * 0.7, 0); c.stroke();
+        c.restore();
+      });
+    } else if (id === 'rosemary') {
+      c.strokeStyle = '#5E4B3A'; c.lineWidth = 2.4; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(-2, 26); c.quadraticCurveTo(3, 0, -1, -28); c.stroke();
+      for (let i = -5; i <= 5; i++) {
+        const py = i * 4.5;
+        [-1, 1].forEach(dir => {
+          c.strokeStyle = i % 2 === 0 ? '#4B7D55' : '#6A9E72';
+          c.lineWidth = 2.1;
+          c.beginPath(); c.moveTo(0, py); c.lineTo(dir * (10 - Math.abs(i) * 0.6), py - 8); c.stroke();
+        });
+      }
+    } else if (id === 'osmanthus_sprig') {
+      c.strokeStyle = '#6E5034'; c.lineWidth = 2; c.beginPath(); c.moveTo(-16, 12); c.quadraticCurveTo(0, 2, 14, -12); c.stroke();
+      const blooms = [[-8, 6], [0, -1], [8, -7], [2, 8], [-4, -8]];
+      blooms.forEach(([fx, fy]) => {
+        for (let p = 0; p < 4; p++) {
+          const a = p * Math.PI * 0.5 + 0.4;
+          c.fillStyle = p % 2 === 0 ? '#F4BD3D' : '#E39822';
+          c.beginPath(); c.ellipse(fx + Math.cos(a) * 3.5, fy + Math.sin(a) * 3.5, 3.2, 2.2, a, 0, Math.PI * 2); c.fill();
+        }
+        c.fillStyle = '#FFF5D0'; c.beginPath(); c.arc(fx, fy, 1.4, 0, Math.PI * 2); c.fill();
+      });
+    } else if (id === 'hibiscus_petal') {
+      for (let p = 0; p < 5; p++) {
+        const a = (p / 5) * Math.PI * 2;
+        c.save(); c.rotate(a);
+        const g = c.createRadialGradient(0, -6, 1, 0, -10, 12);
+        g.addColorStop(0, '#E35B74'); g.addColorStop(1, '#8C1A32');
+        c.fillStyle = g;
+        c.beginPath(); c.ellipse(0, -9, 6.5, 10, 0, 0, Math.PI * 2); c.fill();
+        c.restore();
+      }
+      c.fillStyle = '#F2C96B'; c.beginPath(); c.arc(0, 0, 3.5, 0, Math.PI * 2); c.fill();
+    } else if (id === 'bamboo_skewer') {
+      c.strokeStyle = '#C9A86A'; c.lineWidth = 2.6; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(-28, 18); c.lineTo(28, -18); c.stroke();
+      // 竹节结
+      c.fillStyle = '#A88246'; c.beginPath(); c.arc(22, -14, 4, 0, Math.PI * 2); c.fill();
+      // 串青梅与樱桃
+      [[-8, 5, '#7EB656', '#4D7D32'], [7, -5, '#C7344E', '#7A1628']].forEach(([bx, by, c1, c2]) => {
+        const g = c.createRadialGradient(bx - 3, by - 3, 1, bx, by, 10);
+        g.addColorStop(0, c1); g.addColorStop(1, c2);
+        c.fillStyle = g; c.beginPath(); c.arc(bx, by, 9.5, 0, Math.PI * 2); c.fill();
+        c.fillStyle = 'rgba(255,255,255,0.45)'; c.beginPath(); c.arc(bx - 3, by - 3, 2.3, 0, Math.PI * 2); c.fill();
+      });
+    }
+    c.restore();
+  }
+
+  /* ============================================================================
+   * 6. 主舞台渲染引擎：原创东汉月轩酒案 + 焦散光影 + 2D流体 + 冰料 + 器皿折射
+   * ============================================================================ */
+  function drawAtmosphericBackground(targetCtx, t) {
+    const theme = SCENE_THEMES[state.sceneIdx];
+    const W = 720, H = 760;
+
+    // 1) 雅致暮色/晴昼天幕渐变
+    const bgG = targetCtx.createLinearGradient(0, 0, 0, H);
+    bgG.addColorStop(0, theme.bgTop);
+    bgG.addColorStop(0.62, theme.bgMid);
+    bgG.addColorStop(1, theme.bgBot);
+    targetCtx.fillStyle = bgG;
+    targetCtx.fillRect(0, 0, W, H);
+
+    // 2) 朦胧窗月与宣纸隔扇光晕
+    const moonX = 165, moonY = 148;
+    const glowG = targetCtx.createRadialGradient(moonX, moonY, 16, moonX, moonY, 260);
+    glowG.addColorStop(0, theme.lanternGlow);
+    glowG.addColorStop(1, 'rgba(0,0,0,0)');
+    targetCtx.fillStyle = glowG;
+    targetCtx.fillRect(0, 0, W, H);
+
+    targetCtx.save();
+    targetCtx.globalAlpha = state.sceneIdx === 2 ? 0.55 : 0.24;
+    targetCtx.fillStyle = theme.moonColor;
+    targetCtx.beginPath(); targetCtx.arc(moonX, moonY, 54, 0, Math.PI * 2); targetCtx.fill();
+    targetCtx.restore();
+
+    // 3) 淡墨工笔窗棂几何格栅（极具东汉书斋意境）
+    targetCtx.save();
+    targetCtx.strokeStyle = theme.screenStroke;
+    targetCtx.lineWidth = 1.6;
+    const frameX = 48, frameY = 38, frameW = 624, frameH = 490;
+    targetCtx.strokeRect(frameX, frameY, frameW, frameH);
+    for (let x = frameX + 104; x < frameX + frameW; x += 104) {
+      targetCtx.beginPath(); targetCtx.moveTo(x, frameY); targetCtx.lineTo(x, frameY + frameH); targetCtx.stroke();
+    }
+    for (let y = frameY + 122; y < frameY + frameH; y += 122) {
+      targetCtx.beginPath(); targetCtx.moveTo(frameX, y); targetCtx.lineTo(frameX + frameW, y); targetCtx.stroke();
+    }
+    // 摇曳竹影（左上方轻拂）
+    targetCtx.strokeStyle = state.sceneIdx === 2 ? 'rgba(92, 112, 92, 0.16)' : 'rgba(18, 28, 30, 0.32)';
+    targetCtx.fillStyle = targetCtx.strokeStyle;
+    const sway = Math.sin(t * 0.0008) * 6;
+    targetCtx.lineWidth = 3;
+    targetCtx.beginPath(); targetCtx.moveTo(48, 220); targetCtx.quadraticCurveTo(130 + sway, 150, 210 + sway, 95); targetCtx.stroke();
+    [[125, 162, -0.4], [158, 134, 0.35], [186, 112, -0.25], [105, 180, 0.5]].forEach(([bx, by, ba]) => {
+      targetCtx.save(); targetCtx.translate(bx + sway * 0.6, by); targetCtx.rotate(ba + sway * 0.01);
+      targetCtx.beginPath(); targetCtx.ellipse(0, 0, 26, 5.5, 0, 0, Math.PI * 2); targetCtx.fill();
+      targetCtx.restore();
+    });
+    targetCtx.restore();
+
+    // 4) 漂浮暖金微尘/萤火
+    targetCtx.save();
+    state.motes.forEach(m => {
+      const mx = (m.x + Math.sin(t * 0.0006 + m.ph) * 18 + W) % W;
+      const my = (m.y - t * 0.008 * m.sp + 520) % 520;
+      const al = 0.18 + 0.25 * Math.sin(t * 0.002 + m.ph);
+      targetCtx.fillStyle = state.sceneIdx === 1 ? `rgba(190, 240, 232, ${al})` : `rgba(244, 206, 130, ${al})`;
+      targetCtx.beginPath(); targetCtx.arc(mx, my, m.r, 0, Math.PI * 2); targetCtx.fill();
+    });
+    targetCtx.restore();
+
+    // 5) 前景胡桃漆木酒案与青瓷镶金杯垫
+    const tableY = 556;
+    const tabG = targetCtx.createLinearGradient(0, tableY, 0, H);
+    tabG.addColorStop(0, theme.tableTop);
+    tabG.addColorStop(0.72, theme.tableEdge);
+    tabG.addColorStop(1, '#120C09');
+    targetCtx.fillStyle = tabG;
+    targetCtx.fillRect(0, tableY, W, H - tableY);
+
+    // 案面边沿高光线与木纹
+    targetCtx.strokeStyle = theme.tableSheen;
+    targetCtx.lineWidth = 2;
+    targetCtx.beginPath(); targetCtx.moveTo(0, tableY + 1); targetCtx.lineTo(W, tableY + 1); targetCtx.stroke();
+    targetCtx.strokeStyle = 'rgba(255,255,255,0.035)';
+    targetCtx.lineWidth = 1;
+    for (let y = tableY + 26; y < H; y += 28) {
+      targetCtx.beginPath(); targetCtx.moveTo(0, y); targetCtx.quadraticCurveTo(360, y + 6, W, y - 2); targetCtx.stroke();
+    }
+
+    // 青瓷承盘杯垫
+    const coasterY = state.glass.stemBotY + 6;
+    targetCtx.save();
+    targetCtx.fillStyle = 'rgba(0, 0, 0, 0.38)';
+    targetCtx.beginPath(); targetCtx.ellipse(CX, coasterY + 10, 128, 25, 0, 0, Math.PI * 2); targetCtx.fill();
+    const cGrad = targetCtx.createRadialGradient(CX - 25, coasterY - 4, 8, CX, coasterY, 120);
+    cGrad.addColorStop(0, theme.coasterFill);
+    cGrad.addColorStop(1, '#253230');
+    targetCtx.fillStyle = cGrad;
+    targetCtx.strokeStyle = theme.coasterRim;
+    targetCtx.lineWidth = 2.2;
+    targetCtx.beginPath(); targetCtx.ellipse(CX, coasterY, 122, 22, 0, 0, Math.PI * 2); targetCtx.fill(); targetCtx.stroke();
+    // 内圈细金线
+    targetCtx.strokeStyle = 'rgba(228, 189, 114, 0.45)'; targetCtx.lineWidth = 1;
+    targetCtx.beginPath(); targetCtx.ellipse(CX, coasterY, 104, 17, 0, 0, Math.PI * 2); targetCtx.stroke();
+
+    // 6) 酒液透光焦散光斑 (Caustics) 投影到杯垫与桌面
+    if (liquid.fillLevel > 0.05) {
+      const [ar, ag, ab] = liquid.getAvgRgb();
+      const caustG = targetCtx.createRadialGradient(CX + 58, coasterY + 8, 6, CX + 64, coasterY + 10, 96);
+      caustG.addColorStop(0, rgbCss(ar + 45, ag + 45, ab + 45, 0.34));
+      caustG.addColorStop(0.6, rgbCss(ar, ag, ab, 0.14));
+      caustG.addColorStop(1, 'rgba(0,0,0,0)');
+      targetCtx.fillStyle = caustG;
+      targetCtx.beginPath(); targetCtx.ellipse(CX + 62, coasterY + 10, 98, 22, 0.08, 0, Math.PI * 2); targetCtx.fill();
+    }
+    targetCtx.restore();
+  }
+
+  function drawIcePiece(c, p, glass, surfY, t) {
+    const bowlH = glass.botY - glass.topY;
+    // 浮力：有酒液时冰块随液面漂浮，无酒液时沉在杯底
+    let targetY = glass.botY - p.ry * bowlH * 0.55 - p.size * 0.7;
+    if (liquid.fillLevel > 0.12) {
+      const floatY = surfY + 18 + (p.ry * 0.5) * Math.max(20, glass.botY - surfY - 36);
+      targetY = Math.min(glass.botY - p.size * 0.8, floatY);
+    }
+    const maxW = getGlassHalfWidthAtY(glass, targetY) - p.size * 0.85;
+    const ix = CX + p.rx * Math.max(12, maxW) + Math.sin(t * 0.002 + p.rot * 4) * (liquid.fillLevel > 0.1 ? 2.5 : 0);
+    const iy = targetY + Math.cos(t * 0.0025 + p.rot * 3) * (liquid.fillLevel > 0.1 ? 2.2 : 0);
+
+    c.save();
+    c.translate(ix, iy);
+    c.rotate(p.rot + liquid.sloshAngle * 0.6);
+
+    if (p.kind === 'sphere') {
+      const r = p.size;
+      const g = c.createRadialGradient(-r * 0.32, -r * 0.32, r * 0.1, 0, 0, r);
+      g.addColorStop(0, 'rgba(255, 255, 255, 0.72)');
+      g.addColorStop(0.55, 'rgba(218, 240, 248, 0.28)');
+      g.addColorStop(1, 'rgba(180, 218, 232, 0.48)');
+      c.fillStyle = g;
+      c.strokeStyle = 'rgba(255, 255, 255, 0.65)'; c.lineWidth = 1.5;
+      c.beginPath(); c.arc(0, 0, r, 0, Math.PI * 2); c.fill(); c.stroke();
+      // 内部冰裂纹与月牙高光
+      c.strokeStyle = 'rgba(255,255,255,0.42)'; c.lineWidth = 1.1;
+      c.beginPath(); c.moveTo(-r * 0.3, -r * 0.1); c.lineTo(r * 0.15, r * 0.2); c.lineTo(r * 0.35, -r * 0.05); c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.75)';
+      c.beginPath(); c.ellipse(-r * 0.32, -r * 0.36, r * 0.26, r * 0.12, -0.6, 0, Math.PI * 2); c.fill();
+    } else if (p.kind === 'cube') {
+      const s = p.size;
+      const g = c.createLinearGradient(-s, -s, s, s);
+      g.addColorStop(0, 'rgba(255,255,255,0.62)');
+      g.addColorStop(0.5, 'rgba(215, 238, 246, 0.22)');
+      g.addColorStop(1, 'rgba(255,255,255,0.42)');
+      c.fillStyle = g;
+      c.strokeStyle = 'rgba(255,255,255,0.72)'; c.lineWidth = 1.4;
+      c.beginPath(); c.roundRect(-s * 0.68, -s * 0.68, s * 1.36, s * 1.36, 7); c.fill(); c.stroke();
+      // 内部切面折光
+      c.strokeStyle = 'rgba(255,255,255,0.48)'; c.lineWidth = 1;
+      c.beginPath(); c.roundRect(-s * 0.42, -s * 0.42, s * 0.84, s * 0.84, 4); c.stroke();
+      c.fillStyle = 'rgba(255,255,255,0.68)';
+      c.beginPath(); c.moveTo(-s * 0.48, -s * 0.48); c.lineTo(s * 0.05, -s * 0.48); c.lineTo(-s * 0.48, s * 0.05); c.closePath(); c.fill();
+    } else {
+      const s = p.size;
+      c.fillStyle = 'rgba(240, 250, 255, 0.54)';
+      c.strokeStyle = 'rgba(255, 255, 255, 0.72)'; c.lineWidth = 1;
+      c.beginPath();
+      c.moveTo(-s * 0.6, -s * 0.2); c.lineTo(0, -s * 0.65); c.lineTo(s * 0.65, -s * 0.1);
+      c.lineTo(s * 0.3, s * 0.55); c.lineTo(-s * 0.5, s * 0.45); c.closePath();
+      c.fill(); c.stroke();
+    }
+    c.restore();
+  }
+
+  // 绘制饮具（支持水面折射微错位！）
+  function drawStirrerOrStraw(c, glass, surfY, isFrontHalf) {
+    const sid = state.stirrer.id;
+    if (sid === 'none') return;
+    const topX = CX + 64, topY = glass.topY - 76;
+    const botX = CX - 24, botY = glass.botY - 16;
+
+    // 交点插值
+    const hasLiquid = liquid.fillLevel > 0.06 && surfY < botY - 8;
+    const tSurf = hasLiquid ? clamp((surfY - topY) / (botY - topY), 0.1, 0.95) : 1;
+    const midX = lerp(topX, botX, tSurf);
+    const midY = lerp(topY, botY, tSurf);
+
+    c.save();
+    if (!isFrontHalf && hasLiquid) {
+      // 水下段（轻微折射偏移 + 略柔透明）
+      c.globalAlpha = 0.72;
+      drawStirrerSegment(c, sid, midX + 5, midY, botX + 6, botY, true);
+    } else if (isFrontHalf) {
+      // 水上段（或无水全段）
+      drawStirrerSegment(c, sid, topX, topY, hasLiquid ? midX : botX, hasLiquid ? midY : botY, false);
+    }
+    c.restore();
+  }
+
+  function drawStirrerSegment(c, sid, x1, y1, x2, y2, submerged) {
+    c.lineCap = 'round';
+    if (sid === 'lotus_stem') {
+      c.strokeStyle = '#3F7D56'; c.lineWidth = 9.5;
+      c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      c.strokeStyle = 'rgba(182, 232, 186, 0.6)'; c.lineWidth = 2.5;
+      c.beginPath(); c.moveTo(x1 - 2, y1); c.lineTo(x2 - 2, y2); c.stroke();
+    } else if (sid === 'bamboo_chip') {
+      c.strokeStyle = '#C99F59'; c.lineWidth = 8;
+      c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      c.strokeStyle = '#8C622B'; c.lineWidth = 1.6;
+      const mx = lerp(x1, x2, 0.5), my = lerp(y1, y2, 0.5);
+      c.beginPath(); c.moveTo(mx - 4, my - 2); c.lineTo(mx + 4, my + 2); c.stroke();
+    } else if (sid === 'brass_spoon') {
+      c.strokeStyle = '#D4A54D'; c.lineWidth = 5;
+      c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      c.strokeStyle = '#FFF0C2'; c.lineWidth = 1.5;
+      c.beginPath(); c.moveTo(x1 - 1, y1); c.lineTo(x2 - 1, y2); c.stroke();
+      if (!submerged) {
+        c.fillStyle = '#E4BD72'; c.beginPath(); c.arc(x1, y1, 6, 0, Math.PI * 2); c.fill();
+      }
+    } else if (sid === 'glass_straw') {
+      c.strokeStyle = 'rgba(235, 248, 252, 0.55)'; c.lineWidth = 10;
+      c.beginPath(); c.moveTo(x1, y1); c.lineTo(x2, y2); c.stroke();
+      c.strokeStyle = 'rgba(255, 255, 255, 0.85)'; c.lineWidth = 2.2;
+      c.beginPath(); c.moveTo(x1 - 2.5, y1); c.lineTo(x2 - 2.5, y2); c.stroke();
+    }
+  }
+
+  // 倾倒酒瓶与精确旋转联动的瓶口酒柱
+  function drawPouringBottleAndStream(targetCtx, glass, surfY) {
+    const wine = state.activePourWine || state.bottleWine;
+    if (!wine || (state.bottleTilt < 0.02 && !state.activePourWine)) return;
+
+    const bx = 568, by = 114;
+    const angle = -0.18 - state.bottleTilt * 1.12; // 逆时针向左下倾倒
+    // 瓶口在瓶身局部坐标系中为 (-118, 0)，精确映射到世界坐标
+    const localSpoutX = -118, localSpoutY = 0;
+    const cosA = Math.cos(angle), sinA = Math.sin(angle);
+    const spoutX = bx + localSpoutX * cosA - localSpoutY * sinA;
+    const spoutY = by + localSpoutX * sinA + localSpoutY * cosA;
+
+    // 若为贴壁缓分层，绘制悬在液面上方的鎏金吧勺
+    const slowFloat = state.pourMode === 'float';
+    const targetHitX = slowFloat ? CX + getGlassHalfWidthAtY(glass, surfY) * 0.42 : CX + 14;
+    const targetHitY = Math.min(glass.botY - 8, surfY + 4);
+
+    if (state.activePourWine && state.bottleTilt > 0.55) {
+      targetCtx.save();
+      if (slowFloat) {
+        // 缓流吧勺柄
+        targetCtx.strokeStyle = '#E0B45A'; targetCtx.lineWidth = 4; targetCtx.lineCap = 'round';
+        targetCtx.beginPath(); targetCtx.moveTo(targetHitX + 44, glass.topY - 56); targetCtx.lineTo(targetHitX, targetHitY - 4); targetCtx.stroke();
+        targetCtx.fillStyle = '#E8C272';
+        targetCtx.beginPath(); targetCtx.ellipse(targetHitX - 3, targetHitY - 3, 12, 5, -0.35, 0, Math.PI * 2); targetCtx.fill();
+      }
+      // 真实重力抛物线酒柱
+      const streamW = slowFloat ? 4.2 : 7.5;
+      const g = targetCtx.createLinearGradient(spoutX, spoutY, targetHitX, targetHitY);
+      g.addColorStop(0, wine.color);
+      g.addColorStop(1, wine.color);
+      targetCtx.strokeStyle = g;
+      targetCtx.lineWidth = streamW;
+      targetCtx.lineCap = 'round';
+      targetCtx.beginPath();
+      targetCtx.moveTo(spoutX, spoutY);
+      targetCtx.quadraticCurveTo(spoutX - 36, spoutY + 42, targetHitX, targetHitY);
+      targetCtx.stroke();
+      // 酒柱高光丝
+      targetCtx.strokeStyle = 'rgba(255,255,255,0.45)';
+      targetCtx.lineWidth = streamW * 0.28;
+      targetCtx.beginPath();
+      targetCtx.moveTo(spoutX - 1.5, spoutY);
+      targetCtx.quadraticCurveTo(spoutX - 37.5, spoutY + 42, targetHitX - 1.5, targetHitY);
+      targetCtx.stroke();
+
+      // 落点激起的小水花与气泡
+      if (!slowFloat) {
+        targetCtx.fillStyle = 'rgba(255,255,255,0.65)';
+        for (let i = 0; i < 4; i++) {
+          const ang = -Math.PI * (0.2 + Math.random() * 0.6);
+          const dist = 6 + Math.random() * 14;
+          targetCtx.beginPath();
+          targetCtx.arc(targetHitX + Math.cos(ang) * dist, targetHitY + Math.sin(ang) * dist * 0.7, 1.8 + Math.random() * 1.8, 0, Math.PI * 2);
+          targetCtx.fill();
+        }
+      }
+      targetCtx.restore();
+    }
+
+    // 绘制随酒款变色的东汉琉璃酒瓶
+    targetCtx.save();
+    targetCtx.translate(bx, by);
+    targetCtx.rotate(angle);
+    // 瓶身
+    const bGrad = targetCtx.createLinearGradient(0, -34, 0, 34);
+    bGrad.addColorStop(0, wine.bottle);
+    bGrad.addColorStop(0.45, wine.color);
+    bGrad.addColorStop(1, '#1A1110');
+    targetCtx.fillStyle = bGrad;
+    targetCtx.beginPath();
+    targetCtx.moveTo(-118, -10); targetCtx.lineTo(-70, -13);
+    targetCtx.quadraticCurveTo(-48, -32, -20, -34);
+    targetCtx.lineTo(78, -34); targetCtx.quadraticCurveTo(92, -34, 92, -18);
+    targetCtx.lineTo(92, 18); targetCtx.quadraticCurveTo(92, 34, 78, 34);
+    targetCtx.lineTo(-20, 34); targetCtx.quadraticCurveTo(-48, 32, -70, 13);
+    targetCtx.lineTo(-118, 10); targetCtx.closePath();
+    targetCtx.fill();
+    // 瓶口金环
+    targetCtx.fillStyle = '#D4A54D';
+    targetCtx.fillRect(-120, -11.5, 6, 23);
+    // 宣纸酒标
+    targetCtx.fillStyle = wine.label || '#FAF3E0';
+    targetCtx.beginPath(); targetCtx.roundRect(-10, -24, 62, 48, 4); targetCtx.fill();
+    targetCtx.strokeStyle = '#B8924C'; targetCtx.lineWidth = 1.2; targetCtx.stroke();
+    targetCtx.fillStyle = '#3B2820'; targetCtx.font = '700 13px "Songti SC", serif';
+    targetCtx.textAlign = 'center'; targetCtx.textBaseline = 'middle';
+    targetCtx.fillText(wine.name.slice(0, 2), 21, -6);
+    targetCtx.fillText(wine.name.slice(2, 4), 21, 11);
+    // 瓶身玻璃高光
+    targetCtx.fillStyle = 'rgba(255,255,255,0.28)';
+    targetCtx.beginPath(); targetCtx.roundRect(-24, -26, 98, 7, 4); targetCtx.fill();
+    targetCtx.restore();
+  }
+
+  // 主画面绘制（供实时渲染和导出高清酒卡共用）
+  function renderDrinkScene(targetCtx, t, forExport = false) {
+    const theme = SCENE_THEMES[state.sceneIdx];
+    const glass = state.glass;
+
+    // 1. 背景、酒案与焦散
+    drawAtmosphericBackground(targetCtx, t);
+
+    // 摇晃位移
+    const shakeX = state.shakerAnim > 0.01 ? Math.sin(t * 0.055) * 14 * state.shakerAnim : 0;
+    const shakeY = state.shakerAnim > 0.01 ? Math.cos(t * 0.07) * 8 * state.shakerAnim : 0;
+    targetCtx.save();
+    targetCtx.translate(shakeX, shakeY);
+
+    // 2. 高脚杯柄与底座
+    if (glass.stemBotY - glass.botY > 28) {
+      const stemG = targetCtx.createLinearGradient(CX - 10, glass.botY, CX + 10, glass.botY);
+      stemG.addColorStop(0, 'rgba(185, 198, 196, 0.55)');
+      stemG.addColorStop(0.45, 'rgba(255, 255, 255, 0.92)');
+      stemG.addColorStop(1, 'rgba(140, 155, 154, 0.62)');
+      targetCtx.fillStyle = stemG;
+      targetCtx.beginPath();
+      targetCtx.moveTo(CX - 11, glass.botY - 2);
+      targetCtx.quadraticCurveTo(CX - 5, (glass.botY + glass.stemBotY) * 0.5, CX - 9, glass.stemBotY - 6);
+      targetCtx.lineTo(CX + 9, glass.stemBotY - 6);
+      targetCtx.quadraticCurveTo(CX + 5, (glass.botY + glass.stemBotY) * 0.5, CX + 11, glass.botY - 2);
+      targetCtx.closePath(); targetCtx.fill();
+    }
+    const baseG = targetCtx.createLinearGradient(CX - glass.baseRx, glass.stemBotY, CX + glass.baseRx, glass.stemBotY);
+    baseG.addColorStop(0, 'rgba(175, 190, 188, 0.55)');
+    baseG.addColorStop(0.5, 'rgba(255, 255, 255, 0.85)');
+    baseG.addColorStop(1, 'rgba(148, 165, 162, 0.62)');
+    targetCtx.fillStyle = baseG; targetCtx.strokeStyle = theme.glassStroke; targetCtx.lineWidth = 1.6;
+    targetCtx.beginPath(); targetCtx.ellipse(CX, glass.stemBotY, glass.baseRx, 14, 0, 0, Math.PI * 2); targetCtx.fill(); targetCtx.stroke();
+
+    // 汉代朱漆羽觞双耳
+    if (glass.hasEars) {
+      [-1, 1].forEach(dir => {
+        targetCtx.fillStyle = '#9E2A1B'; targetCtx.strokeStyle = '#DFAA46'; targetCtx.lineWidth = 2.4;
+        targetCtx.beginPath();
+        targetCtx.ellipse(CX + dir * (glass.rimRx + 15), glass.topY + 26, 20, 10.5, dir * 0.22, 0, Math.PI * 2);
+        targetCtx.fill(); targetCtx.stroke();
+      });
+    }
+
+    // 3. 后杯壁底色
+    traceGlassBowlPath(targetCtx, glass, 0);
+    targetCtx.fillStyle = glass.tint;
+    targetCtx.fill();
+
+    const bowlH = glass.botY - glass.topY;
+    const surfY = glass.botY - liquid.fillLevel * bowlH;
+
+    // 4. 杯内裁剪：2D 真实流体 + 杯底捣料 + 冰块 + 水下吸管 + 浮沉果饰 + 绵密酒沫
+    targetCtx.save();
+    traceGlassBowlPath(targetCtx, glass, 4);
+    targetCtx.clip();
+
+    // 4.1 渲染 2D 网格流体贴图
+    if (liquid.fillLevel > 0.004) {
+      liquid.updateTexture();
+      const tiltDy = Math.tan(liquid.sloshAngle) * glass.midRx;
+      targetCtx.save();
+      // 液面波浪裁剪
+      targetCtx.beginPath();
+      const leftX = CX - glass.midRx - 20, rightX = CX + glass.midRx + 20;
+      targetCtx.moveTo(leftX, glass.botY + 20);
+      targetCtx.lineTo(leftX, surfY - tiltDy);
+      for (let x = leftX; x <= rightX; x += 18) {
+        const nx = (x - CX) / glass.midRx;
+        const wy = surfY + nx * tiltDy + Math.sin(nx * 3.8 + liquid.wavePhase) * (1.8 + Math.abs(liquid.sloshVel) * 45);
+        targetCtx.lineTo(x, wy);
+      }
+      targetCtx.lineTo(rightX, glass.botY + 20);
+      targetCtx.closePath();
+      targetCtx.clip();
+
+      targetCtx.imageSmoothingEnabled = true;
+      targetCtx.imageSmoothingQuality = 'high';
+      targetCtx.drawImage(liquid.offCanvas, CX - glass.midRx - 4, glass.topY, (glass.midRx + 4) * 2, bowlH + 4);
+
+      // 内部暖光透射立体感（左右暗、中心透亮）
+      const depthG = targetCtx.createLinearGradient(CX - glass.midRx, 0, CX + glass.midRx, 0);
+      depthG.addColorStop(0, 'rgba(18, 12, 10, 0.24)');
+      depthG.addColorStop(0.28, 'rgba(255, 255, 255, 0.10)');
+      depthG.addColorStop(0.55, 'rgba(255, 250, 235, 0.16)');
+      depthG.addColorStop(1, 'rgba(18, 12, 10, 0.28)');
+      targetCtx.fillStyle = depthG;
+      targetCtx.fillRect(CX - glass.midRx - 10, glass.topY, glass.midRx * 2 + 20, bowlH + 10);
+      targetCtx.restore();
+    }
+
+    // 4.2 杯底鲜果/薄荷捣料
+    state.muddleItems.forEach(item => {
+      const mx = CX + item.rx * (glass.botRx - 14);
+      const my = glass.botY - 12 - item.ry * 26;
+      targetCtx.save();
+      targetCtx.translate(mx, my);
+      targetCtx.rotate(item.rot);
+      const sy = 1 - item.crush * 0.42;
+      const sx = 1 + item.crush * 0.32;
+      targetCtx.scale(sx, sy);
+      targetCtx.fillStyle = item.color;
+      targetCtx.beginPath(); targetCtx.ellipse(0, 0, item.r, item.r * 0.72, 0, 0, Math.PI * 2); targetCtx.fill();
+      targetCtx.fillStyle = 'rgba(255,255,255,0.28)';
+      targetCtx.beginPath(); targetCtx.ellipse(-item.r * 0.25, -item.r * 0.2, item.r * 0.35, item.r * 0.2, 0, 0, Math.PI * 2); targetCtx.fill();
+      targetCtx.restore();
+    });
+
+    // 4.3 饮具水下折射段
+    drawStirrerOrStraw(targetCtx, glass, surfY, false);
+
+    // 4.4 晶透冰块
+    state.icePieces.forEach(p => drawIcePiece(targetCtx, p, glass, surfY, t));
+
+    // 4.5 水中浮沉果饰
+    state.inWineItems.forEach(item => {
+      const bob = liquid.fillLevel > 0.08 ? Math.sin(t * 0.0024 + item.phase) * 3.2 : 0;
+      const iy = clamp(item.y + bob, Math.max(glass.topY + 18, surfY - 6), glass.botY - 18);
+      const hw = getGlassHalfWidthAtY(glass, iy) - 18;
+      const ix = clamp(item.x, CX - hw, CX + hw);
+      drawGarnishGraphic(targetCtx, item.id, ix, iy, item.scale || 1, item.rot + liquid.sloshAngle * 0.5);
+    });
+
+    // 4.6 上升微气泡
+    if (liquid.fillLevel > 0.05) {
+      targetCtx.fillStyle = 'rgba(255, 255, 255, 0.58)';
+      state.bubbles.forEach(b => {
+        if (b.y > surfY + 4 && b.y < glass.botY - 4) {
+          targetCtx.beginPath(); targetCtx.arc(b.x, b.y, b.r, 0, Math.PI * 2); targetCtx.fill();
+        }
+      });
+    }
+
+    // 4.7 液面弯月面 (Meniscus) 与摇和绵密酒沫 (Foam Head)
+    if (liquid.fillLevel > 0.01) {
+      const surfRx = getGlassHalfWidthAtY(glass, surfY);
+      const [sr, sg, sb] = liquid.getSurfaceRgb();
+      targetCtx.fillStyle = rgbCss(sr + 28, sg + 28, sb + 28, 0.52);
+      targetCtx.beginPath(); targetCtx.ellipse(CX, surfY, surfRx, 12, liquid.sloshAngle * 0.35, 0, Math.PI * 2); targetCtx.fill();
+
+      if (liquid.foamLevel > 0.008) {
+        const foamH = liquid.foamLevel * bowlH;
+        const fGrad = targetCtx.createLinearGradient(0, surfY - foamH, 0, surfY + 8);
+        fGrad.addColorStop(0, 'rgba(255, 252, 246, 0.94)');
+        fGrad.addColorStop(0.7, rgbCss(lerp(sr, 255, 0.72), lerp(sg, 252, 0.72), lerp(sb, 245, 0.72), 0.85));
+        fGrad.addColorStop(1, 'rgba(255, 252, 246, 0)');
+        targetCtx.fillStyle = fGrad;
+        targetCtx.beginPath();
+        targetCtx.ellipse(CX, surfY - foamH * 0.35, surfRx + 2, foamH * 0.75 + 10, 0, 0, Math.PI * 2);
+        targetCtx.fill();
+      }
+    }
+    targetCtx.restore(); // 结束杯内裁剪
+
+    // 5. 交互工具实时渲染：胡桃木捣棒 / 搅拌吧勺
+    if (state.muddlerAnim > 0.01) {
+      const plunge = Math.sin(state.muddlerAnim * Math.PI);
+      const my = lerp(glass.topY - 95, glass.botY - 26, plunge);
+      targetCtx.save();
+      const mg = targetCtx.createLinearGradient(CX - 14, 0, CX + 14, 0);
+      mg.addColorStop(0, '#4E3422'); mg.addColorStop(0.5, '#8C6242'); mg.addColorStop(1, '#3D2618');
+      targetCtx.fillStyle = mg;
+      targetCtx.beginPath(); targetCtx.roundRect(CX - 13, my - 190, 26, 190, 10); targetCtx.fill();
+      targetCtx.fillStyle = '#332014';
+      targetCtx.beginPath(); targetCtx.ellipse(CX, my, 15, 7, 0, 0, Math.PI * 2); targetCtx.fill();
+      targetCtx.restore();
+    }
+    if (state.step === 3 && state.mixTool === 'spoon' && !forExport) {
+      const sx = state.stirPos.active ? state.stirPos.x : CX + Math.sin(t * 0.002) * 28;
+      const sy = state.stirPos.active ? state.stirPos.y : Math.max(glass.topY + 40, surfY + 35);
+      targetCtx.save();
+      targetCtx.strokeStyle = '#DFB054'; targetCtx.lineWidth = 4.5; targetCtx.lineCap = 'round';
+      targetCtx.beginPath(); targetCtx.moveTo(sx + 18, glass.topY - 92); targetCtx.lineTo(sx, sy); targetCtx.stroke();
+      targetCtx.fillStyle = '#EBC474';
+      targetCtx.beginPath(); targetCtx.ellipse(sx, sy, 10, 5, 0.2, 0, Math.PI * 2); targetCtx.fill();
+      targetCtx.restore();
+    }
+
+    // 6. 饮具水上段
+    drawStirrerOrStraw(targetCtx, glass, surfY, true);
+
+    // 7. 前杯壁玻璃高光、冰杯冷雾与凝露水珠
+    targetCtx.save();
+    traceGlassBowlPath(targetCtx, glass, 0);
+    if (state.chilled) {
+      const frostG = targetCtx.createLinearGradient(0, glass.topY, 0, glass.botY);
+      frostG.addColorStop(0, 'rgba(235, 248, 252, 0.16)');
+      frostG.addColorStop(0.65, 'rgba(225, 242, 248, 0.08)');
+      frostG.addColorStop(1, 'rgba(235, 248, 252, 0.18)');
+      targetCtx.fillStyle = frostG; targetCtx.fill();
+    }
+    targetCtx.strokeStyle = theme.glassStroke; targetCtx.lineWidth = 2.4; targetCtx.stroke();
+    // 左侧弧形主高光
+    targetCtx.strokeStyle = theme.glassSpec; targetCtx.lineWidth = 5.5; targetCtx.lineCap = 'round';
+    targetCtx.beginPath();
+    targetCtx.moveTo(CX - glass.rimRx + 16, glass.topY + 26);
+    targetCtx.quadraticCurveTo(CX - glass.midRx + 18, lerp(glass.topY, glass.botY, 0.5), CX - glass.botRx + 16, glass.botY - 26);
+    targetCtx.stroke();
+    // 右侧细反光
+    targetCtx.strokeStyle = 'rgba(255,255,255,0.34)'; targetCtx.lineWidth = 2.4;
+    targetCtx.beginPath();
+    targetCtx.moveTo(CX + glass.rimRx - 14, glass.topY + 34);
+    targetCtx.quadraticCurveTo(CX + glass.midRx - 16, lerp(glass.topY, glass.botY, 0.52), CX + glass.botRx - 14, glass.botY - 36);
+    targetCtx.stroke();
+
+    // 7.1 名士手绘杯身琉璃微雕简笔画
+    if (state.glassSketchImg && state.glassSketchImg.naturalWidth > 0) {
+      targetCtx.save();
+      traceGlassBowlPath(targetCtx, glass, 8);
+      targetCtx.clip();
+      const sw = Math.min(glass.midRx * 1.12, 136);
+      const sh = Math.min((glass.botY - glass.topY) * 0.52, 136);
+      const s = Math.min(sw, sh);
+      const cy = lerp(glass.topY, glass.botY, 0.48);
+      targetCtx.globalAlpha = 0.86;
+      targetCtx.drawImage(state.glassSketchImg, CX - s * 0.5, cy - s * 0.5, s, s);
+      targetCtx.restore();
+    }
+
+    // 冰杯凝露滑落水珠
+    if (state.chilled) {
+      state.condensationDrops.forEach(d => {
+        const dy = lerp(glass.topY + 22, glass.botY - 20, d.v);
+        const dx = CX + d.u * (getGlassHalfWidthAtY(glass, dy) - 10);
+        targetCtx.fillStyle = 'rgba(240, 252, 255, 0.55)';
+        targetCtx.beginPath(); targetCtx.ellipse(dx, dy, d.r * 0.72, d.r * 1.15, 0, 0, Math.PI * 2); targetCtx.fill();
+      });
+    }
+
+    // 杯口椭圆与挂杯盐/糖霜边
+    targetCtx.strokeStyle = theme.glassStroke; targetCtx.lineWidth = 2.2;
+    targetCtx.beginPath(); targetCtx.ellipse(CX, glass.topY, glass.rimRx, 14, 0, 0, Math.PI * 2); targetCtx.stroke();
+
+    if (state.rimCrust.id !== 'none') {
+      const specks = state.rimCrust.specks;
+      for (let i = 0; i < 68; i++) {
+        const a = (i / 68) * Math.PI * 2;
+        const rx = glass.rimRx + Math.sin(i * 13.7) * 3.5;
+        const px = CX + Math.cos(a) * rx;
+        const py = glass.topY + Math.sin(a) * 14 + Math.cos(i * 7.3) * 3.5 + (Math.sin(a) > 0 ? 3.5 : 0);
+        targetCtx.fillStyle = specks[i % specks.length];
+        targetCtx.globalAlpha = Math.sin(a) > -0.2 ? 0.92 : 0.45;
+        targetCtx.beginPath(); targetCtx.arc(px, py, 1.8 + (i % 3) * 0.75, 0, Math.PI * 2); targetCtx.fill();
+      }
+      targetCtx.globalAlpha = 1;
+    }
+    targetCtx.restore();
+
+    // 8. 杯口挂饰（可拖拽微调）
+    state.rimItems.forEach(item => {
+      drawGarnishGraphic(targetCtx, item.id, item.x, item.y, item.scale || 1, item.rot || 0);
+    });
+
+    // 9. 收尾香气（柑橘喷雾金点 / 沉香青烟）
+    if (state.aroma.id === 'citrus_mist') {
+      targetCtx.save();
+      for (let i = 0; i < 18; i++) {
+        const ph = (t * 0.0014 + i * 0.41) % 1;
+        const mx = CX + Math.sin(i * 2.3 + t * 0.001) * (glass.rimRx * 0.85);
+        const my = glass.topY - 12 - ph * 95;
+        targetCtx.fillStyle = `rgba(248, 214, 120, ${(1 - ph) * 0.65})`;
+        targetCtx.beginPath(); targetCtx.arc(mx, my, 1.6 + (1 - ph) * 1.8, 0, Math.PI * 2); targetCtx.fill();
+      }
+      targetCtx.restore();
+    } else if (state.aroma.id === 'incense_smoke') {
+      targetCtx.save();
+      for (let s = 0; s < 3; s++) {
+        targetCtx.strokeStyle = `rgba(225, 232, 235, ${0.14 + s * 0.04})`;
+        targetCtx.lineWidth = 10 - s * 2; targetCtx.lineCap = 'round';
+        targetCtx.beginPath();
+        for (let k = 0; k <= 14; k++) {
+          const u = k / 14;
+          const sx = CX + (s - 1) * 26 + Math.sin(u * 4.5 - t * 0.002 + s * 2) * (14 + u * 22);
+          const sy = glass.topY - 8 - u * 135;
+          if (k === 0) targetCtx.moveTo(sx, sy); else targetCtx.lineTo(sx, sy);
+        }
+        targetCtx.stroke();
+      }
+      targetCtx.restore();
+    }
+
+    targetCtx.restore(); // 结束摇晃偏移
+
+    // 10. 倾倒中的酒瓶与流柱
+    if (!forExport) drawPouringBottleAndStream(targetCtx, glass, surfY);
+  }
+
+  /* ============================================================================
+   * 7. 风味计算与智能题名
+   * ============================================================================ */
+  function computeFlavorProfile() {
+    let sweet = 0, sour = 0, floral = 0, abv = 0, total = 0;
+    Object.entries(state.pourLog).forEach(([name, amt]) => {
+      const w = WINE_PALETTE.find(x => x.name === name);
+      if (w && amt > 0) {
+        sweet += w.sweet * amt; sour += w.sour * amt; floral += w.floral * amt; abv += w.abv * amt; total += amt;
+      }
+    });
+    state.muddleItems.forEach(m => {
+      const w = 0.08 + m.crush * 0.12;
+      sweet += (m.sweet || 0.1) * w; sour += (m.sour || 0.1) * w; floral += (m.floral || 0.2) * w; total += w * 0.5;
+    });
+    if (total < 0.001) return { sweet: 0, sour: 0, floral: 0, abv: 0 };
+    return {
+      sweet: clamp(sweet / total, 0, 1),
+      sour: clamp(sour / total, 0, 1),
+      floral: clamp(floral / total, 0, 1),
+      abv: clamp(abv / total, 0, 1)
+    };
+  }
+  function updateFlavorHud() {
+    const f = computeFlavorProfile();
+    document.getElementById('barSweet').style.width = `${Math.round(f.sweet * 100)}%`;
+    document.getElementById('barSour').style.width = `${Math.round(f.sour * 100)}%`;
+    document.getElementById('barFloral').style.width = `${Math.round(f.floral * 100)}%`;
+    document.getElementById('barAbv').style.width = `${Math.round(f.abv * 100)}%`;
+  }
+  function suggestDrinkTitle() {
+    const entries = Object.entries(state.pourLog).sort((a, b) => b[1] - a[1]);
+    const main = entries[0] ? entries[0][0] : '流霞';
+    const sub = entries[1] ? entries[1][0].slice(0, 2) : (state.muddleItems[0] ? state.muddleItems[0].name.slice(-2) : '夜月');
+    const f = computeFlavorProfile();
+    if (f.abv > 0.55) return `${main.slice(0, 2)}醉${sub.slice(0, 1)}觞`;
+    if (f.floral > 0.58) return `${main.slice(0, 2)}浮花露`;
+    if (f.sour > 0.45) return `青岚${main.slice(0, 2)}饮`;
+    return `${main.slice(0, 2)}${sub.slice(0, 2)}酿`;
+  }
+
+  /* ============================================================================
+   * 8. 底部 6 步动态交互面板渲染
+   * ============================================================================ */
+  const bottomDock = document.getElementById('bottomDock');
+  const stageHintPill = document.getElementById('stageHintPill');
+
+  function updateStepperUI() {
+    document.querySelectorAll('.step-item').forEach((el, idx) => {
+      el.classList.toggle('active', idx === state.step);
+      el.classList.toggle('done', idx < state.step);
+    });
+  }
+
+  function renderDock() {
+    updateStepperUI();
+    updateFlavorHud();
+    bottomDock.innerHTML = '';
+
+    if (state.step === 0) {
+      stageHintPill.textContent = '择一雅器，可选挂杯霜边与冰杯凝露';
+      const head = document.createElement('div'); head.className = 'dock-head';
+      head.innerHTML = `<div class="dock-instruction">第一步 · 择器与挂杯</div>
+        <div class="dock-sub-tabs">
+          <button type="button" class="sub-tab ${state.chilled ? 'active' : ''}" id="toggleChillBtn">${state.chilled ? '冰杯凝露：开' : '冰杯凝露：关'}</button>
+        </div>`;
+      bottomDock.appendChild(head);
+
+      const scroll = document.createElement('div'); scroll.className = 'options-scroll';
+      HAN_GLASSES.forEach(g => {
+        const card = document.createElement('div');
+        card.className = `thumb-card ${state.glass.id === g.id ? 'active' : ''}`;
+        const c = document.createElement('canvas'); c.width = 48; c.height = 46;
+        renderVesselThumb(c, g);
+        card.appendChild(c);
+        card.innerHTML += `<div class="thumb-label">${g.name}</div><div class="thumb-sub">${g.sub}</div>`;
+        // innerHTML += clears canvas bitmap, re-draw after
+        renderVesselThumb(card.querySelector('canvas'), g);
+        card.onclick = () => { state.glass = g; rebuildIcePieces(); sfx.playClink(1520, 0.06); renderDock(); };
+        scroll.appendChild(card);
+      });
+      bottomDock.appendChild(scroll);
+
+      const row = document.createElement('div'); row.className = 'dock-action-row';
+      const rimRow = document.createElement('div'); rimRow.style.cssText = 'display:flex;gap:5px;overflow-x:auto;scrollbar-width:none;';
+      RIM_CRUSTS.forEach(rc => {
+        const b = document.createElement('button');
+        b.type = 'button'; b.className = `small-pill-btn ${state.rimCrust.id === rc.id ? 'active' : ''}`;
+        b.textContent = rc.name;
+        b.onclick = () => { state.rimCrust = rc; sfx.playPop(520); renderDock(); };
+        rimRow.appendChild(b);
+      });
+      const nextBtn = document.createElement('button'); nextBtn.type = 'button'; nextBtn.className = 'primary-next-btn';
+      nextBtn.textContent = '下一步：冰料 ›';
+      nextBtn.onclick = () => goToStep(1);
+      row.appendChild(rimRow); row.appendChild(nextBtn);
+      bottomDock.appendChild(row);
+
+      document.getElementById('toggleChillBtn').onclick = () => { state.chilled = !state.chilled; sfx.playClink(1850, 0.05); renderDock(); };
+    } else if (state.step === 1) {
+      stageHintPill.textContent = state.muddleItems.length ? '点击杯身或点“木槌捣汁”压出鲜果香气' : '先择冰型，可投鲜果薄荷入杯底捣汁';
+      const head = document.createElement('div'); head.className = 'dock-head';
+      head.innerHTML = `<div class="dock-instruction">第二步 · 落冰与捣料出汁</div>
+        <div class="dock-sub-tabs">
+          <button type="button" class="sub-tab active" id="muddlePressBtn">木槌捣汁</button>
+          <button type="button" class="sub-tab" id="clearMuddleBtn">清料</button>
+        </div>`;
+      bottomDock.appendChild(head);
+
+      const scroll = document.createElement('div'); scroll.className = 'options-scroll';
+      // 先放冰型
+      ICE_TYPES.forEach(ic => {
+        const card = document.createElement('div');
+        card.className = `thumb-card ${state.iceType.id === ic.id ? 'active' : ''}`;
+        card.style.minWidth = '66px';
+        card.innerHTML = `<div style="width:20px;height:20px;border-radius:${ic.id === 'sphere' ? '50%' : '5px'};background:linear-gradient(135deg,#FFF,#BFE0EC);border:1px solid #96B8C4;"></div>
+          <div class="thumb-label">${ic.name}</div><div class="thumb-sub">${ic.sub}</div>`;
+        card.onclick = () => { state.iceType = ic; rebuildIcePieces(); sfx.playClink(1720, 0.07); renderDock(); };
+        scroll.appendChild(card);
+      });
+      // 分隔再放鲜料
+      MUDDLE_INGREDIENTS.forEach(mi => {
+        const card = document.createElement('div');
+        card.className = 'thumb-card'; card.style.minWidth = '66px';
+        card.innerHTML = `<div style="width:18px;height:18px;border-radius:50%;background:${mi.color};border:1px solid rgba(0,0,0,0.14);"></div>
+          <div class="thumb-label">${mi.name}</div><div class="thumb-sub">投底捣汁</div>`;
+        card.onclick = () => {
+          if (state.muddleItems.length < 9) {
+            state.muddleItems.push({ ...mi, rx: (Math.random() - 0.5) * 1.35, ry: Math.random() * 0.7, r: 9 + Math.random() * 4, rot: Math.random() * Math.PI, crush: 0 });
+            sfx.playPop(460); renderDock();
+          }
+        };
+        scroll.appendChild(card);
+      });
+      bottomDock.appendChild(scroll);
+
+      const row = document.createElement('div'); row.className = 'dock-action-row';
+      const prevBtn = document.createElement('button'); prevBtn.type = 'button'; prevBtn.className = 'small-pill-btn'; prevBtn.textContent = '‹ 上一步';
+      prevBtn.onclick = () => goToStep(0);
+      const nextBtn = document.createElement('button'); nextBtn.type = 'button'; nextBtn.className = 'primary-next-btn'; nextBtn.textContent = '下一步：注酒 ›';
+      nextBtn.onclick = () => goToStep(2);
+      row.appendChild(prevBtn); row.appendChild(nextBtn);
+      bottomDock.appendChild(row);
+
+      document.getElementById('muddlePressBtn').onclick = triggerMuddle;
+      document.getElementById('clearMuddleBtn').onclick = () => { state.muddleItems = []; sfx.playPop(340); renderDock(); };
+    } else if (state.step === 2) {
+      stageHintPill.textContent = state.pourMode === 'float' ? '贴壁缓分层：重露沉底、轻酒漂浮' : '直冲激荡：酒柱卷起 2D 流体漩涡混合';
+      const head = document.createElement('div'); head.className = 'dock-head';
+      head.innerHTML = `<div class="dock-instruction">第三步 · 长按酒色倾壶注酒</div>
+        <div class="dock-sub-tabs">
+          <button type="button" class="sub-tab ${state.pourMode === 'direct' ? 'active' : ''}" id="modeDirectBtn">直冲激荡</button>
+          <button type="button" class="sub-tab ${state.pourMode === 'float' ? 'active' : ''}" id="modeFloatBtn">贴壁缓分层</button>
+        </div>`;
+      bottomDock.appendChild(head);
+
+      const grid = document.createElement('div'); grid.className = 'wine-grid';
+      WINE_PALETTE.forEach(w => {
+        const pill = document.createElement('button'); pill.type = 'button'; pill.className = 'wine-pill';
+        pill.innerHTML = `<span class="wine-dot" style="background:${w.color};"></span>
+          <span class="wine-meta"><span class="wine-name">${w.name}</span><span class="wine-dens">${w.tag}</span></span>`;
+        const startP = (e) => {
+          e.preventDefault();
+          state.activePourWine = w; state.bottleWine = w;
+          pill.classList.add('pouring');
+          sfx.startPour(liquid.fillLevel, state.pourMode === 'float');
+        };
+        const stopP = () => {
+          if (state.activePourWine === w) { state.activePourWine = null; sfx.stopPour(); }
+          pill.classList.remove('pouring');
+        };
+        pill.addEventListener('pointerdown', startP);
+        pill.addEventListener('pointerup', stopP);
+        pill.addEventListener('pointerleave', stopP);
+        pill.addEventListener('pointercancel', stopP);
+        grid.appendChild(pill);
+      });
+      bottomDock.appendChild(grid);
+
+      const row = document.createElement('div'); row.className = 'dock-action-row';
+      const prevBtn = document.createElement('button'); prevBtn.type = 'button'; prevBtn.className = 'small-pill-btn'; prevBtn.textContent = '‹ 上一步';
+      prevBtn.onclick = () => goToStep(1);
+      const clearBtn = document.createElement('button'); clearBtn.type = 'button'; clearBtn.className = 'small-pill-btn'; clearBtn.textContent = '倒空重调';
+      clearBtn.onclick = () => { liquid.reset(); state.pourLog = {}; sfx.playPop(320); updateFlavorHud(); };
+      const nextBtn = document.createElement('button'); nextBtn.type = 'button'; nextBtn.className = 'primary-next-btn'; nextBtn.textContent = '下一步：搅和 ›';
+      nextBtn.onclick = () => { if (liquid.fillLevel < 0.08) { liquid.pourStep(WINE_PALETTE[0], 0.25, false); state.pourLog[WINE_PALETTE[0].name] = (state.pourLog[WINE_PALETTE[0].name] || 0) + 0.25; } goToStep(3); };
+      row.appendChild(prevBtn); row.appendChild(clearBtn); row.appendChild(nextBtn);
+      bottomDock.appendChild(row);
+
+      document.getElementById('modeDirectBtn').onclick = () => { state.pourMode = 'direct'; renderDock(); };
+      document.getElementById('modeFloatBtn').onclick = () => { state.pourMode = 'float'; renderDock(); };
+    } else if (state.step === 3) {
+      stageHintPill.textContent = state.mixTool === 'spoon' ? '在杯中左右划动，用吧勺拉出大理石旋涡' : '连点“摇和起沫”，激荡出绵密酒沫';
+      const head = document.createElement('div'); head.className = 'dock-head';
+      head.innerHTML = `<div class="dock-instruction">第四步 · 吧勺慢搅与摇和起沫</div>
+        <div class="dock-sub-tabs">
+          <button type="button" class="sub-tab ${state.mixTool === 'spoon' ? 'active' : ''}" id="toolSpoonBtn">吧勺慢搅</button>
+          <button type="button" class="sub-tab ${state.mixTool === 'shaker' ? 'active' : ''}" id="toolShakerBtn">雪克摇和</button>
+        </div>`;
+      bottomDock.appendChild(head);
+
+      const info = document.createElement('div');
+      info.style.cssText = 'display:flex;gap:8px;align-items:center;justify-content:center;padding:4px 0;';
+      if (state.mixTool === 'spoon') {
+        const autoStir = document.createElement('button'); autoStir.type = 'button'; autoStir.className = 'small-pill-btn active';
+        autoStir.textContent = '轻搅一圈（拉丝混色）';
+        autoStir.onclick = () => {
+          for (let k = 0; k < 10; k++) {
+            const ang = (k / 10) * Math.PI * 2;
+            liquid.stirAt(0.5 + Math.cos(ang) * 0.24, 0.48 + Math.sin(ang) * 0.2, -Math.sin(ang) * 2.4, Math.cos(ang) * 1.2);
+          }
+          sfx.playClink(1620, 0.06);
+        };
+        info.appendChild(autoStir);
+      } else {
+        const shakeBtn = document.createElement('button'); shakeBtn.type = 'button'; shakeBtn.className = 'small-pill-btn active';
+        shakeBtn.style.padding = '8px 20px';
+        shakeBtn.textContent = '点击摇和起沫（激荡酒液）';
+        shakeBtn.onclick = () => {
+          liquid.shakePulse(1.1);
+          state.shakerAnim = 1.0;
+          sfx.playClink(1820, 0.08);
+          setTimeout(() => sfx.playClink(1460, 0.06), 90);
+        };
+        info.appendChild(shakeBtn);
+      }
+      bottomDock.appendChild(info);
+
+      const row = document.createElement('div'); row.className = 'dock-action-row';
+      const prevBtn = document.createElement('button'); prevBtn.type = 'button'; prevBtn.className = 'small-pill-btn'; prevBtn.textContent = '‹ 继续注酒';
+      prevBtn.onclick = () => goToStep(2);
+      const nextBtn = document.createElement('button'); nextBtn.type = 'button'; nextBtn.className = 'primary-next-btn'; nextBtn.textContent = '下一步：点睛 ›';
+      nextBtn.onclick = () => goToStep(4);
+      row.appendChild(prevBtn); row.appendChild(nextBtn);
+      bottomDock.appendChild(row);
+
+      document.getElementById('toolSpoonBtn').onclick = () => { state.mixTool = 'spoon'; renderDock(); };
+      document.getElementById('toolShakerBtn').onclick = () => { state.mixTool = 'shaker'; renderDock(); };
+    } else if (state.step === 4) {
+      stageHintPill.textContent = '轻点添加手绘配饰 · 在杯上直接拖动可微调位置';
+      const head = document.createElement('div'); head.className = 'dock-head';
+      head.innerHTML = `<div class="dock-instruction">第五步 · 雅趣点睛与香气</div>
+        <div class="dock-sub-tabs">
+          <button type="button" class="sub-tab ${state.garnishTab === 'in' ? 'active' : ''}" data-gtab="in">浮杯中</button>
+          <button type="button" class="sub-tab ${state.garnishTab === 'rim' ? 'active' : ''}" data-gtab="rim">挂杯口</button>
+          <button type="button" class="sub-tab ${state.garnishTab === 'stirrer' ? 'active' : ''}" data-gtab="stirrer">饮具</button>
+          <button type="button" class="sub-tab ${state.garnishTab === 'aroma' ? 'active' : ''}" data-gtab="aroma">香气</button>
+        </div>`;
+      bottomDock.appendChild(head);
+      head.querySelectorAll('[data-gtab]').forEach(btn => {
+        btn.onclick = () => { state.garnishTab = btn.dataset.gtab; renderDock(); };
+      });
+
+      const scroll = document.createElement('div'); scroll.className = 'options-scroll';
+      if (state.garnishTab === 'in' || state.garnishTab === 'rim') {
+        const list = GARNISH_CATALOG.filter(g => g.mode === 'both' || g.mode === state.garnishTab);
+        list.forEach(item => {
+          const card = document.createElement('div'); card.className = 'thumb-card'; card.style.minWidth = '66px';
+          const c = document.createElement('canvas'); c.width = 44; c.height = 42;
+          drawGarnishGraphic(c.getContext('2d'), item.id, 22, 21, 0.62, 0);
+          card.appendChild(c);
+          const lbl = document.createElement('div'); lbl.className = 'thumb-label'; lbl.textContent = item.name;
+          card.appendChild(lbl);
+          card.onclick = () => addGarnishItem(item, state.garnishTab);
+          scroll.appendChild(card);
+        });
+      } else if (state.garnishTab === 'stirrer') {
+        STIRRER_TYPES.forEach(st => {
+          const card = document.createElement('div');
+          card.className = `thumb-card ${state.stirrer.id === st.id ? 'active' : ''}`;
+          card.innerHTML = `<div class="thumb-label">${st.name}</div>`;
+          card.onclick = () => { state.stirrer = st; sfx.playPop(580); renderDock(); };
+          scroll.appendChild(card);
+        });
+      } else {
+        AROMA_TYPES.forEach(ar => {
+          const card = document.createElement('div');
+          card.className = `thumb-card ${state.aroma.id === ar.id ? 'active' : ''}`;
+          card.innerHTML = `<div class="thumb-label">${ar.name}</div>`;
+          card.onclick = () => { state.aroma = ar; sfx.playPop(620); renderDock(); };
+          scroll.appendChild(card);
+        });
+      }
+      bottomDock.appendChild(scroll);
+
+      const row = document.createElement('div'); row.className = 'dock-action-row';
+      const prevBtn = document.createElement('button'); prevBtn.type = 'button'; prevBtn.className = 'small-pill-btn'; prevBtn.textContent = '‹ 搅和';
+      prevBtn.onclick = () => goToStep(3);
+      const undoBtn = document.createElement('button'); undoBtn.type = 'button'; undoBtn.className = 'small-pill-btn'; undoBtn.textContent = '撤回饰品';
+      undoBtn.onclick = () => {
+        if (state.garnishTab === 'rim' && state.rimItems.length) state.rimItems.pop();
+        else if (state.inWineItems.length) state.inWineItems.pop();
+        else if (state.rimItems.length) state.rimItems.pop();
+        sfx.playPop(360);
+      };
+      const nextBtn = document.createElement('button'); nextBtn.type = 'button'; nextBtn.className = 'primary-next-btn'; nextBtn.textContent = '题名封存 ›';
+      nextBtn.onclick = () => openCardModal();
+      row.appendChild(prevBtn); row.appendChild(undoBtn); row.appendChild(nextBtn);
+      bottomDock.appendChild(row);
+    } else {
+      stageHintPill.textContent = '佳酿已封存，可继续微调或开启新杯';
+      const row = document.createElement('div'); row.className = 'dock-action-row';
+      const backBtn = document.createElement('button'); backBtn.type = 'button'; backBtn.className = 'small-pill-btn'; backBtn.textContent = '‹ 返回修饰';
+      backBtn.onclick = () => goToStep(4);
+      const cardBtn = document.createElement('button'); cardBtn.type = 'button'; cardBtn.className = 'primary-next-btn'; cardBtn.textContent = '打开收藏酒卡';
+      cardBtn.onclick = () => document.getElementById('posterModal').classList.add('show');
+      row.appendChild(backBtn); row.appendChild(cardBtn);
+      bottomDock.appendChild(row);
+    }
+  }
+
+  function goToStep(s) {
+    state.step = clamp(s, 0, 5);
+    renderDock();
+    if (typeof window.__drinkOnStepChanged === 'function') window.__drinkOnStepChanged(state.step);
+  }
+
+  function triggerMuddle() {
+    state.muddlerAnim = 1.0;
+    sfx.playMuddle();
+    if (state.muddleItems.length > 0) {
+      state.muddleItems.forEach(m => { m.crush = Math.min(1, m.crush + 0.34); });
+      const pick = state.muddleItems[state.muddleItems.length - 1];
+      liquid.injectMuddleJuice(pick.juice, 0.032);
+      updateFlavorHud();
+    }
+  }
+
+  function addGarnishItem(item, mode = 'in') {
+    const glass = state.glass;
+    const surfY = glass.botY - liquid.fillLevel * (glass.botY - glass.topY);
+    if (mode === 'rim' || item.mode === 'rim') {
+      // 沿杯口弧线智能分布，避免重叠堆砌
+      const idx = state.rimItems.length;
+      const angles = [-0.15, Math.PI + 0.15, -0.52, Math.PI + 0.52, -0.88];
+      const a = angles[idx % angles.length];
+      const rx = glass.rimRx + 2;
+      const x = CX + Math.cos(a) * rx;
+      const y = glass.topY + Math.sin(a) * 14 - 4;
+      state.rimItems.push({ ...item, x, y, rot: (Math.cos(a) > 0 ? 0.22 : -0.22), scale: 1.05 });
+    } else {
+      const targetY = clamp(surfY + 24 + Math.random() * 55, glass.topY + 28, glass.botY - 26);
+      const hw = Math.max(18, getGlassHalfWidthAtY(glass, targetY) - 24);
+      state.inWineItems.push({
+        ...item,
+        x: CX + (Math.random() - 0.5) * hw * 1.4,
+        y: targetY,
+        rot: (Math.random() - 0.5) * 1.2,
+        scale: 0.94,
+        phase: Math.random() * Math.PI * 2
+      });
+    }
+    sfx.playPop(560);
+  }
+
+  /* ============================================================================
+   * 9. 画布交互：捣压、吧勺搅拌、配饰拖拽微调
+   * ============================================================================ */
+  function canvasCoordsFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height)
+    };
+  }
+
+  canvas.addEventListener('pointerdown', (e) => {
+    const pt = canvasCoordsFromEvent(e);
+    const glass = state.glass;
+
+    if (state.step === 1) {
+      if (Math.abs(pt.x - CX) < glass.midRx + 20 && pt.y > glass.topY - 20 && pt.y < glass.botY + 20) {
+        triggerMuddle();
+      }
+      return;
+    }
+    if (state.step === 3 && state.mixTool === 'spoon') {
+      state.stirPos = { active: true, x: pt.x, y: pt.y, vx: 0, vy: 0 };
+      canvas.setPointerCapture(e.pointerId);
+      return;
+    }
+    if (state.step === 4) {
+      // 优先拾取杯口配饰，其次杯中配饰
+      for (let i = state.rimItems.length - 1; i >= 0; i--) {
+        const it = state.rimItems[i];
+        if (Math.hypot(pt.x - it.x, pt.y - it.y) < 36) {
+          state.dragItem = { list: 'rim', idx: i, ox: it.x - pt.x, oy: it.y - pt.y };
+          canvas.setPointerCapture(e.pointerId);
+          return;
+        }
+      }
+      for (let i = state.inWineItems.length - 1; i >= 0; i--) {
+        const it = state.inWineItems[i];
+        if (Math.hypot(pt.x - it.x, pt.y - it.y) < 32) {
+          state.dragItem = { list: 'in', idx: i, ox: it.x - pt.x, oy: it.y - pt.y };
+          canvas.setPointerCapture(e.pointerId);
+          return;
+        }
+      }
+    }
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    const pt = canvasCoordsFromEvent(e);
+    const glass = state.glass;
+
+    if (state.stirPos.active && state.step === 3) {
+      const dx = pt.x - state.stirPos.x;
+      const dy = pt.y - state.stirPos.y;
+      state.stirPos.x = clamp(pt.x, CX - glass.midRx + 16, CX + glass.midRx - 16);
+      state.stirPos.y = clamp(pt.y, glass.topY + 20, glass.botY - 18);
+      const normX = clamp((state.stirPos.x - (CX - glass.midRx)) / (glass.midRx * 2), 0.05, 0.95);
+      const normY = clamp((glass.botY - state.stirPos.y) / (glass.botY - glass.topY), 0.05, 0.95);
+      liquid.stirAt(normX, normY, clamp(dx * 0.16, -2.5, 2.5), clamp(-dy * 0.12, -2.0, 2.0));
+      state.stirCount++;
+      if (state.stirCount % 16 === 0) sfx.playClink(1580 + Math.random() * 260, 0.04);
+      return;
+    }
+    if (state.dragItem) {
+      const arr = state.dragItem.list === 'rim' ? state.rimItems : state.inWineItems;
+      const it = arr[state.dragItem.idx];
+      if (!it) return;
+      if (state.dragItem.list === 'rim') {
+        it.x = clamp(pt.x + state.dragItem.ox, CX - glass.rimRx - 22, CX + glass.rimRx + 22);
+        it.y = clamp(pt.y + state.dragItem.oy, glass.topY - 34, glass.topY + 28);
+      } else {
+        it.x = clamp(pt.x + state.dragItem.ox, CX - glass.midRx + 18, CX + glass.midRx - 18);
+        it.y = clamp(pt.y + state.dragItem.oy, glass.topY + 22, glass.botY - 18);
+      }
+    }
+  });
+
+  const endPointer = () => { state.stirPos.active = false; state.dragItem = null; };
+  canvas.addEventListener('pointerup', endPointer);
+  canvas.addEventListener('pointercancel', endPointer);
+
+  /* ============================================================================
+   * 10. 真实笔速压感毛笔签名板 & 高清酒卡导出 + 酒谱画廊
+   * ============================================================================ */
+  const sigCanvas = document.getElementById('sigCanvas');
+  const sigCtx = sigCanvas.getContext('2d');
+  let sigDrawing = false, sigLast = null, sigWidth = 3.2;
+
+  sigCanvas.addEventListener('pointerdown', (e) => {
+    const r = sigCanvas.getBoundingClientRect();
+    sigDrawing = true; sigWidth = 3.6;
+    sigLast = { x: (e.clientX - r.left) * (sigCanvas.width / r.width), y: (e.clientY - r.top) * (sigCanvas.height / r.height), t: performance.now() };
+    sigCanvas.setPointerCapture(e.pointerId);
+  });
+  sigCanvas.addEventListener('pointermove', (e) => {
+    if (!sigDrawing || !sigLast) return;
+    const r = sigCanvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (sigCanvas.width / r.width);
+    const y = (e.clientY - r.top) * (sigCanvas.height / r.height);
+    const now = performance.now();
+    const dist = Math.hypot(x - sigLast.x, y - sigLast.y);
+    const dt = Math.max(4, now - sigLast.t);
+    const speed = dist / dt; // px/ms
+    const targetW = clamp(4.6 - speed * 2.2, 1.35, 5.0);
+    sigWidth = lerp(sigWidth, targetW, 0.35);
+
+    sigCtx.strokeStyle = '#2B211C';
+    sigCtx.lineCap = 'round'; sigCtx.lineJoin = 'round';
+    sigCtx.lineWidth = sigWidth;
+    sigCtx.beginPath(); sigCtx.moveTo(sigLast.x, sigLast.y); sigCtx.lineTo(x, y); sigCtx.stroke();
+    sigLast = { x, y, t: now };
+  });
+  sigCanvas.addEventListener('pointerup', () => { sigDrawing = false; sigLast = null; });
+  document.getElementById('clearSigBtn').onclick = () => sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+
+  function openCardModal() {
+    document.getElementById('drinkTitleInput').value = suggestDrinkTitle();
+    document.getElementById('cardModal').classList.add('show');
+  }
+
+  async function generateAndShowPoster() {
+    state.card.title = document.getElementById('drinkTitleInput').value.trim() || '月下流霞';
+    state.card.to = document.getElementById('drinkToInput').value.trim() || '致：微醺知音';
+    state.card.msg = document.getElementById('drinkMsgInput').value.trim() || '愿与君共此良宵。';
+    state.card.sigDataUrl = sigCanvas.toDataURL('image/png');
+
+    const poster = document.createElement('canvas');
+    poster.width = 760; poster.height = 1040;
+    const pc = poster.getContext('2d');
+
+    // 宣纸烫金收藏酒卡底板
+    pc.fillStyle = '#F7F1E4'; pc.fillRect(0, 0, 760, 1040);
+    pc.strokeStyle = '#C89B4B'; pc.lineWidth = 3; pc.strokeRect(20, 20, 720, 1000);
+    pc.strokeStyle = 'rgba(200, 155, 75, 0.38)'; pc.lineWidth = 1; pc.strokeRect(28, 28, 704, 984);
+
+    // 嵌入当前高质感主画布
+    const snapCanvas = document.createElement('canvas');
+    snapCanvas.width = 720; snapCanvas.height = 760;
+    renderDrinkScene(snapCanvas.getContext('2d'), performance.now(), true);
+    pc.save();
+    pc.beginPath(); pc.roundRect(42, 42, 676, 680, 14); pc.clip();
+    pc.drawImage(snapCanvas, 20, 20, 680, 700, 42, 42, 676, 680);
+    pc.restore();
+    pc.strokeStyle = '#D9C8AA'; pc.lineWidth = 2;
+    pc.beginPath(); pc.roundRect(42, 42, 676, 680, 14); pc.stroke();
+
+    // 下方酒笺题记
+    pc.fillStyle = '#2B211C'; pc.font = '800 32px "Songti SC", serif';
+    pc.textAlign = 'left'; pc.fillText(state.card.title, 48, 774);
+
+    // 朱红工坊小印
+    pc.fillStyle = '#B84336';
+    pc.beginPath(); pc.roundRect(654, 742, 56, 56, 8); pc.fill();
+    pc.fillStyle = '#FAF5EB'; pc.font = '800 18px "Songti SC", serif'; pc.textAlign = 'center';
+    pc.fillText('曲水', 682, 764); pc.fillText('酒肆', 682, 788);
+
+    pc.textAlign = 'left';
+    pc.fillStyle = '#75584A'; pc.font = '700 18px "Songti SC", serif';
+    pc.fillText(state.card.to, 48, 810);
+
+    // 配方风味摘要
+    const wines = Object.keys(state.pourLog).slice(0, 4).join(' · ') || '特调佳酿';
+    pc.fillStyle = '#9A8475'; pc.font = '600 15px "Songti SC", serif';
+    pc.fillText(`器皿：${state.glass.name}   配方：${wines}`, 48, 842);
+
+    // 祝酒词自动换行
+    pc.fillStyle = '#3B2820'; pc.font = '600 17px "Songti SC", serif';
+    const msg = state.card.msg;
+    let line = '', ly = 880;
+    for (const ch of msg) {
+      if (pc.measureText(line + ch).width > 430) { pc.fillText(line, 48, ly); line = ch; ly += 26; }
+      else line += ch;
+    }
+    if (line) pc.fillText(line, 48, ly);
+
+    // 叠加毛笔落款
+    pc.drawImage(sigCanvas, 470, 880, 236, 52);
+
+    const dataUrl = poster.toDataURL('image/png');
+    document.getElementById('posterImage').src = dataUrl;
+    const f = computeFlavorProfile();
+    document.getElementById('posterFlavorLine').textContent =
+      `甜 ${Math.round(f.sweet * 100)}% · 酸 ${Math.round(f.sour * 100)}% · 花果 ${Math.round(f.floral * 100)}% · 酒韵 ${Math.round(f.abv * 100)}%`;
+
+    document.getElementById('cardModal').classList.remove('show');
+    document.getElementById('posterModal').classList.add('show');
+    goToStep(5);
+    sfx.playChime();
+
+    // 优先同步写入宿主独立历史库，同时保留本地酒谱兜底
+    if (typeof window.__drinkOnPosterReady === 'function') {
+      try { await window.__drinkOnPosterReady(dataUrl); } catch (_) {}
+    } else {
+      await saveDrinkToDB({
+        id: `drink_${Date.now()}`,
+        title: state.card.title,
+        desc: `${state.glass.name} · ${wines}`,
+        dataUrl,
+        createdAt: Date.now()
+      });
+    }
+  }
+
+  async function renderHistoryModal() {
+    const listEl = document.getElementById('historyList');
+    let items = [];
+    if (typeof window.__drinkLoadHostHistory === 'function') {
+      try { items = await window.__drinkLoadHostHistory(); } catch (_) { items = []; }
+    }
+    if (!Array.isArray(items) || !items.length) {
+      items = await loadDrinksFromDB();
+    }
+    if (!items.length) {
+      listEl.innerHTML = '<div style="text-align:center;padding:26px 10px;font-size:12.5px;color:var(--lacquer-light);">酒谱尚空，调好第一杯佳酿并封存后便会收录于此。</div>';
+      return;
+    }
+    listEl.innerHTML = '';
+    items.forEach(item => {
+      const title = item.cakeName || item.title || '月下流霞';
+      const desc = item.cakeDesc || item.desc || '';
+      const imgUrl = item.posterDataUrl || item.dataUrl || '';
+      const card = document.createElement('div'); card.className = 'history-card';
+      const d = new Date(item.createdAt || Date.now());
+      const ts = `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      card.innerHTML = `<img class="history-thumb" src="${imgUrl}" alt="${title}">
+        <div class="history-meta">
+          <div class="history-title">${title}</div>
+          <div class="history-desc">${desc}</div>
+          <div class="history-time">${item.charName ? `${item.charName} · ` : ''}${ts}</div>
+        </div>
+        <div class="history-ops">
+          <button type="button" class="small-pill-btn view-btn">赏鉴</button>
+          <button type="button" class="small-pill-btn del-btn" style="color:var(--cinnabar);">删去</button>
+        </div>`;
+      card.querySelector('.view-btn').onclick = () => {
+        document.getElementById('posterImage').src = imgUrl;
+        document.getElementById('posterFlavorLine').textContent = `${title} · ${desc}`;
+        if (typeof window.__drinkOpenHistoryItem === 'function') {
+          window.__drinkOpenHistoryItem(item);
+        }
+        document.getElementById('historyModal').classList.remove('show');
+        document.getElementById('posterModal').classList.add('show');
+      };
+      card.querySelector('.del-btn').onclick = async () => {
+        if (typeof window.__drinkDeleteHostHistory === 'function') {
+          try { await window.__drinkDeleteHostHistory(item.id); } catch (_) {}
+        }
+        await deleteDrinkFromDB(item.id);
+        renderHistoryModal();
+      };
+      listEl.appendChild(card);
+    });
+  }
+
+  /* ============================================================================
+   * 11. 主动画循环
+   * ============================================================================ */
+  function renderLoop(t) {
+    // 瓶身倾倒平滑插值 + 实时注酒
+    const targetTilt = state.activePourWine ? 1 : 0;
+    state.bottleTilt = lerp(state.bottleTilt, targetTilt, 0.18);
+    if (state.activePourWine && state.bottleTilt > 0.55) {
+      const slow = state.pourMode === 'float';
+      const delta = slow ? 0.0052 : 0.0085;
+      const poured = liquid.pourStep(state.activePourWine, delta, slow, slow ? 0.72 : 0.54);
+      if (poured) {
+        state.pourLog[state.activePourWine.name] = (state.pourLog[state.activePourWine.name] || 0) + delta;
+        sfx.updatePour(liquid.fillLevel, slow);
+        updateFlavorHud();
+        if (!slow && Math.random() < 0.45) {
+          const surfY = state.glass.botY - liquid.fillLevel * (state.glass.botY - state.glass.topY);
+          state.bubbles.push({ x: CX + (Math.random() - 0.5) * 85, y: surfY + 12 + Math.random() * 50, r: 1.5 + Math.random() * 2.5, vy: 0.9 + Math.random() * 1.4 });
+        }
+      }
+    }
+
+    // 气泡与冷凝水珠物理更新
+    if (liquid.fillLevel > 0.08 && Math.random() < 0.08) {
+      state.bubbles.push({ x: CX + (Math.random() - 0.5) * (state.glass.botRx * 1.1), y: state.glass.botY - 12, r: 1.2 + Math.random() * 2.1, vy: 0.7 + Math.random() * 1.1 });
+    }
+    state.bubbles.forEach(b => { b.y -= b.vy; b.x += Math.sin(t * 0.006 + b.y * 0.1) * 0.3; });
+    state.bubbles = state.bubbles.filter(b => b.y > state.glass.topY).slice(-60);
+
+    if (state.chilled) {
+      state.condensationDrops.forEach(d => { d.v += d.vy; if (d.v > 0.92) { d.v = 0.12; d.u = (Math.random() - 0.5) * 1.55; } });
+    }
+    if (state.muddlerAnim > 0) state.muddlerAnim = Math.max(0, state.muddlerAnim - 0.055);
+    if (state.shakerAnim > 0) state.shakerAnim = Math.max(0, state.shakerAnim - 0.045);
+
+    liquid.step();
+    renderDrinkScene(ctx, t, false);
+    requestAnimationFrame(renderLoop);
+  }
+
+  /* ============================================================================
+   * 12. 全局事件绑定与重置
+   * ============================================================================ */
+  function resetAll() {
+    liquid.reset();
+    state.pourLog = {};
+    state.muddleItems = [];
+    state.inWineItems = [];
+    state.rimItems = [];
+    state.rimCrust = RIM_CRUSTS[0];
+    state.aroma = AROMA_TYPES[0];
+    state.bubbles = [];
+    state.glassSketchImg = null;
+    state.glassSketchTitle = '';
+    sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+    rebuildIcePieces();
+    updateFlavorHud();
+    goToStep(0);
+    if (typeof window.__drinkOnReset === 'function') window.__drinkOnReset();
+    sfx.playPop(440);
+  }
+
+  function bindGlobalEvents() {
+    document.querySelectorAll('.step-item').forEach(el => {
+      el.onclick = () => {
+        const s = Number(el.dataset.step);
+        if (s === 5) openCardModal(); else goToStep(s);
+      };
+    });
+    document.getElementById('sceneThemeBtn').onclick = () => {
+      state.sceneIdx = (state.sceneIdx + 1) % SCENE_THEMES.length;
+      document.getElementById('sceneThemeBtn').textContent = `景致：${SCENE_THEMES[state.sceneIdx].name}`;
+      sfx.playPop(580);
+    };
+    document.getElementById('soundToggleBtn').onclick = (e) => {
+      sfx.enabled = !sfx.enabled;
+      e.currentTarget.style.opacity = sfx.enabled ? '1' : '0.42';
+    };
+    document.getElementById('resetGameBtn').onclick = resetAll;
+
+    document.getElementById('closeCardModalBtn').onclick = () => document.getElementById('cardModal').classList.remove('show');
+    document.getElementById('saveCardBtn').onclick = generateAndShowPoster;
+    document.getElementById('continueDecorBtn').onclick = () => { document.getElementById('posterModal').classList.remove('show'); goToStep(4); };
+    document.getElementById('remakeDrinkBtn').onclick = () => { document.getElementById('posterModal').classList.remove('show'); resetAll(); };
+    document.getElementById('downloadPosterBtn').onclick = () => {
+      const a = document.createElement('a');
+      a.href = document.getElementById('posterImage').src;
+      a.download = `${state.card.title || '曲水特调'}.png`;
+      a.click();
+      sfx.playPop(640);
+    };
+    document.getElementById('openHistoryBtn').onclick = () => {
+      renderHistoryModal();
+      document.getElementById('historyModal').classList.add('show');
+    };
+    document.getElementById('closeHistoryModalBtn').onclick = () => document.getElementById('historyModal').classList.remove('show');
+  }
+
+  /* ============================================================================
+   * 13. 传讯名士真实 AI 6 步共创调酒桥接引擎 (WORKSHOP_CAKE_* 协议 · edition:'drink')
+   * ============================================================================ */
+  function initDrinkCoCreationBridge() {
+    const EDITION = 'drink';
+    const STEP_NAMES = ['择器挂杯', '落冰捣料', '倾壶分层', '摇和起沫', '雅趣点睛', '题签封酿'];
+    const charSelectEl = document.getElementById('coopCharSelect');
+    const modeSelectEl = document.getElementById('coopModeSelect');
+    const swapBtnEl = document.getElementById('coopSwapTurnBtn');
+    const actionBtnEl = document.getElementById('coopActionBtn');
+    const pillEl = document.getElementById('coopSpeakerPill');
+    const pillNameEl = document.getElementById('coopPillName');
+    const bubbleEl = document.getElementById('coopBubble');
+    const bubbleNameEl = document.getElementById('coopBubbleName');
+    const bubbleTagEl = document.getElementById('coopBubbleTag');
+    const bubbleTextEl = document.getElementById('coopBubbleText');
+    const bubbleActionsEl = document.getElementById('coopBubbleActions');
+    const nextStepBtnEl = document.getElementById('coopNextStepBtn');
+    const skipAnimBtnEl = document.getElementById('coopSkipAnimBtn');
+    const collapseBtnEl = document.getElementById('coopBubbleCollapseBtn');
+
+    const posterImgEl = document.getElementById('posterImage');
+    const posterViewTabsEl = document.getElementById('posterViewTabs');
+    const tabPosterImgEl = document.getElementById('tabPosterImg');
+    const tabPosterNotesEl = document.getElementById('tabPosterNotes');
+    const posterNotesPageEl = document.getElementById('posterNotesPage');
+    const posterReviewBoxEl = document.getElementById('posterReviewBox');
+    const feedbackRowEl = document.getElementById('posterUserFeedbackRow');
+    const feedbackInputEl = document.getElementById('userFeedbackInput');
+    const sendFeedbackBtnEl = document.getElementById('sendUserFeedbackBtn');
+    const askCharTasteBtnEl = document.getElementById('askCharTasteBtn');
+    const saveBackpackBtnEl = document.getElementById('saveBackpackBtn');
+    const openForwardModalBtnEl = document.getElementById('openForwardModalBtn');
+    const posterToastEl = document.getElementById('posterActionToast');
+    const forwardModalEl = document.getElementById('forwardModal');
+    const forwardCharSelectEl = document.getElementById('forwardCharSelect');
+    const forwardNoteInputEl = document.getElementById('forwardNoteInput');
+    const confirmForwardBtnEl = document.getElementById('confirmForwardBtn');
+
+    const coop = {
+      characters: [],
+      selectedCharId: '',
+      userName: '广陵王',
+      mode: 'user_make_char_eat',
+      userFirst: true,
+      busy: false,
+      bubbleExpanded: false,
+      hostConnected: false,
+      makingNotes: [],
+      relayHistory: [],
+      lastReview: null,
+      lastPosterDataUrl: '',
+      stepWaitResolver: null,
+      skipFullAnim: false
+    };
+    const pendingRpcs = {};
+    let rpcSeq = 0;
+
+    function sendHostRpc(reqType, resType, payload) {
+      return new Promise((resolve, reject) => {
+        const reqId = `drink_rpc_${Date.now()}_${++rpcSeq}`;
+        const timer = setTimeout(() => { delete pendingRpcs[reqId]; reject(new Error('通信超时')); }, 50000);
+        pendingRpcs[reqId] = { resType, resolve, reject, timer };
+        window.parent.postMessage({ type: reqType, requestId: reqId, payload: Object.assign({ edition: EDITION }, payload || {}) }, '*');
+      });
+    }
+
+    window.addEventListener('message', (ev) => {
+      const data = ev && ev.data;
+      if (!data || typeof data !== 'object' || !data.type) return;
+      if (data.type === 'WORKSHOP_CAKE_HOST_SYNC') {
+        coop.hostConnected = true;
+        const p = data.payload || {};
+        coop.characters = Array.isArray(p.characters) ? p.characters : [];
+        coop.userName = p.userName || '广陵王';
+        const opts = coop.characters.length > 0
+          ? coop.characters.map(c => `<option value="${String(c.id).replace(/"/g, '&quot;')}">${c.name}</option>`).join('')
+          : '<option value="">暂未检测到名士</option>';
+        charSelectEl.innerHTML = opts; forwardCharSelectEl.innerHTML = opts;
+        if (!coop.selectedCharId && coop.characters.length > 0) coop.selectedCharId = String(coop.characters[0].id);
+        if (coop.selectedCharId) { charSelectEl.value = coop.selectedCharId; forwardCharSelectEl.value = coop.selectedCharId; }
+        syncCoopUI();
+        return;
+      }
+      if (data.requestId && pendingRpcs[data.requestId]) {
+        const entry = pendingRpcs[data.requestId];
+        clearTimeout(entry.timer); delete pendingRpcs[data.requestId];
+        if (data.error) entry.reject(new Error(data.error)); else entry.resolve(data.result);
+      }
+    });
+
+    function getCharName() {
+      const found = coop.characters.find(c => String(c.id) === String(coop.selectedCharId));
+      return (found && found.name) || '名士';
+    }
+    function showToast(msg) {
+      posterToastEl.textContent = msg || '';
+      if (msg) setTimeout(() => { if (posterToastEl.textContent === msg) posterToastEl.textContent = ''; }, 3800);
+    }
+    function setBubbleExpanded(exp) {
+      coop.bubbleExpanded = Boolean(exp);
+      bubbleEl.classList.toggle('show', coop.bubbleExpanded);
+      pillEl.classList.toggle('show', !coop.bubbleExpanded && Boolean(bubbleTextEl.textContent));
+    }
+    function showBubble(name, tag, text) {
+      bubbleNameEl.textContent = name || getCharName();
+      bubbleTagEl.textContent = tag || '调酒中';
+      bubbleTextEl.textContent = text || '';
+      pillNameEl.textContent = name || getCharName();
+      setBubbleExpanded(true);
+    }
+    pillEl.onclick = () => setBubbleExpanded(true);
+    collapseBtnEl.onclick = () => setBubbleExpanded(false);
+
+    function captureSmallDrinkSnapshot() {
+      try {
+        const tmp = document.createElement('canvas');
+        tmp.width = 360; tmp.height = 380;
+        const tc = tmp.getContext('2d');
+        renderDrinkScene(tc, performance.now(), true);
+        return tmp.toDataURL('image/jpeg', 0.78);
+      } catch (_) { return ''; }
+    }
+
+    function loadSvgToImage(svgStr, w, h) {
+      return new Promise((resolve) => {
+        if (!svgStr || typeof svgStr !== 'string' || svgStr.indexOf('<svg') < 0) return resolve(null);
+        const fixed = svgStr.replace(/<svg\b([^>]*)>/i, (m, attrs) => {
+          let a = String(attrs || '');
+          if (!/xmlns=/i.test(a)) a = ' xmlns="http://www.w3.org/2000/svg"' + a;
+          if (!/\bwidth=/i.test(a)) a += ` width="${w}"`;
+          if (!/\bheight=/i.test(a)) a += ` height="${h}"`;
+          return `<svg${a}>`;
+        });
+        let settled = false;
+        const done = (img) => { if (!settled) { settled = true; resolve(img); } };
+        const timer = setTimeout(() => done(null), 2600);
+        try {
+          const blob = new Blob([fixed], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            URL.revokeObjectURL(url); clearTimeout(timer);
+            if (img.naturalWidth > 0) done(img); else tryDataUrl();
+          };
+          img.onerror = () => { URL.revokeObjectURL(url); tryDataUrl(); };
+          img.src = url;
+        } catch (_) { tryDataUrl(); }
+        function tryDataUrl() {
+          const img2 = new Image();
+          img2.onload = () => { clearTimeout(timer); done(img2.naturalWidth > 0 ? img2 : null); };
+          img2.onerror = () => { clearTimeout(timer); done(null); };
+          img2.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(fixed);
+        }
+      });
+    }
+
+    function drawFallbackDrinkSignature(charName, sketchTitle) {
+      const c = sigCtx;
+      c.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+      c.save();
+      c.strokeStyle = '#634F43'; c.lineWidth = 2.2; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(18, 52); c.quadraticCurveTo(72, 30, 134, 38); c.quadraticCurveTo(158, 40, 174, 24); c.stroke();
+      [[116, 30, 3.4, '#E4BD72'], [125, 25, 3.2, '#C89B4B'], [134, 32, 3.4, '#E4BD72'], [146, 27, 3.0, '#C89B4B']].forEach(([x, y, r, col]) => {
+        c.fillStyle = col; c.beginPath(); c.arc(x, y, r, 0, Math.PI * 2); c.fill();
+      });
+      c.strokeStyle = '#B84336'; c.lineWidth = 1.8;
+      c.beginPath(); c.roundRect(188, 17, 25, 25, 4); c.stroke();
+      c.fillStyle = '#B84336'; c.font = '800 13px "Songti SC", serif'; c.textAlign = 'center'; c.textBaseline = 'middle';
+      c.fillText('觞', 200.5, 30);
+      c.fillStyle = '#2B211C'; c.font = '800 20px "Songti SC", serif'; c.textAlign = 'left';
+      c.fillText(String(charName || '名士').slice(0, 4), 226, 36);
+      if (sketchTitle) {
+        c.fillStyle = '#9A8475'; c.font = '600 10px "Songti SC", serif';
+        c.fillText(`· ${String(sketchTitle).slice(0, 6)}`, 226, 56);
+      }
+      c.restore();
+    }
+
+    function describeStepActionChoice(stepIdx, act) {
+      if (!act) return '';
+      if (stepIdx === 0) {
+        const sc = SCENE_THEMES.find(x => x.id === act.sceneId);
+        const gl = HAN_GLASSES.find(x => x.id === act.glassId);
+        const rc = RIM_CRUSTS.find(x => x.id === act.rimCrustId);
+        return [sc && sc.name, gl && gl.name, rc && rc.name, act.chilled ? '冰杯凝露' : '常温'].filter(Boolean).join(' · ');
+      }
+      if (stepIdx === 1) {
+        const ic = ICE_TYPES.find(x => x.id === act.iceTypeId);
+        const ms = (act.muddleIds || []).map(id => { const m = MUDDLE_INGREDIENTS.find(x => x.id === id); return m ? m.name : ''; }).filter(Boolean);
+        return [ic && ic.name, ms.length ? `捣入${ms.join('、')}` : ''].filter(Boolean).join(' · ');
+      }
+      if (stepIdx === 2) {
+        return (act.pours || []).map(p => { const w = WINE_PALETTE.find(x => x.id === p.id); return w ? w.name : ''; }).filter(Boolean).join(' → ');
+      }
+      if (stepIdx === 3) {
+        return act.mixStyle === 'shake' ? '摇和起沫' : (act.mixStyle === 'stir' ? '吧勺轻搅' : '静置留层');
+      }
+      if (stepIdx === 4) {
+        const g1 = (act.inWineGarnishes || []).map(id => (GARNISH_CATALOG.find(x => x.id === id) || {}).name).filter(Boolean);
+        const g2 = (act.rimGarnishes || []).map(id => (GARNISH_CATALOG.find(x => x.id === id) || {}).name).filter(Boolean);
+        const st = STIRRER_TYPES.find(x => x.id === act.stirrerId);
+        const ar = AROMA_TYPES.find(x => x.id === act.aromaId);
+        return [...g1, ...g2, st && st.id !== 'none' ? st.name : '', ar && ar.id !== 'none' ? ar.name : '', act.glassSketchTitle ? `杯身微雕「${act.glassSketchTitle}」` : ''].filter(Boolean).join(' · ');
+      }
+      if (stepIdx === 5) {
+        return `《${act.drinkTitle || '月下流霞'}》${act.cardSketchTitle ? ` · 花押「${act.cardSketchTitle}」` : ''}`;
+      }
+      return '';
+    }
+
+    function recordMakingNote(stepIdx, charName, choiceText, line) {
+      const idx = coop.makingNotes.findIndex(n => n.stepIdx === stepIdx);
+      const item = { stepIdx, stepName: STEP_NAMES[stepIdx] || `第${stepIdx + 1}步`, charName: charName || getCharName(), choiceText: choiceText || '', line: line || '' };
+      if (idx >= 0) coop.makingNotes[idx] = item; else coop.makingNotes.push(item);
+      coop.makingNotes.sort((a, b) => a.stepIdx - b.stepIdx);
+      coop.relayHistory.push(`第${stepIdx + 1}步(${item.stepName}) ${item.charName}：${choiceText} — ${line}`);
+    }
+
+    function switchPosterTab(tab) {
+      const showNotes = tab === 'notes';
+      tabPosterImgEl.classList.toggle('active', !showNotes);
+      tabPosterNotesEl.classList.toggle('active', showNotes);
+      posterImgEl.style.display = showNotes ? 'none' : 'block';
+      posterNotesPageEl.classList.toggle('show', showNotes);
+    }
+    tabPosterImgEl.onclick = () => switchPosterTab('img');
+    tabPosterNotesEl.onclick = () => switchPosterTab('notes');
+
+    function renderPosterNotesView(notes) {
+      const list = Array.isArray(notes) ? notes : coop.makingNotes;
+      if (list.length > 0) {
+        posterViewTabsEl.classList.add('show');
+        posterNotesPageEl.innerHTML = list.map(n => `
+          <div class="poster-note-item">
+            <div class="poster-note-head">
+              <span>第${(n.stepIdx || 0) + 1}步 · ${n.stepName || ''}</span>
+              <span>${n.charName || getCharName()}</span>
+            </div>
+            ${n.choiceText ? `<div class="poster-note-choice">${n.choiceText}</div>` : ''}
+            <div class="poster-note-line">${n.line || ''}</div>
+          </div>`).join('');
+      } else {
+        posterViewTabsEl.classList.remove('show');
+        posterNotesPageEl.innerHTML = '';
+      }
+      switchPosterTab('img');
+    }
+
+    function buildDrinkSummary() {
+      const sc = SCENE_THEMES[state.sceneIdx] || SCENE_THEMES[0];
+      const wines = Object.keys(state.pourLog).join('、') || '桂花蜜露、青梅冰酿、西域葡酿';
+      const muddles = state.muddleItems.map(m => m.name).join('、');
+      const garnishes = [...state.inWineItems, ...state.rimItems].map(i => i.name).join('、') || '青柠轮片、金桂花枝';
+      const f = computeFlavorProfile();
+      const flavorStr = `甜${Math.round(f.sweet * 100)}% 酸${Math.round(f.sour * 100)}% 花果${Math.round(f.floral * 100)}% 酒韵${Math.round(f.abv * 100)}%`;
+      const desc = `景致「${sc.name}」，以「${state.glass.name}」盛装（${state.rimCrust.name}、${state.chilled ? '冰杯' : '常温'}、${state.iceType.name}${muddles ? '、捣料:' + muddles : ''}），调入${wines}，点缀${garnishes}${state.stirrer.id !== 'none' ? '，配' + state.stirrer.name : ''}${state.aroma.id !== 'none' ? '，熏' + state.aroma.name : ''}${state.glassSketchTitle ? '，杯身微雕「' + state.glassSketchTitle + '」' : ''}（风味：${flavorStr}）`;
+      return {
+        cakeName: state.card.title || document.getElementById('drinkTitleInput').value.trim() || '月下流霞',
+        cakeDesc: desc,
+        plaqueText: state.card.to || '饮胜',
+        visualSnapshotText: `${desc}；酒名《${state.card.title || '月下流霞'}》，题词「${state.card.msg || ''}」`
+      };
+    }
+
+    async function applyCharStep(stepIdx, act, charName) {
+      if (!act) return;
+      if (stepIdx === 0) {
+        const sIdx = SCENE_THEMES.findIndex(x => x.id === act.sceneId);
+        if (sIdx >= 0) {
+          state.sceneIdx = sIdx;
+          document.getElementById('sceneThemeBtn').textContent = `景致：${SCENE_THEMES[sIdx].name}`;
+        }
+        const g = HAN_GLASSES.find(x => x.id === act.glassId);
+        if (g) state.glass = g;
+        const r = RIM_CRUSTS.find(x => x.id === act.rimCrustId);
+        if (r) state.rimCrust = r;
+        state.chilled = act.chilled !== false;
+        rebuildIcePieces();
+        goToStep(0);
+        sfx.playPop(540);
+      } else if (stepIdx === 1) {
+        const ic = ICE_TYPES.find(x => x.id === act.iceTypeId);
+        if (ic) state.iceType = ic;
+        rebuildIcePieces();
+        state.muddleItems = [];
+        const ms = Array.isArray(act.muddleIds) ? act.muddleIds : [];
+        ms.forEach((mid, idx) => {
+          const obj = MUDDLE_INGREDIENTS.find(x => x.id === mid);
+          if (obj) {
+            state.muddleItems.push({ ...obj, rx: (idx - (ms.length - 1) / 2) * 0.36, ry: 0.18 + (idx % 2) * 0.16, r: 11, rot: idx * 0.7, crush: 0.55 });
+          }
+        });
+        if (state.muddleItems.length > 0) triggerMuddle();
+        updateFlavorHud();
+        goToStep(1);
+        sfx.playClink(1580, 0.08);
+      } else if (stepIdx === 2) {
+        liquid.reset();
+        state.pourLog = {};
+        const pours = Array.isArray(act.pours) && act.pours.length > 0 ? act.pours : [
+          { id: 'osmanthus_honey', amount: 0.24, slow: true },
+          { id: 'green_plum', amount: 0.26, slow: true },
+          { id: 'butterfly_pea', amount: 0.24, slow: true }
+        ];
+        pours.forEach((p, idx) => {
+          const w = WINE_PALETTE.find(x => x.id === p.id);
+          if (!w) return;
+          const totalAmt = clamp(Number(p.amount) || 0.24, 0.12, 0.34);
+          const slow = typeof p.slow === 'boolean' ? p.slow : (idx > 0);
+          const subSteps = 10;
+          for (let k = 0; k < subSteps; k++) {
+            liquid.pourStep(w, totalAmt / subSteps, slow, slow ? 0.72 : 0.54);
+          }
+          state.pourLog[w.name] = (state.pourLog[w.name] || 0) + totalAmt;
+        });
+        updateFlavorHud();
+        goToStep(2);
+        sfx.playChime();
+      } else if (stepIdx === 3) {
+        if (act.mixStyle === 'shake') {
+          liquid.shakePulse(1.0);
+          state.shakerAnim = 1.0;
+          sfx.playClink(1720, 0.09);
+        } else if (act.mixStyle === 'stir') {
+          for (let k = 0; k < 6; k++) {
+            liquid.stirAt(0.5 + Math.cos(k) * 0.22, 0.45 + Math.sin(k) * 0.2, 1.2, 0.6);
+          }
+          sfx.playClink(1520, 0.06);
+        } else {
+          sfx.playPop(500);
+        }
+        goToStep(3);
+      } else if (stepIdx === 4) {
+        state.inWineItems = [];
+        state.rimItems = [];
+        (act.inWineGarnishes || []).forEach(gid => {
+          const g = GARNISH_CATALOG.find(x => x.id === gid);
+          if (g) addGarnishItem(g, 'in');
+        });
+        (act.rimGarnishes || []).forEach(gid => {
+          const g = GARNISH_CATALOG.find(x => x.id === gid);
+          if (g) addGarnishItem(g, 'rim');
+        });
+        const st = STIRRER_TYPES.find(x => x.id === act.stirrerId);
+        if (st) state.stirrer = st;
+        const ar = AROMA_TYPES.find(x => x.id === act.aromaId);
+        if (ar) state.aroma = ar;
+        state.glassSketchTitle = act.glassSketchTitle || '';
+        state.glassSketchImg = act.glassSketchSvg ? await loadSvgToImage(act.glassSketchSvg, 180, 180) : null;
+        goToStep(4);
+        sfx.playPop(620);
+      } else if (stepIdx === 5) {
+        const title = act.drinkTitle || suggestDrinkTitle();
+        const to = act.cardTo || `致：${coop.userName}`;
+        const note = act.cardNote || '晚风微凉，共饮此盏流霞，愿岁岁常欢愉。';
+        document.getElementById('drinkTitleInput').value = title;
+        document.getElementById('drinkToInput').value = to;
+        document.getElementById('drinkMsgInput').value = note;
+        state.card.title = title;
+        state.card.to = to;
+        state.card.msg = note;
+        drawFallbackDrinkSignature(charName || getCharName(), act.cardSketchTitle || '');
+        if (act.cardSketchSvg) {
+          const img = await loadSvgToImage(act.cardSketchSvg, 320, 70);
+          if (img && img.naturalWidth > 0) {
+            sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+            sigCtx.drawImage(img, 8, 2, sigCanvas.width - 16, sigCanvas.height - 4);
+          }
+        }
+        goToStep(5);
+      }
+      renderDock();
+    }
+
+    function waitForUserStepAdvance(curIdx) {
+      if (coop.skipFullAnim) return Promise.resolve();
+      return new Promise((resolve) => {
+        coop.stepWaitResolver = resolve;
+        bubbleActionsEl.style.display = 'flex';
+        nextStepBtnEl.textContent = curIdx < 5 ? `看下一步 (${curIdx + 2}/6)` : '封存酒笺 · 端上酒盏';
+      });
+    }
+    nextStepBtnEl.onclick = () => {
+      bubbleActionsEl.style.display = 'none';
+      if (coop.stepWaitResolver) { const fn = coop.stepWaitResolver; coop.stepWaitResolver = null; fn(); }
+    };
+    skipAnimBtnEl.onclick = () => {
+      coop.skipFullAnim = true;
+      bubbleActionsEl.style.display = 'none';
+      if (coop.stepWaitResolver) { const fn = coop.stepWaitResolver; coop.stepWaitResolver = null; fn(); }
+    };
+
+    async function runCharacterFullMake() {
+      if (coop.busy) return;
+      if (!coop.selectedCharId) { showBubble('系统', '提示', '请先选择一位传讯名士。'); return; }
+      coop.busy = true;
+      coop.skipFullAnim = false;
+      coop.makingNotes = [];
+      coop.relayHistory = [];
+      coop.lastReview = null;
+      actionBtnEl.disabled = true;
+      const cname = getCharName();
+      showBubble(cname, '构思酒谱', `${cname} 正在灯下斟酌你的口味与酒趣，稍候片刻…`);
+      try {
+        const res = await sendHostRpc('WORKSHOP_CAKE_FULL_MAKE_REQUEST', 'WORKSHOP_CAKE_FULL_MAKE_RESPONSE', {
+          charId: coop.selectedCharId
+        });
+        const plan = res.plan || {};
+        const lines = Array.isArray(res.stepLines) ? res.stepLines : [];
+        const realName = res.charName || cname;
+
+        const stepPayloads = [
+          { sceneId: plan.sceneId, glassId: plan.glassId, rimCrustId: plan.rimCrustId, chilled: plan.chilled },
+          { iceTypeId: plan.iceTypeId, muddleIds: plan.muddleIds },
+          { pours: plan.pours },
+          { mixStyle: plan.mixStyle },
+          { inWineGarnishes: plan.inWineGarnishes, rimGarnishes: plan.rimGarnishes, stirrerId: plan.stirrerId, aromaId: plan.aromaId, glassSketchTitle: plan.glassSketchTitle, glassSketchSvg: plan.glassSketchSvg },
+          { drinkTitle: plan.drinkTitle, cardTo: plan.cardTo, cardNote: plan.cardNote, cardSketchTitle: plan.cardSketchTitle, cardSketchSvg: plan.cardSketchSvg }
+        ];
+
+        for (let i = 0; i < 6; i++) {
+          await applyCharStep(i, stepPayloads[i], realName);
+          const line = lines[i] || `完成了第 ${i + 1} 步。`;
+          const choiceText = describeStepActionChoice(i, stepPayloads[i]);
+          recordMakingNote(i, realName, choiceText, line);
+          showBubble(realName, `${STEP_NAMES[i]} (${i + 1}/6)`, line);
+          await waitForUserStepAdvance(i);
+        }
+
+        bubbleActionsEl.style.display = 'none';
+        await generateAndShowPoster();
+        if (res.introNote) showBubble(realName, '敬君一盏', res.introNote);
+      } catch (err) {
+        showBubble(cname, '调酒中断', `未能连上 AI 调酒：${err.message || err}`);
+      } finally {
+        bubbleActionsEl.style.display = 'none';
+        coop.busy = false;
+        actionBtnEl.disabled = false;
+        syncCoopUI();
+      }
+    }
+
+    async function runCharacterRelayStep() {
+      if (coop.busy) return;
+      if (!coop.selectedCharId) { showBubble('系统', '提示', '请先选择一位传讯名士。'); return; }
+      coop.busy = true;
+      actionBtnEl.disabled = true;
+      const curStep = clamp(state.step, 0, 5);
+      const cname = getCharName();
+      showBubble(cname, `${STEP_NAMES[curStep]}中`, `${cname} 正在端详眼前这杯酒，构思「${STEP_NAMES[curStep]}」…`);
+      try {
+        const snap = buildDrinkSummary();
+        const imgSnap = captureSmallDrinkSnapshot();
+        const res = await sendHostRpc('WORKSHOP_CAKE_STEP_RELAY_REQUEST', 'WORKSHOP_CAKE_STEP_RELAY_RESPONSE', {
+          charId: coop.selectedCharId,
+          stepIndex: curStep,
+          visualSnapshotText: snap.visualSnapshotText,
+          cakeSummary: snap.cakeDesc,
+          relayHistory: coop.relayHistory,
+          imageDataUrl: imgSnap
+        });
+        const realName = res.charName || cname;
+        await applyCharStep(curStep, res.stepAction, realName);
+        const choiceText = describeStepActionChoice(curStep, res.stepAction);
+        recordMakingNote(curStep, realName, choiceText, res.spokenLine || '');
+        showBubble(realName, res.moodTag || STEP_NAMES[curStep], res.spokenLine || '这一步交给我来。');
+        if (curStep === 5) {
+          await generateAndShowPoster();
+        } else {
+          goToStep(curStep + 1);
+        }
+      } catch (err) {
+        showBubble(cname, '提示', `接力调酒失败：${err.message || err}`);
+      } finally {
+        coop.busy = false;
+        actionBtnEl.disabled = false;
+        syncCoopUI();
+      }
+    }
+
+    function syncCoopUI() {
+      const m = coop.mode;
+      swapBtnEl.style.display = m === 'relay_coop' ? 'inline-block' : 'none';
+      swapBtnEl.textContent = coop.userFirst ? '我先手' : 'TA先手';
+      const isCharTurn = m === 'relay_coop' && (coop.userFirst ? (state.step % 2 === 1) : (state.step % 2 === 0));
+      actionBtnEl.style.display = (m === 'char_make_user_eat' || isCharTurn) ? 'inline-block' : 'none';
+      actionBtnEl.textContent = m === 'char_make_user_eat' ? '请TA调酒' : '让TA做这步';
+      askCharTasteBtnEl.textContent = `请「${getCharName()}」品评`;
+      feedbackRowEl.classList.toggle('show', m === 'char_make_user_eat');
+    }
+
+    document.getElementById('backToWorkshopBtn').onclick = () => window.parent.postMessage({ type: 'WORKSHOP_CAKE_CLOSE' }, '*');
+    charSelectEl.onchange = () => { coop.selectedCharId = charSelectEl.value; forwardCharSelectEl.value = coop.selectedCharId; syncCoopUI(); };
+    modeSelectEl.onchange = () => { coop.mode = modeSelectEl.value; syncCoopUI(); };
+    swapBtnEl.onclick = () => { coop.userFirst = !coop.userFirst; syncCoopUI(); };
+
+    actionBtnEl.onclick = () => {
+      if (coop.mode === 'char_make_user_eat') runCharacterFullMake();
+      else runCharacterRelayStep();
+    };
+
+    askCharTasteBtnEl.onclick = async () => {
+      if (coop.busy || !coop.selectedCharId) return;
+      coop.busy = true; askCharTasteBtnEl.textContent = '浅酌品评中…';
+      try {
+        const snap = buildDrinkSummary();
+        const imgSnap = captureSmallDrinkSnapshot();
+        const res = await sendHostRpc('WORKSHOP_CAKE_TASTE_REQUEST', 'WORKSHOP_CAKE_TASTE_RESPONSE', {
+          charId: coop.selectedCharId,
+          mode: coop.mode,
+          visualSnapshotText: snap.visualSnapshotText,
+          cakeSummary: snap.cakeDesc,
+          imageDataUrl: imgSnap
+        });
+        coop.lastReview = res;
+        posterReviewBoxEl.style.display = 'block';
+        posterReviewBoxEl.innerHTML = `<div style="font-weight:800;color:var(--cinnabar);margin-bottom:3px;">${res.charName} 的品酒回函（${res.reactionTag}）</div><div>${res.comment}</div><div style="font-weight:700;margin-top:3px;">${res.dialogue}</div>`;
+      } catch (err) { showToast(`品评失败：${err.message || err}`); }
+      coop.busy = false; syncCoopUI();
+    };
+
+    sendFeedbackBtnEl.onclick = async () => {
+      const fb = feedbackInputEl.value.trim();
+      if (!fb || coop.busy || !coop.selectedCharId) return;
+      coop.busy = true; sendFeedbackBtnEl.disabled = true; sendFeedbackBtnEl.textContent = '回应中…';
+      try {
+        const snap = buildDrinkSummary();
+        const res = await sendHostRpc('WORKSHOP_CAKE_FEEDBACK_REQUEST', 'WORKSHOP_CAKE_FEEDBACK_RESPONSE', {
+          charId: coop.selectedCharId,
+          userFeedback: fb,
+          visualSnapshotText: snap.visualSnapshotText,
+          cakeSummary: snap.cakeDesc
+        });
+        coop.lastReview = res;
+        posterReviewBoxEl.style.display = 'block';
+        posterReviewBoxEl.innerHTML = `<div style="font-weight:800;color:var(--cinnabar);margin-bottom:3px;">${res.charName} 闻言回应（${res.reactionTag}）</div><div>${res.comment}</div><div style="font-weight:700;margin-top:3px;">${res.dialogue}</div>`;
+        feedbackInputEl.value = '';
+      } catch (err) { showToast(`发送失败：${err.message || err}`); }
+      coop.busy = false; sendFeedbackBtnEl.disabled = false; sendFeedbackBtnEl.textContent = '告诉TA';
+    };
+
+    saveBackpackBtnEl.onclick = async () => {
+      const snap = buildDrinkSummary();
+      try {
+        const res = await sendHostRpc('WORKSHOP_CAKE_SAVE_BACKPACK', 'WORKSHOP_CAKE_ACTION_RESULT', {
+          cakeName: snap.cakeName, cakeDesc: snap.cakeDesc, posterDataUrl: posterImgEl.src
+        });
+        showToast((res && res.message) || '已收入行囊');
+      } catch (err) { showToast(`收入失败：${err.message || err}`); }
+    };
+
+    openForwardModalBtnEl.onclick = () => forwardModalEl.classList.add('show');
+    document.getElementById('closeForwardModalBtn').onclick = () => forwardModalEl.classList.remove('show');
+    confirmForwardBtnEl.onclick = async () => {
+      const targetId = forwardCharSelectEl.value;
+      const targetObj = coop.characters.find(c => String(c.id) === String(targetId));
+      const snap = buildDrinkSummary();
+      try {
+        const res = await sendHostRpc('WORKSHOP_CAKE_SEND_CHAT', 'WORKSHOP_CAKE_ACTION_RESULT', {
+          charId: targetId, charName: targetObj ? targetObj.name : '',
+          cakeName: snap.cakeName, cakeDesc: snap.cakeDesc, plaqueText: snap.plaqueText,
+          forwardNote: forwardNoteInputEl.value.trim(), posterDataUrl: posterImgEl.src
+        });
+        forwardModalEl.classList.remove('show');
+        showToast((res && res.message) || '已送出佳酿');
+      } catch (err) { showToast(`送出失败：${err.message || err}`); }
+    };
+
+    window.__drinkOnPosterReady = async (dataUrl) => {
+      coop.lastPosterDataUrl = dataUrl;
+      renderPosterNotesView(coop.makingNotes);
+      feedbackRowEl.classList.toggle('show', coop.mode === 'char_make_user_eat');
+      if (!coop.lastReview) posterReviewBoxEl.style.display = 'none';
+      const snap = buildDrinkSummary();
+      const rec = {
+        id: `drink_${Date.now()}`,
+        cakeName: snap.cakeName,
+        cakeDesc: snap.cakeDesc,
+        plaqueText: snap.plaqueText,
+        mode: coop.mode,
+        charId: coop.selectedCharId,
+        charName: getCharName(),
+        posterDataUrl: dataUrl,
+        makingNotes: coop.makingNotes.slice(0, 8),
+        review: coop.lastReview,
+        createdAt: Date.now()
+      };
+      if (coop.hostConnected) {
+        try { await sendHostRpc('WORKSHOP_CAKE_SAVE_HISTORY', 'WORKSHOP_CAKE_ACTION_RESULT', rec); return; } catch (_) {}
+      }
+      await saveDrinkToDB({ id: rec.id, title: rec.cakeName, desc: rec.cakeDesc, dataUrl, createdAt: rec.createdAt });
+    };
+
+    window.__drinkLoadHostHistory = async () => {
+      if (!coop.hostConnected) return [];
+      const res = await sendHostRpc('WORKSHOP_CAKE_LIST_HISTORY', 'WORKSHOP_CAKE_ACTION_RESULT', {});
+      return Array.isArray(res) ? res : [];
+    };
+
+    window.__drinkDeleteHostHistory = async (id) => {
+      if (!coop.hostConnected) return;
+      await sendHostRpc('WORKSHOP_CAKE_DELETE_HISTORY', 'WORKSHOP_CAKE_ACTION_RESULT', { id });
+    };
+
+    window.__drinkOpenHistoryItem = (item) => {
+      renderPosterNotesView(item && item.makingNotes ? item.makingNotes : []);
+      if (item && item.review && item.review.comment) {
+        posterReviewBoxEl.style.display = 'block';
+        posterReviewBoxEl.innerHTML = `<div style="font-weight:800;color:var(--cinnabar);margin-bottom:3px;">${item.review.charName || item.charName || '名士'} 的品酒回函（${item.review.reactionTag || '雅评'}）</div><div>${item.review.comment}</div><div style="font-weight:700;margin-top:3px;">${item.review.dialogue || ''}</div>`;
+      } else {
+        posterReviewBoxEl.style.display = 'none';
+      }
+    };
+
+    window.__drinkOnReset = () => {
+      coop.makingNotes = [];
+      coop.relayHistory = [];
+      coop.lastReview = null;
+      posterReviewBoxEl.style.display = 'none';
+      renderPosterNotesView([]);
+    };
+
+    window.__drinkOnStepChanged = () => syncCoopUI();
+    window.parent.postMessage({ type: 'WORKSHOP_CAKE_REQUEST_SYNC', payload: { edition: EDITION } }, '*');
+  }
+
+  // 启动工坊
+  bindGlobalEvents();
+  initDrinkCoCreationBridge();
+  renderDock();
+  requestAnimationFrame(renderLoop);
+})();
+</script>
+</body>
+</html>

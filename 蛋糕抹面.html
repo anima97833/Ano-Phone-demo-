@@ -2303,6 +2303,16 @@
     ctx.scale(1, ry / rx);
     ctx.rotate(state.turntableAngle);
     ctx.drawImage(topS.canvas, -rx, -rx, rx * 2, rx * 2);
+    if (state.topSketchImg && state.topSketchImg.complete && state.topSketchImg.naturalWidth > 0) {
+      const skR = rx * 0.66;
+      ctx.save();
+      ctx.shadowColor = 'rgba(72, 36, 18, 0.22)';
+      ctx.shadowBlur = 3;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 2;
+      ctx.drawImage(state.topSketchImg, -skR, -skR, skR * 2, skR * 2);
+      ctx.restore();
+    }
     ctx.restore();
 
     // 顶面柔和环境高光与边缘微压暗
@@ -2512,6 +2522,16 @@
     ctx.translate(cx, cy);
     ctx.rotate(state.turntableAngle);
     ctx.drawImage(topS.canvas, -R, -R, R * 2, R * 2);
+    if (state.topSketchImg && state.topSketchImg.complete && state.topSketchImg.naturalWidth > 0) {
+      const skR = R * 0.66;
+      ctx.save();
+      ctx.shadowColor = 'rgba(72, 36, 18, 0.22)';
+      ctx.shadowBlur = 3;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 2;
+      ctx.drawImage(state.topSketchImg, -skR, -skR, skR * 2, skR * 2);
+      ctx.restore();
+    }
     ctx.restore();
 
     // 柔和顶部体积光影
@@ -5958,28 +5978,60 @@
       if (!act) return '';
       if (stepIdx === 0) {
         const sp = (SPONGE_FLAVORS.find(x => x.id === act.spongeId) || {}).name || '法式香草胚';
-        const fc = (FILLING_CREAMS.find(x => x.id === act.fillingCreamId) || {}).name || '香草草莓酱';
-        const ff = (FILLING_FRUITS.find(x => x.id === act.fillingFruitId) || {}).name || '鲜切草莓丁';
-        return `${sp} + ${fc} + ${ff}`;
+        const fc1 = (FILLING_CREAMS.find(x => x.id === act.fillingCreamId) || {}).name || '香草草莓酱';
+        const ff1 = (FILLING_FRUITS.find(x => x.id === act.fillingFruitId) || {}).name || '鲜切草莓丁';
+        const fc2 = (FILLING_CREAMS.find(x => x.id === (act.fillingCream2Id || act.fillingCreamId)) || {}).name || fc1;
+        const ff2 = (FILLING_FRUITS.find(x => x.id === (act.fillingFruit2Id || act.fillingFruitId)) || {}).name || ff1;
+        if (fc2 !== fc1 || ff2 !== ff1) {
+          return `${sp}｜第1层 ${fc1}+${ff1}｜第2层 ${fc2}+${ff2}`;
+        }
+        return `${sp} + ${fc1} + ${ff1}`;
       }
       if (stepIdx === 1) {
         const col = (FROSTING_COLORS.find(x => x.id === act.frostingColorId) || {}).name || '动物鲜奶油';
+        const secCol = act.secondaryFrostingColorId && act.secondaryFrostingColorId !== 'none'
+          ? (FROSTING_COLORS.find(x => x.id === act.secondaryFrostingColorId) || {}).name
+          : '';
+        const styleLabel = secCol && act.frostingStyle === 'marble'
+          ? `×${secCol}(大理石晕染)`
+          : (secCol && act.frostingStyle === 'ombre' ? `×${secCol}(双色渐变)` : '');
         const gl = (DRIP_GLAZES.find(x => x.id === act.dripGlazeId) || {}).name || '无淋面';
-        return `${col} · ${gl}（${act.neatness === 'rustic' ? '手工随性肌理' : '工整抹平'}）`;
+        const spen = act.saucePenId && act.saucePenId !== 'none' && act.saucePattern && act.saucePattern !== 'none'
+          ? (DRIP_GLAZES.find(x => x.id === act.saucePenId) || {}).name
+          : '';
+        const spenLabel = spen ? ` + ${spen}拉丝` : '';
+        const skLabel = act.cakeTopSketchSvg ? ` + 顶面手绘「${act.cakeTopSketchTitle || '简笔画'}」` : '';
+        return `${col}${styleLabel} · ${gl}${spenLabel}${skLabel}（${act.neatness === 'rustic' ? '手工随性肌理' : '工整抹平'}）`;
       }
       if (stepIdx === 2) {
         const nz = (PIPING_NOZZLES.find(x => x.id === act.pipingNozzleId) || {}).name || '八齿曲奇花';
         const pc = (PIPING_COLORS.find(x => x.id === act.pipingColorId) || {}).name || '香缇白';
-        return `${pc} · ${nz}`;
+        const spc = act.secondaryPipingColorId && act.secondaryPipingColorId !== 'none'
+          ? (PIPING_COLORS.find(x => x.id === act.secondaryPipingColorId) || {}).name
+          : '';
+        const patMap = { princess: '顶缘+底边裙边', double_crown: '双层皇冠花边', crown: '皇冠花环', ring: '经典外圈', minimal: '雅致单圈' };
+        return `${pc}${spc ? '×' + spc : ''} · ${nz}（${patMap[act.pipingPattern] || '经典花边'}）`;
       }
       if (stepIdx === 3) {
         const names = (Array.isArray(act.decorList) ? act.decorList : [])
           .map(id => (DECOR_ITEMS.find(x => x.id === id) || {}).name)
           .filter(Boolean);
-        return names.length > 0 ? names.join('、') : '鲜果点缀';
+        const spNames = (Array.isArray(act.sprinkleTypes) ? act.sprinkleTypes : [])
+          .map(id => (DECOR_ITEMS.find(x => x.id === id) || {}).name)
+          .filter(Boolean);
+        const sideMap = {
+          garland: '侧壁复古垂弧花环',
+          blossom_wall: '侧壁奶油浮雕小花',
+          fruit_wall: '侧壁鲜果甜点贴面',
+          starlight: '侧壁星河金箔糖珠'
+        };
+        const sideLabel = sideMap[act.sideStyle] ? `｜${sideMap[act.sideStyle]}` : '';
+        const baseStr = names.length > 0 ? names.join('、') : '鲜果点缀';
+        return (spNames.length > 0 ? `${baseStr} ＋ ${spNames.join('、')}` : baseStr) + sideLabel;
       }
       if (stepIdx === 4) {
-        return `巧克力牌「${act.plaqueText || ''}」｜ 贺卡「${act.cardBody || ''}」`;
+        const skNote = act.cardSketchSvg ? `｜ 签名涂鸦「${act.cardSketchTitle || '亲笔小画'}」` : '';
+        return `巧克力牌「${act.plaqueText || ''}」｜ 贺卡「${act.cardBody || ''}」${skNote}`;
       }
       return '点亮许愿蜡烛';
     }
@@ -6086,15 +6138,33 @@
         ? Object.keys(decorCounts).map(k => `${k}×${decorCounts[k]}`).join('、')
         : '暂未摆放水果或糖饰';
 
+      const sprinkleCounts = {};
+      (state.sprinkles || []).forEach(sp => {
+        const meta = DECOR_ITEMS.find(x => x.id === sp.type);
+        const label = (meta && meta.name) || sp.type;
+        sprinkleCounts[label] = (sprinkleCounts[label] || 0) + 1;
+      });
+      const sprinkleSummary = Object.keys(sprinkleCounts).length > 0
+        ? `；点缀撒料：${Object.keys(sprinkleCounts).join('、')}（共 ${state.sprinkles.length} 粒）`
+        : '';
+
+      const sauceNote = (state.frostStrokes && state.frostStrokes.length > 0)
+        ? `，配有流心酱笔拉丝装饰`
+        : '';
+      const topSketchNote = state.topSketchTitle
+        ? `，顶面亲手用奶油/巧克力笔画了一幅「${state.topSketchTitle}」简笔画`
+        : '';
+
       const cardInfo = state.card && state.card.hasPlaque
-        ? `巧克力牌刻字：「${state.card.plaqueText || 'Happy Day'}」；贺卡抬头「${state.card.to || ''}」，祝福正文：「${state.card.body || ''}」`
+        ? `巧克力牌刻字：「${state.card.plaqueText || 'Happy Day'}」；贺卡抬头「${state.card.to || ''}」，祝福正文：「${state.card.body || ''}」` +
+          (state.card.sketchTitle ? `；签名区手绘了「${state.card.sketchTitle}」小涂鸦` : '')
         : '尚未插上巧克力牌与贺卡';
 
       const fullText = [
         `1. 蛋糕胚与夹心：${spongeName}（3层）；${fillDesc}`,
-        `2. 外层奶油与淋面：${frostName}，${dripName}；视觉观感：${frostLook}`,
+        `2. 外层奶油与淋面：${frostName}，${dripName}${sauceNote}${topSketchNote}；视觉观感：${frostLook}`,
         `3. 裱花外观：${pipeDesc}`,
-        `4. 顶面鲜果与装饰：${decorSummary}（总计 ${state.decorations.length} 件）`,
+        `4. 顶面鲜果与装饰：${decorSummary}（总计 ${state.decorations.length} 件）${sprinkleSummary}`,
         `5. 贺卡与刻字：${cardInfo}`,
         `6. 蜡烛状态：${state.candlesLit ? '已点亮许愿烛' : '未点亮'}`
       ].join('\n');
@@ -6107,48 +6177,276 @@
       };
     }
 
+    function paintArtisanFrostingSurface(buf, primaryHex, secondaryHex, style, baseHeight, isTop) {
+      if (!secondaryHex || style === 'solid') {
+        buf.fillBaseColor(primaryHex, baseHeight);
+        return;
+      }
+      const c1 = hexToRgb(primaryHex);
+      const c2 = hexToRgb(secondaryHex);
+      const r1 = srgbToLin(c1.r), g1 = srgbToLin(c1.g), b1 = srgbToLin(c1.b);
+      const r2 = srgbToLin(c2.r), g2 = srgbToLin(c2.g), b2 = srgbToLin(c2.b);
+      const w = buf.width;
+      const h = buf.height;
+      const albedo = buf.albedo;
+      const hm = buf.heightMap;
+
+      for (let y = 0; y < h; y++) {
+        const ny = y / Math.max(1, h - 1);
+        for (let x = 0; x < w; x++) {
+          const nx = x / Math.max(1, w - 1);
+          let t = 0;
+          if (style === 'marble') {
+            const wave = Math.sin(nx * Math.PI * 4 + Math.sin(ny * Math.PI * 3) * 1.4) * 0.5 + 0.5;
+            const wave2 = Math.cos((nx * 2.2 - ny * 2.8) * Math.PI) * 0.5 + 0.5;
+            t = Math.max(0, Math.min(1, (wave * 0.62 + wave2 * 0.38) * 0.72));
+          } else {
+            // ombre: side blends bottom->top; top blends soft radial outer->center
+            if (isTop) {
+              const dx = (nx - 0.5) * 2;
+              const dy = (ny - 0.5) * 2;
+              const dist = Math.min(1, Math.hypot(dx, dy));
+              t = Math.pow(dist, 1.45) * 0.72;
+            } else {
+              const smoothWave = Math.sin(nx * Math.PI * 4) * 0.04;
+              t = Math.max(0, Math.min(1, (ny + smoothWave - 0.12) * 1.05));
+            }
+          }
+          const idx = y * w + x;
+          const i4 = idx * 4;
+          albedo[i4] = r1 + (r2 - r1) * t;
+          albedo[i4 + 1] = g1 + (g2 - g1) * t;
+          albedo[i4 + 2] = b1 + (b2 - b1) * t;
+          albedo[i4 + 3] = 1.0;
+          hm[idx] = baseHeight + (style === 'marble' ? (t - 0.35) * 0.06 : 0);
+        }
+      }
+      buf.rebuildRegion(0, 0, w - 1, h - 1);
+      buf.dirty = null;
+    }
+
+    function addArtisanSauceStrokes(saucePenObj, pattern) {
+      if (!saucePenObj || !saucePenObj.color || !pattern || pattern === 'none') return;
+      if (!state.frostStrokes) state.frostStrokes = [];
+      const pushPts = (pts, size) => {
+        if (pts.length < 2) return;
+        state.frostStrokes.push({
+          points: pts,
+          size,
+          isSauce: true,
+          color: saucePenObj,
+          shards: []
+        });
+      };
+
+      if (pattern === 'swirl') {
+        const pts = [];
+        const steps = 44;
+        for (let i = 0; i <= steps; i++) {
+          const frac = i / steps;
+          const a = frac * Math.PI * 4.5;
+          const r = 0.08 + frac * 0.64;
+          const u = Math.cos(a) * r;
+          const v = Math.sin(a) * r;
+          const wp = surfaceToWorld('top', u, v, 'iso');
+          pts.push({ x: wp.x, y: wp.y, surface: 'top', u, v });
+        }
+        pushPts(pts, 11);
+      } else if (pattern === 'lace') {
+        const pts = [];
+        const steps = 64;
+        for (let i = 0; i <= steps; i++) {
+          const a = (i / steps) * Math.PI * 2;
+          const r = 0.72 + Math.sin(a * 10) * 0.07;
+          const u = Math.cos(a) * r;
+          const v = Math.sin(a) * r;
+          const wp = surfaceToWorld('top', u, v, 'iso');
+          pts.push({ x: wp.x, y: wp.y, surface: 'top', u, v });
+        }
+        pushPts(pts, 10);
+      } else if (pattern === 'ribbon') {
+        // 侧壁柔和波浪丝带（仅画正面可见半圈 u in [0.04, 0.46]，随转盘旋转）
+        const pts = [];
+        const steps = 36;
+        for (let i = 0; i <= steps; i++) {
+          const frac = i / steps;
+          const u = 0.03 + frac * 0.44;
+          const v = 0.56 + Math.sin(frac * Math.PI * 5) * 0.14;
+          const wp = surfaceToWorld('side', u, v, 'iso');
+          if (wp) pts.push({ x: wp.x, y: wp.y, surface: 'side', u, v });
+        }
+        pushPts(pts, 11);
+      }
+    }
+
+    function loadSvgToImage(svgStr, onLoaded, onFailed) {
+      if (!svgStr || typeof svgStr !== 'string') {
+        if (typeof onFailed === 'function') onFailed();
+        return;
+      }
+      let safeSvg = svgStr.trim();
+      // 兜底确保有明确的像素宽高，避免 Chrome SVG-to-Canvas naturalWidth === 0
+      if (!/<svg[^>]*\swidth\s*=/i.test(safeSvg)) {
+        safeSvg = safeSvg.replace(/<svg\b/i, '<svg width="320" height="80"');
+      }
+      const tryDataUri = () => {
+        try {
+          const img = new Image();
+          img.onload = () => { if (typeof onLoaded === 'function') onLoaded(img); };
+          img.onerror = () => { if (typeof onFailed === 'function') onFailed(); };
+          img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(safeSvg);
+        } catch (_) {
+          if (typeof onFailed === 'function') onFailed();
+        }
+      };
+      try {
+        if (typeof Blob !== 'undefined' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+          const blob = new Blob([safeSvg], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => {
+            try { URL.revokeObjectURL(url); } catch (_) {}
+            if (typeof onLoaded === 'function') onLoaded(img);
+          };
+          img.onerror = () => {
+            try { URL.revokeObjectURL(url); } catch (_) {}
+            tryDataUri();
+          };
+          img.src = url;
+          return;
+        }
+      } catch (_) {}
+      tryDataUri();
+    }
+
+    function drawFallbackSignatureCanvas(charName) {
+      sigCtx.save();
+      sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+      // 折枝红梅 + 手绘小爱心 + 名士落款（纯 Canvas2D 100% 必出）
+      sigCtx.strokeStyle = '#5A3822';
+      sigCtx.lineWidth = 2.4;
+      sigCtx.lineCap = 'round';
+      sigCtx.beginPath();
+      sigCtx.moveTo(22, 56);
+      sigCtx.quadraticCurveTo(88, 36, 152, 42);
+      sigCtx.quadraticCurveTo(186, 44, 214, 26);
+      sigCtx.stroke();
+      sigCtx.beginPath();
+      sigCtx.moveTo(96, 42);
+      sigCtx.quadraticCurveTo(110, 24, 130, 18);
+      sigCtx.stroke();
+      // 小花朵
+      [[134, 16, '#E86A53'], [142, 20, '#F29B8E'], [128, 22, '#F29B8E'], [136, 26, '#E86A53']].forEach(([fx, fy, fc]) => {
+        sigCtx.fillStyle = fc;
+        sigCtx.beginPath();
+        sigCtx.arc(fx, fy, 4.4, 0, Math.PI * 2);
+        sigCtx.fill();
+      });
+      sigCtx.fillStyle = '#F5D878';
+      sigCtx.beginPath();
+      sigCtx.arc(135, 21, 2.2, 0, Math.PI * 2);
+      sigCtx.fill();
+      // 手绘小爱心
+      sigCtx.strokeStyle = '#C94E38';
+      sigCtx.lineWidth = 2.2;
+      sigCtx.beginPath();
+      sigCtx.moveTo(196, 33);
+      sigCtx.bezierCurveTo(196, 25, 206, 23, 210, 30);
+      sigCtx.bezierCurveTo(214, 23, 224, 25, 224, 33);
+      sigCtx.bezierCurveTo(224, 42, 210, 49, 210, 49);
+      sigCtx.bezierCurveTo(210, 49, 196, 42, 196, 33);
+      sigCtx.stroke();
+      // 名士亲笔落款
+      sigCtx.fillStyle = '#4A2E1B';
+      sigCtx.font = 'bold 21px "STKaiti", "KaiTi", serif';
+      sigCtx.textBaseline = 'middle';
+      sigCtx.fillText(String(charName || getSelectedCharName() || '名士').slice(0, 4), 244, 42);
+      sigCtx.strokeStyle = '#C94E38';
+      sigCtx.lineWidth = 1.6;
+      sigCtx.beginPath();
+      sigCtx.moveTo(238, 58);
+      sigCtx.quadraticCurveTo(274, 54, 314, 60);
+      sigCtx.stroke();
+      sigCtx.restore();
+    }
+
     function applyCharacterStepToCanvas(stepIdx, act) {
       if (!act || typeof act !== 'object') return;
       if (stepIdx === 0) {
         const sp = SPONGE_FLAVORS.find(x => x.id === act.spongeId) || SPONGE_FLAVORS[0];
-        const fc = FILLING_CREAMS.find(x => x.id === act.fillingCreamId) || FILLING_CREAMS[0];
-        const ff = FILLING_FRUITS.find(x => x.id === act.fillingFruitId) || FILLING_FRUITS[0];
+        const fc1 = FILLING_CREAMS.find(x => x.id === act.fillingCreamId) || FILLING_CREAMS[0];
+        const ff1 = FILLING_FRUITS.find(x => x.id === act.fillingFruitId) || FILLING_FRUITS[0];
+        const fc2 = FILLING_CREAMS.find(x => x.id === (act.fillingCream2Id || act.fillingCreamId)) || fc1;
+        const ff2 = FILLING_FRUITS.find(x => x.id === (act.fillingFruit2Id || act.fillingFruitId)) || ff1;
         state.spongeFlavor = sp;
-        state.fillingCream = fc;
-        state.fillingFruit = ff;
-        state.fillings.forEach(f => {
-          f.cream = fc;
-          f.fruit = ff;
-          f.spreadProgress = 1;
-        });
+        state.fillingCream = fc1;
+        state.fillingFruit = ff1;
+        if (state.fillings[0]) {
+          state.fillings[0].cream = fc1;
+          state.fillings[0].fruit = ff1;
+          state.fillings[0].spreadProgress = 1;
+        }
+        if (state.fillings[1]) {
+          state.fillings[1].cream = fc2;
+          state.fillings[1].fruit = ff2;
+          state.fillings[1].spreadProgress = 1;
+        }
         state.layersVisible = 3;
         state.layerPhase = 6;
         sfx.playChime();
       } else if (stepIdx === 1) {
         const col = FROSTING_COLORS.find(x => x.id === act.frostingColorId) || FROSTING_COLORS[0];
+        const secCol = (act.secondaryFrostingColorId && act.secondaryFrostingColorId !== 'none')
+          ? FROSTING_COLORS.find(x => x.id === act.secondaryFrostingColorId)
+          : null;
+        const fStyle = secCol ? (act.frostingStyle || 'ombre') : 'solid';
         const gl = DRIP_GLAZES.find(x => x.id === act.dripGlazeId) || DRIP_GLAZES[0];
+        const baseH = act.neatness === 'rustic' ? 0.44 : 0.64;
         state.frostingColor = col;
         state.baseCoatColor = col;
-        state.topSurface.fillBaseColor(col.mid, act.neatness === 'rustic' ? 0.42 : 0.62);
-        state.sideSurface.fillBaseColor(col.mid, act.neatness === 'rustic' ? 0.42 : 0.62);
+        paintArtisanFrostingSurface(state.topSurface, col.mid, secCol ? secCol.mid : null, fStyle, baseH, true);
+        paintArtisanFrostingSurface(state.sideSurface, col.mid, secCol ? secCol.mid : null, fStyle, baseH, false);
         state.roughCoverage = 1;
-        state.smoothProgress = act.neatness === 'rustic' ? 0.72 : 1;
+        state.smoothProgress = act.neatness === 'rustic' ? 0.74 : 1;
         state.frostPhase = 2;
         state.dripGlaze = gl;
-        state.drips = new Array(32).fill(0).map((_, i) => gl.id === 'none' ? 0 : (16 + ((i * 19) % 28)));
+        state.drips = new Array(32).fill(0).map((_, i) => gl.id === 'none' ? 0 : (18 + Math.round(Math.sin(i * 1.15) * 10 + ((i * 17) % 18))));
+        if (act.saucePenId && act.saucePenId !== 'none' && act.saucePattern && act.saucePattern !== 'none') {
+          const spen = DRIP_GLAZES.find(x => x.id === act.saucePenId);
+          if (spen && spen.color) {
+            state.saucePen = spen;
+            addArtisanSauceStrokes(spen, act.saucePattern);
+          }
+        }
+        if (act.cakeTopSketchSvg) {
+          state.topSketchTitle = act.cakeTopSketchTitle || '手绘简笔画';
+          loadSvgToImage(act.cakeTopSketchSvg, img => {
+            state.topSketchImg = img;
+          });
+        } else {
+          state.topSketchImg = null;
+          state.topSketchTitle = '';
+        }
         sfx.playChime();
       } else if (stepIdx === 2) {
         const nz = PIPING_NOZZLES.find(x => x.id === act.pipingNozzleId) || PIPING_NOZZLES[0];
         const pc = PIPING_COLORS.find(x => x.id === act.pipingColorId) || PIPING_COLORS[0];
+        const spc = (act.secondaryPipingColorId && act.secondaryPipingColorId !== 'none')
+          ? (PIPING_COLORS.find(x => x.id === act.secondaryPipingColorId) || pc)
+          : pc;
         state.pipingNozzle = nz;
         state.pipingColor = pc;
-        const count = act.pipingPattern === 'minimal' ? 8 : 12;
-        const radius = act.pipingPattern === 'crown' ? 0.78 : 0.88;
+        const pat = act.pipingPattern || 'princess';
         const ty = getCakeTopY();
-        for (let i = 0; i < count; i++) {
-          const a = (i * Math.PI * 2) / count;
-          const u = Math.cos(a) * radius;
-          const v = Math.sin(a) * radius;
+
+        // 1. 顶面主花边圈
+        const outerCount = pat === 'minimal' ? 8 : 12;
+        const outerRadius = pat === 'crown' ? 0.80 : 0.88;
+        for (let i = 0; i < outerCount; i++) {
+          const a = (i * Math.PI * 2) / outerCount;
+          const u = Math.cos(a) * outerRadius;
+          const v = Math.sin(a) * outerRadius;
+          const useCol = (spc !== pc && i % 2 === 1 && pat !== 'double_crown') ? spc : pc;
           state.pipings.push({
             x: CAKE.cx + u * (CAKE.rx + 4),
             y: ty + v * (CAKE.ry + 2),
@@ -6156,30 +6454,123 @@
             u,
             v,
             nozzleId: nz.id,
-            color: pc,
+            color: useCol,
             scale: 1,
             angle: a
           });
         }
+
+        // 2. 双层皇冠内圈
+        if (pat === 'double_crown') {
+          const innerCount = 8;
+          const innerNz = nz.id === 'shell' ? 'pearl' : (nz.id === 'rosette' ? 'blossom' : nz.id);
+          for (let i = 0; i < innerCount; i++) {
+            const a = (i * Math.PI * 2) / innerCount + Math.PI / innerCount;
+            const u = Math.cos(a) * 0.56;
+            const v = Math.sin(a) * 0.56;
+            state.pipings.push({
+              x: CAKE.cx + u * (CAKE.rx + 4),
+              y: ty + v * (CAKE.ry + 2),
+              surface: 'top',
+              u,
+              v,
+              nozzleId: innerNz,
+              color: spc,
+              scale: 0.86,
+              angle: a
+            });
+          }
+        }
+
+        // 3. 底部高定裙边围花（在侧面底部 v=0.96，自动随转盘旋转）
+        if (pat === 'princess') {
+          const skirtCount = 16;
+          const skirtNz = nz.id === 'blossom' ? 'pearl' : 'shell';
+          for (let i = 0; i < skirtCount; i++) {
+            const u = i / skirtCount;
+            const v = 0.96;
+            const wp = surfaceToWorld('side', u, v, 'iso');
+            state.pipings.push({
+              x: wp ? wp.x : CAKE.cx,
+              y: wp ? wp.y : CAKE.baseY,
+              surface: 'side',
+              u,
+              v,
+              nozzleId: skirtNz,
+              color: i % 2 === 0 ? pc : spc,
+              scale: 0.82,
+              angle: 0
+            });
+          }
+        }
         sfx.playChime();
       } else if (stepIdx === 3) {
-        const list = Array.isArray(act.decorList) && act.decorList.length > 0 ? act.decorList : ['straw_whole', 'blueberry', 'mint_leaf'];
+        const list = Array.isArray(act.decorList) && act.decorList.length > 0
+          ? act.decorList
+          : ['straw_whole', 'straw_half', 'blueberry', 'macaron_pink', 'choco_sail', 'mint_leaf'];
         const ty = getCakeTopY();
-        const layout = act.decorLayout || 'symmetric';
-        list.forEach((dId, i) => {
-          const valid = DECOR_ITEMS.find(x => x.id === dId);
-          if (!valid) return;
-          let u = 0, v = 0;
-          if (layout === 'cluster') {
-            const a = (i * 2.39996);
-            const r = Math.min(0.55, 0.14 + i * 0.06);
+        // 若顶面有角色手绘简笔画，优先采用外围半月/花环留白构图，避免把中间涂鸦盖住
+        const hasTopSketch = Boolean(state.topSketchImg || state.topSketchTitle);
+        const layout = hasTopSketch && (act.decorLayout === 'cluster' || act.decorLayout === 'symmetric')
+          ? 'crescent'
+          : (act.decorLayout || 'crescent');
+        const validList = list.map(dId => DECOR_ITEMS.find(x => x.id === dId)).filter(Boolean);
+        const total = validList.length;
+
+        validList.forEach((valid, i) => {
+          let u = 0, v = 0, sc = 0.96 + (i % 3) * 0.06, rot = (i % 2 === 0 ? 1 : -1) * 0.14;
+          if (layout === 'crescent') {
+            // 法式高定半月弯：沿上半弧/左弧错落成优雅新月，留出另一侧展示精致抹面与巧克力牌
+            const frac = total > 1 ? i / (total - 1) : 0.5;
+            const a = -Math.PI * 0.96 + frac * Math.PI * 1.18;
+            const r = 0.44 + Math.sin(frac * Math.PI) * 0.16 + ((i % 2) * 0.08 - 0.04);
             u = Math.cos(a) * r;
-            v = Math.sin(a) * r;
+            v = Math.sin(a) * r - 0.05;
+            sc = 0.92 + Math.sin(frac * Math.PI) * 0.18;
+            rot = (frac - 0.5) * 0.42;
+          } else if (layout === 'wreath') {
+            // 满圈花环 + 中心主景
+            if (total >= 5 && i >= total - 2) {
+              const ci = i - (total - 2);
+              const ca = ci * Math.PI + 0.4;
+              u = Math.cos(ca) * 0.16;
+              v = Math.sin(ca) * 0.14 - 0.08;
+              sc = 1.08;
+            } else {
+              const ringTotal = total >= 5 ? total - 2 : total;
+              const a = (i * Math.PI * 2) / Math.max(1, ringTotal) - Math.PI * 0.5;
+              const r = 0.58 + (i % 2 === 0 ? 0.04 : -0.05);
+              u = Math.cos(a) * r;
+              v = Math.sin(a) * r;
+            }
+          } else if (layout === 'cluster') {
+            // 丰盛中心花束簇拥
+            const a = i * 2.39996;
+            const r = Math.min(0.54, 0.08 + Math.sqrt(i + 0.5) * 0.15);
+            u = Math.cos(a) * r;
+            v = Math.sin(a) * r - 0.06;
+            sc = 1.06 - Math.min(0.18, i * 0.02);
+          } else if (layout === 'symmetric') {
+            // 对称双圈（外圈 + 内圈主景，告别中心空洞）
+            const innerCount = total >= 6 ? Math.min(3, Math.floor(total / 3)) : 0;
+            const outerCount = total - innerCount;
+            if (i < outerCount) {
+              const a = (i * Math.PI * 2) / Math.max(1, outerCount) - Math.PI * 0.5;
+              u = Math.cos(a) * 0.58;
+              v = Math.sin(a) * 0.58;
+            } else {
+              const ii = i - outerCount;
+              const a = (ii * Math.PI * 2) / Math.max(1, innerCount) - Math.PI * 0.3;
+              u = Math.cos(a) * 0.22;
+              v = Math.sin(a) * 0.20 - 0.06;
+              sc = 1.06;
+            }
           } else {
-            const a = (i * Math.PI * 2) / Math.max(1, list.length);
-            const r = layout === 'playful' ? (0.35 + ((i % 3) * 0.16)) : 0.56;
+            // playful 灵动错落
+            const a = (i * Math.PI * 2) / Math.max(1, total) + 0.25;
+            const r = 0.26 + ((i % 3) * 0.17);
             u = Math.cos(a) * r;
-            v = Math.sin(a) * r;
+            v = Math.sin(a) * r - 0.03;
           }
           state.decorations.push({
             uid: Date.now() + i * 17,
@@ -6189,17 +6580,202 @@
             surface: 'top',
             u,
             v,
-            scale: 0.96 + (i % 3) * 0.06,
-            rot: (i % 2 === 0 ? 1 : -1) * 0.12
+            scale: sc,
+            rot
           });
         });
+
+        // 撒料笔刷（食用金箔 / 珍珠糖粒 / 彩糖针）
+        const spTypes = Array.isArray(act.sprinkleTypes) && act.sprinkleTypes.length > 0
+          ? act.sprinkleTypes.filter(t => t === 'sprinkle_gold' || t === 'sprinkle_pearl' || t === 'sprinkle_sugar')
+          : [];
+        const densMap = { none: 0, light: 16, medium: 28, rich: 42 };
+        const spCount = densMap[act.sprinkleDensity] !== undefined ? densMap[act.sprinkleDensity] : (spTypes.length > 0 ? 26 : 0);
+        if (spTypes.length > 0 && spCount > 0) {
+          const sugarColors = ['#FF8FA0', '#F2B749', '#88C9A1', '#9AC4F8', '#FFF5E4'];
+          const goldColors = ['#F9D968', '#E5B83B', '#FFF0A8'];
+          for (let k = 0; k < spCount; k++) {
+            const t = spTypes[k % spTypes.length];
+            const a = k * 2.39996 + 0.6;
+            const r = 0.16 + ((k * 0.6180339) % 1) * 0.68;
+            const u = Math.cos(a) * r;
+            const v = Math.sin(a) * r;
+            const wp = surfaceToWorld('top', u, v, 'iso');
+            state.sprinkles.push({
+              type: t,
+              x: wp.x,
+              y: wp.y,
+              surface: 'top',
+              u,
+              v,
+              size: t === 'sprinkle_pearl' ? (3.2 + (k % 3) * 0.7) : (3.8 + (k % 3) * 0.8),
+              angle: (k * 1.3) % (Math.PI * 2),
+              color: t === 'sprinkle_gold'
+                ? goldColors[k % goldColors.length]
+                : sugarColors[k % sugarColors.length]
+            });
+          }
+        }
+
+        // 侧壁 360° 精致装饰（告别光秃秃的圆柱侧壁，且随转盘自然旋转）
+        const sideStyle = act.sideStyle || 'garland';
+        if (sideStyle !== 'clean') {
+          const pc = state.pipingColor || PIPING_COLORS[0];
+          const altPc = PIPING_COLORS.find(x => x.id !== pc.id && (x.id === 'p_white' || x.id === 'p_pink' || x.id === 'p_yellow')) || pc;
+          const hasBottomSkirt = state.pipings.some(p => p.surface === 'side' && p.v >= 0.88);
+          const pushSidePipe = (u, v, nozzleId, colorObj, scale) => {
+            const nu = ((u % 1) + 1) % 1;
+            const wp = surfaceToWorld('side', nu, v, 'iso');
+            state.pipings.push({
+              x: wp ? wp.x : CAKE.cx,
+              y: wp ? wp.y : CAKE.baseY,
+              surface: 'side',
+              u: nu,
+              v,
+              nozzleId,
+              color: colorObj,
+              scale,
+              angle: 0
+            });
+          };
+          const pushSideSprinkle = (u, v, t, k) => {
+            const nu = ((u % 1) + 1) % 1;
+            const wp = surfaceToWorld('side', nu, v, 'iso');
+            const sugarColors = ['#FF8FA0', '#F2B749', '#88C9A1', '#9AC4F8', '#FFF5E4'];
+            const goldColors = ['#F9D968', '#E5B83B', '#FFF0A8'];
+            state.sprinkles.push({
+              type: t,
+              x: wp ? wp.x : CAKE.cx,
+              y: wp ? wp.y : CAKE.baseY - 40,
+              surface: 'side',
+              u: nu,
+              v,
+              size: t === 'sprinkle_pearl' ? (3.2 + (k % 3) * 0.75) : (4.0 + (k % 3) * 0.85),
+              angle: (k * 1.4) % (Math.PI * 2),
+              color: t === 'sprinkle_gold' ? goldColors[k % goldColors.length] : sugarColors[k % sugarColors.length]
+            });
+          };
+
+          // 若步骤三尚未加底边裙边，顺手补齐一圈高定底边
+          if (!hasBottomSkirt) {
+            const skirtCount = 18;
+            for (let i = 0; i < skirtCount; i++) {
+              pushSidePipe(i / skirtCount, 0.94, 'shell', i % 2 === 0 ? pc : altPc, 0.78);
+            }
+          }
+
+          const sideSpPool = spTypes.length > 0 ? spTypes : ['sprinkle_gold', 'sprinkle_pearl'];
+
+          if (sideStyle === 'garland') {
+            // 法式复古 Lambeth 垂弧珍珠花环 + 挂点五瓣奶油花 + 垂坠珍珠
+            const arches = 8;
+            const dotsPerArch = 7;
+            for (let aIdx = 0; aIdx < arches; aIdx++) {
+              const u0 = aIdx / arches;
+              const uSpan = 1 / arches;
+              // 挂点花结
+              pushSidePipe(u0, 0.38, 'blossom', pc, 0.78);
+              pushSidePipe(u0, 0.50, 'pearl', altPc, 0.44);
+              // 垂弧珍珠链
+              for (let d = 1; d < dotsPerArch; d++) {
+                const frac = d / dotsPerArch;
+                const u = u0 + frac * uSpan;
+                const sag = Math.sin(frac * Math.PI);
+                const v = 0.38 + sag * 0.24;
+                pushSidePipe(u, v, 'pearl', d % 2 === 0 ? pc : altPc, 0.38 + sag * 0.12);
+              }
+              // 下方点缀一颗小花与金箔糖珠
+              pushSidePipe(u0 + uSpan * 0.5, 0.74, 'pearl', pc, 0.46);
+              pushSideSprinkle(u0 + uSpan * 0.5, 0.52, sideSpPool[aIdx % sideSpPool.length], aIdx);
+              pushSideSprinkle(u0 + uSpan * 0.28, 0.76, sideSpPool[(aIdx + 1) % sideSpPool.length], aIdx + 10);
+              pushSideSprinkle(u0 + uSpan * 0.74, 0.78, sideSpPool[aIdx % sideSpPool.length], aIdx + 20);
+            }
+          } else if (sideStyle === 'blossom_wall') {
+            // 双层错落奶油浮雕小花环绕 + 金箔糖珠星点
+            const ring1 = 10;
+            for (let i = 0; i < ring1; i++) {
+              const u = i / ring1;
+              pushSidePipe(u, 0.44 + (i % 2) * 0.06, i % 2 === 0 ? 'blossom' : 'rosette', i % 2 === 0 ? pc : altPc, 0.68);
+              pushSidePipe(u + 0.5 / ring1, 0.70 - (i % 2) * 0.05, 'blossom', i % 2 === 0 ? altPc : pc, 0.62);
+            }
+            for (let k = 0; k < 28; k++) {
+              const u = (k * 0.6180339) % 1;
+              const v = 0.34 + ((k * 0.37) % 1) * 0.52;
+              pushSideSprinkle(u, v, sideSpPool[k % sideSpPool.length], k);
+            }
+          } else if (sideStyle === 'fruit_wall') {
+            // 侧壁腰部贴面鲜果/甜点 + 薄荷叶 + 糖珠
+            const flatCandidates = ['straw_half', 'fig_slice', 'mango_wedge', 'macaron_pink', 'macaron_green', 'meringue'];
+            const fromList = validList.map(x => x.id).filter(id => flatCandidates.includes(id));
+            const wallPool = fromList.length > 0 ? fromList : ['straw_half', 'macaron_pink', 'meringue'];
+            const wallCount = 10;
+            for (let i = 0; i < wallCount; i++) {
+              const u = i / wallCount;
+              const v = 0.58 + (i % 2 === 0 ? -0.04 : 0.06);
+              const wp = surfaceToWorld('side', u, v, 'iso');
+              state.decorations.push({
+                uid: Date.now() + 500 + i * 19,
+                type: wallPool[i % wallPool.length],
+                x: wp ? wp.x : CAKE.cx,
+                y: wp ? wp.y : CAKE.baseY - 60,
+                surface: 'side',
+                u,
+                v,
+                scale: 0.72,
+                rot: (i % 2 === 0 ? -0.14 : 0.14)
+              });
+              // 相邻点缀一小片薄荷叶或小奶油花
+              pushSidePipe(u + 0.5 / wallCount, 0.64, 'blossom', pc, 0.56);
+            }
+            for (let k = 0; k < 22; k++) {
+              pushSideSprinkle((k * 0.6180339) % 1, 0.35 + ((k * 0.41) % 1) * 0.5, sideSpPool[k % sideSpPool.length], k);
+            }
+          } else if (sideStyle === 'starlight') {
+            // 侧壁银河金箔珍珠斜向漫撒 + 几朵精致迷你奶油花
+            const starPool = ['sprinkle_gold', 'sprinkle_pearl'];
+            for (let k = 0; k < 40; k++) {
+              const u = k / 40;
+              const band = 0.56 + Math.sin(u * Math.PI * 4) * 0.16;
+              const jitter = (((k * 0.6180339) % 1) - 0.5) * 0.24;
+              const v = Math.max(0.32, Math.min(0.86, band + jitter));
+              pushSideSprinkle(u, v, starPool[k % starPool.length], k);
+            }
+            for (let i = 0; i < 8; i++) {
+              const u = i / 8 + 0.04;
+              const v = 0.56 + Math.sin(u * Math.PI * 4) * 0.15;
+              pushSidePipe(u, v, 'blossom', i % 2 === 0 ? pc : altPc, 0.58);
+            }
+          }
+        }
         sfx.playChime();
       } else if (stepIdx === 4) {
         state.card.theme = Math.max(0, Math.min(3, Number(act.cardTheme) || 0));
         state.card.to = String(act.cardTo || `致：${coop.userName}`).slice(0, 18);
         state.card.body = String(act.cardBody || '愿你岁岁常欢愉。').slice(0, 60);
         state.card.plaqueText = String(act.plaqueText || '岁岁安暖').slice(0, 10);
+        state.card.sketchTitle = String(act.cardSketchTitle || '').slice(0, 12);
         state.card.hasPlaque = true;
+        if (act.cardSketchSvg) {
+          // 先画轻量落款占位，待 SVG 异步解码成功后立即无缝覆盖；若 SVG 损坏则保留落款绝不留白
+          drawFallbackSignatureCanvas(getSelectedCharName());
+          loadSvgToImage(act.cardSketchSvg, img => {
+            const iw = img.naturalWidth || img.width || 320;
+            const ih = img.naturalHeight || img.height || 80;
+            if (iw <= 0 || ih <= 0) return;
+            sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+            const pad = 4;
+            const maxW = sigCanvas.width - pad * 2;
+            const maxH = sigCanvas.height - pad * 2;
+            const ratio = Math.min(maxW / iw, maxH / ih);
+            const dw = iw * ratio;
+            const dh = ih * ratio;
+            sigCtx.drawImage(img, (sigCanvas.width - dw) * 0.5, (sigCanvas.height - dh) * 0.5, dw, dh);
+          }, () => {
+            drawFallbackSignatureCanvas(getSelectedCharName());
+          });
+        } else {
+          drawFallbackSignatureCanvas(getSelectedCharName());
+        }
         sfx.playChime();
       } else if (stepIdx === 5) {
         if (!state.decorations.some(d => d.type === 'candle')) {
@@ -6330,11 +6906,45 @@
         const plan = res.plan || {};
         const stepLines = res.stepLines || [];
         const stepActions = [
-          { spongeId: plan.spongeId, fillingCreamId: plan.fillingCreamId, fillingFruitId: plan.fillingFruitId },
-          { frostingColorId: plan.frostingColorId, dripGlazeId: plan.dripGlazeId, neatness: plan.neatness },
-          { pipingNozzleId: plan.pipingNozzleId, pipingColorId: plan.pipingColorId, pipingPattern: plan.pipingPattern },
-          { decorList: plan.decorList, decorLayout: plan.decorLayout },
-          { cardTheme: plan.cardTheme, cardTo: plan.cardTo, cardBody: plan.cardBody, plaqueText: plan.plaqueText },
+          {
+            spongeId: plan.spongeId,
+            fillingCreamId: plan.fillingCreamId,
+            fillingFruitId: plan.fillingFruitId,
+            fillingCream2Id: plan.fillingCream2Id,
+            fillingFruit2Id: plan.fillingFruit2Id
+          },
+          {
+            frostingColorId: plan.frostingColorId,
+            secondaryFrostingColorId: plan.secondaryFrostingColorId,
+            frostingStyle: plan.frostingStyle,
+            dripGlazeId: plan.dripGlazeId,
+            saucePenId: plan.saucePenId,
+            saucePattern: plan.saucePattern,
+            neatness: plan.neatness,
+            cakeTopSketchTitle: plan.cakeTopSketchTitle,
+            cakeTopSketchSvg: plan.cakeTopSketchSvg
+          },
+          {
+            pipingNozzleId: plan.pipingNozzleId,
+            pipingColorId: plan.pipingColorId,
+            secondaryPipingColorId: plan.secondaryPipingColorId,
+            pipingPattern: plan.pipingPattern
+          },
+          {
+            decorList: plan.decorList,
+            decorLayout: plan.decorLayout,
+            sideStyle: plan.sideStyle,
+            sprinkleTypes: plan.sprinkleTypes,
+            sprinkleDensity: plan.sprinkleDensity
+          },
+          {
+            cardTheme: plan.cardTheme,
+            cardTo: plan.cardTo,
+            cardBody: plan.cardBody,
+            plaqueText: plan.plaqueText,
+            cardSketchTitle: plan.cardSketchTitle,
+            cardSketchSvg: plan.cardSketchSvg
+          },
           {}
         ];
 

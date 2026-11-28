@@ -1,0 +1,2331 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>棉花娃娃手作工坊 · Cotton Doll Atelier</title>
+<style>
+  :root {
+    --cream-bg: #FAF6F0;
+    --cream-card: #FFFDF9;
+    --apricot-soft: #F3E6D8;
+    --pink-mist: #E7B7C1;
+    --pink-deep: #C46F7F;
+    --pink-soft: #FDF2F4;
+    --sage-green: #6D9381;
+    --sage-soft: #EAF3EE;
+    --brown-dark: #433128;
+    --brown-mid: #755B4E;
+    --brown-light: #A48D7E;
+    --border-warm: #E4D4C3;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; height: 100dvh; overflow: hidden;
+    background: radial-gradient(circle at 50% 20%, #3E332D 0%, #201A17 100%);
+    font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans SC", sans-serif;
+    color: var(--brown-dark);
+  }
+  #app {
+    display: flex; flex-direction: column; width: 100%; max-width: 520px; height: 100%;
+    margin: 0 auto; position: relative; background: var(--cream-bg);
+    box-shadow: 0 0 48px rgba(0, 0, 0, 0.45); overflow: hidden;
+  }
+
+  /* 顶部栏 + 清爽 6 步导航 */
+  .top-header {
+    flex-shrink: 0; padding: 7px 10px 6px;
+    background: linear-gradient(180deg, #FFFDF9 0%, #F7EFE4 100%);
+    border-bottom: 1px solid var(--border-warm);
+    box-shadow: 0 2px 8px rgba(67, 49, 40, 0.06); z-index: 25;
+  }
+  .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 5px; gap: 6px; }
+  .brand-title { font-size: 14.5px; font-weight: 800; color: var(--brown-dark); display: flex; align-items: center; gap: 6px; min-width: 0; }
+  .brand-title span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .header-actions { display: flex; gap: 4px; align-items: center; flex-shrink: 0; }
+  .icon-btn {
+    width: 27px; height: 27px; border-radius: 50%; border: 1px solid var(--border-warm);
+    background: var(--cream-card); color: var(--brown-mid);
+    display: flex; align-items: center; justify-content: center; cursor: pointer;
+    font-size: 12px; font-weight: 700; transition: all 0.16s;
+  }
+  .icon-btn:active { transform: scale(0.92); }
+  .icon-btn:disabled { opacity: 0.36; pointer-events: none; }
+  .icon-btn.text-pill { width: auto; padding: 0 9px; border-radius: 14px; font-size: 11px; }
+
+  .stepper {
+    display: grid; grid-template-columns: repeat(6, 1fr); gap: 3px;
+    background: rgba(243, 230, 216, 0.68); border: 1px solid var(--border-warm);
+    border-radius: 13px; padding: 3px; font-size: 11px; font-weight: 700; color: var(--brown-light);
+  }
+  .step-item {
+    text-align: center; cursor: pointer; padding: 3.5px 2px; border-radius: 9px;
+    transition: all 0.18s; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .step-item.active {
+    color: #FFF; background: linear-gradient(135deg, #D58391 0%, #B76373 100%);
+    box-shadow: 0 2px 6px rgba(183, 99, 115, 0.3);
+  }
+  .step-item.done { color: var(--sage-green); background: var(--sage-soft); }
+
+  /* 舞台区 */
+  .stage-wrap {
+    flex: 1 1 0; min-height: 0; position: relative;
+    display: flex; align-items: center; justify-content: center; overflow: hidden;
+    background: #EADBC8;
+  }
+  #dollCanvas { width: 100%; height: 100%; display: block; touch-action: none; }
+
+  .stage-top-hud {
+    position: absolute; top: 8px; left: 10px; right: 10px;
+    display: flex; justify-content: space-between; align-items: center;
+    pointer-events: none; z-index: 15; gap: 6px;
+  }
+  .hud-pill {
+    pointer-events: auto; padding: 4px 10px; border-radius: 14px;
+    background: rgba(255, 253, 249, 0.9); backdrop-filter: blur(5px);
+    border: 1px solid var(--border-warm); color: var(--brown-dark);
+    font-size: 10.5px; font-weight: 700; box-shadow: 0 2px 8px rgba(67, 49, 40, 0.08);
+    max-width: 65%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .hud-btn {
+    cursor: pointer; border: 1px solid var(--pink-mist); background: var(--pink-soft);
+    color: var(--pink-deep); padding: 4px 10px; border-radius: 12px;
+    font-size: 10.5px; font-weight: 800; pointer-events: auto; transition: all 0.15s;
+  }
+  .hud-btn:active { transform: scale(0.94); }
+
+  .selection-toolbar {
+    position: absolute; bottom: 8px; left: 50%; transform: translateX(-50%);
+    z-index: 18; display: none; align-items: center; gap: 4px;
+    padding: 4px 8px; border-radius: 15px;
+    background: rgba(255, 253, 249, 0.95); border: 1.5px solid var(--pink-mist);
+    box-shadow: 0 4px 14px rgba(67, 49, 40, 0.15);
+  }
+  .selection-toolbar.show { display: flex; }
+  .sel-btn {
+    padding: 3px 7px; border-radius: 9px; border: 1px solid var(--border-warm);
+    background: var(--cream-card); color: var(--brown-dark); font-size: 10.5px; font-weight: 700; cursor: pointer;
+  }
+  .sel-btn.danger { color: #C94A4A; border-color: #F1C5C5; background: #FFF5F5; }
+
+  .stage-toast {
+    position: absolute; top: 44px; left: 50%; transform: translateX(-50%);
+    z-index: 22; padding: 5px 13px; border-radius: 15px;
+    background: rgba(67, 49, 40, 0.9); color: #FFFDF9; font-size: 11px; font-weight: 700;
+    pointer-events: none; opacity: 0; transition: opacity 0.2s; white-space: nowrap;
+  }
+  .stage-toast.show { opacity: 1; }
+
+  /* 舞台右侧缩放与抓手平移浮栏 */
+  .zoom-controls {
+    position: absolute; right: 9px; bottom: 10px; z-index: 16;
+    display: flex; flex-direction: column; gap: 4px; align-items: center;
+    background: rgba(255, 253, 249, 0.9); backdrop-filter: blur(5px);
+    border: 1px solid var(--border-warm); border-radius: 14px; padding: 4px;
+    box-shadow: 0 3px 10px rgba(67, 49, 40, 0.1);
+  }
+  .zoom-btn {
+    width: 28px; height: 26px; border-radius: 9px; border: 1px solid var(--border-warm);
+    background: var(--cream-card); color: var(--brown-dark); font-size: 12px; font-weight: 800;
+    cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .zoom-btn:active { transform: scale(0.92); }
+  .zoom-btn.active { background: var(--pink-soft); border-color: var(--pink-deep); color: var(--pink-deep); }
+  .zoom-pct { font-size: 9.5px; font-weight: 800; color: var(--brown-mid); cursor: pointer; padding: 1px 0; }
+
+  /* 底部工作台 */
+  .bottom-dock {
+    flex-shrink: 0;
+    background: linear-gradient(180deg, #FFFDF9 0%, #F5ECE0 100%);
+    border-top: 1.5px solid var(--border-warm);
+    border-radius: 20px 20px 0 0;
+    padding: 8px 11px calc(8px + env(safe-area-inset-bottom));
+    box-shadow: 0 -6px 24px rgba(67, 49, 40, 0.1);
+    z-index: 25; display: flex; flex-direction: column; gap: 6px;
+  }
+  .sub-tabs { display: flex; gap: 5px; overflow-x: auto; scrollbar-width: none; }
+  .sub-tabs::-webkit-scrollbar { display: none; }
+  .sub-tab {
+    padding: 3.5px 10px; border-radius: 12px; border: 1px solid var(--border-warm);
+    background: var(--cream-card); color: var(--brown-mid); font-size: 11px; font-weight: 700;
+    cursor: pointer; white-space: nowrap; transition: all 0.15s;
+  }
+  .sub-tab.active { background: var(--brown-dark); color: #FFFDF9; border-color: var(--brown-dark); }
+
+  /* 动态控制区（支持款式缩略图 + Tomodachi 滑块 + 自由色盘） */
+  .dock-body { display: flex; flex-direction: column; gap: 6px; max-height: 186px; overflow-y: auto; scrollbar-width: none; }
+  .dock-body::-webkit-scrollbar { display: none; }
+
+  .options-scroll { display: flex; gap: 7px; overflow-x: auto; padding: 2px 1px; scrollbar-width: none; align-items: stretch; }
+  .options-scroll::-webkit-scrollbar { display: none; }
+  .option-card {
+    flex: 0 0 auto; min-width: 64px; padding: 5px 6px; border-radius: 12px;
+    background: var(--cream-card); border: 1.5px solid var(--border-warm);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
+    cursor: pointer; transition: all 0.15s; position: relative;
+  }
+  .option-card:active { transform: scale(0.95); }
+  .option-card.active { border-color: var(--pink-deep); background: var(--pink-soft); box-shadow: 0 2px 8px rgba(196, 111, 127, 0.18); }
+  .option-card canvas { display: block; }
+  .opt-title { font-size: 10.5px; font-weight: 800; color: var(--brown-dark); white-space: nowrap; }
+  .opt-sub { font-size: 9px; color: var(--brown-light); white-space: nowrap; }
+
+  /* 自由色盘行 */
+  .color-row { display: flex; align-items: center; gap: 6px; overflow-x: auto; scrollbar-width: none; padding: 2px 1px; }
+  .color-row::-webkit-scrollbar { display: none; }
+  .color-row-label { font-size: 10.5px; font-weight: 800; color: var(--brown-mid); white-space: nowrap; flex-shrink: 0; }
+  .color-picker-wrap {
+    position: relative; width: 26px; height: 26px; border-radius: 50%; flex-shrink: 0;
+    background: conic-gradient(#F26B6B, #F2C94C, #6FCF97, #56CCF2, #9B51E0, #F26B6B);
+    border: 2px solid #FFF; box-shadow: 0 0 0 1.2px var(--brown-light);
+    cursor: pointer; overflow: hidden; display: flex; align-items: center; justify-content: center;
+  }
+  .color-picker-wrap input[type="color"] {
+    position: absolute; inset: -6px; width: 40px; height: 40px; opacity: 0; cursor: pointer;
+  }
+  .color-picker-dot { width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid #FFF; pointer-events: none; }
+  .swatch-btn {
+    width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0; cursor: pointer;
+    border: 1.5px solid rgba(67, 49, 40, 0.22); transition: transform 0.14s;
+    box-shadow: inset 0 2px 3px rgba(255,255,255,0.4);
+  }
+  .swatch-btn.active { border: 2px solid var(--brown-dark); transform: scale(1.12); box-shadow: 0 0 0 2px #FFF inset; }
+
+  /* Tomodachi 精雕滑块网格 */
+  .slider-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 5px 10px; padding: 2px 2px; }
+  .slider-item { display: flex; align-items: center; gap: 6px; }
+  .slider-lbl { font-size: 10px; font-weight: 700; color: var(--brown-mid); width: 34px; flex-shrink: 0; }
+  .slider-item input[type="range"] {
+    flex: 1; height: 4px; accent-color: var(--pink-deep); cursor: pointer; min-width: 0;
+  }
+  .toggle-chip {
+    padding: 3px 9px; border-radius: 10px; border: 1px solid var(--border-warm);
+    background: var(--cream-card); color: var(--brown-mid); font-size: 10.5px; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+  }
+  .toggle-chip.active { background: var(--pink-soft); border-color: var(--pink-deep); color: var(--pink-deep); }
+
+  .dock-action-row { display: flex; justify-content: space-between; align-items: center; gap: 6px; }
+  .small-pill-btn {
+    padding: 6px 10px; border-radius: 14px; border: 1.2px solid var(--border-warm);
+    background: var(--cream-card); color: var(--brown-mid); font-size: 11px; font-weight: 700;
+    cursor: pointer; white-space: nowrap;
+  }
+  .small-pill-btn:active { transform: scale(0.95); }
+  .small-pill-btn.accent { border-color: var(--sage-green); background: var(--sage-soft); color: #365B4A; }
+  .primary-next-btn {
+    margin-left: auto; padding: 7px 14px; border-radius: 15px;
+    border: 1.5px solid #B05F6E;
+    background: linear-gradient(135deg, #D98997 0%, #BF6A7A 100%);
+    color: #FFF; font-size: 12px; font-weight: 800; cursor: pointer; white-space: nowrap;
+    box-shadow: 0 3px 10px rgba(191, 106, 122, 0.28);
+  }
+  .primary-next-btn:active { transform: scale(0.96); }
+
+  /* 弹窗 */
+  .modal-overlay { position: fixed; inset: 0; background: rgba(30, 23, 19, 0.58); backdrop-filter: blur(4px); z-index: 60; display: none; align-items: center; justify-content: center; padding: 14px; }
+  .modal-overlay.show { display: flex; }
+  .card-modal { width: 100%; max-width: 400px; background: var(--cream-bg); border-radius: 22px; border: 1.5px solid var(--border-warm); padding: 15px; box-shadow: 0 20px 50px rgba(0, 0, 0, 0.34); display: flex; flex-direction: column; gap: 9px; max-height: 90dvh; overflow-y: auto; align-items: center; }
+  .card-input, .card-textarea { width: 100%; border: 1px solid var(--border-warm); background: var(--cream-card); border-radius: 11px; padding: 7px 10px; font-size: 12.5px; color: var(--brown-dark); font-family: inherit; outline: none; }
+  .card-textarea { resize: none; height: 54px; }
+  .poster-img { width: 100%; max-width: 300px; border-radius: 14px; border: 1.5px solid var(--border-warm); box-shadow: 0 8px 24px rgba(67, 49, 40, 0.18); }
+  .btn-pink-large { width: 100%; padding: 10px; border-radius: 14px; border: 1.5px solid #B05F6E; background: linear-gradient(135deg, #D98997 0%, #BF6A7A 100%); color: #FFF; font-size: 13px; font-weight: 800; cursor: pointer; }
+  .btn-outline-large { width: 100%; padding: 9px; border-radius: 14px; border: 1.2px solid var(--border-warm); background: var(--cream-card); color: var(--brown-dark); font-size: 12px; font-weight: 700; cursor: pointer; }
+  .gallery-list { width: 100%; display: flex; flex-direction: column; gap: 8px; max-height: 58dvh; overflow-y: auto; }
+  .gallery-item { display: flex; gap: 9px; align-items: center; background: var(--cream-card); border: 1px solid var(--border-warm); border-radius: 13px; padding: 8px; }
+  .gallery-thumb { width: 52px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-warm); flex-shrink: 0; }
+  .gallery-meta { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .gallery-title { font-size: 12.5px; font-weight: 800; color: var(--brown-dark); }
+  .gallery-sub { font-size: 10px; color: var(--brown-mid); }
+
+  @media (max-height: 740px) {
+    .top-header { padding: 5px 8px 4px; }
+    .bottom-dock { padding: 6px 9px calc(6px + env(safe-area-inset-bottom)); gap: 4px; }
+    .dock-body { max-height: 158px; gap: 4px; }
+    .option-card { min-width: 58px; padding: 4px 5px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header class="top-header">
+    <div class="header-row">
+      <div class="brand-title">
+        <button type="button" class="icon-btn" id="backToWorkshopBtn" title="返回东汉工坊" style="width:24px;height:24px;font-size:14px;font-weight:800;flex-shrink:0;">‹</button>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
+          <circle cx="12" cy="9" r="6" fill="#F3E5D8" stroke="#433128" stroke-width="1.8"/>
+          <circle cx="9.8" cy="8.5" r="1" fill="#433128"/>
+          <circle cx="14.2" cy="8.5" r="1" fill="#433128"/>
+          <path d="M10.5 11C11.2 11.7 12.8 11.7 13.5 11" stroke="#C46F7F" stroke-width="1.6" stroke-linecap="round"/>
+          <path d="M7 20C7 16.8 9.2 15 12 15C14.8 15 17 16.8 17 20" stroke="#433128" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        <span>棉花娃娃手作工坊 · Atelier</span>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="undoBtn" title="撤销" disabled>↶</button>
+        <button class="icon-btn" id="redoBtn" title="重做" disabled>↷</button>
+        <button class="icon-btn text-pill" id="openGalleryBtn">娃柜</button>
+        <button class="icon-btn" id="soundToggleBtn" title="音效">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        </button>
+        <button class="icon-btn" id="newProjectBtn" title="新建娃娃">↻</button>
+      </div>
+    </div>
+
+    <div class="stepper" id="stepperBar">
+      <span class="step-item active" data-step="0">1.捏脸</span>
+      <span class="step-item" data-step="1">2.裁绣</span>
+      <span class="step-item" data-step="2">3.缝棉</span>
+      <span class="step-item" data-step="3">4.发型</span>
+      <span class="step-item" data-step="4">5.娃衣</span>
+      <span class="step-item" data-step="5">6.展示</span>
+    </div>
+  </header>
+
+  <div class="stage-wrap" id="stageWrap">
+    <canvas id="dollCanvas"></canvas>
+
+    <div class="stage-top-hud">
+      <div class="hud-pill" id="stageStatusPill">流畅脸型 · 自由捏娃</div>
+      <button type="button" class="hud-btn" id="stageQuickBtn">随机灵感</button>
+    </div>
+
+    <div class="selection-toolbar" id="selectionToolbar">
+      <button type="button" class="sel-btn" id="selScaleUpBtn">放大</button>
+      <button type="button" class="sel-btn" id="selScaleDownBtn">缩小</button>
+      <button type="button" class="sel-btn" id="selRotLeftBtn">左转</button>
+      <button type="button" class="sel-btn" id="selRotRightBtn">右转</button>
+      <button type="button" class="sel-btn danger" id="selDeleteBtn">移除</button>
+    </div>
+
+    <div class="zoom-controls" id="zoomControls">
+      <button type="button" class="zoom-btn" id="zoomInBtn" title="放大画布">+</button>
+      <span class="zoom-pct" id="zoomPctLabel" title="点击重置100%">100%</span>
+      <button type="button" class="zoom-btn" id="zoomOutBtn" title="缩小画布">-</button>
+      <button type="button" class="zoom-btn" id="panModeBtn" title="抓手平移画布" style="font-size:10px;">移</button>
+    </div>
+
+    <div class="stage-toast" id="stageToast">提示</div>
+  </div>
+
+  <div class="bottom-dock" id="bottomDock">
+    <div class="sub-tabs" id="subTabs"></div>
+    <div class="dock-body" id="dockBody"></div>
+    <div class="dock-action-row">
+      <button type="button" class="small-pill-btn" id="prevStepBtn">‹ 上一步</button>
+      <button type="button" class="small-pill-btn accent" id="contextActionBtn" style="display:none;">快捷动作</button>
+      <button type="button" class="primary-next-btn" id="nextStepBtn">下一步 ›</button>
+    </div>
+  </div>
+</div>
+
+<!-- 出生证登记弹窗 -->
+<div class="modal-overlay" id="namingModal">
+  <div class="card-modal">
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;">登记棉花娃娃出生证</h3>
+      <button class="icon-btn" id="closeNamingModalBtn">×</button>
+    </div>
+    <input type="text" class="card-input" id="dollNameInput" maxlength="14" placeholder="为你的棉花娃娃取个名字" value="奶糖小兔">
+    <textarea class="card-textarea" id="dollNoteInput" maxlength="64" placeholder="写下给崽崽的出生寄语...">一针一线亲手缝制的小可爱，愿你永远蓬松温暖。</textarea>
+    <button type="button" class="btn-pink-large" id="generatePosterBtn">生成高清出生证纪念卡</button>
+  </div>
+</div>
+
+<!-- 纪念卡展示弹窗 -->
+<div class="modal-overlay" id="posterModal">
+  <div class="card-modal">
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;">棉花娃娃专属纪念卡</h3>
+      <button class="icon-btn" id="closePosterModalBtn">×</button>
+    </div>
+    <img id="posterImg" class="poster-img" alt="棉花娃娃出生证">
+    <button type="button" class="btn-pink-large" id="downloadPngBtn">保存高清 PNG 纪念卡 ↓</button>
+    <div style="display:flex;gap:8px;width:100%;">
+      <button type="button" class="btn-outline-large" id="setHomePetBtn" style="flex:1;border-color:var(--pink-mist);color:var(--pink-deep);background:var(--pink-soft);">设为桌宠</button>
+      <button type="button" class="btn-outline-large" id="saveBackpackBtn" style="flex:1;">收入行囊</button>
+      <button type="button" class="btn-outline-large" id="openForwardModalBtn" style="flex:1;">赠予好友</button>
+    </div>
+    <div style="display:flex;gap:8px;width:100%;">
+      <button type="button" class="btn-outline-large" id="backToEditBtn" style="flex:1;">继续装扮</button>
+      <button type="button" class="btn-outline-large" id="makeAnotherBtn" style="flex:1;">再做一只</button>
+    </div>
+    <div id="posterActionToast" style="font-size:11px;color:var(--pink-deep);font-weight:700;min-height:14px;text-align:center;"></div>
+  </div>
+</div>
+
+<!-- 本地娃柜作品集 -->
+<div class="modal-overlay" id="galleryModal">
+  <div class="card-modal">
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;">我的娃柜 · 历次作品</h3>
+      <button class="icon-btn" id="closeGalleryModalBtn">×</button>
+    </div>
+    <div class="gallery-list" id="galleryList"></div>
+  </div>
+</div>
+
+<!-- 赠予传讯好友弹窗 -->
+<div class="modal-overlay" id="forwardModal">
+  <div class="card-modal">
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15px;">飞鸽传书 · 分享棉花娃娃</h3>
+      <button class="icon-btn" id="closeForwardModalBtn">×</button>
+    </div>
+    <select class="card-input" id="forwardCharSelect"><option value="">选择传讯好友</option></select>
+    <input type="text" class="card-input" id="forwardNoteInput" maxlength="40" placeholder="附上一句留言（选填）" value="亲手缝了一只棉花娃娃，给你看看！">
+    <button type="button" class="btn-pink-large" id="confirmForwardBtn">发送纪念卡</button>
+  </div>
+</div>
+
+<script src="./Milvus/cotton_doll_renderer.js"></script>
+<script>
+(() => {
+  'use strict';
+
+  /* =========================================================================
+   * 0. 复用共享 2D 骨骼渲染内核 (Milvus/cotton_doll_renderer.js)
+   * ========================================================================= */
+  const R = window.CottonDollRenderer;
+  if (!R) throw new Error('未加载 Milvus/cotton_doll_renderer.js');
+  const {
+    HEAD_SCALE,
+    clamp, lerp, dist, hexToRgb, rgbToHex, shadeHex, hexAlpha,
+    SKIN_SWATCHES, EYE_SWATCHES, HAIR_SWATCHES, CLOTH_SWATCHES,
+    FACE_PRESETS, EAR_TYPES, FABRIC_TYPES, BROW_STYLES, EYE_STYLES, LASH_STYLES, HIGHLIGHT_STYLES,
+    NOSE_STYLES, MOUTH_STYLES, BLUSH_STYLES, HAIR_BACK_STYLES, HAIR_BANG_STYLES, HAIR_SIDE_STYLES,
+    POSE_PRESETS, ANIM_CLIPS, AHOGE_STYLES, OUTFIT_DRESSES, OUTFIT_TOPS, OUTFIT_BOTTOMS, OUTFIT_SHOES,
+    OUTFIT_PATTERNS, ACCESSORIES_CATALOG, BACKGROUNDS,
+    createDefaultState,
+    traceSmoothClosedCurve, ensureSculptOffsets, generateSmoothHeadPoints, generateLimbPoints, fillPlushShape,
+    drawCustomStrokes, drawStarPath, drawTinyHeart,
+    fillOutfitPattern, sampleHeadEdgeForEar, drawSmoothEars, makeHairGrad, drawHairFront,
+    drawOutfitTorso, drawSleeveOnArm, drawPantLegOnLeg, drawShortsHipPelvis, drawShoesOnLeg,
+    getSkeletonJoints
+  } = R;
+
+  // 薄适配层：透传编辑器当前 state 与 runtime.anim 给共享渲染内核
+  const getActiveSleeveType = () => R.getActiveSleeveType(state.outfit);
+  const drawFaceAll = (c, f, craft, scale = 1, showFreeEmb = true) =>
+    R.drawFaceAll(c, f, craft, scale, showFreeEmb, runtime.anim.blink || 0);
+  const drawHairBack = (c, headY, hair, shiftX) =>
+    R.drawHairBack(c, headY, hair, shiftX, state.outfit && state.outfit.mainColor);
+  const drawAccessoryItem = (c, acc, shiftX, isSelected) =>
+    R.drawAccessoryItem(c, acc, shiftX, isSelected, state.showcase && state.showcase.name);
+  const drawFullDoll = (c, centerX, centerY, scale = 1, turnDeg = 0, showCloth = true, showHair = true, useLiveAnim = true) =>
+    R.drawFullDoll(c, state, runtime.anim, { centerX, centerY, scale, turnDeg, showCloth, showHair, useLiveAnim });
+  const stepSpineRigAnimation = (tSec) => R.stepSpineRigAnimation(state, runtime.anim, tSec);
+
+  class AtelierSoundEngine {
+    constructor() { this.ctx = null; this.enabled = true; this.lastT = 0; }
+    init() {
+      if (!this.ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (AC) this.ctx = new AC();
+      }
+      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    }
+    playPop(freq = 540, dur = 0.08) {
+      if (!this.enabled) return;
+      this.init(); if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = 'sine'; o.frequency.setValueAtTime(freq * 0.82, now);
+      o.frequency.exponentialRampToValueAtTime(freq * 1.24, now + dur);
+      g.gain.setValueAtTime(0.075, now); g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      o.connect(g); g.connect(this.ctx.destination); o.start(now); o.stop(now + dur + 0.01);
+    }
+    playSnip() {
+      if (!this.enabled || performance.now() - this.lastT < 95) return;
+      this.lastT = performance.now(); this.init(); if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const buf = this.ctx.createBuffer(1, Math.floor(this.ctx.sampleRate * 0.04), this.ctx.sampleRate);
+      const d = buf.getChannelData(0);
+      for (let i = 0; i < d.length; i++) d[i] = (Math.random() * 2 - 1) * Math.exp(-i / (this.ctx.sampleRate * 0.014));
+      const src = this.ctx.createBufferSource(); src.buffer = buf;
+      const f = this.ctx.createBiquadFilter(); f.type = 'highpass'; f.frequency.value = 1750;
+      const g = this.ctx.createGain(); g.gain.value = 0.13;
+      src.connect(f); f.connect(g); g.connect(this.ctx.destination); src.start(now);
+    }
+    playStitch() {
+      if (!this.enabled || performance.now() - this.lastT < 85) return;
+      this.lastT = performance.now(); this.playPop(780 + Math.random() * 140, 0.045);
+    }
+    playStuff() {
+      if (!this.enabled) return;
+      this.init(); if (!this.ctx) return;
+      const now = this.ctx.currentTime;
+      const o = this.ctx.createOscillator(), g = this.ctx.createGain();
+      o.type = 'triangle'; o.frequency.setValueAtTime(195, now); o.frequency.exponentialRampToValueAtTime(325, now + 0.12);
+      g.gain.setValueAtTime(0.11, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.13);
+      o.connect(g); g.connect(this.ctx.destination); o.start(now); o.stop(now + 0.14);
+    }
+    playChime() {
+      if (!this.enabled) return;
+      [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => setTimeout(() => this.playPop(f, 0.15), i * 75));
+    }
+  }
+  const sfx = new AtelierSoundEngine();
+
+
+  let state = createDefaultState();
+
+  const runtime = {
+    w: 380, h: 440, cx: 190, cy: 220,
+    zoom: 1, panX: 0, panY: 0, panMode: false,
+    pointers: new Map(), pinchStartDist: 0, pinchStartZoom: 1, panStart: null,
+    pointerDown: false, pointerMode: 'idle', pointerPos: { x: 190, y: 220 },
+    activeTarget: null,
+    flipAnim: 0,      // 真实 rAF 翻面动画 1 -> 0
+    puffBounce: 0,    // 真实 rAF 塞棉弹性 Q 弹
+    unalignedOffset: { x: 26, y: -16 },
+    // Spine 级实时骨骼插值通道（平滑 Cross-Fade 过渡）
+    anim: {
+      rootX: 0, rootY: 0, bodyTilt: 0, squashX: 1, squashY: 1,
+      headTilt: 0, headY: 0, hairSway: 0,
+      leftArm: 0.56, rightArm: -0.56, leftLeg: 0.04, rightLeg: -0.04,
+      blink: 0, nextBlinkAt: 2.6
+    }
+  };
+
+  // Undo / Redo
+  const historyMgr = {
+    undoStack: [], redoStack: [], maxLen: 35,
+    snapshot() {
+      const s = JSON.stringify(state);
+      if (this.undoStack.length && this.undoStack[this.undoStack.length - 1] === s) return;
+      this.undoStack.push(s);
+      if (this.undoStack.length > this.maxLen) this.undoStack.shift();
+      this.redoStack = [];
+      this.updateBtns();
+    },
+    undo() {
+      if (this.undoStack.length <= 1) return;
+      this.redoStack.push(this.undoStack.pop());
+      state = JSON.parse(this.undoStack[this.undoStack.length - 1]);
+      this.updateBtns(); renderDock(); showToast('已撤销上一步');
+    },
+    redo() {
+      if (!this.redoStack.length) return;
+      const n = this.redoStack.pop();
+      this.undoStack.push(n);
+      state = JSON.parse(n);
+      this.updateBtns(); renderDock(); showToast('已重做操作');
+    },
+    updateBtns() {
+      document.getElementById('undoBtn').disabled = this.undoStack.length <= 1;
+      document.getElementById('redoBtn').disabled = this.redoStack.length === 0;
+    }
+  };
+
+  // IndexedDB
+  const DB_NAME = 'CottonDollAtelierDB_V2';
+  function openDB() {
+    return new Promise((res, rej) => {
+      if (!window.indexedDB) return rej(new Error('no idb'));
+      const req = indexedDB.open(DB_NAME, 1);
+      req.onupgradeneeded = (e) => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('projects')) db.createObjectStore('projects', { keyPath: 'projectId' });
+        if (!db.objectStoreNames.contains('gallery')) db.createObjectStore('gallery', { keyPath: 'id' });
+      };
+      req.onsuccess = () => res(req.result);
+      req.onerror = () => rej(req.error);
+    });
+  }
+  let saveTimer = null;
+  function scheduleSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(async () => {
+      try {
+        const db = await openDB();
+        const tx = db.transaction('projects', 'readwrite');
+        tx.objectStore('projects').put({ ...JSON.parse(JSON.stringify(state)), updatedAt: Date.now() });
+      } catch (_) {
+        try { localStorage.setItem('cotton_doll_v2_proj', JSON.stringify(state)); } catch (__) {}
+      }
+    }, 350);
+  }
+  async function loadLatest() {
+    try {
+      const db = await openDB();
+      const all = await new Promise((r, j) => {
+        const q = db.transaction('projects', 'readonly').objectStore('projects').getAll();
+        q.onsuccess = () => r(q.result || []); q.onerror = () => j(q.error);
+      });
+      if (all.length) { all.sort((a, b) => (b.updatedAt || 0) - (a.updatedAt || 0)); return all[0]; }
+    } catch (_) {
+      try { const raw = localStorage.getItem('cotton_doll_v2_proj'); if (raw) return JSON.parse(raw); } catch (__) {}
+    }
+    return null;
+  }
+  async function saveGallery(item) {
+    try {
+      const db = await openDB();
+      await new Promise((r, j) => { const tx = db.transaction('gallery', 'readwrite'); tx.objectStore('gallery').put(item); tx.oncomplete = r; tx.onerror = () => j(tx.error); });
+    } catch (_) {
+      try { const a = JSON.parse(localStorage.getItem('cotton_doll_v2_gal') || '[]'); a.unshift(item); localStorage.setItem('cotton_doll_v2_gal', JSON.stringify(a.slice(0, 15))); } catch (__) {}
+    }
+  }
+  async function loadGallery() {
+    try {
+      const db = await openDB();
+      const all = await new Promise((r, j) => { const q = db.transaction('gallery', 'readonly').objectStore('gallery').getAll(); q.onsuccess = () => r(q.result || []); q.onerror = () => j(q.error); });
+      return all.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    } catch (_) {
+      try { return JSON.parse(localStorage.getItem('cotton_doll_v2_gal') || '[]'); } catch (__) { return []; }
+    }
+  }
+  async function deleteGallery(id) {
+    try {
+      const db = await openDB();
+      await new Promise((r, j) => { const tx = db.transaction('gallery', 'readwrite'); tx.objectStore('gallery').delete(id); tx.oncomplete = r; tx.onerror = () => j(tx.error); });
+    } catch (_) {}
+  }
+
+
+  function applyNomadSculptBrush(localX, localY, moveDx, moveDy) {
+    const ui = state.sculptUI;
+    const offs = ensureSculptOffsets(state.body);
+    const pts = generateSmoothHeadPoints(state.body, 1.0);
+    const N = pts.length;
+    const R = ui.radius || 42;
+
+    const applyAt = (bx, by, mdx, mdy) => {
+      const next = offs.map(o => ({ dx: o.dx, dy: o.dy }));
+      for (let i = 0; i < N; i++) {
+        const d = Math.hypot(pts[i].x - bx, pts[i].y - by);
+        if (d >= R) continue;
+        // 余弦平方衰减，呈现 Nomad 黏土柔和推拉手感
+        const w = Math.pow(Math.cos((d / R) * Math.PI * 0.5), 2);
+        if (ui.brush === 'move') {
+          next[i].dx = clamp(next[i].dx + mdx * w * 0.85, -34, 34);
+          next[i].dy = clamp(next[i].dy + mdy * w * 0.85, -30, 30);
+        } else if (ui.brush === 'inflate' || ui.brush === 'pinch') {
+          const len = Math.hypot(pts[i].x, pts[i].y) || 1;
+          const dir = ui.brush === 'inflate' ? 1 : -1;
+          next[i].dx = clamp(next[i].dx + (pts[i].x / len) * dir * w * 1.45, -34, 34);
+          next[i].dy = clamp(next[i].dy + (pts[i].y / len) * dir * w * 1.45, -30, 30);
+        } else if (ui.brush === 'smooth') {
+          const prev = offs[(i - 1 + N) % N], nxt = offs[(i + 1) % N];
+          next[i].dx = lerp(next[i].dx, (prev.dx + nxt.dx) * 0.5, w * 0.45);
+          next[i].dy = lerp(next[i].dy, (prev.dy + nxt.dy) * 0.5, w * 0.45);
+        }
+      }
+      // 轻度拉普拉斯松弛，确保边缘永远顺滑不打结
+      for (let i = 0; i < N; i++) {
+        const p = next[(i - 1 + N) % N], c = next[i], n = next[(i + 1) % N];
+        offs[i].dx = lerp(c.dx, (p.dx + n.dx) * 0.5, 0.08);
+        offs[i].dy = lerp(c.dy, (p.dy + n.dy) * 0.5, 0.08);
+      }
+    };
+
+    applyAt(localX, localY, moveDx, moveDy);
+    if (ui.symmetry) {
+      applyAt(-localX, localY, -moveDx, moveDy);
+    }
+  }
+
+
+  function eraseStrokesAt(strokesArr, x, y, radius = 10, mirror = false) {
+    if (!Array.isArray(strokesArr) || !strokesArr.length) return false;
+    const targets = mirror ? [[x, y], [-x, y]] : [[x, y]];
+    let changed = false;
+    for (let i = strokesArr.length - 1; i >= 0; i--) {
+      const st = strokesArr[i];
+      const pts = st.points || [];
+      const hitAt = (px, py) => targets.some(([tx, ty]) => {
+        if (Math.hypot(px - tx, py - ty) <= radius + (st.width || 3) * 0.4) return true;
+        if (st.mirror && Math.hypot(-px - tx, py - ty) <= radius + (st.width || 3) * 0.4) return true;
+        return false;
+      });
+      if (st.type === 'dot' || st.type === 'fill' || st.type === 'circle' || st.type === 'ellipse') {
+        const hitShape = pts.some(p => hitAt(p.x, p.y)) || (pts.length >= 2 && hitAt((pts[0].x + pts[pts.length - 1].x) * 0.5, (pts[0].y + pts[pts.length - 1].y) * 0.5));
+        if (hitShape) {
+          strokesArr.splice(i, 1);
+          changed = true;
+        }
+      } else if (st.type === 'airbrush') {
+        const kept = pts.filter(p => !hitAt(p.x, p.y));
+        if (kept.length !== pts.length) {
+          changed = true;
+          if (kept.length > 0) st.points = kept; else strokesArr.splice(i, 1);
+        }
+      } else {
+        // 线段局部擦断：把未命中的连续段落保留为新线段
+        let anyHit = false;
+        const segments = [];
+        let curSeg = [];
+        for (let k = 0; k < pts.length; k++) {
+          if (hitAt(pts[k].x, pts[k].y)) {
+            anyHit = true;
+            if (curSeg.length >= 2) segments.push(curSeg);
+            curSeg = [];
+          } else {
+            curSeg.push(pts[k]);
+          }
+        }
+        if (curSeg.length >= 2) segments.push(curSeg);
+        if (anyHit) {
+          changed = true;
+          const replacements = segments.map(seg => ({ ...st, points: seg }));
+          strokesArr.splice(i, 1, ...replacements);
+        }
+      }
+    }
+    return changed;
+  }
+
+
+  // 绘制可拖拽四肢绑骨骨架叠加层（仅在“绑骨摆姿”页签显示）
+  function getBoneHandlesWorld(cx, cy) {
+    const isSlender = state.body.bodyType === 'slender';
+    const j = getSkeletonJoints(isSlender);
+    const pose = state.pose;
+    const baseY = cy + 16;
+    const endOf = (piv, ang, len) => ({
+      px: cx + piv.x, py: baseY + piv.y,
+      x: cx + piv.x - Math.sin(ang) * len,
+      y: baseY + piv.y + Math.cos(ang) * len
+    });
+    const headLen = 88;
+    const ht = pose.headTilt || 0;
+    return {
+      head: { px: cx, py: baseY + j.neckY, x: cx + Math.sin(ht) * headLen, y: baseY + j.neckY - Math.cos(ht) * headLen, label: '歪头' },
+      leftArm:  { ...endOf(j.leftArm,  pose.leftArm,  j.armLen), label: '左手' },
+      rightArm: { ...endOf(j.rightArm, pose.rightArm, j.armLen), label: '右手' },
+      leftLeg:  { ...endOf(j.leftLeg,  pose.leftLeg,  j.legLen), label: '左脚' },
+      rightLeg: { ...endOf(j.rightLeg, pose.rightLeg, j.legLen), label: '右脚' }
+    };
+  }
+
+  function drawSkeletonOverlay(c, cx, cy) {
+    const hds = getBoneHandlesWorld(cx, cy);
+    c.save();
+    // 骨架连线
+    c.strokeStyle = 'rgba(212, 163, 89, 0.85)';
+    c.lineWidth = 3.2; c.lineCap = 'round';
+    Object.values(hds).forEach(h => {
+      c.beginPath(); c.moveTo(h.px, h.py); c.lineTo(h.x, h.y); c.stroke();
+      // 关节圆心
+      c.fillStyle = '#FFFDF9'; c.strokeStyle = '#C46F7F'; c.lineWidth = 2;
+      c.beginPath(); c.arc(h.px, h.py, 5, 0, Math.PI * 2); c.fill(); c.stroke();
+      // 末端可拖手柄
+      c.fillStyle = 'rgba(196, 111, 127, 0.92)'; c.strokeStyle = '#FFF'; c.lineWidth = 2.2;
+      c.beginPath(); c.arc(h.x, h.y, 9.5, 0, Math.PI * 2); c.fill(); c.stroke();
+      c.fillStyle = '#433128'; c.font = '800 9.5px sans-serif'; c.textAlign = 'center';
+      c.fillText(h.label, h.x, h.y - 13);
+    });
+    c.restore();
+  }
+
+  /* =========================================================================
+   * 6. 舞台背景与 6 步主场景渲染器（含 rAF 动效循环）
+   * ========================================================================= */
+  const canvas = document.getElementById('dollCanvas');
+  const ctx = canvas.getContext('2d');
+
+  function getBaseFitScale() {
+    return clamp(Math.min(runtime.w / 320, runtime.h / 340), 0.56, 1.08);
+  }
+  function updateZoomLabel() {
+    const el = document.getElementById('zoomPctLabel');
+    if (el) el.textContent = `${Math.round(runtime.zoom * 100)}%`;
+    const pb = document.getElementById('panModeBtn');
+    if (pb) pb.classList.toggle('active', runtime.panMode);
+  }
+  function setCameraZoom(nextZoom) {
+    runtime.zoom = clamp(nextZoom, 0.75, 3.2);
+    if (runtime.zoom <= 1.02) { runtime.panX = 0; runtime.panY = 0; }
+    else {
+      const limX = runtime.w * 0.45 * runtime.zoom;
+      const limY = runtime.h * 0.45 * runtime.zoom;
+      runtime.panX = clamp(runtime.panX, -limX, limX);
+      runtime.panY = clamp(runtime.panY, -limY, limY);
+    }
+    updateZoomLabel();
+  }
+
+  function resizeCanvas() {
+    const wrap = document.getElementById('stageWrap');
+    const r = wrap.getBoundingClientRect();
+    if (r.width < 10 || r.height < 10) return;
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    runtime.w = Math.round(r.width);
+    runtime.h = Math.round(r.height);
+    runtime.cx = runtime.w * 0.5;
+    runtime.cy = runtime.h * 0.52;
+    const targetW = Math.round(runtime.w * dpr);
+    const targetH = Math.round(runtime.h * dpr);
+    if (canvas.width !== targetW || canvas.height !== targetH) {
+      canvas.width = targetW;
+      canvas.height = targetH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  }
+  window.addEventListener('resize', resizeCanvas);
+  if (typeof ResizeObserver !== 'undefined') {
+    new ResizeObserver(() => resizeCanvas()).observe(document.getElementById('stageWrap'));
+  }
+
+  function drawShowcaseBg(c, w, h, bgId) {
+    const bg = BACKGROUNDS.find(b => b.id === bgId) || BACKGROUNDS[0];
+    const g = c.createLinearGradient(0, 0, 0, h);
+    g.addColorStop(0, bg.top); g.addColorStop(1, bg.bot);
+    c.fillStyle = g; c.fillRect(0, 0, w, h);
+
+    if (bgId === 'worktable') {
+      c.save();
+      c.strokeStyle = 'rgba(138, 110, 88, 0.13)'; c.lineWidth = 1;
+      for (let x = (w % 28) * 0.5; x < w; x += 28) { c.beginPath(); c.moveTo(x, 0); c.lineTo(x, h); c.stroke(); }
+      for (let y = (h % 28) * 0.5; y < h; y += 28) { c.beginPath(); c.moveTo(0, y); c.lineTo(w, y); c.stroke(); }
+      c.strokeStyle = 'rgba(138, 110, 88, 0.25)'; c.lineWidth = 1.5; c.strokeRect(12, 12, w - 24, h - 24);
+      c.restore();
+    } else if (bgId === 'berry_picnic') {
+      c.save(); c.fillStyle = 'rgba(232, 168, 182, 0.18)';
+      for (let x = 0; x < w; x += 36) c.fillRect(x, 0, 14, h);
+      for (let y = 0; y < h; y += 36) c.fillRect(0, y, w, 14);
+      c.restore();
+    } else if (bgId === 'star_box') {
+      c.save();
+      for (let i = 0; i < 28; i++) {
+        c.fillStyle = i % 3 === 0 ? 'rgba(255, 238, 180, 0.8)' : 'rgba(210, 228, 255, 0.55)';
+        const sx = ((i * 89 + 37) % Math.max(100, Math.floor(w - 20))) + 10;
+        const sy = ((i * 67 + 23) % Math.max(100, Math.floor(h - 20))) + 10;
+        drawStarPath(c, sx, sy, 4, (i % 3) + 2.2, 1); c.fill();
+      }
+      c.restore();
+    }
+  }
+
+  function ensureCraftSamples() {
+    const pts = generateSmoothHeadPoints(state.body, 1.08);
+    if (state.craft.cutSamples.length !== pts.length) {
+      state.craft.cutSamples = pts.map(() => state.craft.cutProgress >= 0.85);
+    }
+    if (state.craft.sewSamples.length !== pts.length) {
+      state.craft.sewSamples = pts.map((_, i) => (i >= 20 && i <= 28) ? false : state.craft.sewProgress >= 0.85);
+    }
+  }
+
+  function renderScene() {
+    const w = runtime.w, h = runtime.h, cx = runtime.cx, cy = runtime.cy;
+    const fit = getBaseFitScale();
+    ctx.clearRect(0, 0, w, h);
+    drawShowcaseBg(ctx, w, h, state.step === 5 ? state.showcase.background : 'worktable');
+    ensureCraftSamples();
+
+    // 统一舞台缩放与平移摄像机矩阵（所有步骤皆可无损放大至 320% 精细绘制）
+    ctx.save();
+    ctx.translate(cx + runtime.panX, cy + runtime.panY);
+    ctx.scale(runtime.zoom * fit, runtime.zoom * fit);
+    ctx.translate(-cx, -cy);
+
+    if (state.step === 0) {
+      // 1. Tomodachi 捏脸定稿（纯净裸娃脸型与精绣五官，不遮挡额头与脸廓）
+      drawFullDoll(ctx, cx, cy + 16, 1.0, 0, false, false);
+      if (state.subTab === 'sculpt') {
+        const j = getSkeletonJoints(state.body.bodyType === 'slender');
+        const r = state.sculptUI.radius * j.faceScale;
+        ctx.save();
+        ctx.strokeStyle = 'rgba(196, 111, 127, 0.72)';
+        ctx.fillStyle = 'rgba(196, 111, 127, 0.08)';
+        ctx.lineWidth = 1.6 / Math.max(1, runtime.zoom);
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath(); ctx.arc(runtime.pointerPos.x, runtime.pointerPos.y, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+        if (state.sculptUI.symmetry) {
+          const mx = cx - (runtime.pointerPos.x - cx);
+          ctx.strokeStyle = 'rgba(109, 147, 129, 0.58)';
+          ctx.beginPath(); ctx.arc(mx, runtime.pointerPos.y, r, 0, Math.PI * 2); ctx.stroke();
+        }
+        ctx.restore();
+      } else if (runtime.pointerDown && (runtime.pointerMode === 'drag-eye' || runtime.pointerMode === 'drag-brow' || runtime.pointerMode === 'drag-mouth')) {
+        const j = getSkeletonJoints(state.body.bodyType === 'slender');
+        const headY = cy + 16 + j.actualHeadY;
+        const sc = j.faceScale, f = state.face;
+        let hx = cx, hy = headY;
+        if (runtime.pointerMode === 'drag-eye') { hx = cx + f.eyeSpacing * sc; hy = headY + f.eyeY * sc; }
+        else if (runtime.pointerMode === 'drag-brow') { hx = cx - f.browSpacing * sc; hy = headY + (f.eyeY + f.browY) * sc; }
+        else { hx = cx; hy = headY + f.mouthY * sc; }
+        ctx.save();
+        ctx.strokeStyle = 'rgba(196, 111, 127, 0.72)'; ctx.lineWidth = 1.5 / Math.max(1, runtime.zoom);
+        ctx.setLineDash([4, 3]);
+        ctx.beginPath(); ctx.arc(hx, hy, 18, 0, Math.PI * 2); ctx.stroke();
+        ctx.restore();
+      }
+    } else if (state.step === 1) {
+      // 2. 裁布 & 竹绣绷对称刺绣
+      ctx.save(); ctx.translate(cx, cy);
+      if (state.subTab === 'cut') {
+        const outer = generateSmoothHeadPoints(state.body, 1.08);
+        const inner = generateSmoothHeadPoints(state.body, 0.94);
+        ctx.fillStyle = state.body.skinColor; ctx.strokeStyle = '#C4B09B'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.roundRect(-142, -138, 284, 276, 10); ctx.fill(); ctx.stroke();
+        fillPlushShape(ctx, outer, state.body.skinColor, state.body.fabricType, 0);
+        traceSmoothClosedCurve(ctx, inner);
+        ctx.strokeStyle = 'rgba(196,111,127,0.45)'; ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); ctx.stroke(); ctx.setLineDash([]);
+        outer.forEach((p, i) => {
+          const nxt = outer[(i + 1) % outer.length];
+          const done = state.craft.cutSamples[i];
+          ctx.strokeStyle = done ? '#433128' : 'rgba(164, 141, 126, 0.6)';
+          ctx.lineWidth = done ? 3 : 1.6; ctx.setLineDash(done ? [] : [4, 4]);
+          ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nxt.x, nxt.y); ctx.stroke();
+        });
+        ctx.setLineDash([]);
+        ctx.fillStyle = '#433128'; ctx.font = '800 12px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(`沿外圈虚线滑动裁剪 · ${Math.round(state.craft.cutProgress * 100)}%`, 0, 122);
+      } else {
+        // 竹制绣绷
+        ctx.fillStyle = '#C9A276'; ctx.strokeStyle = '#785636'; ctx.lineWidth = 2;
+        ctx.fillRect(-16, -152, 32, 14); ctx.strokeRect(-16, -152, 32, 14);
+        ctx.strokeStyle = '#D6B388'; ctx.lineWidth = 11;
+        ctx.beginPath(); ctx.arc(0, 0, 134, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#8C6844'; ctx.lineWidth = 1.8;
+        ctx.beginPath(); ctx.arc(0, 0, 140, 0, Math.PI * 2); ctx.stroke();
+        const headPts = generateSmoothHeadPoints(state.body, 1.0);
+        fillPlushShape(ctx, headPts, state.body.skinColor, state.body.fabricType, 12);
+        if (state.craft.mirrorEmbroidery) {
+          ctx.strokeStyle = 'rgba(196, 111, 127, 0.25)'; ctx.setLineDash([4, 4]);
+          ctx.beginPath(); ctx.moveTo(0, -100); ctx.lineTo(0, 100); ctx.stroke(); ctx.setLineDash([]);
+        }
+        ctx.save(); traceSmoothClosedCurve(ctx, headPts); ctx.clip();
+        drawFaceAll(ctx, state.face, state.craft, 1.0, true);
+        ctx.restore();
+      }
+      ctx.restore();
+    } else if (state.step === 2) {
+      // 3. 缝合翻面 + 弹性塞棉（真实 rAF 翻面与 Q 弹动画）
+      ctx.save(); ctx.translate(cx, cy);
+      const pts = generateSmoothHeadPoints(state.body, 1.0);
+      if (state.subTab === 'sew') {
+        if (state.craft.turned) {
+          const flipX = runtime.flipAnim > 0.01 ? Math.max(0.08, Math.abs(Math.cos(runtime.flipAnim * Math.PI))) : 1;
+          ctx.scale(flipX, 1);
+          fillPlushShape(ctx, pts, state.body.skinColor, state.body.fabricType, 28);
+          ctx.save(); traceSmoothClosedCurve(ctx, pts); ctx.clip();
+          drawFaceAll(ctx, state.face, state.craft, 1.0, true);
+          ctx.restore();
+          ctx.fillStyle = '#4B7A66'; ctx.font = '800 12px sans-serif'; ctx.textAlign = 'center';
+          ctx.fillText('已由返口翻至正面，可切换“塞棉”', 0, 118);
+        } else {
+          fillPlushShape(ctx, pts, state.body.skinColor, state.body.fabricType, 0);
+          ctx.save();
+          if (!state.craft.aligned) ctx.translate(runtime.unalignedOffset.x, runtime.unalignedOffset.y);
+          fillPlushShape(ctx, pts, state.body.skinColor, state.body.fabricType, 0);
+          if (!state.craft.aligned) {
+            ctx.fillStyle = '#B85D6C'; ctx.font = '800 12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('拖动上层布片对齐（或点底部对齐）', 0, 0);
+          } else {
+            pts.forEach((p, i) => {
+              const nxt = pts[(i + 1) % pts.length];
+              const isOpen = i >= 20 && i <= 28;
+              ctx.strokeStyle = isOpen ? '#6D9381' : (state.craft.sewSamples[i] ? state.craft.sewThreadColor : 'rgba(117,91,78,0.35)');
+              ctx.lineWidth = isOpen ? 3 : (state.craft.sewSamples[i] ? 2.8 : 1.5);
+              ctx.setLineDash(isOpen ? [3, 5] : [6, 3]);
+              ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(nxt.x, nxt.y); ctx.stroke();
+            });
+            ctx.setLineDash([]);
+            ctx.fillStyle = '#433128'; ctx.font = '800 12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(`沿虚线走针缝合（留底口）· ${Math.round(state.craft.sewProgress * 100)}%`, 0, 0);
+          }
+          ctx.restore();
+        }
+      } else {
+        // 塞棉蓬松 Q 弹动效
+        const bounce = 1 + Math.sin(runtime.puffBounce * Math.PI) * 0.08 + (state.craft.fillLevel / 100) * 0.06;
+        ctx.scale(bounce, 2 - bounce * 0.99);
+        fillPlushShape(ctx, pts, state.body.skinColor, state.body.fabricType, state.craft.fillLevel);
+        ctx.save(); traceSmoothClosedCurve(ctx, pts); ctx.clip();
+        drawFaceAll(ctx, state.face, state.craft, 1.0, true);
+        ctx.restore();
+        ctx.fillStyle = state.craft.closed ? '#4B7A66' : '#755B4E';
+        ctx.font = '800 12px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(state.craft.closed ? '已塞满高弹PP棉并藏针封口' : `点击娃头塞入PP棉 · 饱满度 ${state.craft.fillLevel}%`, 0, 122);
+      }
+      ctx.restore();
+    } else {
+      // 4. 发型 / 5. 娃衣 / 6. 展示（在“绑骨摆姿”下显示可拖拽四肢骨架）
+      const turn = state.step === 5 ? (state.showcase.turnAngle || 0) : 0;
+      drawFullDoll(ctx, cx, cy + 16, 1.0, turn, true, true, true);
+      if (state.step === 5 && state.subTab === 'pose' && state.pose.animClip === 'static') {
+        drawSkeletonOverlay(ctx, cx, cy);
+      }
+    }
+    // 橡皮擦笔刷预览圆环
+    const isErasingUI =
+      ((state.step === 0 && state.subTab === 'draw_face') || (state.step === 1 && state.subTab === 'emb')) && state.craft.embTool === 'eraser' ||
+      (state.step === 3 && state.subTab === 'draw_hair' && state.hairDraw.tool === 'eraser') ||
+      (state.step === 4 && state.subTab === 'draw_cloth' && state.outfitDraw.tool === 'eraser') ||
+      (state.step === 5 && state.subTab === 'draw_acc' && state.accDraw.tool === 'eraser');
+    if (isErasingUI) {
+      ctx.save();
+      ctx.strokeStyle = 'rgba(196, 111, 127, 0.85)'; ctx.fillStyle = 'rgba(255, 255, 255, 0.32)';
+      ctx.lineWidth = 1.5 / Math.max(1, runtime.zoom); ctx.setLineDash([4, 3]);
+      ctx.beginPath(); ctx.arc(runtime.pointerPos.x, runtime.pointerPos.y, 12, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      ctx.restore();
+    }
+    ctx.restore(); // 结束摄像机缩放/平移矩阵
+  }
+
+
+  function animLoop(ts) {
+    if (runtime.flipAnim > 0) runtime.flipAnim = Math.max(0, runtime.flipAnim - 0.055);
+    if (runtime.puffBounce > 0) runtime.puffBounce = Math.max(0, runtime.puffBounce - 0.07);
+    stepSpineRigAnimation((ts || performance.now()) * 0.001);
+    renderScene();
+    requestAnimationFrame(animLoop);
+  }
+
+  /* =========================================================================
+   * 7. 手绘 Canvas 缩略图生成器（0 Emoji，告别纯文字盲选）
+   * ========================================================================= */
+  function makeThumbCanvas(kind, item) {
+    const cvs = document.createElement('canvas');
+    cvs.width = 40; cvs.height = 32;
+    const c = cvs.getContext('2d');
+    c.save(); c.translate(20, 16);
+    if (item.id === 'none') {
+      c.strokeStyle = '#A48D7E'; c.lineWidth = 1.6; c.setLineDash([3, 3]);
+      c.beginPath(); c.arc(0, 0, 9, 0, Math.PI * 2); c.stroke();
+      c.setLineDash([]); c.beginPath(); c.moveTo(-6, -6); c.lineTo(6, 6); c.stroke();
+    } else if (kind === 'eye') {
+      const f = { ...state.face, eyeStyle: item.id, eyeSpacing: 0, eyeY: 0, eyeSize: 0.72, browStyle: 'none', noseStyle: 'none', mouthStyle: 'none', blushStyle: 'none', marks: {} };
+      // 只画单眼
+      c.save();
+      if (item.id === 'smile') { c.strokeStyle = f.eyeColorL; c.lineWidth = 2.6; c.beginPath(); c.arc(0, 4, 9, Math.PI * 1.12, Math.PI * 1.88); c.stroke(); }
+      else if (item.id === 'closed') { c.strokeStyle = f.eyeColorL; c.lineWidth = 2.4; c.beginPath(); c.arc(0, -3, 9, Math.PI * 0.14, Math.PI * 0.86); c.stroke(); }
+      else if (item.id === 'button') { c.fillStyle = f.eyeColorL; c.beginPath(); c.arc(0, 0, 6, 0, Math.PI * 2); c.fill(); c.fillStyle = '#FFF'; c.beginPath(); c.arc(-2, -2, 2, 0, Math.PI * 2); c.fill(); }
+      else {
+        const rx = item.id === 'fox' ? 11 : 9.5, ry = item.id === 'fox' ? 6.5 : 9.5;
+        c.fillStyle = f.eyeColorL; c.beginPath(); c.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); c.fill();
+        c.fillStyle = shadeHex(f.eyeColorL, -0.5); c.beginPath(); c.arc(0, 0.5, 4, 0, Math.PI * 2); c.fill();
+        c.fillStyle = '#FFF'; c.beginPath(); c.arc(-3, -3, 2.5, 0, Math.PI * 2); c.fill();
+        if (item.id === 'star') { drawStarPath(c, 0, 0, 5, 4.5, 2); c.fill(); }
+      }
+      c.restore();
+    } else if (kind === 'brow') {
+      c.strokeStyle = state.face.browColor; c.fillStyle = state.face.browColor; c.lineWidth = 2.4; c.lineCap = 'round';
+      if (item.id === 'dot') { c.beginPath(); c.ellipse(0, 0, 5, 3.8, 0, 0, Math.PI * 2); c.fill(); }
+      else if (item.id === 'straight') { c.beginPath(); c.moveTo(-11, 0); c.lineTo(11, 0); c.stroke(); }
+      else if (item.id === 'worried') { c.beginPath(); c.moveTo(-10, -4); c.quadraticCurveTo(0, -1, 10, 4); c.stroke(); }
+      else if (item.id === 'sharp') { c.beginPath(); c.moveTo(-11, 3); c.lineTo(2, -3); c.lineTo(11, 0); c.stroke(); }
+      else if (item.id === 'raised') { c.beginPath(); c.moveTo(-10, 2); c.quadraticCurveTo(2, -6, 11, -1); c.stroke(); }
+      else { c.beginPath(); c.moveTo(-11, 2); c.quadraticCurveTo(0, -4, 11, 2); c.stroke(); }
+    } else if (kind === 'mouth') {
+      c.strokeStyle = state.face.mouthColor; c.fillStyle = state.face.mouthColor; c.lineWidth = 2.2; c.lineCap = 'round';
+      if (item.id === 'cat') { c.beginPath(); c.arc(-5, -1, 5, 0.2, 2.9); c.arc(5, -1, 5, 0.2, 2.9); c.stroke(); }
+      else if (item.id === 'pout') { c.beginPath(); c.ellipse(0, 0, 5.5, 3.5, 0, 0, Math.PI * 2); c.fill(); }
+      else if (item.id === 'happy') { c.beginPath(); c.arc(0, -3, 8, 0, Math.PI); c.closePath(); c.fill(); }
+      else if (item.id === 'sad') { c.beginPath(); c.arc(0, 6, 7.5, Math.PI * 1.15, Math.PI * 1.85); c.stroke(); }
+      else if (item.id === 'oh') { c.beginPath(); c.ellipse(0, 0, 4, 5.5, 0, 0, Math.PI * 2); c.stroke(); }
+      else { c.beginPath(); c.arc(0, -3, 7.5, 0.3, Math.PI - 0.3); c.stroke(); }
+    } else if (kind === 'acc') {
+      c.scale(0.36, 0.36);
+      drawAccessoryItem(c, { ...item, x: 0, y: 0, scale: 1, rot: 0 }, 0, false);
+    }
+    c.restore();
+    return cvs;
+  }
+
+  /* =========================================================================
+   * 8. 底部 Tomodachi 级动态面板（自由色盘 + 连续滑块 + 缩略图）
+   * ========================================================================= */
+  const STEP_TABS = {
+    0: [
+      { id: 'face',      name: '脸型肤色' },
+      { id: 'sculpt',    name: '推捏塑形' },
+      { id: 'ears',      name: '体型兽耳' },
+      { id: 'eyes',      name: '眼睛异瞳' },
+      { id: 'brows',     name: '眉毛精雕' },
+      { id: 'mouth',     name: '鼻嘴腮红' },
+      { id: 'draw_face', name: '自画五官' },
+      { id: 'marks',     name: '面部印记' }
+    ],
+    1: [
+      { id: 'cut', name: '布料与裁剪' },
+      { id: 'emb', name: '绣绷自由绣' }
+    ],
+    2: [
+      { id: 'sew',   name: '对齐与缝翻' },
+      { id: 'stuff', name: '充棉与封口' }
+    ],
+    3: [
+      { id: 'back',      name: '后发' },
+      { id: 'bang',      name: '刘海' },
+      { id: 'side',      name: '鬓角呆毛' },
+      { id: 'color',     name: '双色染坊' },
+      { id: 'draw_hair', name: '手绘头发' }
+    ],
+    4: [
+      { id: 'dress',      name: '连衣裙' },
+      { id: 'top',        name: '上衣' },
+      { id: 'bottom',     name: '下装鞋袜' },
+      { id: 'pattern',    name: '印花配色' },
+      { id: 'draw_cloth', name: '手绘娃衣' }
+    ],
+    5: [
+      { id: 'pose',     name: '绑骨摆姿' },
+      { id: 'acc',      name: '头饰配件' },
+      { id: 'draw_acc', name: '手绘首饰' },
+      { id: 'bg',       name: '转向背景' }
+    ]
+  };
+
+  function addColorRow(container, label, currentHex, swatches, onChange) {
+    const row = document.createElement('div'); row.className = 'color-row';
+    const lbl = document.createElement('span'); lbl.className = 'color-row-label'; lbl.textContent = label;
+    row.appendChild(lbl);
+
+    // 任意自由色盘取色器
+    const wrap = document.createElement('label'); wrap.className = 'color-picker-wrap'; wrap.title = '打开自由色盘';
+    const dot = document.createElement('span'); dot.className = 'color-picker-dot'; dot.style.background = currentHex;
+    const inp = document.createElement('input'); inp.type = 'color'; inp.value = currentHex;
+    inp.oninput = (e) => { dot.style.background = e.target.value; onChange(e.target.value, false); };
+    inp.onchange = (e) => { onChange(e.target.value, true); historyMgr.snapshot(); scheduleSave(); };
+    wrap.appendChild(dot); wrap.appendChild(inp);
+    row.appendChild(wrap);
+
+    swatches.forEach(hex => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = `swatch-btn ${currentHex.toLowerCase() === hex.toLowerCase() ? 'active' : ''}`;
+      b.style.background = hex;
+      b.onclick = () => { onChange(hex, true); sfx.playPop(580); historyMgr.snapshot(); scheduleSave(); renderDock(); };
+      row.appendChild(b);
+    });
+    container.appendChild(row);
+  }
+
+  function addSliders(container, specs) {
+    const grid = document.createElement('div'); grid.className = 'slider-grid';
+    specs.forEach(sp => {
+      const it = document.createElement('div'); it.className = 'slider-item';
+      const lbl = document.createElement('span'); lbl.className = 'slider-lbl'; lbl.textContent = sp.label;
+      const inp = document.createElement('input');
+      inp.type = 'range'; inp.min = sp.min; inp.max = sp.max; inp.step = sp.step || 0.01; inp.value = sp.val;
+      inp.oninput = (e) => sp.onInput(parseFloat(e.target.value));
+      inp.onchange = () => { historyMgr.snapshot(); scheduleSave(); };
+      it.appendChild(lbl); it.appendChild(inp);
+      grid.appendChild(it);
+    });
+    container.appendChild(grid);
+  }
+
+  function addCard(scroll, { title, sub, active, thumb, onClick }) {
+    const card = document.createElement('div');
+    card.className = `option-card ${active ? 'active' : ''}`;
+    if (thumb) card.appendChild(thumb);
+    const t = document.createElement('div'); t.className = 'opt-title'; t.textContent = title; card.appendChild(t);
+    if (sub) { const s = document.createElement('div'); s.className = 'opt-sub'; s.textContent = sub; card.appendChild(s); }
+    card.onclick = () => { onClick(); sfx.playPop(540); historyMgr.snapshot(); scheduleSave(); renderDock(); };
+    scroll.appendChild(card);
+  }
+
+  // 统一专业手绘工具栏（画笔 / 填充笔 / 喷枪+强度阈值 / 正圆 / 椭圆 / 珠点 / 取色器 / 橡皮擦）
+  function renderProDrawToolbar(body, cfg) {
+    const curTool = cfg.getTool();
+    const row = document.createElement('div'); row.className = 'color-row';
+    const items = [
+      ...(cfg.prefixChips || []),
+      { lbl: '画笔', act: curTool === 'line', fn: () => cfg.setTool('line') },
+      { lbl: '填充笔', act: curTool === 'fill', fn: () => cfg.setTool('fill') },
+      { lbl: '喷枪', act: curTool === 'airbrush', fn: () => cfg.setTool('airbrush') },
+      { lbl: '正圆', act: curTool === 'circle', fn: () => cfg.setTool('circle') },
+      { lbl: '椭圆', act: curTool === 'ellipse', fn: () => cfg.setTool('ellipse') },
+      { lbl: '珠点', act: curTool === 'dot', fn: () => cfg.setTool('dot') },
+      ...(cfg.extraChips || []),
+      { lbl: '取色器', act: curTool === 'eyedropper', fn: () => { cfg.setTool('eyedropper'); showToast('点击画布任意位置吸取颜色'); } },
+      { lbl: '橡皮擦', act: curTool === 'eraser', fn: () => cfg.setTool('eraser') },
+      { lbl: cfg.getMirror() ? '对称：开' : '对称：关', act: cfg.getMirror(), fn: () => cfg.setMirror(!cfg.getMirror()) },
+      { lbl: '撤回', act: false, fn: cfg.onUndo },
+      { lbl: '清空', act: false, fn: cfg.onClear }
+    ];
+    items.forEach(x => {
+      const btn = document.createElement('button'); btn.type = 'button';
+      btn.className = `toggle-chip ${x.act ? 'active' : ''}`;
+      btn.textContent = x.lbl;
+      btn.onclick = () => { x.fn(); sfx.playPop(); historyMgr.snapshot(); renderDock(); };
+      row.appendChild(btn);
+    });
+    body.appendChild(row);
+
+    const sliders = [{ label: '粗细', min: cfg.minW || 1.2, max: cfg.maxW || 14, step: 0.3, val: cfg.getWidth(), onInput: cfg.setWidth }];
+    if (curTool === 'airbrush') {
+      sliders.push({ label: '喷枪强', min: 0.06, max: 1.0, step: 0.02, val: cfg.getStrength(), onInput: cfg.setStrength });
+    }
+    addSliders(body, sliders);
+    addColorRow(body, cfg.colorLabel || '画笔色', cfg.getColor(), cfg.swatches || CLOTH_SWATCHES, cfg.setColor);
+  }
+
+  function pickCanvasColorAt(sp) {
+    try {
+      const dprX = canvas.width / Math.max(1, runtime.w);
+      const dprY = canvas.height / Math.max(1, runtime.h);
+      const px = clamp(Math.round(sp.x * dprX), 0, canvas.width - 1);
+      const py = clamp(Math.round(sp.y * dprY), 0, canvas.height - 1);
+      const d = ctx.getImageData(px, py, 1, 1).data;
+      return rgbToHex(d[0], d[1], d[2]);
+    } catch (_) { return '#C46F7F'; }
+  }
+
+  function renderDock() {
+    const tabs = STEP_TABS[state.step];
+    if (!tabs.some(t => t.id === state.subTab)) state.subTab = tabs[0].id;
+
+    document.querySelectorAll('#stepperBar .step-item').forEach((el, i) => {
+      el.classList.toggle('active', i === state.step);
+      el.classList.toggle('done', i < state.step);
+    });
+
+    const subTabsEl = document.getElementById('subTabs');
+    subTabsEl.innerHTML = '';
+    tabs.forEach(t => {
+      const b = document.createElement('button'); b.type = 'button';
+      b.className = `sub-tab ${state.subTab === t.id ? 'active' : ''}`;
+      b.textContent = t.name;
+      b.onclick = () => { state.subTab = t.id; sfx.playPop(520); renderDock(); };
+      subTabsEl.appendChild(b);
+    });
+
+    const body = document.getElementById('dockBody');
+    body.innerHTML = '';
+    const f = state.face, b = state.body, tab = state.subTab;
+
+    // 顶部 HUD 与快捷按钮
+    const statusPill = document.getElementById('stageStatusPill');
+    const quickBtn = document.getElementById('stageQuickBtn');
+    const ctxBtn = document.getElementById('contextActionBtn');
+    ctxBtn.style.display = 'none';
+
+    if (state.step === 0) {
+      statusPill.textContent = '自由捏脸 · 支持色盘与连续微调';
+      quickBtn.style.display = 'inline-block'; quickBtn.textContent = '随机灵感';
+      quickBtn.onclick = randomizeDoll;
+
+      if (tab === 'face') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        FACE_PRESETS.forEach(fp => addCard(sc, {
+          title: fp.name,
+          active: Math.abs(b.faceWidth - fp.faceWidth) < 0.02 && Math.abs(b.chinRound - fp.chinRound) < 0.05,
+          onClick: () => { b.faceWidth = fp.faceWidth; b.cheekPlump = fp.cheekPlump; b.chinRound = fp.chinRound; }
+        }));
+        body.appendChild(sc);
+        addSliders(body, [
+          { label: '脸宽', min: 0.88, max: 1.14, step: 0.01, val: b.faceWidth, onInput: v => b.faceWidth = v },
+          { label: '腮肉', min: 0, max: 1, step: 0.02, val: b.cheekPlump, onInput: v => b.cheekPlump = v },
+          { label: '下巴', min: 0.15, max: 1, step: 0.02, val: b.chinRound, onInput: v => b.chinRound = v }
+        ]);
+        addColorRow(body, '肤色盘', b.skinColor, SKIN_SWATCHES, (hex) => { b.skinColor = hex; });
+      } else if (tab === 'sculpt') {
+        statusPill.textContent = 'Nomad 推捏笔刷：在脸廓边缘直接推拉塑形';
+        const ui = state.sculptUI;
+        const row = document.createElement('div'); row.className = 'color-row';
+        [
+          { id: 'move', lbl: '推拉 Move' },
+          { id: 'inflate', lbl: '鼓胀变圆' },
+          { id: 'pinch', lbl: '收窄显瘦' },
+          { id: 'smooth', lbl: '顺滑抹平' }
+        ].forEach(br => {
+          const btn = document.createElement('button'); btn.type = 'button';
+          btn.className = `toggle-chip ${ui.brush === br.id ? 'active' : ''}`;
+          btn.textContent = br.lbl; btn.onclick = () => { ui.brush = br.id; sfx.playPop(); renderDock(); };
+          row.appendChild(btn);
+        });
+        const symBtn = document.createElement('button'); symBtn.type = 'button';
+        symBtn.className = `toggle-chip ${ui.symmetry ? 'active' : ''}`;
+        symBtn.textContent = ui.symmetry ? '对称：开' : '对称：关';
+        symBtn.onclick = () => { ui.symmetry = !ui.symmetry; renderDock(); };
+        row.appendChild(symBtn);
+        const rstBtn = document.createElement('button'); rstBtn.type = 'button'; rstBtn.className = 'toggle-chip';
+        rstBtn.textContent = '复位脸型';
+        rstBtn.onclick = () => { b.sculptOffsets = Array.from({ length: 56 }, () => ({ dx: 0, dy: 0 })); historyMgr.snapshot(); showToast('已复位脸型推捏'); };
+        row.appendChild(rstBtn);
+        body.appendChild(row);
+        addSliders(body, [{ label: '笔刷', min: 18, max: 72, step: 2, val: ui.radius, onInput: v => ui.radius = v }]);
+      } else if (tab === 'draw_face') {
+        statusPill.textContent = '自画五官：支持画笔/填充笔/喷枪/正圆/椭圆/取色器/橡皮';
+        renderProDrawToolbar(body, {
+          getTool: () => state.craft.embTool,
+          setTool: v => state.craft.embTool = v,
+          getMirror: () => state.craft.mirrorEmbroidery,
+          setMirror: v => state.craft.mirrorEmbroidery = v,
+          getWidth: () => state.craft.embWidth,
+          setWidth: v => state.craft.embWidth = v,
+          getStrength: () => state.craft.airStrength ?? 0.35,
+          setStrength: v => state.craft.airStrength = v,
+          getColor: () => state.craft.embColor,
+          setColor: v => state.craft.embColor = v,
+          colorLabel: '画笔色',
+          swatches: ['#C46370', '#3B2B26', '#E07A88', '#4F77AD', '#D99B38', '#FFFFFF'],
+          onUndo: () => state.craft.freeStrokes.pop(),
+          onClear: () => { state.craft.freeStrokes = []; },
+          extraChips: [{ lbl: '平针绣', act: state.craft.embTool === 'pen', fn: () => state.craft.embTool = 'pen' }]
+        });
+      } else if (tab === 'ears') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        addCard(sc, { title: '奶团Q版', sub: '1:1.5', active: b.bodyType === 'chibi', onClick: () => b.bodyType = 'chibi' });
+        addCard(sc, { title: '修长比例', sub: '1:1.8', active: b.bodyType === 'slender', onClick: () => b.bodyType = 'slender' });
+        EAR_TYPES.forEach(er => addCard(sc, { title: er.name, active: b.ears === er.id, onClick: () => b.ears = er.id }));
+        body.appendChild(sc);
+      } else if (tab === 'eyes') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        EYE_STYLES.forEach(ey => addCard(sc, { title: ey.name, thumb: makeThumbCanvas('eye', ey), active: f.eyeStyle === ey.id, onClick: () => f.eyeStyle = ey.id }));
+        body.appendChild(sc);
+        addSliders(body, [
+          { label: '大小', min: 0.72, max: 1.32, step: 0.02, val: f.eyeSize, onInput: v => f.eyeSize = v },
+          { label: '眼距', min: 28, max: 54, step: 1, val: f.eyeSpacing, onInput: v => f.eyeSpacing = v },
+          { label: '眼高', min: -12, max: 20, step: 1, val: f.eyeY, onInput: v => f.eyeY = v },
+          { label: '眼角', min: -0.35, max: 0.35, step: 0.02, val: f.eyeTilt, onInput: v => f.eyeTilt = v }
+        ]);
+        const subRow = document.createElement('div'); subRow.className = 'color-row';
+        const hetBtn = document.createElement('button'); hetBtn.type = 'button';
+        hetBtn.className = `toggle-chip ${f.heterochromia ? 'active' : ''}`;
+        hetBtn.textContent = f.heterochromia ? '异瞳：开' : '异瞳：关';
+        hetBtn.onclick = () => { f.heterochromia = !f.heterochromia; if (f.heterochromia && f.eyeColorR === f.eyeColorL) f.eyeColorR = '#4F77AD'; renderDock(); };
+        subRow.appendChild(hetBtn);
+        LASH_STYLES.forEach(ls => {
+          const lb = document.createElement('button'); lb.type = 'button'; lb.className = `toggle-chip ${f.lashStyle === ls.id ? 'active' : ''}`;
+          lb.textContent = ls.name; lb.onclick = () => { f.lashStyle = ls.id; renderDock(); }; subRow.appendChild(lb);
+        });
+        HIGHLIGHT_STYLES.forEach(hl => {
+          const hb = document.createElement('button'); hb.type = 'button'; hb.className = `toggle-chip ${f.highlightStyle === hl.id ? 'active' : ''}`;
+          hb.textContent = hl.name; hb.onclick = () => { f.highlightStyle = hl.id; renderDock(); }; subRow.appendChild(hb);
+        });
+        body.appendChild(subRow);
+        addColorRow(body, f.heterochromia ? '左瞳色' : '瞳色盘', f.eyeColorL, EYE_SWATCHES, hex => { f.eyeColorL = hex; if (!f.heterochromia) f.eyeColorR = hex; });
+        if (f.heterochromia) addColorRow(body, '右瞳色', f.eyeColorR, EYE_SWATCHES, hex => { f.eyeColorR = hex; });
+      } else if (tab === 'brows') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        BROW_STYLES.forEach(br => addCard(sc, { title: br.name, thumb: makeThumbCanvas('brow', br), active: f.browStyle === br.id, onClick: () => f.browStyle = br.id }));
+        body.appendChild(sc);
+        addSliders(body, [
+          { label: '眉高', min: -38, max: -14, step: 1, val: f.browY, onInput: v => f.browY = v },
+          { label: '眉距', min: 26, max: 54, step: 1, val: f.browSpacing, onInput: v => f.browSpacing = v },
+          { label: '倾角', min: -0.4, max: 0.4, step: 0.02, val: f.browTilt, onInput: v => f.browTilt = v },
+          { label: '粗细', min: 1.4, max: 4.6, step: 0.1, val: f.browThickness, onInput: v => f.browThickness = v }
+        ]);
+        addColorRow(body, '眉色盘', f.browColor, HAIR_SWATCHES.slice(0, 7), hex => { f.browColor = hex; });
+      } else if (tab === 'mouth') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        MOUTH_STYLES.forEach(m => addCard(sc, { title: m.name, thumb: makeThumbCanvas('mouth', m), active: f.mouthStyle === m.id, onClick: () => f.mouthStyle = m.id }));
+        body.appendChild(sc);
+        const nbRow = document.createElement('div'); nbRow.className = 'color-row';
+        NOSE_STYLES.forEach(ns => {
+          const nb = document.createElement('button'); nb.type = 'button'; nb.className = `toggle-chip ${f.noseStyle === ns.id ? 'active' : ''}`;
+          nb.textContent = '鼻:' + ns.name; nb.onclick = () => { f.noseStyle = ns.id; renderDock(); }; nbRow.appendChild(nb);
+        });
+        BLUSH_STYLES.forEach(bl => {
+          const bb = document.createElement('button'); bb.type = 'button'; bb.className = `toggle-chip ${f.blushStyle === bl.id ? 'active' : ''}`;
+          bb.textContent = bl.name; bb.onclick = () => { f.blushStyle = bl.id; renderDock(); }; nbRow.appendChild(bb);
+        });
+        body.appendChild(nbRow);
+        addSliders(body, [
+          { label: '嘴高', min: 20, max: 46, step: 1, val: f.mouthY, onInput: v => f.mouthY = v },
+          { label: '嘴宽', min: 0.72, max: 1.35, step: 0.02, val: f.mouthScale, onInput: v => f.mouthScale = v },
+          { label: '鼻高', min: 8, max: 24, step: 1, val: f.noseY, onInput: v => f.noseY = v },
+          { label: '腮浓', min: 0.1, max: 0.85, step: 0.03, val: f.blushAlpha, onInput: v => f.blushAlpha = v }
+        ]);
+        addColorRow(body, '唇色', f.mouthColor, ['#C46370', '#E07A88', '#D95353', '#A64D58', '#E89578', '#8C5852'], hex => f.mouthColor = hex);
+        addColorRow(body, '腮红', f.blushColor, ['#EE95A6', '#F4A68C', '#E67A8E', '#F2B8C6', '#D98C9C'], hex => f.blushColor = hex);
+      } else if (tab === 'marks') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        [
+          ['moleL', '左眼泪痣'], ['moleR', '右眼泪痣'], ['freckles', '元气雀斑'],
+          ['bandaid', '脸颊创可贴'], ['huadian', '额头花钿'], ['starCheek', '星芒印记']
+        ].forEach(([k, name]) => addCard(sc, { title: name, active: !!f.marks[k], onClick: () => f.marks[k] = !f.marks[k] }));
+        body.appendChild(sc);
+      }
+    } else if (state.step === 1) {
+      statusPill.textContent = tab === 'cut' ? '择真实绒布并沿虚线裁剪' : '竹绣绷刺绣 · 支持左右对称镜像';
+      quickBtn.style.display = tab === 'cut' ? 'inline-block' : 'none';
+      quickBtn.textContent = '一键裁好';
+      quickBtn.onclick = () => { state.craft.cutSamples = state.craft.cutSamples.map(() => true); state.craft.cutProgress = 1; sfx.playChime(); showToast('纸样裁剪完成！'); };
+
+      if (tab === 'cut') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        FABRIC_TYPES.forEach(ft => addCard(sc, { title: ft.name, sub: ft.sub, active: b.fabricType === ft.id, onClick: () => b.fabricType = ft.id }));
+        body.appendChild(sc);
+      } else {
+        renderProDrawToolbar(body, {
+          getTool: () => state.craft.embTool,
+          setTool: v => state.craft.embTool = v,
+          getMirror: () => state.craft.mirrorEmbroidery,
+          setMirror: v => state.craft.mirrorEmbroidery = v,
+          getWidth: () => state.craft.embWidth,
+          setWidth: v => state.craft.embWidth = v,
+          getStrength: () => state.craft.airStrength ?? 0.35,
+          setStrength: v => state.craft.airStrength = v,
+          getColor: () => state.craft.embColor,
+          setColor: v => state.craft.embColor = v,
+          colorLabel: '绣线色',
+          swatches: ['#C46F7F', '#3B2B26', '#D99B38', '#4F77AD', '#5E997A', '#FFFFFF'],
+          onUndo: () => state.craft.freeStrokes.pop(),
+          onClear: () => { state.craft.freeStrokes = []; },
+          extraChips: [{ lbl: '平针绣', act: state.craft.embTool === 'pen', fn: () => state.craft.embTool = 'pen' }]
+        });
+      }
+    } else if (state.step === 2) {
+      statusPill.textContent = tab === 'sew' ? '对合布片 → 沿线走针 → 翻至正面' : '点击娃头塞入PP棉，蓬松饱满后封口';
+      quickBtn.style.display = 'inline-block';
+      quickBtn.textContent = tab === 'sew' ? '缝好并翻面' : '一键塞满封口';
+      quickBtn.onclick = () => {
+        if (tab === 'sew') {
+          state.craft.aligned = true; state.craft.sewProgress = 1;
+          state.craft.sewSamples = state.craft.sewSamples.map((_, i) => !(i >= 20 && i <= 28));
+          state.craft.turned = true; runtime.flipAnim = 1.0; sfx.playChime(); showToast('已缝合并翻至正面！');
+        } else {
+          state.craft.fillLevel = 100; state.craft.closed = true; runtime.puffBounce = 1.0; sfx.playChime(); showToast('已塞满PP棉并藏针封口！');
+        }
+        renderDock();
+      };
+      if (tab === 'sew') {
+        addColorRow(body, '缝线色', state.craft.sewThreadColor, ['#C46F7F', '#5A4136', '#D4A359', '#6D9381', '#6986AC'], hex => state.craft.sewThreadColor = hex);
+        ctxBtn.style.display = 'inline-block';
+        if (!state.craft.aligned) {
+          ctxBtn.textContent = '对合正反布片';
+          ctxBtn.onclick = () => { state.craft.aligned = true; sfx.playPop(620); renderDock(); };
+        } else if (!state.craft.turned) {
+          ctxBtn.textContent = '由返口翻至正面';
+          ctxBtn.onclick = () => { state.craft.turned = true; runtime.flipAnim = 1.0; sfx.playChime(); renderDock(); };
+        } else {
+          ctxBtn.textContent = '去塞入棉花 ›';
+          ctxBtn.onclick = () => { state.subTab = 'stuff'; renderDock(); };
+        }
+      } else {
+        ctxBtn.style.display = 'inline-block';
+        ctxBtn.textContent = state.craft.fillLevel >= 80 ? '藏针缝合封口' : '塞入一团PP棉';
+        ctxBtn.onclick = () => {
+          if (state.craft.fillLevel < 100) { state.craft.fillLevel = Math.min(100, state.craft.fillLevel + 25); runtime.puffBounce = 1.0; sfx.playStuff(); }
+          else { state.craft.closed = true; sfx.playChime(); showToast('藏针封口完成！'); }
+          renderDock();
+        };
+      }
+    } else if (state.step === 3) {
+      statusPill.textContent = '四层发型自由叠搭 · 支持双色挑染';
+      quickBtn.style.display = 'none';
+      const hr = state.hair;
+      if (tab === 'back') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        HAIR_BACK_STYLES.forEach(x => addCard(sc, { title: x.name, active: hr.backStyle === x.id, onClick: () => hr.backStyle = x.id }));
+        body.appendChild(sc);
+      } else if (tab === 'bang') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        HAIR_BANG_STYLES.forEach(x => addCard(sc, { title: x.name, active: hr.bangStyle === x.id, onClick: () => hr.bangStyle = x.id }));
+        body.appendChild(sc);
+      } else if (tab === 'side') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        HAIR_SIDE_STYLES.forEach(x => addCard(sc, { title: x.name, sub: '鬓角', active: hr.sideStyle === x.id, onClick: () => hr.sideStyle = x.id }));
+        AHOGE_STYLES.forEach(x => addCard(sc, { title: x.name, sub: '呆毛', active: hr.ahogeStyle === x.id, onClick: () => hr.ahogeStyle = x.id }));
+        body.appendChild(sc);
+      } else if (tab === 'color') {
+        addColorRow(body, '主发色', hr.mainColor, HAIR_SWATCHES, hex => hr.mainColor = hex);
+        const r2 = document.createElement('div'); r2.className = 'color-row';
+        const tg = document.createElement('button'); tg.type = 'button'; tg.className = `toggle-chip ${hr.tipEnabled ? 'active' : ''}`;
+        tg.textContent = hr.tipEnabled ? '发尾渐变挑染：开' : '发尾渐变挑染：关';
+        tg.onclick = () => { hr.tipEnabled = !hr.tipEnabled; renderDock(); }; r2.appendChild(tg);
+        body.appendChild(r2);
+        if (hr.tipEnabled) addColorRow(body, '发尾色', hr.tipColor, HAIR_SWATCHES, hex => hr.tipColor = hex);
+      } else if (tab === 'draw_hair') {
+        statusPill.textContent = '手绘头发：支持前/后发层、喷枪、填充笔、图形与取色';
+        const d = state.hairDraw;
+        renderProDrawToolbar(body, {
+          getTool: () => d.tool, setTool: v => d.tool = v,
+          getMirror: () => d.mirror, setMirror: v => d.mirror = v,
+          getWidth: () => d.width, setWidth: v => d.width = v, maxW: 18,
+          getStrength: () => d.airStrength ?? 0.35, setStrength: v => d.airStrength = v,
+          getColor: () => d.color, setColor: v => d.color = v,
+          colorLabel: '发画色', swatches: HAIR_SWATCHES,
+          onUndo: () => (d.layer === 'front' ? hr.customFrontStrokes : hr.customBackStrokes).pop(),
+          onClear: () => { if (d.layer === 'front') hr.customFrontStrokes = []; else hr.customBackStrokes = []; },
+          prefixChips: [
+            { lbl: d.layer === 'front' ? '前发层' : '后发层', act: true, fn: () => d.layer = d.layer === 'front' ? 'back' : 'front' },
+            { lbl: '清预设', act: hr.backStyle === 'none' && hr.bangStyle === 'none', fn: () => { hr.backStyle = 'none'; hr.bangStyle = 'none'; hr.sideStyle = 'none'; hr.ahogeStyle = 'none'; } }
+          ]
+        });
+      }
+    } else if (state.step === 4) {
+      statusPill.textContent = '手工娃衣（自动匹配衣袖与印花色盘）';
+      quickBtn.style.display = 'none';
+      const of = state.outfit;
+      if (tab === 'dress') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        OUTFIT_DRESSES.forEach(d => addCard(sc, { title: d.name, active: of.dress === d.id, onClick: () => { of.dress = d.id; if (d.id !== 'none') of.top = 'none'; } }));
+        body.appendChild(sc);
+      } else if (tab === 'top') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        OUTFIT_TOPS.forEach(t => addCard(sc, { title: t.name, active: of.top === t.id, onClick: () => { of.top = t.id; if (t.id !== 'none') { of.dress = 'none'; if (of.bottom === 'none') of.bottom = 'pleated_skirt'; } } }));
+        body.appendChild(sc);
+      } else if (tab === 'bottom') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        OUTFIT_BOTTOMS.forEach(bt => addCard(sc, { title: bt.name, sub: '下装', active: of.bottom === bt.id, onClick: () => { of.bottom = bt.id; if (bt.id !== 'none') of.dress = 'none'; } }));
+        OUTFIT_SHOES.forEach(sh => addCard(sc, { title: sh.name, sub: '鞋袜', active: of.shoes === sh.id, onClick: () => of.shoes = sh.id }));
+        body.appendChild(sc);
+      } else if (tab === 'pattern') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        OUTFIT_PATTERNS.forEach(pt => addCard(sc, { title: pt.name, active: of.pattern === pt.id, onClick: () => of.pattern = pt.id }));
+        body.appendChild(sc);
+        addColorRow(body, '主衣色', of.mainColor, CLOTH_SWATCHES, hex => of.mainColor = hex);
+        addColorRow(body, '辅色边', of.accentColor, CLOTH_SWATCHES, hex => of.accentColor = hex);
+        addColorRow(body, '下装色', of.bottomColor, CLOTH_SWATCHES, hex => of.bottomColor = hex);
+        addColorRow(body, '鞋履色', of.shoeColor, ['#7A4F48', '#3B2F2B', '#C46F7F', '#D4A359', '#6986AC', '#FAF6EE'], hex => of.shoeColor = hex);
+      } else if (tab === 'draw_cloth') {
+        statusPill.textContent = '手绘娃衣：支持画笔/填充笔/喷枪/正圆/椭圆/取色器';
+        const d = state.outfitDraw;
+        renderProDrawToolbar(body, {
+          getTool: () => d.tool, setTool: v => d.tool = v,
+          getMirror: () => d.mirror, setMirror: v => d.mirror = v,
+          getWidth: () => d.width, setWidth: v => d.width = v, maxW: 16,
+          getStrength: () => d.airStrength ?? 0.35, setStrength: v => d.airStrength = v,
+          getColor: () => d.color, setColor: v => d.color = v,
+          colorLabel: '衣画色', swatches: CLOTH_SWATCHES,
+          onUndo: () => of.customStrokes.pop(),
+          onClear: () => { of.customStrokes = []; },
+          prefixChips: [{ lbl: '脱预设裸画', act: of.dress === 'none' && of.top === 'none', fn: () => { of.dress = 'none'; of.top = 'none'; of.bottom = 'none'; } }]
+        });
+      }
+    } else if (state.step === 5) {
+      statusPill.textContent = '可绑骨调节四肢动作、佩戴或手绘首饰';
+      quickBtn.style.display = 'none';
+      if (tab === 'pose') {
+        const p = state.pose;
+        statusPill.textContent = p.animClip === 'static' ? '手动定格：拖动红点关节自由摆姿' : 'Spine 连贯动作：丝滑跨帧融合播放中';
+        const animRow = document.createElement('div'); animRow.className = 'options-scroll';
+        ANIM_CLIPS.forEach(cl => addCard(animRow, {
+          title: cl.name, sub: cl.sub, active: (p.animClip || 'idle') === cl.id,
+          onClick: () => { p.animClip = cl.id; }
+        }));
+        body.appendChild(animRow);
+
+        if (p.animClip === 'static') {
+          const sc = document.createElement('div'); sc.className = 'options-scroll';
+          POSE_PRESETS.forEach(pr => addCard(sc, {
+            title: pr.name,
+            active: Math.abs(p.leftArm - pr.leftArm) < 0.08 && Math.abs(p.rightArm - pr.rightArm) < 0.08 && Math.abs(p.leftLeg - pr.leftLeg) < 0.08,
+            onClick: () => { p.headTilt = pr.headTilt; p.leftArm = pr.leftArm; p.rightArm = pr.rightArm; p.leftLeg = pr.leftLeg; p.rightLeg = pr.rightLeg; }
+          }));
+          body.appendChild(sc);
+          addSliders(body, [
+            { label: '歪头', min: -0.35, max: 0.35, step: 0.02, val: p.headTilt, onInput: v => p.headTilt = v },
+            { label: '左臂', min: -0.9, max: 2.4, step: 0.04, val: p.leftArm, onInput: v => p.leftArm = v },
+            { label: '右臂', min: -2.4, max: 0.9, step: 0.04, val: p.rightArm, onInput: v => p.rightArm = v },
+            { label: '左腿', min: -0.65, max: 0.95, step: 0.04, val: p.leftLeg, onInput: v => p.leftLeg = v },
+            { label: '右腿', min: -0.95, max: 0.65, step: 0.04, val: p.rightLeg, onInput: v => p.rightLeg = v }
+          ]);
+        }
+      } else if (tab === 'acc') {
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        ACCESSORIES_CATALOG.forEach(ac => {
+          const ex = state.accessories.find(x => x.id === ac.id);
+          addCard(sc, {
+            title: ac.name, thumb: makeThumbCanvas('acc', ac), active: !!ex,
+            onClick: () => {
+              if (ex) { state.accessories = state.accessories.filter(x => x.id !== ac.id); state.selectedAccUid = null; }
+              else { const it = { uid: 'a_' + Date.now() + '_' + ac.id, ...ac, scale: 1, rot: 0 }; state.accessories.push(it); state.selectedAccUid = it.uid; }
+              updateSelectionToolbar();
+            }
+          });
+        });
+        body.appendChild(sc);
+        const sel = state.accessories.find(x => x.uid === state.selectedAccUid);
+        if (sel) addColorRow(body, '配饰色', sel.color || '#DF7A8A', CLOTH_SWATCHES, hex => sel.color = hex);
+      } else if (tab === 'draw_acc') {
+        statusPill.textContent = '手绘首饰：正圆/椭圆画耳环眼镜，喷枪画高光光晕';
+        const d = state.accDraw;
+        renderProDrawToolbar(body, {
+          getTool: () => d.tool, setTool: v => d.tool = v,
+          getMirror: () => d.mirror, setMirror: v => d.mirror = v,
+          getWidth: () => d.width, setWidth: v => d.width = v, maxW: 12,
+          getStrength: () => d.airStrength ?? 0.35, setStrength: v => d.airStrength = v,
+          getColor: () => d.color, setColor: v => d.color = v,
+          colorLabel: '首饰色', swatches: ['#E4B854', '#FFF6E3', '#DF7A8A', '#7AB4E0', '#9DC4B1', '#433128', '#C4474E'],
+          onUndo: () => state.customAccStrokes.pop(),
+          onClear: () => { state.customAccStrokes = []; }
+        });
+      } else {
+        addSliders(body, [{ label: '转向', min: -18, max: 18, step: 1, val: state.showcase.turnAngle, onInput: v => state.showcase.turnAngle = v }]);
+        const sc = document.createElement('div'); sc.className = 'options-scroll';
+        BACKGROUNDS.forEach(bg => addCard(sc, { title: bg.name, active: state.showcase.background === bg.id, onClick: () => state.showcase.background = bg.id }));
+        body.appendChild(sc);
+      }
+    }
+
+    document.getElementById('prevStepBtn').style.visibility = state.step === 0 ? 'hidden' : 'visible';
+    document.getElementById('nextStepBtn').textContent = state.step === 5 ? '生成出生证 ›' : '下一步 ›';
+  }
+
+  function randomizeDoll() {
+    const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+    const fp = pick(FACE_PRESETS);
+    state.body.faceWidth = fp.faceWidth; state.body.cheekPlump = fp.cheekPlump; state.body.chinRound = fp.chinRound;
+    state.body.ears = pick(EAR_TYPES).id;
+    state.body.skinColor = pick(SKIN_SWATCHES.slice(0, 5));
+    state.face.eyeStyle = pick(EYE_STYLES).id;
+    state.face.eyeColorL = pick(EYE_SWATCHES);
+    state.face.heterochromia = Math.random() < 0.25;
+    state.face.eyeColorR = state.face.heterochromia ? pick(EYE_SWATCHES) : state.face.eyeColorL;
+    state.face.browStyle = pick(BROW_STYLES).id;
+    state.face.mouthStyle = pick(MOUTH_STYLES).id;
+    state.face.noseStyle = pick(NOSE_STYLES).id;
+    state.face.blushStyle = pick(BLUSH_STYLES.slice(1)).id;
+    state.hair.backStyle = pick(HAIR_BACK_STYLES).id;
+    state.hair.bangStyle = pick(HAIR_BANG_STYLES).id;
+    state.hair.ahogeStyle = pick(AHOGE_STYLES).id;
+    state.hair.mainColor = pick(HAIR_SWATCHES);
+    state.face.browColor = shadeHex(state.hair.mainColor, -0.15);
+    state.outfit.mainColor = pick(CLOTH_SWATCHES);
+    sfx.playChime(); historyMgr.snapshot(); scheduleSave(); renderDock();
+  }
+
+  /* =========================================================================
+   * 9. 画布触控交互：双指缩放平移、滚轮缩放、五官拖拽、裁剪、镜像刺绣、缝合、配饰拖拽
+   * ========================================================================= */
+  function getScreenPt(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: (e.clientX - r.left) * (runtime.w / r.width), y: (e.clientY - r.top) * (runtime.h / r.height) };
+  }
+  function getPt(e) {
+    const sp = getScreenPt(e);
+    const totalScale = runtime.zoom * getBaseFitScale();
+    return {
+      x: (sp.x - (runtime.cx + runtime.panX)) / totalScale + runtime.cx,
+      y: (sp.y - (runtime.cy + runtime.panY)) / totalScale + runtime.cy
+    };
+  }
+
+  canvas.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const factor = e.deltaY < 0 ? 1.12 : 0.89;
+    setCameraZoom(runtime.zoom * factor);
+  }, { passive: false });
+
+  canvas.addEventListener('pointerdown', (e) => {
+    const sp = getScreenPt(e);
+    runtime.pointers.set(e.pointerId, sp);
+    canvas.setPointerCapture(e.pointerId);
+
+    // 双指捏合缩放 & 平移
+    if (runtime.pointers.size === 2) {
+      const [p1, p2] = [...runtime.pointers.values()];
+      runtime.pinchStartDist = Math.max(10, dist(p1.x, p1.y, p2.x, p2.y));
+      runtime.pinchStartZoom = runtime.zoom;
+      runtime.panStart = { x: (p1.x + p2.x) * 0.5, y: (p1.y + p2.y) * 0.5, panX: runtime.panX, panY: runtime.panY };
+      runtime.pointerMode = 'pinch';
+      runtime.pointerDown = true;
+      return;
+    }
+
+    // 抓手平移模式
+    if (runtime.panMode) {
+      runtime.pointerDown = true;
+      runtime.pointerMode = 'pan';
+      runtime.panStart = { x: sp.x, y: sp.y, panX: runtime.panX, panY: runtime.panY };
+      return;
+    }
+
+    const pt = getPt(e);
+    runtime.pointerDown = true; runtime.pointerPos = pt;
+    const cx = runtime.cx, cy = runtime.cy;
+
+    if (state.step === 0) {
+      const j = getSkeletonJoints(state.body.bodyType === 'slender');
+      const headY = cy + 16 + j.actualHeadY;
+      const sc = j.faceScale, f = state.face;
+      if (state.subTab === 'sculpt') {
+        runtime.pointerMode = 'sculpt-face';
+        const lx = (pt.x - cx) / sc, ly = (pt.y - headY) / sc;
+        if (state.sculptUI.brush !== 'move') applyNomadSculptBrush(lx, ly, 0, 0);
+        return;
+      }
+      if (state.subTab === 'draw_face') {
+        const lx = (pt.x - cx) / sc, ly = (pt.y - headY) / sc;
+        if (state.craft.embTool === 'eyedropper') {
+          const picked = pickCanvasColorAt(sp);
+          state.craft.embColor = picked; state.craft.embTool = 'line';
+          sfx.playPop(720); showToast(`已吸取颜色 ${picked}`); renderDock(); return;
+        }
+        if (state.craft.embTool === 'eraser') {
+          runtime.pointerMode = 'erase-face';
+          eraseStrokesAt(state.craft.freeStrokes, lx, ly, 12 / sc, state.craft.mirrorEmbroidery);
+          return;
+        }
+        if (Math.hypot(lx, ly) < 108) {
+          runtime.pointerMode = 'draw-face';
+          const isShape = state.craft.embTool === 'circle' || state.craft.embTool === 'ellipse';
+          state.craft.freeStrokes.push({
+            color: state.craft.embColor, width: state.craft.embWidth,
+            strength: state.craft.airStrength ?? 0.35,
+            type: state.craft.embTool, mirror: state.craft.mirrorEmbroidery,
+            points: isShape ? [{ x: lx, y: ly }, { x: lx, y: ly }] : [{ x: lx, y: ly }]
+          });
+          sfx.playStitch();
+        }
+        return;
+      }
+      if (dist(pt.x, pt.y, cx + f.eyeSpacing * sc, headY + f.eyeY * sc) < 22 || dist(pt.x, pt.y, cx - f.eyeSpacing * sc, headY + f.eyeY * sc) < 22) { runtime.pointerMode = 'drag-eye'; return; }
+      if (dist(pt.x, pt.y, cx - f.browSpacing * sc, headY + (f.eyeY + f.browY) * sc) < 20 || dist(pt.x, pt.y, cx + f.browSpacing * sc, headY + (f.eyeY + f.browY) * sc) < 20) { runtime.pointerMode = 'drag-brow'; return; }
+      if (dist(pt.x, pt.y, cx, headY + f.mouthY * sc) < 20) { runtime.pointerMode = 'drag-mouth'; return; }
+    } else if (state.step === 1) {
+      if (state.subTab === 'cut') { runtime.pointerMode = 'cut'; hitCut(pt); }
+      else {
+        const lx = pt.x - cx, ly = pt.y - cy;
+        if (state.craft.embTool === 'eyedropper') {
+          const picked = pickCanvasColorAt(sp);
+          state.craft.embColor = picked; state.craft.embTool = 'line';
+          sfx.playPop(720); showToast(`已吸取颜色 ${picked}`); renderDock(); return;
+        }
+        if (state.craft.embTool === 'eraser') {
+          runtime.pointerMode = 'erase-emb';
+          eraseStrokesAt(state.craft.freeStrokes, lx, ly, 12, state.craft.mirrorEmbroidery);
+          return;
+        }
+        if (Math.hypot(lx, ly) < 98) {
+          runtime.pointerMode = 'emb';
+          const isShape = state.craft.embTool === 'circle' || state.craft.embTool === 'ellipse';
+          state.craft.freeStrokes.push({
+            color: state.craft.embColor, width: state.craft.embWidth,
+            strength: state.craft.airStrength ?? 0.35,
+            type: state.craft.embTool, mirror: state.craft.mirrorEmbroidery,
+            points: isShape ? [{ x: lx, y: ly }, { x: lx, y: ly }] : [{ x: lx, y: ly }]
+          });
+          sfx.playStitch();
+        }
+      }
+    } else if (state.step === 2) {
+      if (state.subTab === 'sew') {
+        if (!state.craft.aligned) runtime.pointerMode = 'align';
+        else if (!state.craft.turned) { runtime.pointerMode = 'sew'; hitSew(pt); }
+      } else {
+        if (dist(pt.x, pt.y, cx, cy) < 115) {
+          if (state.craft.fillLevel < 100) {
+            state.craft.fillLevel = Math.min(100, state.craft.fillLevel + 20);
+            runtime.puffBounce = 1.0; sfx.playStuff(); renderDock();
+          } else if (!state.craft.closed) {
+            state.craft.closed = true; sfx.playChime(); showToast('藏针封口完成！'); renderDock();
+          }
+        }
+      }
+    } else if (state.step === 3 && state.subTab === 'draw_hair') {
+      const d = state.hairDraw;
+      if (d.tool === 'eyedropper') {
+        const picked = pickCanvasColorAt(sp);
+        d.color = picked; d.tool = 'line';
+        sfx.playPop(720); showToast(`已吸取颜色 ${picked}`); renderDock(); return;
+      }
+      const j = getSkeletonJoints(state.body.bodyType === 'slender');
+      const headY = cy + 16 + j.actualHeadY;
+      const arr = d.layer === 'front' ? state.hair.customFrontStrokes : state.hair.customBackStrokes;
+      const hx = (pt.x - cx) / HEAD_SCALE, hy = (pt.y - headY) / HEAD_SCALE;
+      if (d.tool === 'eraser') {
+        runtime.pointerMode = 'erase-hair';
+        eraseStrokesAt(arr, hx, hy, 14 / HEAD_SCALE, d.mirror);
+        return;
+      }
+      runtime.pointerMode = 'draw-hair';
+      const isShape = d.tool === 'circle' || d.tool === 'ellipse';
+      arr.push({
+        color: d.color, width: d.width, strength: d.airStrength ?? 0.35, type: d.tool, mirror: d.mirror,
+        points: isShape ? [{ x: hx, y: hy }, { x: hx, y: hy }] : [{ x: hx, y: hy }]
+      });
+      sfx.playPop(580, 0.04);
+    } else if (state.step === 4 && state.subTab === 'draw_cloth') {
+      const d = state.outfitDraw;
+      if (d.tool === 'eyedropper') {
+        const picked = pickCanvasColorAt(sp);
+        d.color = picked; d.tool = 'line';
+        sfx.playPop(720); showToast(`已吸取颜色 ${picked}`); renderDock(); return;
+      }
+      const lx = pt.x - cx, ly = pt.y - (cy + 16);
+      if (d.tool === 'eraser') {
+        runtime.pointerMode = 'erase-cloth';
+        eraseStrokesAt(state.outfit.customStrokes, lx, ly, 13, d.mirror);
+        return;
+      }
+      runtime.pointerMode = 'draw-cloth';
+      const isShape = d.tool === 'circle' || d.tool === 'ellipse';
+      state.outfit.customStrokes.push({
+        color: d.color, width: d.width, strength: d.airStrength ?? 0.35, type: d.tool, mirror: d.mirror,
+        points: isShape ? [{ x: lx, y: ly }, { x: lx, y: ly }] : [{ x: lx, y: ly }]
+      });
+      sfx.playPop(560, 0.04);
+    } else if (state.step === 5) {
+      if (state.subTab === 'pose') {
+        if (state.pose.animClip !== 'static') return;
+        const hds = getBoneHandlesWorld(cx, cy);
+        for (const [k, h] of Object.entries(hds)) {
+          if (dist(pt.x, pt.y, h.x, h.y) < 28) {
+            runtime.pointerMode = 'drag-bone';
+            runtime.activeTarget = k;
+            sfx.playPop(660, 0.04);
+            return;
+          }
+        }
+        return;
+      }
+      if (state.subTab === 'draw_acc') {
+        const d = state.accDraw;
+        if (d.tool === 'eyedropper') {
+          const picked = pickCanvasColorAt(sp);
+          d.color = picked; d.tool = 'line';
+          sfx.playPop(720); showToast(`已吸取颜色 ${picked}`); renderDock(); return;
+        }
+        const turnShift = ((state.showcase.turnAngle || 0) / 18) * 16 * 0.65;
+        const lx = pt.x - cx - turnShift, ly = pt.y - (cy + 16);
+        if (d.tool === 'eraser') {
+          runtime.pointerMode = 'erase-acc';
+          eraseStrokesAt(state.customAccStrokes, lx, ly, 13, d.mirror);
+          return;
+        }
+        runtime.pointerMode = 'draw-acc';
+        const isShape = d.tool === 'circle' || d.tool === 'ellipse';
+        state.customAccStrokes.push({
+          color: d.color, width: d.width, strength: d.airStrength ?? 0.35, type: d.tool, mirror: d.mirror,
+          points: isShape ? [{ x: lx, y: ly }, { x: lx, y: ly }] : [{ x: lx, y: ly }]
+        });
+        sfx.playPop(640, 0.04);
+        return;
+      }
+      const turnShift = ((state.showcase.turnAngle || 0) / 18) * 16 * 0.65;
+      for (let i = state.accessories.length - 1; i >= 0; i--) {
+        const ac = state.accessories[i];
+        const ax = cx + (ac.x + turnShift), ay = cy + 16 + ac.y;
+        if (dist(pt.x, pt.y, ax, ay) < 38) {
+          state.selectedAccUid = ac.uid; runtime.activeTarget = ac; runtime.pointerMode = 'drag-acc';
+          updateSelectionToolbar(); renderDock(); return;
+        }
+      }
+      state.selectedAccUid = null; updateSelectionToolbar(); renderDock();
+    }
+  });
+
+  canvas.addEventListener('pointermove', (e) => {
+    const sp = getScreenPt(e);
+    if (runtime.pointers.has(e.pointerId)) runtime.pointers.set(e.pointerId, sp);
+    const prevPt = runtime.pointerPos;
+    const curPt = getPt(e);
+    runtime.pointerPos = curPt;
+    if (!runtime.pointerDown) return;
+
+    if (runtime.pointerMode === 'pinch' && runtime.pointers.size === 2 && runtime.panStart) {
+      const [p1, p2] = [...runtime.pointers.values()];
+      const curD = Math.max(10, dist(p1.x, p1.y, p2.x, p2.y));
+      const midX = (p1.x + p2.x) * 0.5, midY = (p1.y + p2.y) * 0.5;
+      runtime.panX = runtime.panStart.panX + (midX - runtime.panStart.x);
+      runtime.panY = runtime.panStart.panY + (midY - runtime.panStart.y);
+      setCameraZoom(runtime.pinchStartZoom * (curD / runtime.pinchStartDist));
+      return;
+    }
+    if (runtime.pointerMode === 'pan' && runtime.panStart) {
+      const limX = runtime.w * 0.5 * Math.max(1, runtime.zoom);
+      const limY = runtime.h * 0.5 * Math.max(1, runtime.zoom);
+      runtime.panX = clamp(runtime.panStart.panX + (sp.x - runtime.panStart.x), -limX, limX);
+      runtime.panY = clamp(runtime.panStart.panY + (sp.y - runtime.panStart.y), -limY, limY);
+      return;
+    }
+
+    const pt = curPt;
+    const cx = runtime.cx, cy = runtime.cy;
+    const j = getSkeletonJoints(state.body.bodyType === 'slender');
+    const headY = cy + 16 + j.actualHeadY;
+    const sc = j.faceScale, f = state.face;
+    const minStep = Math.max(1.2, 3.0 / runtime.zoom);
+
+    if (runtime.pointerMode === 'erase-face') {
+      eraseStrokesAt(state.craft.freeStrokes, (pt.x - cx) / sc, (pt.y - headY) / sc, 12 / sc, state.craft.mirrorEmbroidery);
+    } else if (runtime.pointerMode === 'erase-emb') {
+      eraseStrokesAt(state.craft.freeStrokes, pt.x - cx, pt.y - cy, 12, state.craft.mirrorEmbroidery);
+    } else if (runtime.pointerMode === 'erase-hair') {
+      const d = state.hairDraw;
+      const arr = d.layer === 'front' ? state.hair.customFrontStrokes : state.hair.customBackStrokes;
+      eraseStrokesAt(arr, (pt.x - cx) / HEAD_SCALE, (pt.y - headY) / HEAD_SCALE, 14 / HEAD_SCALE, d.mirror);
+    } else if (runtime.pointerMode === 'erase-cloth') {
+      eraseStrokesAt(state.outfit.customStrokes, pt.x - cx, pt.y - (cy + 16), 13, state.outfitDraw.mirror);
+    } else if (runtime.pointerMode === 'erase-acc') {
+      const turnShift = ((state.showcase.turnAngle || 0) / 18) * 16 * 0.65;
+      eraseStrokesAt(state.customAccStrokes, pt.x - cx - turnShift, pt.y - (cy + 16), 13, state.accDraw.mirror);
+    } else if (runtime.pointerMode === 'sculpt-face') {
+      const lx = (pt.x - cx) / sc, ly = (pt.y - headY) / sc;
+      const mdx = (pt.x - prevPt.x) / sc, mdy = (pt.y - prevPt.y) / sc;
+      applyNomadSculptBrush(lx, ly, mdx, mdy);
+    } else if (runtime.pointerMode === 'draw-face') {
+      const cur = state.craft.freeStrokes[state.craft.freeStrokes.length - 1];
+      if (cur && cur.type !== 'dot') {
+        const lx = (pt.x - cx) / sc, ly = (pt.y - headY) / sc;
+        if (cur.type === 'circle' || cur.type === 'ellipse') { cur.points[1] = { x: lx, y: ly }; }
+        else {
+          const last = cur.points[cur.points.length - 1];
+          const stepD = cur.type === 'airbrush' ? Math.max(3, cur.width * 0.65) : minStep;
+          if (Math.hypot(lx, ly) < 105 && dist(lx, ly, last.x, last.y) > stepD) { cur.points.push({ x: lx, y: ly }); if (cur.type !== 'airbrush') sfx.playStitch(); }
+        }
+      }
+    } else if (runtime.pointerMode === 'draw-hair') {
+      const d = state.hairDraw;
+      const arr = d.layer === 'front' ? state.hair.customFrontStrokes : state.hair.customBackStrokes;
+      const cur = arr[arr.length - 1];
+      if (cur && cur.type !== 'dot') {
+        const lx = (pt.x - cx) / HEAD_SCALE, ly = (pt.y - headY) / HEAD_SCALE;
+        if (cur.type === 'circle' || cur.type === 'ellipse') { cur.points[1] = { x: lx, y: ly }; }
+        else {
+          const last = cur.points[cur.points.length - 1];
+          const stepD = cur.type === 'airbrush' ? Math.max(3.5, cur.width * 0.65) : minStep;
+          if (dist(lx, ly, last.x, last.y) > stepD) cur.points.push({ x: lx, y: ly });
+        }
+      }
+    } else if (runtime.pointerMode === 'drag-bone' && runtime.activeTarget) {
+      const hds = getBoneHandlesWorld(cx, cy);
+      const k = runtime.activeTarget;
+      const h = hds[k];
+      if (h) {
+        if (k === 'head') {
+          const ang = Math.atan2(pt.x - h.px, -(pt.y - h.py));
+          state.pose.headTilt = clamp(ang, -0.35, 0.35);
+        } else {
+          // 肢体自然下垂为 0，顺时针为正，逆时针为负
+          const ang = Math.atan2(-(pt.x - h.px), pt.y - h.py);
+          if (k === 'leftArm') state.pose.leftArm = clamp(ang, -0.9, 2.4);
+          else if (k === 'rightArm') state.pose.rightArm = clamp(ang, -2.4, 0.9);
+          else if (k === 'leftLeg') state.pose.leftLeg = clamp(ang, -0.65, 0.95);
+          else if (k === 'rightLeg') state.pose.rightLeg = clamp(ang, -0.95, 0.65);
+        }
+      }
+    } else if (runtime.pointerMode === 'draw-cloth') {
+      const cur = state.outfit.customStrokes[state.outfit.customStrokes.length - 1];
+      if (cur && cur.type !== 'dot') {
+        const lx = pt.x - cx, ly = pt.y - (cy + 16);
+        if (cur.type === 'circle' || cur.type === 'ellipse') { cur.points[1] = { x: lx, y: ly }; }
+        else {
+          const last = cur.points[cur.points.length - 1];
+          const stepD = cur.type === 'airbrush' ? Math.max(3.5, cur.width * 0.65) : minStep;
+          if (dist(lx, ly, last.x, last.y) > stepD) cur.points.push({ x: lx, y: ly });
+        }
+      }
+    } else if (runtime.pointerMode === 'draw-acc') {
+      const cur = state.customAccStrokes[state.customAccStrokes.length - 1];
+      if (cur && cur.type !== 'dot') {
+        const turnShift = ((state.showcase.turnAngle || 0) / 18) * 16 * 0.65;
+        const lx = pt.x - cx - turnShift, ly = pt.y - (cy + 16);
+        if (cur.type === 'circle' || cur.type === 'ellipse') { cur.points[1] = { x: lx, y: ly }; }
+        else {
+          const last = cur.points[cur.points.length - 1];
+          const stepD = cur.type === 'airbrush' ? Math.max(3.5, cur.width * 0.65) : minStep;
+          if (dist(lx, ly, last.x, last.y) > stepD) cur.points.push({ x: lx, y: ly });
+        }
+      }
+    } else if (runtime.pointerMode === 'drag-eye') {
+      f.eyeSpacing = clamp(Math.round(Math.abs(pt.x - cx) / sc), 28, 54);
+      f.eyeY = clamp(Math.round((pt.y - headY) / sc), -12, 20);
+    } else if (runtime.pointerMode === 'drag-brow') {
+      f.browSpacing = clamp(Math.round(Math.abs(pt.x - cx) / sc), 26, 54);
+      f.browY = clamp(Math.round((pt.y - headY) / sc - f.eyeY), -38, -14);
+    } else if (runtime.pointerMode === 'drag-mouth') {
+      f.mouthY = clamp(Math.round((pt.y - headY) / sc), 20, 46);
+    } else if (runtime.pointerMode === 'cut') {
+      hitCut(pt);
+    } else if (runtime.pointerMode === 'emb') {
+      const cur = state.craft.freeStrokes[state.craft.freeStrokes.length - 1];
+      if (cur && cur.type !== 'dot') {
+        const lx = pt.x - cx, ly = pt.y - cy;
+        if (cur.type === 'circle' || cur.type === 'ellipse') { cur.points[1] = { x: lx, y: ly }; }
+        else {
+          const last = cur.points[cur.points.length - 1];
+          const stepD = cur.type === 'airbrush' ? Math.max(3, cur.width * 0.65) : Math.max(1.4, 3.2 / runtime.zoom);
+          if (Math.hypot(lx, ly) < 96 && dist(lx, ly, last.x, last.y) > stepD) { cur.points.push({ x: lx, y: ly }); if (cur.type !== 'airbrush') sfx.playStitch(); }
+        }
+      }
+    } else if (runtime.pointerMode === 'align') {
+      runtime.unalignedOffset.x = clamp(pt.x - cx, -38, 38);
+      runtime.unalignedOffset.y = clamp(pt.y - cy, -38, 38);
+      if (Math.hypot(runtime.unalignedOffset.x, runtime.unalignedOffset.y) < 14) {
+        state.craft.aligned = true; sfx.playPop(640); showToast('正反布片已对齐，请沿线缝合！'); renderDock();
+      }
+    } else if (runtime.pointerMode === 'sew') {
+      hitSew(pt);
+    } else if (runtime.pointerMode === 'drag-acc' && runtime.activeTarget) {
+      runtime.activeTarget.x = clamp(pt.x - cx, -135, 135);
+      runtime.activeTarget.y = clamp(pt.y - (cy + 16), -165, 145);
+    }
+  });
+
+  const endPtr = (e) => {
+    if (e && e.pointerId !== undefined) runtime.pointers.delete(e.pointerId);
+    if (runtime.pointers.size > 0) return;
+    if (!runtime.pointerDown) return;
+    const wasDraw = runtime.pointerMode !== 'pan' && runtime.pointerMode !== 'pinch' && runtime.pointerMode !== 'idle';
+    runtime.pointerDown = false; runtime.pointerMode = 'idle'; runtime.activeTarget = null; runtime.panStart = null;
+    if (wasDraw) { historyMgr.snapshot(); scheduleSave(); }
+  };
+  canvas.addEventListener('pointerup', endPtr);
+  canvas.addEventListener('pointercancel', endPtr);
+
+  function hitCut(pt) {
+    const outer = generateSmoothHeadPoints(state.body, 1.08);
+    const lx = pt.x - runtime.cx, ly = pt.y - runtime.cy;
+    let ch = false;
+    outer.forEach((p, i) => { if (!state.craft.cutSamples[i] && dist(lx, ly, p.x, p.y) < 28) { state.craft.cutSamples[i] = true; ch = true; } });
+    if (ch) {
+      sfx.playSnip();
+      state.craft.cutProgress = state.craft.cutSamples.filter(Boolean).length / outer.length;
+      if (state.craft.cutProgress >= 0.85) {
+        state.craft.cutSamples = outer.map(() => true); state.craft.cutProgress = 1;
+        sfx.playChime(); showToast('纸样裁剪完成！可切到“绣绷自由绣”');
+      }
+    }
+  }
+  function hitSew(pt) {
+    const pts = generateSmoothHeadPoints(state.body, 1.0);
+    const lx = pt.x - runtime.cx, ly = pt.y - runtime.cy;
+    let ch = false, tot = 0, cnt = 0;
+    pts.forEach((p, i) => {
+      if (i >= 20 && i <= 28) return;
+      tot++;
+      if (!state.craft.sewSamples[i] && dist(lx, ly, p.x, p.y) < 26) { state.craft.sewSamples[i] = true; ch = true; }
+      if (state.craft.sewSamples[i]) cnt++;
+    });
+    if (ch) {
+      sfx.playStitch();
+      state.craft.sewProgress = cnt / Math.max(1, tot);
+      if (state.craft.sewProgress >= 0.85) {
+        state.craft.sewProgress = 1; sfx.playChime(); showToast('缝合完成，点底部“由返口翻至正面”！'); renderDock();
+      }
+    }
+  }
+
+  /* =========================================================================
+   * 10. 出生证高清离屏导出（同步完整星空/格子背景）与娃柜管理
+   * ========================================================================= */
+  function updateSelectionToolbar() {
+    const bar = document.getElementById('selectionToolbar');
+    bar.classList.toggle('show', Boolean(state.step === 5 && state.accessories.some(a => a.uid === state.selectedAccUid)));
+  }
+
+  async function generatePoster() {
+    state.showcase.name = document.getElementById('dollNameInput').value.trim() || '奶糖小兔';
+    state.showcase.note = document.getElementById('dollNoteInput').value.trim() || '一针一线亲手缝制的小可爱。';
+
+    const off = document.createElement('canvas');
+    off.width = 900; off.height = 1240;
+    const c = off.getContext('2d');
+
+    c.fillStyle = '#FAF5EE'; c.fillRect(0, 0, 900, 1240);
+    c.strokeStyle = '#D9C3B0'; c.lineWidth = 4; c.strokeRect(26, 26, 848, 1188);
+    c.strokeStyle = '#C46F7F'; c.lineWidth = 2; c.setLineDash([10, 6]); c.strokeRect(40, 40, 820, 1160); c.setLineDash([]);
+
+    // 完整背景（包含星空星点与格子垫）
+    c.save(); c.beginPath(); c.roundRect(70, 72, 760, 760, 24); c.clip();
+    c.translate(70, 72);
+    drawShowcaseBg(c, 760, 760, state.showcase.background);
+    drawFullDoll(c, 380, 400, 2.15, state.showcase.turnAngle || 0, true, true, false);
+    c.restore();
+    c.strokeStyle = '#E4D4C3'; c.lineWidth = 3;
+    c.beginPath(); c.roundRect(70, 72, 760, 760, 24); c.stroke();
+
+    c.fillStyle = '#433128'; c.font = '800 40px "PingFang SC", sans-serif'; c.textAlign = 'left';
+    c.fillText(state.showcase.name, 78, 904);
+    c.fillStyle = '#C46F7F'; c.beginPath(); c.roundRect(686, 862, 138, 54, 14); c.fill();
+    c.fillStyle = '#FFF'; c.font = '800 21px "PingFang SC", sans-serif'; c.textAlign = 'center';
+    c.fillText('15cm手作娃', 755, 896);
+
+    const fb = FABRIC_TYPES.find(x => x.id === state.body.fabricType) || FABRIC_TYPES[0];
+    const d = new Date();
+    const ds = `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+    c.textAlign = 'left'; c.fillStyle = '#755B4E'; c.font = '700 22px "PingFang SC", sans-serif';
+    c.fillText(`体型：${state.body.bodyType === 'slender' ? '修长比例 1:1.8' : '奶团Q版 1:1.5'}   |   诞生日：${ds}`, 78, 956);
+    c.fillText(`面料：${fb.name}   |   ${state.face.heterochromia ? '双色异瞳' : '精绣双眸'}`, 78, 994);
+
+    c.fillStyle = '#FFFDF9'; c.strokeStyle = '#E4D4C3'; c.lineWidth = 2;
+    c.beginPath(); c.roundRect(78, 1026, 744, 132, 16); c.fill(); c.stroke();
+    c.fillStyle = '#433128'; c.font = '600 23px "PingFang SC", sans-serif';
+    const note = state.showcase.note;
+    c.fillText(note.slice(0, 27), 102, 1080);
+    if (note.length > 27) c.fillText(note.slice(27, 54), 102, 1122);
+
+    const dataUrl = off.toDataURL('image/png');
+    document.getElementById('posterImg').src = dataUrl;
+    document.getElementById('namingModal').classList.remove('show');
+    document.getElementById('posterModal').classList.add('show');
+    sfx.playChime();
+
+    await saveGallery({
+      id: 'doll_' + Date.now(), name: state.showcase.name, sub: `${fb.name} · ${ds}`,
+      dataUrl, snapshot: JSON.parse(JSON.stringify(state)), createdAt: Date.now()
+    });
+  }
+
+  async function renderGallery() {
+    const el = document.getElementById('galleryList');
+    const items = await loadGallery();
+    if (!items.length) {
+      el.innerHTML = '<div style="text-align:center;padding:24px;color:var(--brown-light);font-size:12px;">娃柜尚空，生成出生证后会自动收录在此。</div>';
+      return;
+    }
+    el.innerHTML = '';
+    items.forEach(it => {
+      const row = document.createElement('div'); row.className = 'gallery-item';
+      row.innerHTML = `<img class="gallery-thumb" src="${it.dataUrl}" alt="${it.name}">
+        <div class="gallery-meta"><div class="gallery-title">${it.name}</div><div class="gallery-sub">${it.sub || ''}</div></div>
+        <div style="display:flex;flex-direction:column;gap:4px;">
+          <button type="button" class="small-pill-btn view-btn">查看</button>
+          <button type="button" class="small-pill-btn load-btn accent">再编辑</button>
+          <button type="button" class="small-pill-btn del-btn" style="color:#C94A4A;">删除</button>
+        </div>`;
+      row.querySelector('.view-btn').onclick = () => {
+        document.getElementById('posterImg').src = it.dataUrl;
+        document.getElementById('galleryModal').classList.remove('show');
+        document.getElementById('posterModal').classList.add('show');
+      };
+      row.querySelector('.load-btn').onclick = () => {
+        if (it.snapshot) { state = JSON.parse(JSON.stringify(it.snapshot)); state.step = 0; renderDock(); showToast(`已载入「${it.name}」`); }
+        document.getElementById('galleryModal').classList.remove('show');
+      };
+      row.querySelector('.del-btn').onclick = async () => { await deleteGallery(it.id); renderGallery(); };
+      el.appendChild(row);
+    });
+  }
+
+  /* =========================================================================
+   * 11. 全局事件绑定与启动
+   * ========================================================================= */
+  let toastTimer = null;
+  function showToast(msg) {
+    const el = document.getElementById('stageToast'); el.textContent = msg; el.classList.add('show');
+    clearTimeout(toastTimer); toastTimer = setTimeout(() => el.classList.remove('show'), 2100);
+  }
+  function goToStep(s) {
+    state.step = clamp(s, 0, 5);
+    updateSelectionToolbar(); scheduleSave(); renderDock(); sfx.playPop(560);
+  }
+
+  function bindEvents() {
+    document.getElementById('undoBtn').onclick = () => historyMgr.undo();
+    document.getElementById('redoBtn').onclick = () => historyMgr.redo();
+    document.getElementById('zoomInBtn').onclick = () => { setCameraZoom(runtime.zoom * 1.25); sfx.playPop(620); };
+    document.getElementById('zoomOutBtn').onclick = () => { setCameraZoom(runtime.zoom * 0.8); sfx.playPop(460); };
+    document.getElementById('zoomPctLabel').onclick = () => { runtime.panX = 0; runtime.panY = 0; setCameraZoom(1); sfx.playPop(540); };
+    document.getElementById('panModeBtn').onclick = () => {
+      runtime.panMode = !runtime.panMode; updateZoomLabel();
+      showToast(runtime.panMode ? '抓手平移已开启：拖动画布移动视角' : '已切回绘制/编辑模式');
+    };
+    document.getElementById('openGalleryBtn').onclick = () => { renderGallery(); document.getElementById('galleryModal').classList.add('show'); };
+    document.getElementById('soundToggleBtn').onclick = (e) => { sfx.enabled = !sfx.enabled; e.currentTarget.style.opacity = sfx.enabled ? '1' : '0.4'; };
+    document.getElementById('newProjectBtn').onclick = () => { state = createDefaultState(); historyMgr.snapshot(); scheduleSave(); renderDock(); showToast('已开启新娃娃设计台'); };
+
+    document.querySelectorAll('#stepperBar .step-item').forEach(el => { el.onclick = () => goToStep(Number(el.dataset.step)); });
+    document.getElementById('prevStepBtn').onclick = () => goToStep(state.step - 1);
+    document.getElementById('nextStepBtn').onclick = () => {
+      if (state.step === 5) {
+        document.getElementById('dollNameInput').value = state.showcase.name || '奶糖小兔';
+        document.getElementById('dollNoteInput').value = state.showcase.note || '';
+        document.getElementById('namingModal').classList.add('show');
+      } else goToStep(state.step + 1);
+    };
+
+    const withAcc = fn => {
+      const ac = state.accessories.find(a => a.uid === state.selectedAccUid);
+      if (!ac) return; fn(ac); historyMgr.snapshot(); scheduleSave();
+    };
+    document.getElementById('selScaleUpBtn').onclick = () => withAcc(a => a.scale = clamp((a.scale || 1) + 0.12, 0.5, 1.8));
+    document.getElementById('selScaleDownBtn').onclick = () => withAcc(a => a.scale = clamp((a.scale || 1) - 0.12, 0.5, 1.8));
+    document.getElementById('selRotLeftBtn').onclick = () => withAcc(a => a.rot = (a.rot || 0) - 0.2);
+    document.getElementById('selRotRightBtn').onclick = () => withAcc(a => a.rot = (a.rot || 0) + 0.2);
+    document.getElementById('selDeleteBtn').onclick = () => {
+      state.accessories = state.accessories.filter(a => a.uid !== state.selectedAccUid);
+      state.selectedAccUid = null; updateSelectionToolbar(); historyMgr.snapshot(); renderDock();
+    };
+
+    document.getElementById('closeNamingModalBtn').onclick = () => document.getElementById('namingModal').classList.remove('show');
+    document.getElementById('generatePosterBtn').onclick = generatePoster;
+    document.getElementById('closePosterModalBtn').onclick = () => document.getElementById('posterModal').classList.remove('show');
+    document.getElementById('backToEditBtn').onclick = () => document.getElementById('posterModal').classList.remove('show');
+    document.getElementById('makeAnotherBtn').onclick = () => { document.getElementById('posterModal').classList.remove('show'); state = createDefaultState(); historyMgr.snapshot(); renderDock(); };
+    document.getElementById('downloadPngBtn').onclick = () => {
+      const a = document.createElement('a'); a.href = document.getElementById('posterImg').src;
+      a.download = `${state.showcase.name || '棉花娃娃'}_出生证.png`; a.click(); sfx.playPop(640);
+    };
+    document.getElementById('closeGalleryModalBtn').onclick = () => document.getElementById('galleryModal').classList.remove('show');
+  }
+
+  async function init() {
+    resizeCanvas(); bindEvents();
+    const saved = await loadLatest();
+    if (saved && saved.version === 5 && saved.face && saved.body) {
+      const def = createDefaultState();
+      state = {
+        ...def, ...saved,
+        body: { ...def.body, ...saved.body },
+        sculptUI: { ...def.sculptUI, ...(saved.sculptUI || {}) },
+        hair: { ...def.hair, ...(saved.hair || {}), customBackStrokes: (saved.hair && saved.hair.customBackStrokes) || [], customFrontStrokes: (saved.hair && saved.hair.customFrontStrokes) || [] },
+        hairDraw: { ...def.hairDraw, ...(saved.hairDraw || {}) },
+        pose: { ...def.pose, ...(saved.pose || {}) },
+        outfit: { ...def.outfit, ...(saved.outfit || {}), customStrokes: (saved.outfit && saved.outfit.customStrokes) || [] },
+        outfitDraw: { ...def.outfitDraw, ...(saved.outfitDraw || {}) },
+        customAccStrokes: saved.customAccStrokes || [],
+        accDraw: { ...def.accDraw, ...(saved.accDraw || {}) }
+      };
+      showToast('已恢复上次捏娃进度');
+    }
+    // 暴露标准骨骼与捏娃数据接口，方便后续接入小手机网页自定义名士
+    window.CottonDollRig = {
+      getState: () => JSON.parse(JSON.stringify(state)),
+      setAnimation: (clipId) => {
+        if (ANIM_CLIPS.some(c => c.id === clipId)) { state.pose.animClip = clipId; renderDock(); }
+      },
+      listAnimations: () => ANIM_CLIPS.map(c => ({ id: c.id, name: c.name }))
+    };
+    historyMgr.snapshot(); renderDock();
+    initDollHostBridge();
+    requestAnimationFrame(animLoop);
+  }
+
+  /* =========================================================================
+   * 12. 东汉工坊纯宿主轻桥接（零 AI：仅返回择坊 / 收入行囊 / 赠予好友）
+   * ========================================================================= */
+  function initDollHostBridge() {
+    const backBtn = document.getElementById('backToWorkshopBtn');
+    const setPetBtn = document.getElementById('setHomePetBtn');
+    const saveBpBtn = document.getElementById('saveBackpackBtn');
+    const openFwdBtn = document.getElementById('openForwardModalBtn');
+    const closeFwdBtn = document.getElementById('closeForwardModalBtn');
+    const confirmFwdBtn = document.getElementById('confirmForwardBtn');
+    const fwdModal = document.getElementById('forwardModal');
+    const fwdSelect = document.getElementById('forwardCharSelect');
+    const fwdNote = document.getElementById('forwardNoteInput');
+    const posterImg = document.getElementById('posterImg');
+    const toastEl = document.getElementById('posterActionToast');
+
+    let friends = [];
+    const pending = {};
+    let seq = 0;
+
+    function showPosterToast(msg) {
+      if (!toastEl) return;
+      toastEl.textContent = msg || '';
+      if (msg) setTimeout(() => { if (toastEl.textContent === msg) toastEl.textContent = ''; }, 3600);
+    }
+
+    function sendHostRpc(type, payload) {
+      return new Promise((resolve, reject) => {
+        if (!window.parent || window.parent === window) {
+          reject(new Error('当前为独立预览模式，请在小手机「东汉工坊」内使用'));
+          return;
+        }
+        const reqId = `doll_rpc_${Date.now()}_${++seq}`;
+        const timer = setTimeout(() => { delete pending[reqId]; reject(new Error('宿主响应超时')); }, 15000);
+        pending[reqId] = { resolve, reject, timer };
+        window.parent.postMessage({ type, requestId: reqId, payload: payload || {} }, '*');
+      });
+    }
+
+    window.addEventListener('message', (ev) => {
+      const data = ev && ev.data;
+      if (!data || typeof data !== 'object' || !data.type) return;
+      if (data.type === 'WORKSHOP_DOLL_HOST_SYNC') {
+        const list = data.payload && Array.isArray(data.payload.friends) ? data.payload.friends : [];
+        friends = list;
+        if (fwdSelect) {
+          fwdSelect.innerHTML = list.length > 0
+            ? list.map(c => `<option value="${String(c.id).replace(/"/g, '&quot;')}">${c.name}</option>`).join('')
+            : '<option value="">暂未检测到传讯好友</option>';
+        }
+        return;
+      }
+      if (data.requestId && pending[data.requestId]) {
+        const entry = pending[data.requestId];
+        clearTimeout(entry.timer);
+        delete pending[data.requestId];
+        if (data.error) entry.reject(new Error(data.error));
+        else entry.resolve(data.result);
+      }
+    });
+
+    function buildDollBrief() {
+      const fb = (typeof FABRIC_TYPES !== 'undefined' && FABRIC_TYPES.find(x => x.id === state.body.fabricType)) || { name: '水晶超柔' };
+      const name = (state.showcase && state.showcase.name) || document.getElementById('dollNameInput').value.trim() || '奶糖小兔';
+      const note = (state.showcase && state.showcase.note) || '';
+      const desc = `${state.body.bodyType === 'slender' ? '修长比例' : '奶团Q版'} · ${fb.name}${note ? ' · ' + note : ''}`;
+      return { dollName: name, dollDesc: desc };
+    }
+
+    if (backBtn) {
+      backBtn.onclick = () => {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'WORKSHOP_DOLL_CLOSE' }, '*');
+        } else {
+          showToast('当前为独立打开模式');
+        }
+      };
+    }
+
+    if (setPetBtn) {
+      setPetBtn.onclick = async () => {
+        const brief = buildDollBrief();
+        try {
+          const res = await sendHostRpc('WORKSHOP_DOLL_SET_HOME_PET', {
+            dollName: brief.dollName,
+            dollSub: brief.dollDesc,
+            thumb: posterImg ? posterImg.src : '',
+            snapshot: JSON.parse(JSON.stringify(state))
+          });
+          showPosterToast((res && res.message) || '已设为桌面宠物');
+        } catch (err) {
+          showPosterToast(err.message || '设为桌宠失败');
+        }
+      };
+    }
+
+    if (saveBpBtn) {
+      saveBpBtn.onclick = async () => {
+        const brief = buildDollBrief();
+        try {
+          const res = await sendHostRpc('WORKSHOP_DOLL_SAVE_BACKPACK', {
+            dollName: brief.dollName,
+            dollDesc: brief.dollDesc,
+            posterDataUrl: posterImg ? posterImg.src : ''
+          });
+          showPosterToast((res && res.message) || '已收入行囊');
+        } catch (err) {
+          showPosterToast(err.message || '收入行囊失败');
+        }
+      };
+    }
+
+    if (openFwdBtn) {
+      openFwdBtn.onclick = () => {
+        if (window.parent && window.parent !== window) {
+          window.parent.postMessage({ type: 'WORKSHOP_DOLL_REQUEST_SYNC' }, '*');
+        }
+        if (fwdModal) fwdModal.classList.add('show');
+      };
+    }
+    if (closeFwdBtn) closeFwdBtn.onclick = () => { if (fwdModal) fwdModal.classList.remove('show'); };
+
+    if (confirmFwdBtn) {
+      confirmFwdBtn.onclick = async () => {
+        const targetId = fwdSelect ? fwdSelect.value : '';
+        const targetObj = friends.find(c => String(c.id) === String(targetId));
+        const brief = buildDollBrief();
+        try {
+          const res = await sendHostRpc('WORKSHOP_DOLL_SEND_CHAT', {
+            charId: targetId,
+            charName: targetObj ? targetObj.name : '',
+            dollName: brief.dollName,
+            dollDesc: brief.dollDesc,
+            forwardNote: fwdNote ? fwdNote.value.trim() : '',
+            posterDataUrl: posterImg ? posterImg.src : ''
+          });
+          if (fwdModal) fwdModal.classList.remove('show');
+          showPosterToast((res && res.message) || '已发送至传讯');
+        } catch (err) {
+          showPosterToast(err.message || '发送失败');
+        }
+      };
+    }
+
+    if (window.parent && window.parent !== window) {
+      window.parent.postMessage({ type: 'WORKSHOP_DOLL_REQUEST_SYNC' }, '*');
+    }
+  }
+  init();
+})();
+</script>
+</body>
+</html>

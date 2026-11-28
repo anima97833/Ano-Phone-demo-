@@ -1,0 +1,4066 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>幽兰佩 · 东汉古法香囊工坊</title>
+<style>
+  :root {
+    --bg-cream: #FFF9EF; --bg-peach: #F9E3C8; --panel-bg: rgba(255, 252, 245, 0.96);
+    --brown-dark: #3E2215; --brown-mid: #784B31; --brown-light: #B58867;
+    --accent-coral: #C84B31; --accent-coral-dark: #9E331E;
+    --accent-gold: #D9A441; --accent-green: #5B8C6B; --border-warm: #E8D2B9;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    width: 100%; height: 100%; height: 100dvh; overflow: hidden;
+    background: radial-gradient(circle at 50% 32%, #FFFDF9 0%, var(--bg-cream) 54%, var(--bg-peach) 100%);
+    font-family: "Songti SC", "STSong", "Noto Serif SC", -apple-system, BlinkMacSystemFont, "PingFang SC", serif;
+    color: var(--brown-dark);
+  }
+  #app { display: flex; flex-direction: column; width: 100%; max-width: 520px; height: 100%; margin: 0 auto; position: relative; box-shadow: 0 0 40px rgba(120, 75, 49, 0.10); }
+  .top-header { flex-shrink: 0; padding: 8px 12px 6px; background: rgba(255, 251, 244, 0.90); backdrop-filter: blur(8px); border-bottom: 1px solid var(--border-warm); z-index: 20; }
+  .header-row { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
+  .brand-title { font-size: 15.5px; font-weight: 700; color: var(--brown-dark); letter-spacing: 0.8px; display: flex; align-items: center; gap: 6px; }
+  .header-actions { display: flex; gap: 6px; align-items: center; }
+  .icon-btn { width: 30px; height: 30px; border-radius: 50%; border: 1px solid var(--border-warm); background: #FFF; color: var(--brown-mid); display: flex; align-items: center; justify-content: center; cursor: pointer; font-family: inherit; transition: all 0.2s; }
+  .icon-btn:active { transform: scale(0.92); background: var(--bg-cream); }
+  .icon-btn:disabled { opacity: 0.38; pointer-events: none; }
+  .stepper { display: flex; justify-content: space-between; align-items: center; position: relative; padding: 0 2px; }
+  .stepper::before { content: ''; position: absolute; top: 11px; left: 16px; right: 16px; height: 2px; background: var(--border-warm); z-index: 0; }
+  .step-item { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; gap: 2px; cursor: pointer; opacity: 0.55; transition: all 0.25s; }
+  .step-item.active, .step-item.done { opacity: 1; }
+  .step-dot { width: 22px; height: 22px; border-radius: 50%; background: #FFF; border: 2px solid var(--border-warm); display: flex; align-items: center; justify-content: center; font-size: 10.5px; font-weight: 700; color: var(--brown-mid); transition: all 0.25s; }
+  .step-item.active .step-dot { background: var(--accent-coral); border-color: var(--accent-coral); color: #FFF; transform: scale(1.12); box-shadow: 0 3px 10px rgba(200, 75, 49, 0.35); }
+  .step-item.done .step-dot { background: var(--accent-gold); border-color: var(--accent-gold); color: #FFF; }
+  .step-label { font-size: 9.5px; font-weight: 600; color: var(--brown-mid); }
+  .step-item.active .step-label { color: var(--accent-coral-dark); font-weight: 700; }
+
+  .prompt-bar { flex-shrink: 0; margin: 6px 12px 0; padding: 7px 11px; background: rgba(255, 255, 255, 0.92); border: 1px solid var(--border-warm); border-radius: 13px; box-shadow: 0 4px 12px rgba(120, 75, 49, 0.05); display: flex; flex-direction: column; gap: 4px; z-index: 15; transition: border-color 0.2s; }
+  .prompt-bar.warn { border-color: #D94330; background: #FFF6F4; }
+  .prompt-top { display: flex; justify-content: space-between; align-items: center; font-size: 12px; font-weight: 600; color: var(--brown-dark); gap: 8px; }
+  .prompt-badge { font-size: 10.5px; padding: 2px 8px; border-radius: 10px; background: #FFF0E5; color: var(--accent-coral-dark); font-weight: 700; white-space: nowrap; }
+  .progress-track { width: 100%; height: 5px; background: #F3E5D7; border-radius: 4px; overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: linear-gradient(90deg, var(--accent-gold), var(--accent-coral)); border-radius: 4px; transition: width 0.15s ease-out; }
+
+  .stage-wrap { flex: 1 1 0; min-height: 0; position: relative; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #sachetCanvas { max-width: 100%; max-height: 100%; width: auto; height: auto; aspect-ratio: 720 / 760; touch-action: none; display: block; }
+  .stage-floating-tools { position: absolute; top: 8px; right: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 12; align-items: flex-end; max-width: 195px; }
+  .stage-camera-controls { position: absolute; top: 8px; left: 10px; display: flex; flex-direction: column; gap: 6px; z-index: 12; }
+  .zoom-group { display: flex; align-items: center; background: rgba(255, 255, 255, 0.92); border: 1px solid var(--border-warm); border-radius: 18px; box-shadow: 0 4px 10px rgba(120, 75, 49, 0.08); overflow: hidden; }
+  .zoom-btn { border: none; background: transparent; color: var(--brown-dark); font-size: 12px; font-weight: 700; padding: 5px 8px; cursor: pointer; min-width: 25px; }
+  .zoom-readout { font-size: 10.5px; font-weight: 700; color: var(--brown-mid); padding: 4px 5px; border-left: 1px solid var(--border-warm); border-right: 1px solid var(--border-warm); cursor: pointer; min-width: 42px; text-align: center; }
+  .float-pill { display: flex; align-items: center; gap: 4px; padding: 5px 10px; border-radius: 16px; background: rgba(255, 255, 255, 0.94); border: 1px solid var(--border-warm); box-shadow: 0 4px 10px rgba(120, 75, 49, 0.08); font-size: 11px; font-weight: 700; color: var(--brown-dark); cursor: pointer; font-family: inherit; transition: all 0.2s; }
+  .float-pill:active { transform: scale(0.94); }
+  .float-pill.active { background: var(--accent-coral); color: #FFF; border-color: var(--accent-coral); }
+
+  /* 配方比例悬浮清单 */
+  .recipe-box { background: rgba(255, 252, 246, 0.95); border: 1px solid var(--border-warm); border-radius: 13px; padding: 7px 9px; width: 176px; box-shadow: 0 6px 16px rgba(120, 75, 49, 0.10); display: flex; flex-direction: column; gap: 4px; max-height: 170px; overflow-y: auto; }
+  .recipe-title { font-size: 10.5px; font-weight: 800; color: var(--brown-mid); display: flex; justify-content: space-between; }
+  .recipe-row { display: flex; justify-content: space-between; align-items: center; font-size: 10.5px; background: #FFF; padding: 3px 6px; border-radius: 7px; border: 1px solid #F2E2D0; }
+  .recipe-del { border: none; background: #FFF0ED; color: #C83E2B; font-weight: 800; border-radius: 5px; padding: 0 5px; cursor: pointer; font-size: 10px; }
+
+  .selection-toolbar { position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); background: rgba(255, 252, 246, 0.97); border: 1px solid var(--border-warm); border-radius: 22px; padding: 5px 9px; display: flex; align-items: center; gap: 5px; box-shadow: 0 6px 18px rgba(120, 75, 49, 0.16); z-index: 15; white-space: nowrap; }
+  .sel-btn { padding: 4px 8px; border-radius: 12px; border: 1px solid var(--border-warm); background: #FFF; font-size: 10.5px; font-weight: 700; color: var(--brown-dark); cursor: pointer; font-family: inherit; }
+  .sel-btn.danger { color: #D94330; border-color: #F5C6BE; background: #FFF5F3; }
+
+  .bottom-dock { flex-shrink: 0; background: var(--panel-bg); border-top: 1px solid var(--border-warm); border-radius: 20px 20px 0 0; padding: 9px 12px calc(9px + env(safe-area-inset-bottom)); box-shadow: 0 -6px 24px rgba(120, 75, 49, 0.08); z-index: 20; display: flex; flex-direction: column; gap: 7px; }
+  .sub-tabs { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+  .sub-tabs::-webkit-scrollbar { display: none; }
+  .sub-tab { padding: 4px 11px; border-radius: 13px; background: #F5E9DC; color: var(--brown-mid); font-size: 11.5px; font-weight: 600; white-space: nowrap; cursor: pointer; border: 1px solid transparent; transition: all 0.2s; }
+  .sub-tab.active { background: #FFF; color: var(--accent-coral-dark); border-color: var(--accent-coral); box-shadow: 0 2px 8px rgba(200, 75, 49, 0.14); }
+  .options-scroll { display: flex; gap: 9px; overflow-x: auto; padding: 3px 2px; scrollbar-width: none; min-height: 64px; align-items: center; }
+  .options-scroll::-webkit-scrollbar { display: none; }
+  .option-card { flex: 0 0 auto; min-width: 62px; padding: 6px 8px; border-radius: 13px; background: #FFF; border: 1.8px solid var(--border-warm); display: flex; flex-direction: column; align-items: center; gap: 4px; cursor: pointer; transition: all 0.2s; }
+  .option-card.active { border-color: var(--accent-coral); background: #FFF6F3; transform: translateY(-2px); box-shadow: 0 4px 12px rgba(200, 75, 49, 0.15); }
+  .swatch-circle { width: 28px; height: 28px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.92); box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+  .option-thumb { width: 34px; height: 34px; display: flex; align-items: center; justify-content: center; }
+  .option-name { font-size: 10.5px; font-weight: 700; color: var(--brown-dark); white-space: nowrap; }
+
+  .dock-footer { display: flex; gap: 9px; align-items: center; }
+  .btn-secondary { padding: 10px 14px; border-radius: 14px; border: 1.5px solid var(--border-warm); background: #FFF; color: var(--brown-mid); font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; font-family: inherit; }
+  .btn-primary { flex: 1; padding: 11px 16px; border-radius: 14px; border: none; background: linear-gradient(135deg, #E26B4F 0%, var(--accent-coral) 100%); color: #FFF; font-size: 13.5px; font-weight: 700; cursor: pointer; font-family: inherit; box-shadow: 0 6px 16px rgba(200, 75, 49, 0.28); display: flex; align-items: center; justify-content: center; gap: 6px; transition: all 0.2s; }
+  .btn-primary:active { transform: scale(0.98); }
+
+  .modal-overlay { position: fixed; inset: 0; background: rgba(62, 34, 21, 0.48); backdrop-filter: blur(4px); z-index: 50; display: none; align-items: center; justify-content: center; padding: 16px; }
+  .modal-overlay.show { display: flex; }
+  .card-modal { width: 100%; max-width: 420px; background: #FFFDF9; border-radius: 22px; border: 2px solid var(--border-warm); padding: 15px; box-shadow: 0 20px 50px rgba(62, 34, 21, 0.28); display: flex; flex-direction: column; gap: 10px; max-height: 92dvh; overflow-y: auto; }
+  .card-preview-box { border-radius: 14px; padding: 13px; border: 2px solid #D9B68C; background: #FFF9F0; }
+  .card-input-group { display: flex; flex-direction: column; gap: 7px; }
+  .card-input, .card-textarea { width: 100%; border: 1px solid rgba(120, 75, 49, 0.25); background: rgba(255, 255, 255, 0.85); border-radius: 9px; padding: 7px 10px; font-size: 12.5px; color: var(--brown-dark); font-family: inherit; outline: none; }
+  .card-textarea { resize: none; height: 58px; line-height: 1.45; }
+  .preset-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; }
+  .preset-chips::-webkit-scrollbar { display: none; }
+  .preset-chip { padding: 4px 9px; border-radius: 11px; background: #F5E9DC; color: var(--brown-mid); font-size: 10.5px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+  .sig-pad-wrap { margin-top: 4px; border: 1px dashed var(--brown-light); border-radius: 9px; background: rgba(255, 255, 255, 0.72); position: relative; height: 72px; overflow: hidden; }
+  #sigCanvas { width: 100%; height: 100%; touch-action: none; display: block; }
+  .sig-hint { position: absolute; top: 5px; left: 8px; font-size: 10px; color: var(--brown-light); pointer-events: none; }
+  .sig-clear { position: absolute; top: 4px; right: 6px; font-size: 10px; padding: 2px 7px; border-radius: 7px; background: #FFF; border: 1px solid var(--border-warm); color: var(--brown-mid); cursor: pointer; }
+  .poster-img { width: 100%; border-radius: 14px; border: 2px solid var(--border-warm); box-shadow: 0 8px 25px rgba(62, 34, 21, 0.15); }
+  .hidden { display: none !important; }
+
+  .coop-bar { display: flex; align-items: center; gap: 5px; margin-top: 5px; overflow-x: auto; scrollbar-width: none; }
+  .coop-bar::-webkit-scrollbar { display: none; }
+  .coop-select { flex: 0 0 auto; max-width: 112px; padding: 3px 7px; border-radius: 9px; border: 1px solid var(--border-warm); background: #FFFDF8; color: var(--brown-dark); font-size: 11px; font-weight: 700; font-family: inherit; }
+  .coop-btn { flex: 0 0 auto; padding: 3px 9px; border-radius: 9px; border: 1px solid #DF9E7B; background: linear-gradient(135deg, #FFF6EB 0%, #FCE5CD 100%); color: #8A3722; font-size: 11px; font-weight: 700; font-family: inherit; cursor: pointer; white-space: nowrap; }
+  .coop-btn.primary { background: linear-gradient(135deg, #E26A4D 0%, #C83E2B 100%); color: #FFF; border-color: #C83E2B; }
+  .coop-speaker-pill { position: absolute; left: 8px; bottom: 8px; z-index: 18; display: none; align-items: center; gap: 4px; padding: 4px 10px; border-radius: 999px; border: 1px solid #D99B78; background: rgba(255, 250, 242, 0.94); color: #6B3A24; font-size: 11px; font-weight: 700; cursor: pointer; }
+  .coop-speaker-pill.show { display: inline-flex; }
+  .coop-bubble { position: absolute; left: 10px; right: 10px; bottom: 10px; z-index: 19; background: rgba(255, 251, 244, 0.97); border: 1.5px solid #D99B78; border-radius: 15px; padding: 9px 11px; box-shadow: 0 10px 26px rgba(78, 42, 22, 0.22); display: none; flex-direction: column; gap: 5px; }
+  .coop-bubble.show { display: flex; }
+  .history-list { width: 100%; display: flex; flex-direction: column; gap: 9px; max-height: 60dvh; overflow-y: auto; }
+  .history-card { display: flex; gap: 9px; align-items: center; background: #FFF9F0; border: 1.5px solid var(--border-warm); border-radius: 13px; padding: 8px; }
+  .history-thumb { width: 54px; height: 72px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-warm); flex-shrink: 0; }
+  .poster-view-tabs { display: none; width: 100%; background: #F5E8D8; border-radius: 11px; padding: 3px; gap: 4px; }
+  .poster-view-tabs.show { display: flex; }
+  .poster-tab-btn { flex: 1; border: none; border-radius: 8px; padding: 6px 8px; background: transparent; color: var(--brown-mid); font-size: 12px; font-weight: 700; font-family: inherit; cursor: pointer; }
+  .poster-tab-btn.active { background: #FFFDF9; color: var(--accent-coral-dark); box-shadow: 0 2px 6px rgba(120, 75, 49, 0.12); }
+  .poster-notes-page { display: none; width: 100%; max-height: 340px; overflow-y: auto; background: #FFF9F0; border: 1.5px solid var(--border-warm); border-radius: 13px; padding: 9px; flex-direction: column; gap: 8px; }
+  .poster-notes-page.show { display: flex; }
+  .poster-note-item { background: #FFFDF9; border: 1px solid #EAD6C0; border-radius: 10px; padding: 8px 10px; }
+
+  @media (max-height: 740px) {
+    .top-header { padding: 5px 10px 4px; }
+    .header-row { margin-bottom: 3px; }
+    .coop-bar { margin-top: 3px; }
+    .prompt-bar { margin: 4px 10px 0; padding: 5px 9px; gap: 3px; }
+    .prompt-top { font-size: 11px; }
+    .bottom-dock { padding: 7px 10px calc(7px + env(safe-area-inset-bottom)); gap: 5px; border-radius: 16px 16px 0 0; }
+    .options-scroll { min-height: 52px; padding: 2px; gap: 7px; }
+    .option-card { min-width: 56px; padding: 4px 6px; gap: 3px; }
+    .swatch-circle { width: 24px; height: 24px; }
+    .option-thumb { width: 30px; height: 30px; }
+    .btn-primary, .btn-secondary { padding: 8px 12px; font-size: 12.5px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="app">
+  <header class="top-header">
+    <div class="header-row">
+      <div class="brand-title">
+        <button class="icon-btn" id="backToWorkshopBtn" title="返回择坊" style="width:26px;height:26px;font-size:13px;font-weight:800;">‹</button>
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+          <path d="M12 3V6M9 6H15L17 10C18 14 16 19 12 19C8 19 6 14 7 10L9 6Z" fill="#D9889A" stroke="#3E2215" stroke-width="1.6"/>
+          <path d="M12 19V22M10 22H14" stroke="#D9A441" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+        <span>幽兰佩 · 东汉香囊工坊</span>
+      </div>
+      <div class="header-actions">
+        <button class="icon-btn" id="undoBtn" title="撤销 (Undo)" disabled>↶</button>
+        <button class="icon-btn" id="redoBtn" title="重做 (Redo)" disabled>↷</button>
+        <button class="icon-btn" id="openHistoryBtn" title="香囊集录" style="width:auto;padding:0 8px;border-radius:13px;font-size:10.5px;font-weight:700;">香囊录</button>
+        <button class="icon-btn" id="soundToggleBtn" title="雅乐开关">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon><path d="M15.54 8.46a5 5 0 0 1 0 7.07"></path></svg>
+        </button>
+        <button class="icon-btn" id="resetGameBtn" title="重新制作">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path><path d="M3 3v5h5"></path></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="coop-bar" id="coopBar">
+      <select class="coop-select" id="coopCharSelect"><option value="">同步名士中…</option></select>
+      <select class="coop-select" id="coopModeSelect" style="max-width:116px;">
+        <option value="user_make_char_eat">我制·TA佩</option>
+        <option value="relay_coop">你一步·TA一步</option>
+        <option value="char_make_user_eat">TA制·赠我</option>
+      </select>
+      <button class="coop-btn" id="coopSwapTurnBtn" style="display:none;">我先手</button>
+      <button class="coop-btn primary" id="coopActionBtn" style="display:none;">请TA制囊</button>
+    </div>
+
+    <div class="stepper" id="stepperBar">
+      <div class="step-item active" data-step="0"><div class="step-dot">一</div><span class="step-label">择囊选绢</span></div>
+      <div class="step-item" data-step="1"><div class="step-dot">二</div><span class="step-label">裁绢定形</span></div>
+      <div class="step-item" data-step="2"><div class="step-dot">三</div><span class="step-label">调香填囊</span></div>
+      <div class="step-item" data-step="3"><div class="step-dot">四</div><span class="step-label">缝合囊口</span></div>
+      <div class="step-item" data-step="4"><div class="step-dot">五</div><span class="step-label">刺绣绘纹</span></div>
+      <div class="step-item" data-step="5"><div class="step-dot">六</div><span class="step-label">系绳缀饰</span></div>
+      <div class="step-item" data-step="6"><div class="step-dot">七</div><span class="step-label">题名封礼</span></div>
+    </div>
+  </header>
+
+  <div class="prompt-bar" id="promptBar">
+    <div class="prompt-top">
+      <span id="promptText">选定香囊形制、汉代丝帛材质、传统底色与织锦底纹</span>
+      <span class="prompt-badge" id="promptBadge">步骤 1/7</span>
+    </div>
+    <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+  </div>
+
+  <div class="stage-wrap">
+    <canvas id="sachetCanvas" width="720" height="760"></canvas>
+
+    <div class="stage-camera-controls">
+      <button class="float-pill" id="xrayModeBtn" title="透视查看香囊内部香料">
+        <span id="xrayModeLabel">内腔透视: 关</span>
+      </button>
+      <div class="zoom-group">
+        <button class="zoom-btn" id="zoomOutBtn">−</button>
+        <span class="zoom-readout" id="zoomResetBtn">100%</span>
+        <button class="zoom-btn" id="zoomInBtn">+</button>
+      </div>
+    </div>
+
+    <div class="stage-floating-tools" id="floatingTools"></div>
+
+    <div class="selection-toolbar hidden" id="selectionToolbar">
+      <button class="sel-btn" id="btnScaleUp">放大</button>
+      <button class="sel-btn" id="btnScaleDown">缩小</button>
+      <button class="sel-btn" id="btnRotate">旋转</button>
+      <button class="sel-btn" id="btnLayerUp">上移层</button>
+      <button class="sel-btn" id="btnLayerDown">下移层</button>
+      <button class="sel-btn" id="btnLockMotif">锁定</button>
+      <button class="sel-btn danger" id="btnDeleteMotif">移除</button>
+    </div>
+
+    <button class="coop-speaker-pill" id="coopSpeakerPill" type="button">
+      <span id="coopPillName">名士</span><span style="font-size:10px;opacity:0.75;">▸</span>
+    </button>
+
+    <div class="coop-bubble" id="coopBubble">
+      <div style="display:flex;justify-content:space-between;align-items:center;">
+        <div style="display:flex;align-items:center;gap:6px;">
+          <span style="font-size:12px;font-weight:800;color:#C83E2B;" id="coopBubbleName">名士</span>
+          <span style="font-size:10px;padding:1px 7px;border-radius:999px;background:#FCE5CD;color:#784B31;font-weight:700;" id="coopBubbleTag">制香中</span>
+        </div>
+        <button type="button" id="coopBubbleCollapseBtn" style="border:none;background:transparent;color:#8C6348;font-size:11px;font-weight:700;cursor:pointer;">收起 ▾</button>
+      </div>
+      <div id="coopBubbleText" style="font-size:12px;line-height:1.55;color:#3E2215;"></div>
+      <div id="coopBubbleActions" style="display:none;gap:8px;margin-top:2px;">
+        <button type="button" class="coop-btn primary" id="coopNextStepBtn" style="flex:1;padding:5px 10px;">看下一步</button>
+        <button type="button" class="coop-btn" id="coopSkipAnimBtn" style="padding:5px 10px;">直达成品</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="bottom-dock">
+    <div class="sub-tabs" id="subTabs"></div>
+    <div class="options-scroll" id="optionsScroll"></div>
+    <div class="dock-footer">
+      <button class="btn-secondary hidden" id="prevStepBtn">上一步</button>
+      <button class="btn-primary" id="nextStepBtn"><span id="nextStepText">选好丝帛，进入裁绢定形</span></button>
+    </div>
+  </div>
+</div>
+
+<!-- STEP 07: 香囊题名 · 赠予知音 弹窗 -->
+<div class="modal-overlay" id="cardModal">
+  <div class="card-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:16px;color:var(--brown-dark);">香囊题名 · 赠予知音</h3>
+      <button class="icon-btn" id="closeCardModalBtn">×</button>
+    </div>
+    <div class="card-preview-box">
+      <div class="card-input-group">
+        <input type="text" class="card-input" id="giftNameInput" maxlength="12" placeholder="为香囊题写雅名（必填，如：幽兰长乐囊）" value="幽兰长乐囊">
+        <input type="text" class="card-input" id="giftToInput" maxlength="18" placeholder="赠予对象（如：致 洛阳知音）" value="致：洛阳知音">
+        <textarea class="card-textarea" id="giftMsgInput" maxlength="64" placeholder="题写祝词...">纫秋兰以为佩，寄芳馨于君侧，愿岁岁常欢愉，出入皆平安。</textarea>
+        <input type="text" class="card-input" id="giftSealInput" maxlength="4" placeholder="东汉工坊朱印篆字（最多4字）" value="长乐未央">
+      </div>
+      <div class="sig-pad-wrap">
+        <span class="sig-hint">在此处用手指挥毫落款（支持压感毛笔粗细）</span>
+        <button class="sig-clear" id="clearSigBtn">重书</button>
+        <canvas id="sigCanvas" width="340" height="72"></canvas>
+      </div>
+    </div>
+    <div class="preset-chips" id="presetChips">
+      <span class="preset-chip" data-name="幽兰长乐囊" data-msg="纫秋兰以为佩，寄芳馨于君侧，愿岁岁常欢愉。" data-seal="长乐未央">幽兰佩祝</span>
+      <span class="preset-chip" data-name="桂魄安神囊" data-msg="金桂伴艾草，清芬涤尘劳，愿君夜夜好眠。" data-seal="出入平安">安神祈福</span>
+      <span class="preset-chip" data-name="同心方胜囊" data-msg="何以致叩叩，香囊系肘后，愿与君共岁华。" data-seal="永结同心">定情信物</span>
+    </div>
+    <button class="btn-primary" id="saveCardBtn">完成封礼并生成纪念图</button>
+  </div>
+</div>
+
+<!-- 成品纪念海报弹窗 -->
+<div class="modal-overlay" id="posterModal">
+  <div class="card-modal" style="align-items:center;">
+    <div style="width:100%;display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:16px;color:var(--brown-dark);">《东汉香囊礼成图》专属纪念</h3>
+      <button class="icon-btn" id="closePosterModalBtn">×</button>
+    </div>
+    <div class="poster-view-tabs" id="posterViewTabs">
+      <button type="button" class="poster-tab-btn active" id="tabPosterImg">香囊纪念笺</button>
+      <button type="button" class="poster-tab-btn" id="tabPosterNotes">TA 的制香心意</button>
+    </div>
+    <img id="posterImage" class="poster-img" alt="香囊成品纪念图">
+    <div class="poster-notes-page" id="posterNotesPage"></div>
+    <div id="posterReviewBox" style="display:none;width:100%;background:#FFF8EE;border:1.5px solid #E5C2A2;border-radius:12px;padding:9px 11px;font-size:12px;line-height:1.6;"></div>
+    <div id="posterTasteRow" style="display:flex;width:100%;gap:8px;">
+      <button type="button" class="btn-secondary" id="askCharTasteBtn" style="flex:1;padding:8px 10px;font-size:12px;border-color:#DF9E7B;color:#A83622;background:#FFF7F0;">请名士佩香品评</button>
+    </div>
+    <div id="posterUserFeedbackRow" style="display:none;width:100%;gap:6px;">
+      <input type="text" class="card-input" id="userFeedbackInput" placeholder="佩香后对TA说一句真实感受…" style="flex:1;font-size:12px;">
+      <button type="button" class="coop-btn primary" id="sendUserFeedbackBtn" style="padding:7px 11px;">发给TA</button>
+    </div>
+    <div style="display:flex;gap:8px;width:100%;flex-wrap:wrap;">
+      <button type="button" class="btn-secondary" id="saveBackpackBtn" style="flex:1;padding:8px 10px;font-size:12px;">收入行囊</button>
+      <button type="button" class="btn-secondary" id="openForwardModalBtn" style="flex:1;padding:8px 10px;font-size:12px;">赠予传讯好友</button>
+      <button type="button" class="btn-primary" id="downloadPosterBtn" style="flex:1.2;padding:8px 12px;font-size:12.5px;">保存成品图</button>
+    </div>
+    <div id="posterActionToast" style="font-size:11px;color:#A83622;font-weight:700;min-height:15px;"></div>
+  </div>
+</div>
+
+<!-- 香囊集录弹窗 -->
+<div class="modal-overlay" id="historyModal">
+  <div class="card-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15.5px;color:var(--brown-dark);">幽兰佩 · 东汉香囊集录</h3>
+      <button class="icon-btn" id="closeHistoryModalBtn">×</button>
+    </div>
+    <div class="history-list" id="historyList"></div>
+  </div>
+</div>
+
+<!-- 转发好友弹窗 -->
+<div class="modal-overlay" id="forwardModal">
+  <div class="card-modal">
+    <div style="display:flex;justify-content:space-between;align-items:center;">
+      <h3 style="font-size:15.5px;color:var(--brown-dark);">将香囊赠予传讯好友</h3>
+      <button class="icon-btn" id="closeForwardModalBtn">×</button>
+    </div>
+    <select class="card-input" id="forwardCharSelect"></select>
+    <input type="text" class="card-input" id="forwardNoteInput" maxlength="100" placeholder="可选：附带一句赠香私语…">
+    <button type="button" class="btn-primary" id="confirmForwardBtn">确认赠出香囊</button>
+  </div>
+</div>
+
+<script>
+(() => {
+  /* ============================================================================
+   * 1. Web Audio API 古风手作合成音效 (剪布声、落香声、穿针引线声、玉珠清音)
+   * ============================================================================ */
+  class SoundEngine {
+    constructor() { this.ctx = null; this.enabled = true; this.lastTick = 0; }
+    init() {
+      if (!this.ctx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) this.ctx = new AC(); }
+      if (this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+    }
+    playPop(freq = 560) {
+      if (!this.enabled) return; this.init(); if (!this.ctx) return;
+      const now = this.ctx.currentTime, osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+      osc.type = 'sine'; osc.frequency.setValueAtTime(freq, now); osc.frequency.exponentialRampToValueAtTime(freq * 1.35, now + 0.08);
+      g.gain.setValueAtTime(0.11, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.09);
+      osc.connect(g); g.connect(this.ctx.destination); osc.start(now); osc.stop(now + 0.09);
+    }
+    playSnip() {
+      if (!this.enabled) return;
+      const ms = performance.now(); if (ms - this.lastTick < 75) return; this.lastTick = ms;
+      this.init(); if (!this.ctx) return;
+      const now = this.ctx.currentTime, dur = 0.055, len = Math.floor(this.ctx.sampleRate * dur);
+      const buf = this.ctx.createBuffer(1, len, this.ctx.sampleRate), ch = buf.getChannelData(0);
+      for (let i = 0; i < len; i++) ch[i] = (Math.random() * 2 - 1) * Math.exp(-i / (len * 0.35));
+      const src = this.ctx.createBufferSource(); src.buffer = buf;
+      const flt = this.ctx.createBiquadFilter(); flt.type = 'highpass'; flt.frequency.setValueAtTime(1400, now);
+      const g = this.ctx.createGain(); g.gain.setValueAtTime(0.08, now); g.gain.exponentialRampToValueAtTime(0.001, now + dur);
+      src.connect(flt); flt.connect(g); g.connect(this.ctx.destination); src.start(now); src.stop(now + dur);
+    }
+    playChime() {
+      if (!this.enabled) return; this.init(); if (!this.ctx) return;
+      [523.25, 587.33, 659.25, 783.99, 1046.5].forEach((n, i) => {
+        const now = this.ctx.currentTime + i * 0.07, osc = this.ctx.createOscillator(), g = this.ctx.createGain();
+        osc.type = 'sine'; osc.frequency.setValueAtTime(n, now);
+        g.gain.setValueAtTime(0.09, now); g.gain.exponentialRampToValueAtTime(0.001, now + 0.36);
+        osc.connect(g); g.connect(this.ctx.destination); osc.start(now); osc.stop(now + 0.38);
+      });
+    }
+  }
+  const sfx = new SoundEngine();
+
+  /* ============================================================================
+   * 2. 七步统一配置字典 (STEP_CONFIG & 材料数据库)
+   * ============================================================================ */
+  const SACHET_SHAPES = [
+    { id: 'pouch',     name: '荷包形', rx: 145, ry: 162 },
+    { id: 'round',     name: '圆形香囊', rx: 152, ry: 152 },
+    { id: 'gourd',     name: '葫芦形', rx: 142, ry: 172 },
+    { id: 'fangsheng', name: '方胜形', rx: 156, ry: 156 },
+    { id: 'ruyi',      name: '如意形', rx: 160, ry: 148 },
+    { id: 'petal',     name: '花瓣形', rx: 154, ry: 154 }
+  ];
+
+  const FABRIC_MATERIALS = [
+    { id: 'silk',     name: '素绢', desc: '细腻平纹', sheen: 0.22,swatch: '#F7EFE6' },
+    { id: 'damask',   name: '绫罗', desc: '斜纹提花', sheen: 0.30, swatch: '#EDE3D5' },
+    { id: 'linen',    name: '棉麻', desc: '质朴经纬', sheen: 0.05, swatch: '#DECBB3' },
+    { id: 'brocade',  name: '锦缎', desc: '织金厚重', sheen: 0.36, swatch: '#E8C59B' },
+    { id: 'embcloth', name: '绣布', desc: '十字针孔', sheen: 0.12, swatch: '#F2E6D8' }
+  ];
+
+  const FABRIC_COLORS = [
+    { id: 'rouge',     name: '胭脂粉', hex: '#D9889A', dark: '#9E4B5E', light: '#F5C6D0' },
+    { id: 'moonwhite', name: '月白',   hex: '#DCE6E4', dark: '#97ABA7', light: '#F7FAFA' },
+    { id: 'tianshui',  name: '天水碧', hex: '#88B3AC', dark: '#4F7A73', light: '#C5E3DE' },
+    { id: 'qiuxiang',  name: '秋香色', hex: '#C9B36B', dark: '#8C7836', light: '#EFE1AE' },
+    { id: 'ochre',     name: '赭红',   hex: '#B84A39', dark: '#752318', light: '#E38D7E' },
+    { id: 'turquoise', name: '松石绿', hex: '#689E82', dark: '#396950', light: '#A8D4BD' },
+    { id: 'lotus',     name: '藕荷紫', hex: '#B596B8', dark: '#735375', light: '#E3CEE6' }
+  ];
+
+  const FABRIC_PATTERNS = [
+    { id: 'plain',  name: '素面', swatch: '#E8DFD5' },
+    { id: 'cloud',  name: '云纹', swatch: '#D9B88F' },
+    { id: 'fret',   name: '回纹', swatch: '#C7A67B' },
+    { id: 'pearl',  name: '连珠纹', swatch: '#E0C39E' },
+    { id: 'scroll', name: '缠枝花纹', swatch: '#D49E8A' }
+  ];
+
+  const CUT_TOOLS = [
+    { id: 'scissors', name: '小剪刀', swatch: '#B0BEC5' },
+    { id: 'knife',    name: '裁布刀', swatch: '#8D6E63' },
+    { id: 'ruler',    name: '竹布尺', swatch: '#D4B07B' }
+  ];
+
+  const OPENINGS = [
+    { id: 'drawstring', name: '抽绳口', swatch: '#C84B31' },
+    { id: 'flat',       name: '平口',   swatch: '#B58867' },
+    { id: 'folded',     name: '翻边口', swatch: '#D9A441' }
+  ];
+
+  const HERB_CATALOG = [
+    // 花材
+    { id: 'osmanthus', name: '桂花', category: 'flower', color: '#F2B749', sub: '#C98A1E', shape: 'petal4' },
+    { id: 'plum',      name: '梅花', category: 'flower', color: '#E87A90', sub: '#FFF0F3', shape: 'petal5' },
+    { id: 'jasmine',   name: '茉莉', category: 'flower', color: '#FAF8F0', sub: '#D4DFC7', shape: 'petal5' },
+    { id: 'rose',      name: '玫瑰', category: 'flower', color: '#B8293D', sub: '#7A1120', shape: 'rose' },
+    { id: 'chrys',     name: '菊花', category: 'flower', color: '#F5D04C', sub: '#D49B1A', shape: 'strip' },
+    { id: 'orchid',    name: '兰草', category: 'flower', color: '#7BB086', sub: '#4C7A56', shape: 'leaf' },
+    // 香草
+    { id: 'mugwort',   name: '艾草', category: 'herb',   color: '#5E8C52', sub: '#3B5E32', shape: 'leaf' },
+    { id: 'mint',      name: '薄荷', category: 'herb',   color: '#6AC26B', sub: '#398A3A', shape: 'leaf' },
+    { id: 'perilla',   name: '紫苏', category: 'herb',   color: '#734B7D', sub: '#4B8253', shape: 'leaf' },
+    { id: 'agastache', name: '藿香', category: 'herb',   color: '#688F4E', sub: '#43612E', shape: 'leaf' },
+    { id: 'eupatorium',name: '佩兰', category: 'herb',   color: '#82A868', sub: '#53733E', shape: 'strip' },
+    // 香料
+    { id: 'clove',     name: '丁香', category: 'spice',  color: '#5C3824', sub: '#381F11', shape: 'clove' },
+    { id: 'chenpi',    name: '陈皮', category: 'spice',  color: '#E07A24', sub: '#FFF0C2', shape: 'strip' },
+    { id: 'angelica',  name: '白芷', category: 'spice',  color: '#EFE8D8', sub: '#C7B89B', shape: 'slice' },
+    { id: 'nard',      name: '甘松', category: 'spice',  color: '#8C6D46', sub: '#594228', shape: 'strip' },
+    { id: 'agarwood',  name: '沉香', category: 'spice',  color: '#4A3222', sub: '#291A10', shape: 'slice' },
+    // 辅材
+    { id: 'cotton',    name: '棉絮', category: 'filler', color: '#FFFFFF', sub: '#E6E1DA', shape: 'cloud' },
+    { id: 'powder',    name: '香粉', category: 'filler', color: '#E8C782', sub: '#B89348', shape: 'powder' },
+    { id: 'woodchip',  name: '香木碎',category:'filler', color: '#A6784B', sub: '#6E4B2A', shape: 'slice' }
+  ];
+
+  const PRESET_RECIPES = [
+    { name: '清雅花香', items: [{ id: 'osmanthus', amount: 30 }, { id: 'plum', amount: 30 }, { id: 'orchid', amount: 20 }, { id: 'angelica', amount: 20 }] },
+    { name: '草木清香', items: [{ id: 'mugwort', amount: 30 }, { id: 'mint', amount: 25 }, { id: 'eupatorium', amount: 25 }, { id: 'chenpi', amount: 20 }] },
+    { name: '温润木香', items: [{ id: 'agarwood', amount: 35 }, { id: 'clove', amount: 25 }, { id: 'nard', amount: 20 }, { id: 'powder', amount: 20 }] }
+  ];
+
+  const NEEDLES = [
+    { id: 'fine',       name: '细针',   swatch: '#CFD8DC' },
+    { id: 'embroidery', name: '绣花针', swatch: '#B0BEC5' },
+    { id: 'curved',     name: '弯针',   swatch: '#90A4AE' }
+  ];
+
+  const THREAD_COLORS = [
+    { id: 't_red',    name: '朱红', hex: '#C83E3B' },
+    { id: 't_gold',   name: '金丝', hex: '#E0AD45' },
+    { id: 't_white',  name: '米白', hex: '#FAF6EE' },
+    { id: 't_cyan',   name: '黛青', hex: '#3B6478' },
+    { id: 't_green',  name: '青绿', hex: '#58946B' },
+    { id: 't_pink',   name: '浅粉', hex: '#F0A1B0' },
+    { id: 't_purple', name: '藕紫', hex: '#8A6494' },
+    { id: 't_black',  name: '墨黑', hex: '#2B2623' }
+  ];
+
+  const STITCH_TYPES = [
+    { id: 'running',  name: '平针',   swatch: '#C83E3B' },
+    { id: 'back',     name: '回针',   swatch: '#9E331E' },
+    { id: 'overlock', name: '锁边针', swatch: '#D9A441' },
+    { id: 'binding',  name: '包边针', swatch: '#5B8C6B' }
+  ];
+
+  const EMBROIDERY_MOTIFS = [
+    // 花卉纹样
+    { id: 'm_plum',   name: '梅花',   category: 'm_flower' },
+    { id: 'm_lotus',  name: '荷花',   category: 'm_flower' },
+    { id: 'm_peony',  name: '牡丹',   category: 'm_flower' },
+    { id: 'm_orchid', name: '兰花',   category: 'm_flower' },
+    { id: 'm_osman',  name: '桂花枝', category: 'm_flower' },
+    { id: 'm_chrys',  name: '菊花',   category: 'm_flower' },
+    // 吉祥纹样
+    { id: 'm_cloud',  name: '祥云',   category: 'm_ausp' },
+    { id: 'm_ruyi',   name: '如意',   category: 'm_ausp' },
+    { id: 'm_bat',    name: '福蝠',   category: 'm_ausp' },
+    { id: 'm_fish',   name: '双鱼',   category: 'm_ausp' },
+    { id: 'm_branch', name: '连理枝', category: 'm_ausp' },
+    { id: 'm_beast',  name: '瑞兽纹', category: 'm_ausp' },
+    // 文字纹样
+    { id: 't_fu',     name: '福',     category: 'm_text', text: '福' },
+    { id: 't_an',     name: '安',     category: 'm_text', text: '安' },
+    { id: 't_ning',   name: '宁',     category: 'm_text', text: '宁' },
+    { id: 't_changle',name: '长乐',   category: 'm_text', text: '长乐' },
+    { id: 't_changan',name: '常安',   category: 'm_text', text: '常安' }
+  ];
+
+  const EMBROIDERY_TOOLS = [
+    { id: 'satin',    name: '平绣',   mode: 'motif',    swatch: '#D9A441' },
+    { id: 'chain',    name: '锁绣',   mode: 'motif',    swatch: '#C84B31' },
+    { id: 'gold',     name: '盘金绣', mode: 'motif',    swatch: '#F2C96B' },
+    { id: 'seed',     name: '打籽绣', mode: 'motif',    swatch: '#689E82' },
+    { id: 'freehand', name: '自由刺绣笔', mode: 'freehand', swatch: '#8A6494' }
+  ];
+
+  const CORDS = [
+    { id: 'c_red',    name: '朱红丝绳', color: '#C83E2B', double: false },
+    { id: 'c_cyan',   name: '天青丝绳', color: '#4B7D78', double: false },
+    { id: 'c_gold',   name: '流金丝绳', color: '#D49B2A', double: false },
+    { id: 'c_white',  name: '米白丝绳', color: '#EDE6D8', double: false },
+    { id: 'c_double', name: '双股彩绳', color: '#C83E2B', double: true }
+  ];
+
+  const TASSELS = [
+    { id: 'ts_long',   name: '长流苏',   color: '#C83E2B', len: 105, style: 'long' },
+    { id: 'ts_short',  name: '短流苏',   color: '#D49B2A', len: 68,  style: 'short' },
+    { id: 'ts_double', name: '双层流苏', color: '#4B7D78', len: 96,  style: 'double' },
+    { id: 'ts_petal',  name: '花瓣流苏', color: '#D97388', len: 88,  style: 'petal' }
+  ];
+
+  const BEADS = [
+    { id: 'bd_jade',  name: '白玉珠', color: '#F0F4EC', rim: '#B8C7B4', isRing: false },
+    { id: 'bd_agate', name: '玛瑙珠', color: '#C83728', rim: '#6E140B', isRing: false },
+    { id: 'bd_glass', name: '琉璃珠', color: '#4B86B8', rim: '#1D4263', isRing: false },
+    { id: 'bd_wood',  name: '檀木珠', color: '#6E472B', rim: '#3B2212', isRing: false },
+    { id: 'bd_ring',  name: '白玉环', color: '#F2F5EE', rim: '#B5C4B1', isRing: true }
+  ];
+
+  const KNOTS = [
+    { id: 'kn_ear',    name: '双耳结', color: '#C83E2B' },
+    { id: 'kn_ruyi',   name: '如意结', color: '#D49B2A' },
+    { id: 'kn_simple', name: '同心结', color: '#D97388' },
+    { id: 'kn_flower', name: '盘长花结',color:'#4B7D78' }
+  ];
+
+  const GIFT_BOXES = [
+    { id: 'lacquer', name: '朱漆木盒', bg: '#4A1810', border: '#D49B2A', inner: '#260B07' },
+    { id: 'pouch',   name: '素色锦囊', bg: '#EDE3D2', border: '#B89B72', inner: '#FAF5EC' },
+    { id: 'silk',    name: '丝帛包裹', bg: '#F7E8E8', border: '#D9889A', inner: '#FFFDF9' },
+    { id: 'bamboo',  name: '竹编小盒', bg: '#D8E3CE', border: '#759465', inner: '#F2F7EE' }
+  ];
+
+  const GIFT_SEALS = [
+    { id: 'red_relief',    name: '朱文方印', swatch: '#C83E2B' },
+    { id: 'white_intaglio',name: '白文古印', swatch: '#9E331E' }
+  ];
+
+  const STEP_CONFIG = {
+    0: { title: '择囊选绢', tabs: [{ id: 'shape', name: '香囊形制' }, { id: 'fabric', name: '丝帛材质' }, { id: 'color', name: '布料底色' }, { id: 'pattern', name: '织锦底纹' }] },
+    1: { title: '裁绢定形', tabs: [{ id: 'tool', name: '裁剪工具' }, { id: 'outline', name: '囊体形状' }, { id: 'opening', name: '囊口样式' }] },
+    2: { title: '调香填囊', tabs: [{ id: 'flower', name: '花材' }, { id: 'herb', name: '香草' }, { id: 'spice', name: '香料' }, { id: 'filler', name: '辅材' }] },
+    3: { title: '缝合囊口', tabs: [{ id: 'needle', name: '针具' }, { id: 'thread', name: '丝线颜色' }, { id: 'stitch', name: '缝合针法' }] },
+    4: { title: '刺绣绘纹', tabs: [{ id: 'm_flower', name: '花卉纹样' }, { id: 'm_ausp', name: '吉祥纹样' }, { id: 'm_text', name: '吉语文字' }, { id: 'e_thread', name: '绣线颜色' }, { id: 'e_tool', name: '刺绣针法' }] },
+    5: { title: '系绳缀饰', tabs: [{ id: 'cord', name: '顶部系绳' }, { id: 'tassel', name: '垂穗流苏' }, { id: 'bead', name: '玉珠佩饰' }, { id: 'knot', name: '汉风结饰' }] },
+    6: { title: '题名封礼', tabs: [{ id: 'package', name: '礼盒包装' }, { id: 'seal', name: '工坊印章' }, { id: 'message', name: '题写祝词' }] }
+  };
+
+  /* ============================================================================
+   * 3. IndexedDB 串行防抖持久化引擎 (EasternHanSachetDB)
+   * ============================================================================ */
+  class SachetStorageDB {
+    constructor() {
+      this.dbName = 'EasternHanSachetDB';
+      this.dbVersion = 1;
+      this.db = null;
+      this.saveTimer = null;
+      this.isWriting = false;
+      this.pending = null;
+    }
+    async init() {
+      return new Promise((resolve) => {
+        if (!window.indexedDB) { resolve(false); return; }
+        try {
+          const req = indexedDB.open(this.dbName, this.dbVersion);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            ['projects', 'recipes', 'assets', 'gallery'].forEach(st => {
+              if (!db.objectStoreNames.contains(st)) db.createObjectStore(st, { keyPath: 'id' });
+            });
+          };
+          req.onsuccess = (e) => { this.db = e.target.result; resolve(true); };
+          req.onerror = () => resolve(false);
+        } catch (_) { resolve(false); }
+      });
+    }
+    scheduleSave(serializableState) {
+      if (this.saveTimer) clearTimeout(this.saveTimer);
+      this.saveTimer = setTimeout(() => {
+        this.writeRecord('projects', { id: 'current_draft', version: 1, updatedAt: Date.now(), data: serializableState });
+      }, 380);
+    }
+    async writeRecord(storeName, record) {
+      if (!this.db) return;
+      if (this.isWriting) { this.pending = { storeName, record }; return; }
+      this.isWriting = true;
+      try {
+        await new Promise((resolve, reject) => {
+          const tx = this.db.transaction([storeName], 'readwrite');
+          tx.objectStore(storeName).put(record);
+          tx.oncomplete = () => resolve();
+          tx.onerror = (e) => reject(e);
+        });
+      } catch (_) {}
+      this.isWriting = false;
+      if (this.pending) { const nxt = this.pending; this.pending = null; this.writeRecord(nxt.storeName, nxt.record); }
+    }
+    async loadDraft() {
+      if (!this.db) return null;
+      return new Promise((resolve) => {
+        try {
+          const tx = this.db.transaction(['projects'], 'readonly');
+          const req = tx.objectStore('projects').get('current_draft');
+          req.onsuccess = () => resolve(req.result ? req.result.data : null);
+          req.onerror = () => resolve(null);
+        } catch (_) { resolve(null); }
+      });
+    }
+    async loadGallery() {
+      if (!this.db) return [];
+      return new Promise((resolve) => {
+        try {
+          const tx = this.db.transaction(['gallery'], 'readonly');
+          const req = tx.objectStore('gallery').getAll();
+          req.onsuccess = () => {
+            const list = Array.isArray(req.result) ? req.result : [];
+            list.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+            resolve(list);
+          };
+          req.onerror = () => resolve([]);
+        } catch (_) { resolve([]); }
+      });
+    }
+  }
+  const storageDB = new SachetStorageDB();
+
+  /* ============================================================================
+   * 4. 全局状态树 (state)、步骤验证 (validateStep) 与 30 步 Undo/Redo 历史栈
+   * ============================================================================ */
+  const CW = 720, CH = 760, CX = 360, CY = 400;
+  let state = createInitialState();
+  const undoStack = [], redoStack = [];
+  const runtimeParticles = []; // 布屑、落香动态粒子
+
+  function createInitialState() {
+    return {
+      version: 1,
+      step: 0,
+      subTab: 'shape',
+      xrayMode: false,
+      fabric: { shape: 'pouch', material: 'silk', color: '#D9889A', pattern: 'cloud', opening: 'drawstring' },
+      cutting: { tool: 'scissors', checkpoints: new Array(36).fill(false), progress: 0, foldProgress: 0, completed: false },
+      filling: { activeHerbId: 'osmanthus', ingredients: [], particles: [], totalAmount: 0, capacity: 100 },
+      sewing: { needle: 'fine', threadColor: '#C83E3B', stitchType: 'running', checkpoints: new Array(24).fill(false), progress: 0, cinchProgress: 0, completed: false },
+      embroidery: { toolMode: 'motif', stitchStyle: 'satin', activeMotifId: 'm_plum', threadColor: '#E0AD45', motifs: [], freehandStrokes: [], selectedUid: null },
+      accessories: {
+        cord: CORDS[0],
+        tassel: null,
+        knot: null,
+        beads: []
+      },
+      gift: { name: '幽兰长乐囊', recipient: '致：洛阳知音', message: '纫秋兰以为佩，寄芳馨于君侧，愿岁岁常欢愉，出入皆平安。', box: 'lacquer', seal: 'red_relief', sealText: '长乐未央', completed: false },
+      stepStatus: { 0: true, 1: false, 2: false, 3: false, 4: false, 5: false, 6: false },
+      camera: { zoom: 1.0, panX: 0, panY: 0, targetZoom: 1.0, targetPanX: 0, targetPanY: 0 },
+      pointer: { down: false, x: 360, y: 400, vx: 0, vy: 0 }
+    };
+  }
+
+  function getSerializableState() {
+    const copy = JSON.parse(JSON.stringify(state));
+    delete copy.pointer;
+    delete copy.camera;
+    return copy;
+  }
+
+  function pushHistory() {
+    undoStack.push(getSerializableState());
+    if (undoStack.length > 30) undoStack.shift();
+    redoStack.length = 0;
+    syncHistoryBtns();
+    storageDB.scheduleSave(getSerializableState());
+  }
+
+  function restoreSerializedState(snap) {
+    if (!snap) return;
+    const cam = state.camera, ptr = state.pointer;
+    state = Object.assign(createInitialState(), snap);
+    state.camera = cam;
+    state.pointer = ptr;
+    markAllLayersDirty();
+    updateUI();
+    storageDB.scheduleSave(getSerializableState());
+  }
+
+  function undoAction() {
+    if (undoStack.length === 0) return;
+    redoStack.push(getSerializableState());
+    const prev = undoStack.pop();
+    restoreSerializedState(prev);
+    syncHistoryBtns();
+    sfx.playPop(420);
+  }
+
+  function redoAction() {
+    if (redoStack.length === 0) return;
+    undoStack.push(getSerializableState());
+    const nxt = redoStack.pop();
+    restoreSerializedState(nxt);
+    syncHistoryBtns();
+    sfx.playPop(540);
+  }
+
+  function syncHistoryBtns() {
+    document.getElementById('undoBtn').disabled = undoStack.length === 0;
+    document.getElementById('redoBtn').disabled = redoStack.length === 0;
+  }
+
+  function validateStep(stepIdx) {
+    switch (stepIdx) {
+      case 0: return Boolean(state.fabric.shape && state.fabric.material && state.fabric.color);
+      case 1: return Boolean(state.cutting.completed && state.fabric.opening);
+      case 2: return state.filling.ingredients.length >= 2 && state.filling.totalAmount >= 20;
+      case 3: return state.sewing.progress >= 90 || state.sewing.completed;
+      case 4: return state.embroidery.motifs.length > 0 || state.embroidery.freehandStrokes.length > 0;
+      case 5: return Boolean(state.accessories.cord && (state.accessories.tassel || state.accessories.beads.length > 0 || state.accessories.knot));
+      case 6: return state.gift.name.trim().length > 0;
+      default: return false;
+    }
+  }
+
+  function getStepIncompleteReason(stepIdx) {
+    switch (stepIdx) {
+      case 1: return `请先按住剪刀沿虚线完成裁绢（当前 ${state.cutting.progress}%，或点击右上角「自动裁剪」）`;
+      case 2: return `请至少添入 2 种香料且总份量达 20 份（当前 ${state.filling.ingredients.length} 种 / ${state.filling.totalAmount} 份）`;
+      case 3: return `请拖动针线沿囊口虚线缝合至 90% 以上（当前 ${state.sewing.progress}%，或点击「自动缝合」）`;
+      case 4: return '请至少在香囊表面放置 1 枚刺绣纹样，或使用自由刺绣笔绣出纹路';
+      case 5: return '请至少选择 1 条顶部系绳，并搭配流苏、玉珠或结饰中的任意一项';
+      case 6: return '请为香囊题写雅名并确认封礼';
+      default: return '请先完成当前步骤制作';
+    }
+  }
+
+  /* ============================================================================
+   * 5. 香囊六大形制几何路径与标准化表面坐标 (u, v) 双向映射
+   * ============================================================================ */
+  function getShapeDimensions(shapeId) {
+    return SACHET_SHAPES.find(s => s.id === shapeId) || SACHET_SHAPES[0];
+  }
+
+  // 根据形制与纵向坐标 v ∈ [-1, 1] 计算香囊水平半宽 W(v)，用于 (u, v) 跨形制自适应映射
+  function getSachetHalfWidthAtV(shapeId, v) {
+    const dim = getShapeDimensions(shapeId);
+    const av = Math.min(1, Math.abs(v));
+    if (shapeId === 'round' || shapeId === 'petal') {
+      return dim.rx * Math.sqrt(Math.max(0.15, 1 - av * av * 0.85));
+    }
+    if (shapeId === 'gourd') {
+      // 上窄腰收下圆腹
+      const waist = Math.exp(-Math.pow((v + 0.15) * 3.5, 2)) * 0.42;
+      const topNarrow = v < 0 ? 0.72 : 1.0;
+      return dim.rx * topNarrow * (1 - waist) * Math.sqrt(Math.max(0.18, 1 - av * av * 0.82));
+    }
+    if (shapeId === 'fangsheng') {
+      return dim.rx * Math.max(0.22, 1.05 - av * 0.85);
+    }
+    if (shapeId === 'ruyi') {
+      const lobe = v < 0.2 ? 1.05 : 0.75;
+      return dim.rx * lobe * Math.sqrt(Math.max(0.2, 1 - av * av * 0.8));
+    }
+    // 默认荷包形 (pouch)：束颈丰腹
+    const neckPinch = v < -0.55 ? 0.58 : (v < -0.25 ? 0.72 : 1.0);
+    return dim.rx * neckPinch * Math.sqrt(Math.max(0.22, 1 - Math.pow(av * 0.92, 2)));
+  }
+
+  function uvToSachetWorld(u, v, shapeId = state.fabric.shape) {
+    const dim = getShapeDimensions(shapeId);
+    const hw = getSachetHalfWidthAtV(shapeId, v);
+    return { x: CX + u * hw, y: CY + v * dim.ry };
+  }
+
+  function worldToSachetUV(wx, wy, shapeId = state.fabric.shape) {
+    const dim = getShapeDimensions(shapeId);
+    const v = Math.max(-0.92, Math.min(0.92, (wy - CY) / dim.ry));
+    const hw = Math.max(20, getSachetHalfWidthAtV(shapeId, v));
+    const u = Math.max(-0.92, Math.min(0.92, (wx - CX) / hw));
+    return { u, v };
+  }
+
+  // 绘制香囊主体闭合矢量路径（供裁剪、缝合、底纹及刺绣 clip 共用）
+  function traceSachetContour(ctx, shapeId = state.fabric.shape, scale = 1.0) {
+    const dim = getShapeDimensions(shapeId);
+    const rx = dim.rx * scale, ry = dim.ry * scale;
+    ctx.save();
+    ctx.beginPath();
+
+    if (shapeId === 'round') {
+      ctx.arc(CX, CY, rx, 0, Math.PI * 2);
+    } else if (shapeId === 'fangsheng') {
+      // 汉代同心方胜菱形叠加轮廓
+      ctx.moveTo(CX, CY - ry);
+      ctx.lineTo(CX + rx, CY);
+      ctx.lineTo(CX, CY + ry);
+      ctx.lineTo(CX - rx, CY);
+      ctx.closePath();
+    } else if (shapeId === 'gourd') {
+      // 福禄双腹葫芦形
+      ctx.moveTo(CX - rx * 0.28, CY - ry);
+      ctx.lineTo(CX + rx * 0.28, CY - ry);
+      ctx.bezierCurveTo(CX + rx * 0.85, CY - ry * 0.75, CX + rx * 0.75, CY - ry * 0.22, CX + rx * 0.42, CY - ry * 0.12);
+      ctx.bezierCurveTo(CX + rx * 1.12, CY + ry * 0.10, CX + rx * 1.08, CY + ry * 0.95, CX, CY + ry);
+      ctx.bezierCurveTo(CX - rx * 1.08, CY + ry * 0.95, CX - rx * 1.12, CY + ry * 0.10, CX - rx * 0.42, CY - ry * 0.12);
+      ctx.bezierCurveTo(CX - rx * 0.75, CY - ry * 0.22, CX - rx * 0.85, CY - ry * 0.75, CX - rx * 0.28, CY - ry);
+      ctx.closePath();
+    } else if (shapeId === 'ruyi') {
+      // 祥云如意形
+      ctx.moveTo(CX, CY - ry * 0.88);
+      ctx.bezierCurveTo(CX + rx * 0.75, CY - ry * 1.05, CX + rx * 1.15, CY - ry * 0.20, CX + rx * 0.75, CY + ry * 0.35);
+      ctx.bezierCurveTo(CX + rx * 0.45, CY + ry * 0.75, CX + rx * 0.25, CY + ry, CX, CY + ry);
+      ctx.bezierCurveTo(CX - rx * 0.25, CY + ry, CX - rx * 0.45, CY + ry * 0.75, CX - rx * 0.75, CY + ry * 0.35);
+      ctx.bezierCurveTo(CX - rx * 1.15, CY - ry * 0.20, CX - rx * 0.75, CY - ry * 1.05, CX, CY - ry * 0.88);
+      ctx.closePath();
+    } else if (shapeId === 'petal') {
+      // 六瓣海棠梅花形
+      const petals = 6;
+      for (let i = 0; i <= 120; i++) {
+        const a = (i / 120) * Math.PI * 2;
+        const r = rx * (0.86 + 0.14 * Math.abs(Math.cos(a * petals * 0.5)));
+        const px = CX + Math.cos(a) * r, py = CY + Math.sin(a) * r;
+        if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+      }
+      ctx.closePath();
+    } else {
+      // 经典汉代束口荷包形 (pouch)
+      const cinch = state.step >= 3 ? (0.46 - state.sewing.cinchProgress * 0.14) : 0.52;
+      const flare = state.fabric.opening === 'folded' ? 0.65 : 0.54;
+      ctx.moveTo(CX - rx * flare, CY - ry);
+      ctx.quadraticCurveTo(CX, CY - ry * 0.92, CX + rx * flare, CY - ry);
+      ctx.quadraticCurveTo(CX + rx * (cinch + 0.08), CY - ry * 0.72, CX + rx * cinch, CY - ry * 0.58);
+      ctx.bezierCurveTo(CX + rx * 1.12, CY - ry * 0.18, CX + rx * 1.06, CY + ry * 0.92, CX, CY + ry);
+      ctx.bezierCurveTo(CX - rx * 1.06, CY + ry * 0.92, CX - rx * 1.12, CY - ry * 0.18, CX - rx * cinch, CY - ry * 0.58);
+      ctx.quadraticCurveTo(CX - rx * (cinch + 0.08), CY - ry * 0.72, CX - rx * flare, CY - ry);
+      ctx.closePath();
+    }
+    ctx.restore();
+  }
+
+  // 生成沿香囊轮廓均匀分布的 N 个裁剪检测节点
+  function getContourSamplePoints(shapeId, count = 36) {
+    const dim = getShapeDimensions(shapeId);
+    const rx = dim.rx, ry = dim.ry;
+    const pts = [];
+    for (let i = 0; i < count; i++) {
+      const a = (i / count) * Math.PI * 2 - Math.PI * 0.5;
+      let rX = rx, rY = ry;
+      if (shapeId === 'petal') {
+        const m = 0.86 + 0.14 * Math.abs(Math.cos(a * 3));
+        rX *= m; rY *= m;
+      } else if (shapeId === 'gourd') {
+        const v = Math.sin(a);
+        rX = getSachetHalfWidthAtV('gourd', v);
+      } else if (shapeId === 'pouch') {
+        const v = Math.sin(a);
+        rX = getSachetHalfWidthAtV('pouch', v);
+      } else if (shapeId === 'fangsheng') {
+        const denom = Math.abs(Math.cos(a)) + Math.abs(Math.sin(a));
+        rX = rx / denom; rY = ry / denom;
+      }
+      pts.push({ x: CX + Math.cos(a) * rX, y: CY + Math.sin(a) * rY, angle: a });
+    }
+    return pts;
+  }
+
+  // 生成囊口缝合路径的 24 个针孔节点（区分束颈型香囊 vs 边缘锁边型香囊，绝不横劈囊腹）
+  function getSewingSamplePoints(shapeId = state.fabric.shape, count = 24) {
+    const dim = getShapeDimensions(shapeId);
+    const pts = [];
+    if (shapeId === 'pouch' || shapeId === 'gourd') {
+      // 荷包形/葫芦形：贴合真实收窄的囊颈束口
+      const neckV = shapeId === 'gourd' ? -0.34 : -0.60;
+      const neckY = CY + dim.ry * neckV;
+      const neckW = getSachetHalfWidthAtV(shapeId, neckV) * 0.88;
+      for (let i = 0; i < count; i++) {
+        const t = i / (count - 1);
+        const x = (CX - neckW) + t * (neckW * 2);
+        const y = neckY + Math.sin(t * Math.PI) * 10;
+        pts.push({ x, y });
+      }
+      return pts;
+    }
+
+    // 圆形/花瓣形/方胜形/如意形：沿香囊上半外缘内缩 9px 的真实封口缝边弧线
+    const startAng = -Math.PI * 0.88;
+    const endAng = -Math.PI * 0.12;
+    for (let i = 0; i < count; i++) {
+      const t = i / (count - 1);
+      const a = startAng + t * (endAng - startAng);
+      let rX = dim.rx - 9, rY = dim.ry - 9;
+      if (shapeId === 'petal') {
+        const m = 0.86 + 0.14 * Math.abs(Math.cos(a * 3));
+        rX = dim.rx * m - 8;
+        rY = dim.ry * m - 8;
+      } else if (shapeId === 'fangsheng') {
+        const denom = Math.abs(Math.cos(a)) + Math.abs(Math.sin(a));
+        rX = (dim.rx / denom) - 9;
+        rY = (dim.ry / denom) - 9;
+      } else if (shapeId === 'ruyi') {
+        rX = dim.rx * 0.86;
+        rY = dim.ry * 0.84;
+      }
+      pts.push({ x: CX + Math.cos(a) * rX, y: CY + Math.sin(a) * rY });
+    }
+    return pts;
+  }
+
+  /* ============================================================================
+   * 6. 七层离屏 Canvas 脏标记合成引擎 (Layer 00 ~ Layer 06)
+   * ============================================================================ */
+  const mainCanvas = document.getElementById('sachetCanvas');
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  mainCanvas.width = CW * dpr;
+  mainCanvas.height = CH * dpr;
+  const mainCtx = mainCanvas.getContext('2d');
+
+  const LAYER_NAMES = ['bg', 'fabric', 'filling', 'sewing', 'embroidery', 'lighting', 'accessories', 'effects'];
+  const layers = {};
+  const layerDirty = {};
+
+  LAYER_NAMES.forEach(name => {
+    const c = document.createElement('canvas');
+    c.width = CW * dpr;
+    c.height = CH * dpr;
+    const lctx = c.getContext('2d');
+    lctx.scale(dpr, dpr);
+    layers[name] = { canvas: c, ctx: lctx };
+    layerDirty[name] = true;
+  });
+
+  function markDirty(...names) {
+    if (names.length === 0) LAYER_NAMES.forEach(n => layerDirty[n] = true);
+    else names.forEach(n => {
+      if (layerDirty[n] !== undefined) layerDirty[n] = true;
+      if (n === 'fabric' || n === 'filling') layerDirty.lighting = true;
+    });
+  }
+  function markAllLayersDirty() { markDirty(); }
+
+  // Layer 00: 东汉制香木案背景 / 第7步礼盒陈列台
+  function renderLayer00_Background(ctx) {
+    ctx.clearRect(0, 0, CW, CH);
+    ctx.save();
+    if (state.step === 6) {
+      // STEP 07: 古代礼盒或丝帛陈列台
+      const box = GIFT_BOXES.find(b => b.id === state.gift.box) || GIFT_BOXES[0];
+      ctx.fillStyle = 'rgba(62, 34, 21, 0.22)';
+      ctx.beginPath();
+      ctx.roundRect(108, 128, 504, 520, 26);
+      ctx.fill();
+
+      ctx.fillStyle = box.bg;
+      ctx.strokeStyle = box.border;
+      ctx.lineWidth = 4;
+      ctx.beginPath();
+      ctx.roundRect(100, 118, 520, 520, 22);
+      ctx.fill();
+      ctx.stroke();
+
+      ctx.fillStyle = box.inner;
+      ctx.strokeStyle = box.border;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      ctx.roundRect(122, 140, 476, 476, 16);
+      ctx.fill();
+      ctx.stroke();
+
+      // 礼盒左上角雅名题签
+      const isDarkBox = box.id === 'lacquer';
+      ctx.fillStyle = isDarkBox ? 'rgba(247, 215, 116, 0.88)' : 'rgba(120, 75, 49, 0.85)';
+      ctx.font = 'bold 16px "Songti SC", serif';
+      ctx.textAlign = 'left';
+      ctx.textBaseline = 'top';
+      ctx.fillText(`《${state.gift.name || '幽兰长乐囊'}》`, 144, 158);
+
+      // 礼盒右下角实时呈现「东汉工坊印章」（朱文方印 = 白底红框红字；白文古印 = 朱砂红底白字）
+      const sx = 544, sy = 562, sz = 54;
+      const isRelief = state.gift.seal !== 'white_intaglio';
+      const stxt = (state.gift.sealText || '长乐未央').slice(0, 4);
+      ctx.save();
+      ctx.translate(sx, sy);
+      ctx.rotate(-0.04);
+      if (isRelief) {
+        // 朱文方印（阳文）：素纸底 + 朱砂双框 + 朱红篆字
+        ctx.fillStyle = 'rgba(255, 250, 240, 0.94)';
+        ctx.beginPath(); ctx.roundRect(-sz * 0.5, -sz * 0.5, sz, sz, 4); ctx.fill();
+        ctx.strokeStyle = '#C83E2B';
+        ctx.lineWidth = 3.2;
+        ctx.strokeRect(-sz * 0.5 + 2, -sz * 0.5 + 2, sz - 4, sz - 4);
+        ctx.lineWidth = 1.0;
+        ctx.strokeRect(-sz * 0.5 + 6, -sz * 0.5 + 6, sz - 12, sz - 12);
+        ctx.fillStyle = '#C83E2B';
+      } else {
+        // 白文古印（阴文）：满朱砂印泥底 + 留白阴刻古字
+        ctx.fillStyle = '#B83222';
+        ctx.beginPath(); ctx.roundRect(-sz * 0.5, -sz * 0.5, sz, sz, 4); ctx.fill();
+        ctx.strokeStyle = 'rgba(255, 245, 230, 0.55)';
+        ctx.lineWidth = 1.2;
+        ctx.strokeRect(-sz * 0.5 + 4, -sz * 0.5 + 4, sz - 8, sz - 8);
+        ctx.fillStyle = '#FFF9EF';
+      }
+      ctx.font = 'bold 16px "Songti SC", serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(stxt.slice(0, 2), 0, -9);
+      ctx.fillText(stxt.slice(2, 4) || '印', 0, 10);
+      ctx.restore();
+    } else {
+      // 东汉木案温润纹理与案旁小工具暗影
+      ctx.strokeStyle = 'rgba(181, 136, 103, 0.14)';
+      ctx.lineWidth = 1.5;
+      for (let y = 70; y < CH; y += 48) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.bezierCurveTo(240, y - 8, 480, y + 8, CW, y);
+        ctx.stroke();
+      }
+      // 案角静置的汉代竹尺与线轴装饰
+      ctx.save();
+      ctx.translate(68, 130);
+      ctx.rotate(-0.22);
+      ctx.fillStyle = 'rgba(212, 176, 123, 0.45)';
+      ctx.strokeStyle = 'rgba(120, 75, 49, 0.3)';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(-14, -70, 28, 140, 4);
+      ctx.fill();
+      ctx.stroke();
+      for (let k = -55; k <= 55; k += 14) {
+        ctx.beginPath(); ctx.moveTo(-14, k); ctx.lineTo(-4, k); ctx.stroke();
+      }
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // 生成逼真丝绸经纬肌理与雅致暗花提花织锦底纹
+  function drawFabricTextureAndPattern(ctx, colObj, matId, patId) {
+    ctx.save();
+    // 1. 细腻织物经纬肌理（低对比、高密度，还原真实丝帛/棉麻微织纹）
+    if (matId === 'linen') {
+      ctx.strokeStyle = 'rgba(55, 32, 18, 0.075)';
+      ctx.lineWidth = 1;
+      for (let x = 150; x <= 570; x += 5) { ctx.beginPath(); ctx.moveTo(x, 160); ctx.lineTo(x, 630); ctx.stroke(); }
+      for (let y = 160; y <= 630; y += 5) { ctx.beginPath(); ctx.moveTo(150, y); ctx.lineTo(570, y); ctx.stroke(); }
+    } else if (matId === 'embcloth') {
+      ctx.fillStyle = 'rgba(55, 32, 18, 0.08)';
+      for (let x = 160; x <= 560; x += 7) {
+        for (let y = 170; y <= 620; y += 7) {
+          ctx.fillRect(x, y, 1.3, 1.3);
+        }
+      }
+    } else {
+      // 素绢/绫罗/锦缎：细密斜纹丝光织理
+      ctx.strokeStyle = matId === 'brocade' ? 'rgba(255, 224, 145, 0.11)' : 'rgba(255, 255, 255, 0.065)';
+      ctx.lineWidth = 0.9;
+      for (let d = -260; d <= 560; d += 5) {
+        ctx.beginPath(); ctx.moveTo(150 + d, 160); ctx.lineTo(150 + d - 280, 620); ctx.stroke();
+      }
+      ctx.strokeStyle = 'rgba(42, 22, 12, 0.035)';
+      for (let y = 162; y <= 624; y += 4) {
+        ctx.beginPath(); ctx.moveTo(150, y); ctx.lineTo(570, y); ctx.stroke();
+      }
+    }
+
+    // 2. 雅致提花暗纹（柔和低对比、细腻线稿，像真实织入绸缎里的暗花而非惨白水印）
+    if (patId !== 'plain') {
+      const isGold = matId === 'brocade';
+      ctx.strokeStyle = isGold ? 'rgba(255, 224, 136, 0.24)' : 'rgba(255, 252, 245, 0.13)';
+      ctx.fillStyle = isGold ? 'rgba(255, 224, 136, 0.10)' : 'rgba(255, 252, 245, 0.06)';
+      ctx.lineWidth = 1.05;
+      const step = 44;
+      for (let row = 0; row < 11; row++) {
+        const y = 188 + row * step;
+        for (let col = 0; col < 10; col++) {
+          const ox = 172 + col * step + (row % 2 === 0 ? 0 : step * 0.5);
+          ctx.save();
+          ctx.translate(ox, y);
+          if (patId === 'cloud') {
+            ctx.beginPath();
+            ctx.moveTo(-13, 3);
+            ctx.bezierCurveTo(-15, -5, -5, -9, 0, -4);
+            ctx.bezierCurveTo(6, -10, 15, -5, 13, 3);
+            ctx.bezierCurveTo(8, 6, -8, 6, -13, 3);
+            ctx.fill(); ctx.stroke();
+          } else if (patId === 'fret') {
+            ctx.beginPath();
+            ctx.moveTo(-10, -10); ctx.lineTo(10, -10); ctx.lineTo(10, 10); ctx.lineTo(-10, 10);
+            ctx.lineTo(-10, -4); ctx.lineTo(4, -4); ctx.lineTo(4, 4); ctx.lineTo(-4, 4);
+            ctx.stroke();
+          } else if (patId === 'pearl') {
+            // 汉唐联珠团窠暗纹（8颗细腻小珠围成团花，告别精灵球）
+            for (let k = 0; k < 8; k++) {
+              const a = (k * Math.PI * 2) / 8;
+              ctx.beginPath();
+              ctx.arc(Math.cos(a) * 11, Math.sin(a) * 11, 1.5, 0, Math.PI * 2);
+              ctx.fill();
+            }
+            ctx.beginPath();
+            ctx.arc(0, 0, 5.5, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.arc(0, 0, 2, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (patId === 'scroll') {
+            ctx.beginPath();
+            ctx.moveTo(-12, 4);
+            ctx.bezierCurveTo(-6, -10, 6, -10, 12, 4);
+            ctx.moveTo(-4, -3);
+            ctx.quadraticCurveTo(0, -11, 6, -8);
+            ctx.stroke();
+          }
+          ctx.restore();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  // Layer 01: 布料主体、未裁匹料与立体囊体层
+  function renderLayer01_Fabric(ctx) {
+    ctx.clearRect(0, 0, CW, CH);
+    const colObj = FABRIC_COLORS.find(c => c.hex === state.fabric.color) || FABRIC_COLORS[0];
+    const matObj = FABRIC_MATERIALS.find(m => m.id === state.fabric.material) || FABRIC_MATERIALS[0];
+    const isFlatCloth = (state.step === 0) || (state.step === 1 && !state.cutting.completed);
+
+    ctx.save();
+    if (isFlatCloth) {
+      // 第一阶段 & 第二阶段未裁完：展示铺在木案上的方形丝帛匹料 + 白粉初绘形制虚线
+      ctx.fillStyle = 'rgba(62, 34, 21, 0.16)';
+      ctx.beginPath();
+      ctx.roundRect(148, 178, 428, 438, 12);
+      ctx.fill();
+
+      ctx.save();
+      ctx.beginPath();
+      ctx.roundRect(142, 170, 428, 438, 10);
+      ctx.fillStyle = colObj.hex;
+      ctx.fill();
+      ctx.clip();
+
+      drawFabricTextureAndPattern(ctx, colObj, matObj.id, state.fabric.pattern);
+
+      // 匹料柔和丝绸折叠高光
+      const sheenG = ctx.createLinearGradient(142, 170, 570, 608);
+      sheenG.addColorStop(0, 'rgba(255,255,255,0.18)');
+      sheenG.addColorStop(0.5, 'rgba(255,255,255,0)');
+      sheenG.addColorStop(1, 'rgba(40,20,10,0.14)');
+      ctx.fillStyle = sheenG;
+      ctx.fillRect(142, 170, 428, 438);
+      ctx.restore();
+
+      // 绘制香囊形制白粉引导轮廓线
+      traceSachetContour(ctx, state.fabric.shape, 1.0);
+      ctx.strokeStyle = 'rgba(255, 252, 245, 0.88)';
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([8, 6]);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      // STEP 02 裁剪节点进度高亮
+      if (state.step === 1) {
+        const pts = getContourSamplePoints(state.fabric.shape, state.cutting.checkpoints.length);
+        pts.forEach((p, idx) => {
+          const done = state.cutting.checkpoints[idx];
+          ctx.fillStyle = done ? '#5B8C6B' : 'rgba(255, 255, 255, 0.85)';
+          ctx.beginPath();
+          ctx.arc(p.x, p.y, done ? 4.2 : 3.2, 0, Math.PI * 2);
+          ctx.fill();
+        });
+      }
+    } else {
+      // 已完成裁剪：Layer 01 仅绘制底影、纯净布面底色与织锦暗花（3D曲面光影与褶皱后置到刺绣层之上统一叠加！）
+      ctx.save();
+      ctx.shadowColor = 'rgba(48, 24, 12, 0.24)';
+      ctx.shadowBlur = 28;
+      ctx.shadowOffsetX = 4;
+      ctx.shadowOffsetY = 14;
+      traceSachetContour(ctx, state.fabric.shape, 1.0);
+      ctx.fillStyle = colObj.hex;
+      ctx.fill();
+      ctx.restore();
+
+      ctx.save();
+      traceSachetContour(ctx, state.fabric.shape, 1.0);
+      ctx.clip();
+      drawFabricTextureAndPattern(ctx, colObj, matObj.id, state.fabric.pattern);
+      ctx.restore();
+    }
+    ctx.restore();
+  }
+
+  // Layer 04.5: 后置 3D 鼓胀球面光影、丝绸反光、束口捏褶与立体滚边（盖在刺绣层之上，让所有绣纹真正“长”进曲面丝绸里！）
+  function renderLayer045_Lighting(ctx) {
+    ctx.clearRect(0, 0, CW, CH);
+    const isFlatCloth = (state.step === 0) || (state.step === 1 && !state.cutting.completed);
+    if (isFlatCloth) return;
+
+    const colObj = FABRIC_COLORS.find(c => c.hex === state.fabric.color) || FABRIC_COLORS[0];
+    const matObj = FABRIC_MATERIALS.find(m => m.id === state.fabric.material) || FABRIC_MATERIALS[0];
+    const dim = getShapeDimensions(state.fabric.shape);
+    const plumpFactor = 0.20 + (state.filling.totalAmount / 100) * 0.24;
+
+    ctx.save();
+    ctx.save();
+    traceSachetContour(ctx, state.fabric.shape, 1.0);
+    ctx.clip();
+
+    // 1. 囊腹 3D 鼓胀球面明暗（使边缘处的刺绣纹样自然沉入阴影、中心自然受光）
+    const bodyGrad = ctx.createRadialGradient(CX - 46, CY - 42, 12, CX + 6, CY + 12, Math.max(dim.rx, dim.ry) * 1.25);
+    bodyGrad.addColorStop(0.00, `rgba(255, 252, 245, ${plumpFactor + matObj.sheen * 0.45})`);
+    bodyGrad.addColorStop(0.38, `rgba(255, 250, 242, ${matObj.sheen * 0.16})`);
+    bodyGrad.addColorStop(0.70, 'rgba(55, 25, 14, 0.08)');
+    bodyGrad.addColorStop(1.00, 'rgba(38, 16, 8, 0.46)');
+    ctx.fillStyle = bodyGrad;
+    ctx.fillRect(CX - 220, CY - 220, 440, 440);
+
+    // 2. 丝绸斜向柔滑反光缎带（轻轻掠过布面与绣线）
+    if (matObj.sheen >= 0.12) {
+      const silkBand = ctx.createLinearGradient(CX - 150, CY - 140, CX + 150, CY + 140);
+      silkBand.addColorStop(0.00, 'rgba(255,255,255,0)');
+      silkBand.addColorStop(0.36, `rgba(255,255,255,${matObj.sheen * 0.30})`);
+      silkBand.addColorStop(0.46, 'rgba(255,255,255,0)');
+      silkBand.addColorStop(0.72, `rgba(255,255,255,${matObj.sheen * 0.14})`);
+      silkBand.addColorStop(1.00, 'rgba(255,255,255,0)');
+      ctx.fillStyle = silkBand;
+      ctx.fillRect(CX - 220, CY - 220, 440, 440);
+    }
+
+    // 3. 囊口束口放射状软捏褶（褶皱阴影自然压过经过此处的绣花）
+    const isNeckShape = state.fabric.shape === 'pouch' || state.fabric.shape === 'gourd';
+    const foldTopY = isNeckShape ? (CY - dim.ry * 0.62) : (CY - dim.ry * 0.94);
+    if (state.fabric.opening === 'drawstring' || isNeckShape) {
+      for (let r = -3; r <= 3; r++) {
+        const sx = CX + r * (isNeckShape ? 11 : 14);
+        const ex = CX + r * (isNeckShape ? 26 : 30);
+        const len = isNeckShape ? 58 : 48;
+        const foldG = ctx.createLinearGradient(sx, foldTopY, ex, foldTopY + len);
+        foldG.addColorStop(0, 'rgba(38, 16, 8, 0.25)');
+        foldG.addColorStop(0.55, 'rgba(38, 16, 8, 0.08)');
+        foldG.addColorStop(1, 'rgba(38, 16, 8, 0)');
+        ctx.strokeStyle = foldG;
+        ctx.lineWidth = 4.5;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(sx, foldTopY);
+        ctx.quadraticCurveTo((sx + ex) * 0.5, foldTopY + len * 0.45, ex, foldTopY + len);
+        ctx.stroke();
+
+        const hiG = ctx.createLinearGradient(sx + 3, foldTopY, ex + 4, foldTopY + len * 0.85);
+        hiG.addColorStop(0, 'rgba(255, 252, 245, 0.20)');
+        hiG.addColorStop(1, 'rgba(255, 252, 245, 0)');
+        ctx.strokeStyle = hiG;
+        ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        ctx.moveTo(sx + 3, foldTopY + 2);
+        ctx.quadraticCurveTo((sx + ex) * 0.5 + 3, foldTopY + len * 0.42, ex + 4, foldTopY + len * 0.85);
+        ctx.stroke();
+      }
+    }
+
+    // 4. 四周缝份内侧柔和压暗
+    ctx.save();
+    traceSachetContour(ctx, state.fabric.shape, 1.0);
+    ctx.strokeStyle = 'rgba(36, 15, 8, 0.34)';
+    ctx.lineWidth = 14;
+    ctx.filter = 'blur(4px)';
+    ctx.stroke();
+    ctx.filter = 'none';
+    ctx.restore();
+    ctx.restore();
+
+    // 5. 立体滚边包边条
+    traceSachetContour(ctx, state.fabric.shape, 1.0);
+    ctx.strokeStyle = colObj.dark;
+    ctx.lineWidth = 5.2;
+    ctx.stroke();
+
+    traceSachetContour(ctx, state.fabric.shape, 0.992);
+    ctx.strokeStyle = state.fabric.material === 'brocade' ? 'rgba(242, 206, 126, 0.72)' : colObj.light;
+    ctx.globalAlpha = 0.55;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+    ctx.globalAlpha = 1;
+
+    if (state.fabric.opening === 'folded') {
+      ctx.strokeStyle = colObj.light;
+      ctx.lineWidth = 4.5;
+      ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(CX - dim.rx * 0.45, CY - dim.ry * 0.90);
+      ctx.quadraticCurveTo(CX, CY - dim.ry * 0.82, CX + dim.rx * 0.45, CY - dim.ry * 0.90);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // 绘制单枚香料矢量图形
+  function drawHerbGraphic(ctx, herbMeta, x, y, scale, rot) {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.scale(scale, scale);
+    ctx.rotate(rot);
+
+    ctx.fillStyle = 'rgba(50, 25, 10, 0.16)';
+    ctx.beginPath();
+    ctx.ellipse(1, 3, 10, 6, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    if (herbMeta.shape === 'petal4') {
+      ctx.fillStyle = herbMeta.color;
+      for (let i = 0; i < 4; i++) {
+        ctx.rotate(Math.PI / 2);
+        ctx.beginPath(); ctx.ellipse(5, 0, 5, 3, 0, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = herbMeta.sub;
+      ctx.beginPath(); ctx.arc(0, 0, 2.2, 0, Math.PI * 2); ctx.fill();
+    } else if (herbMeta.shape === 'petal5' || herbMeta.shape === 'rose') {
+      ctx.fillStyle = herbMeta.color;
+      for (let i = 0; i < 5; i++) {
+        const a = (i * Math.PI * 2) / 5;
+        ctx.beginPath(); ctx.arc(Math.cos(a) * 5.5, Math.sin(a) * 5.5, 4.8, 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.fillStyle = herbMeta.sub;
+      ctx.beginPath(); ctx.arc(0, 0, 3, 0, Math.PI * 2); ctx.fill();
+    } else if (herbMeta.shape === 'leaf') {
+      ctx.fillStyle = herbMeta.color;
+      ctx.beginPath();
+      ctx.moveTo(-11, 0); ctx.quadraticCurveTo(0, -8, 11, 0); ctx.quadraticCurveTo(0, 8, -11, 0);
+      ctx.fill();
+      ctx.strokeStyle = herbMeta.sub; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(-9, 0); ctx.lineTo(9, 0); ctx.stroke();
+    } else if (herbMeta.shape === 'clove') {
+      ctx.fillStyle = herbMeta.color;
+      ctx.fillRect(-2, -2, 4, 11);
+      ctx.beginPath(); ctx.arc(0, -4, 4.2, 0, Math.PI * 2); ctx.fill();
+    } else if (herbMeta.shape === 'cloud') {
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+      ctx.beginPath();
+      ctx.arc(-5, 0, 7, 0, Math.PI * 2); ctx.arc(5, 0, 7, 0, Math.PI * 2); ctx.arc(0, -4, 8, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (herbMeta.shape === 'powder') {
+      ctx.fillStyle = herbMeta.color;
+      for (let k = 0; k < 7; k++) {
+        ctx.beginPath(); ctx.arc(Math.cos(k * 1.1) * 6, Math.sin(k * 1.7) * 5, 2.2, 0, Math.PI * 2); ctx.fill();
+      }
+    } else {
+      ctx.fillStyle = herbMeta.color;
+      ctx.strokeStyle = herbMeta.sub;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(-9, -4.5, 18, 9, 3);
+      ctx.fill(); ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  // Layer 02: 香料与丝绸内衬层（在 STEP 03、STEP 04 未完全收口或开启「内腔透视」时可见）
+  function renderLayer02_Filling(ctx) {
+    ctx.clearRect(0, 0, CW, CH);
+    const showCavity = (state.step === 2) || (state.step === 3 && !state.sewing.completed) || state.xrayMode;
+    if (!showCavity) return;
+
+    const dim = getShapeDimensions(state.fabric.shape);
+    ctx.save();
+    if (state.xrayMode && state.step !== 2) ctx.globalAlpha = 0.72;
+
+    // 裁剪在内衬腔体椭圆内，确保任何香料绝不穿透香囊边缘
+    ctx.beginPath();
+    ctx.ellipse(CX, CY + 22, dim.rx * 0.72, dim.ry * 0.62, 0, 0, Math.PI * 2);
+    ctx.fillStyle = '#F7EFE2';
+    ctx.fill();
+    ctx.lineWidth = 3;
+    ctx.strokeStyle = 'rgba(120, 75, 49, 0.35)';
+    ctx.stroke();
+    ctx.clip();
+
+    // 内衬腔体柔和内凹阴影
+    const cavG = ctx.createRadialGradient(CX, CY + 28, 15, CX, CY + 22, dim.rx * 0.75);
+    cavG.addColorStop(0, 'rgba(255, 252, 245, 0)');
+    cavG.addColorStop(1, 'rgba(95, 58, 34, 0.25)');
+    ctx.fillStyle = cavG;
+    ctx.fillRect(CX - 160, CY - 140, 320, 320);
+
+    // 绘制已放入囊中的香料颗粒
+    state.filling.particles.forEach(pt => {
+      const meta = HERB_CATALOG.find(h => h.id === pt.id) || HERB_CATALOG[0];
+      const wp = uvToSachetWorld(pt.u * 0.65, pt.v * 0.55 + 0.12);
+      drawHerbGraphic(ctx, meta, wp.x, wp.y, pt.scale, pt.rot);
+    });
+
+    ctx.restore();
+  }
+
+  // 绘制单段立体穿布丝线（带针孔微凹暗影 + 丝线底影 + 圆柱丝光高光）
+  function drawRealisticThreadSegment(ctx, x1, y1, x2, y2, color, width = 3.0) {
+    // 1. 两端针孔微凹暗点
+    ctx.fillStyle = 'rgba(32, 14, 6, 0.42)';
+    ctx.beginPath(); ctx.arc(x1, y1, width * 0.42, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(x2, y2, width * 0.42, 0, Math.PI * 2); ctx.fill();
+
+    // 2. 丝线投射在布面上的柔影
+    ctx.strokeStyle = 'rgba(30, 12, 5, 0.28)';
+    ctx.lineWidth = width + 0.8;
+    ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.moveTo(x1 + 0.8, y1 + 1.3); ctx.lineTo(x2 + 0.8, y2 + 1.3); ctx.stroke();
+
+    // 3. 丝线主体
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke();
+
+    // 4. 丝线顶部柔顺丝光高光
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.46)';
+    ctx.lineWidth = Math.max(0.8, width * 0.32);
+    ctx.beginPath(); ctx.moveTo(x1 - 0.3, y1 - 0.6); ctx.lineTo(x2 - 0.3, y2 - 0.6); ctx.stroke();
+  }
+
+  // Layer 03: 囊口缝线与真实立体针脚层（四种针法各具真实工艺形态）
+  function renderLayer03_Sewing(ctx) {
+    ctx.clearRect(0, 0, CW, CH);
+    if (state.step < 3 && !state.sewing.completed) return;
+
+    const pts = getSewingSamplePoints(state.fabric.shape, state.sewing.checkpoints.length);
+    const stType = state.sewing.stitchType;
+    const tColor = state.sewing.threadColor;
+
+    ctx.save();
+    // 1. 包边针：精致贴合轮廓的织锦细滚条（不再是突兀粗胶带）
+    if (stType === 'binding' && (state.sewing.progress > 15 || state.sewing.completed)) {
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = 'rgba(42, 20, 8, 0.28)';
+      ctx.lineWidth = 6.2;
+      ctx.beginPath();
+      pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y + 1.5); else ctx.lineTo(p.x, p.y + 1.5); });
+      ctx.stroke();
+
+      ctx.strokeStyle = '#C9963B';
+      ctx.lineWidth = 4.8;
+      ctx.beginPath();
+      pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); });
+      ctx.stroke();
+
+      ctx.strokeStyle = 'rgba(255, 245, 210, 0.55)';
+      ctx.lineWidth = 1.4;
+      ctx.beginPath();
+      pts.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y - 1); else ctx.lineTo(p.x, p.y - 1); });
+      ctx.stroke();
+    }
+
+    // 2. 绘制未缝合的淡白粉针孔引导点 & 已缝合的真实立体针脚
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i];
+      const done = state.sewing.checkpoints[i] || state.sewing.completed;
+      if (!done) {
+        ctx.fillStyle = 'rgba(255, 252, 245, 0.85)';
+        ctx.strokeStyle = 'rgba(120, 75, 49, 0.35)';
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, 2.5, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+      } else if (i < pts.length - 1) {
+        const nxt = pts[i + 1];
+        const dx = nxt.x - p.x, dy = nxt.y - p.y;
+        const len = Math.max(1, Math.hypot(dx, dy));
+        const nx = -dy / len, ny = dx / len; // 垂直法向
+        const needleId = state.sewing.needle || 'fine';
+        const wScale = needleId === 'fine' ? 0.78 : (needleId === 'embroidery' ? 1.28 : 1.0);
+
+        if (stType === 'running') {
+          // 平针：工整穿布虚实交替，每针圆润有丝光
+          if (i % 2 === 0) {
+            drawRealisticThreadSegment(ctx, p.x, p.y, nxt.x, nxt.y, tColor, 2.8 * wScale);
+          }
+        } else if (stType === 'back') {
+          // 回针：紧密首尾相衔的厚实连针，每段独立带起针落针微凹
+          drawRealisticThreadSegment(ctx, p.x, p.y, nxt.x, nxt.y, tColor, 3.2 * wScale);
+        } else if (stType === 'overlock') {
+          // 锁边针：细腻人字跨边锁针（垂直跨越缝线 + 斜向连针）
+          const span = 4.5 * (needleId === 'embroidery' ? 1.15 : 1.0);
+          const xA = p.x - nx * span, yA = p.y - ny * span;
+          const xB = p.x + nx * span, yB = p.y + ny * span;
+          drawRealisticThreadSegment(ctx, xA, yA, xB, yB, tColor, 2.3 * wScale);
+          drawRealisticThreadSegment(ctx, xB, yB, nxt.x - nx * span, nxt.y - ny * span, tColor, 1.9 * wScale);
+        } else {
+          // 包边针：沿金丝滚边斜向缠绕的细密斜缲针
+          drawRealisticThreadSegment(ctx, p.x - nx * 3.4, p.y - ny * 3.4, p.x + nx * 3.4 + dx * 0.45, p.y + ny * 3.4 + dy * 0.45, tColor, 2.1 * wScale);
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  // 辅助：绘制单颗饱满立体的打籽绣绣粒 (French Knot)
+  function drawFrenchKnot(ctx, x, y, r, color) {
+    ctx.fillStyle = 'rgba(35, 16, 6, 0.30)';
+    ctx.beginPath(); ctx.arc(x + 0.7, y + 1.0, r + 0.3, 0, Math.PI * 2); ctx.fill();
+    const g = ctx.createRadialGradient(x - r * 0.35, y - r * 0.35, r * 0.15, x, y, r);
+    g.addColorStop(0, '#FFFFFF');
+    g.addColorStop(0.32, color);
+    g.addColorStop(1, 'rgba(30, 14, 6, 0.55)');
+    ctx.fillStyle = color;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = g;
+    ctx.globalAlpha = 0.58;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
+  // 辅助：在任意路径上渲染 4 种截然不同的真实手绣针法 (平绣 / 锁绣 / 盘金绣 / 打籽绣)
+  function drawEmbroideryPathStroke(ctx, pts, color, stitchStyle = 'satin', width = 3.8) {
+    if (!pts || pts.length < 2) return;
+    // 将路径按固定步长重采样为均匀点列，确保锁链/钉金/打籽密度均匀美观
+    const step = stitchStyle === 'seed' ? 6.5 : (stitchStyle === 'chain' ? 7.5 : (stitchStyle === 'gold' ? 8.0 : 2.8));
+    const samples = [pts[0]];
+    let acc = 0;
+    for (let i = 1; i < pts.length; i++) {
+      const a = pts[i - 1], b = pts[i];
+      const seg = Math.hypot(b.x - a.x, b.y - a.y);
+      if (seg < 0.01) continue;
+      let d = step - acc;
+      while (d <= seg) {
+        const t = d / seg;
+        samples.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+        d += step;
+      }
+      acc = seg - (d - step);
+    }
+    if (samples.length < 2) samples.push(pts[pts.length - 1]);
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    if (stitchStyle === 'seed') {
+      // 打籽绣：一颗颗圆润凸起的丝线结粒
+      for (let i = 0; i < samples.length; i++) {
+        drawFrenchKnot(ctx, samples[i].x, samples[i].y, Math.max(2.6, width * 0.78), color);
+      }
+    } else if (stitchStyle === 'chain') {
+      // 锁绣：环环相扣的水滴状锁链线圈
+      for (let i = 0; i < samples.length - 1; i++) {
+        const p = samples[i], nxt = samples[i + 1];
+        const mx = (p.x + nxt.x) * 0.5, my = (p.y + nxt.y) * 0.5;
+        const ang = Math.atan2(nxt.y - p.y, nxt.x - p.x);
+        const rx = Math.max(3.6, Math.hypot(nxt.x - p.x, nxt.y - p.y) * 0.58);
+        const ry = Math.max(2.3, width * 0.62);
+        ctx.save();
+        ctx.translate(mx, my);
+        ctx.rotate(ang);
+        ctx.strokeStyle = 'rgba(32, 14, 6, 0.28)';
+        ctx.lineWidth = 2.6;
+        ctx.beginPath(); ctx.ellipse(0.6, 1.0, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.0;
+        ctx.beginPath(); ctx.ellipse(0, 0, rx, ry, 0, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.45)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath(); ctx.ellipse(-0.3, -0.5, rx * 0.85, ry * 0.7, 0, -Math.PI * 0.8, -Math.PI * 0.15); ctx.stroke();
+        ctx.restore();
+      }
+    } else if (stitchStyle === 'gold') {
+      // 盘金绣：立体双股鎏金粗丝 + 等距垂直朱红钉金小线
+      ctx.strokeStyle = 'rgba(42, 20, 6, 0.34)';
+      ctx.lineWidth = width + 2.2;
+      ctx.beginPath();
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x + 1, p.y + 1.5) : ctx.lineTo(p.x + 1, p.y + 1.5));
+      ctx.stroke();
+
+      ctx.strokeStyle = '#B88122';
+      ctx.lineWidth = width + 1.2;
+      ctx.beginPath();
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+      ctx.stroke();
+
+      ctx.strokeStyle = '#F7D774';
+      ctx.lineWidth = width * 0.75;
+      ctx.stroke();
+
+      ctx.strokeStyle = '#FFF7D6';
+      ctx.lineWidth = Math.max(1, width * 0.28);
+      ctx.beginPath();
+      pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x - 0.5, p.y - 0.7) : ctx.lineTo(p.x - 0.5, p.y - 0.7));
+      ctx.stroke();
+
+      // 间隔垂直钉金红线
+      for (let i = 1; i < samples.length - 1; i++) {
+        const prev = samples[i - 1], nxt = samples[i + 1];
+        const dx = nxt.x - prev.x, dy = nxt.y - prev.y;
+        const len = Math.max(1, Math.hypot(dx, dy));
+        const nx = (-dy / len) * (width * 0.75), ny = (dx / len) * (width * 0.75);
+        ctx.strokeStyle = '#B83428';
+        ctx.lineWidth = 1.3;
+        ctx.beginPath();
+        ctx.moveTo(samples[i].x - nx, samples[i].y - ny);
+        ctx.lineTo(samples[i].x + nx, samples[i].y + ny);
+        ctx.stroke();
+      }
+    } else {
+      // 平绣 (satin)：密集齐针斜向丝线排布，展现绸缎般顺滑光泽
+      for (let i = 0; i < samples.length - 1; i++) {
+        const p = samples[i], nxt = samples[i + 1];
+        const dx = nxt.x - p.x, dy = nxt.y - p.y;
+        const len = Math.max(1, Math.hypot(dx, dy));
+        const nx = (-dy / len) * (width * 0.68), ny = (dx / len) * (width * 0.68);
+        ctx.strokeStyle = 'rgba(32, 14, 6, 0.20)';
+        ctx.lineWidth = 2.4;
+        ctx.beginPath(); ctx.moveTo(p.x - nx + 0.6, p.y - ny + 1.0); ctx.lineTo(p.x + nx + 0.6, p.y + ny + 1.0); ctx.stroke();
+
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2.1;
+        ctx.beginPath(); ctx.moveTo(p.x - nx, p.y - ny); ctx.lineTo(p.x + nx, p.y + ny); ctx.stroke();
+
+        if (i % 2 === 0) {
+          ctx.strokeStyle = 'rgba(255, 255, 255, 0.35)';
+          ctx.lineWidth = 0.8;
+          ctx.beginPath(); ctx.moveTo(p.x - nx * 0.5, p.y - ny * 0.5); ctx.lineTo(p.x + nx * 0.3, p.y + ny * 0.3); ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  // 绘制单个刺绣纹样（12 款全部独立精绘 + 球面透视微压 + 贴布针孔微勒，彻底消除粘贴感）
+  function drawEmbroideryMotifItem(ctx, item, overrideXY = null) {
+    const wp = overrideXY || uvToSachetWorld(item.u, item.v);
+    const col = item.color || '#E0AD45';
+    const st = item.stitchStyle || 'satin';
+    const meta = EMBROIDERY_MOTIFS.find(m => m.id === item.type) || EMBROIDERY_MOTIFS[0];
+
+    // 根据在鼓胀囊腹上的 (u, v) 位置施加自然球面透视微压缩（靠边缘自动顺着曲面收窄）
+    let curveSx = 1, curveSy = 1;
+    if (!overrideXY) {
+      const uu = Math.max(-0.95, Math.min(0.95, item.u || 0));
+      const vv = Math.max(-0.95, Math.min(0.95, item.v || 0));
+      curveSx = Math.max(0.74, Math.sqrt(Math.max(0.35, 1 - uu * uu * 0.42)));
+      curveSy = Math.max(0.76, Math.sqrt(Math.max(0.40, 1 - vv * vv * 0.36)));
+    }
+
+    ctx.save();
+    ctx.translate(wp.x, wp.y);
+    ctx.scale((item.scale || 1) * curveSx, (item.scale || 1) * curveSy);
+    ctx.rotate(item.rotation || 0);
+
+    // 去掉纸片悬浮投影！改用紧贴布面的微勒针孔压痕 + 内部方向性真丝绣线光泽
+    const fillEmbroideredPath = (drawPathFn, customFill = col) => {
+      // 1. 丝线紧勒布料的极贴合微凹压痕（非悬浮投影）
+      ctx.save();
+      drawPathFn();
+      ctx.strokeStyle = 'rgba(34, 15, 6, 0.32)';
+      ctx.lineWidth = 2.0;
+      ctx.stroke();
+      ctx.restore();
+
+      // 2. 绣线填充 + 细密丝线排布肌理
+      ctx.save();
+      drawPathFn();
+      if (st === 'seed') {
+        ctx.fillStyle = customFill;
+        ctx.globalAlpha = 0.28;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.clip();
+        for (let gx = -22; gx <= 22; gx += 5.2) {
+          for (let gy = -22; gy <= 22; gy += 5.2) {
+            drawFrenchKnot(ctx, gx + ((gy / 5.2) % 2 === 0 ? 0 : 2.4), gy, 2.2, customFill);
+          }
+        }
+      } else {
+        ctx.fillStyle = customFill;
+        ctx.globalAlpha = 0.93; // 极微弱透出丝帛底纹呼吸感，拒绝塑料不透明贴纸
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.save();
+        ctx.clip();
+        // 明暗交替的细密方向性丝线排布（还原真丝平绣的拉丝光泽与层次）
+        for (let k = -26; k <= 26; k += 2.2) {
+          ctx.strokeStyle = (Math.abs(Math.round(k)) % 2 === 0)
+            ? 'rgba(255, 252, 242, 0.32)'
+            : 'rgba(36, 16, 6, 0.14)';
+          ctx.lineWidth = 0.95;
+          ctx.beginPath(); ctx.moveTo(k - 8, -24); ctx.lineTo(k + 8, 24); ctx.stroke();
+        }
+        ctx.restore();
+      }
+      ctx.restore();
+
+      // 3. 针法轮廓收边
+      ctx.save();
+      drawPathFn();
+      if (st === 'gold') {
+        ctx.strokeStyle = '#F7D774';
+        ctx.lineWidth = 2.1;
+        ctx.stroke();
+        ctx.strokeStyle = '#B83428';
+        ctx.lineWidth = 1.0;
+        ctx.setLineDash([2, 5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      } else if (st === 'chain') {
+        ctx.strokeStyle = 'rgba(255, 250, 235, 0.72)';
+        ctx.lineWidth = 1.7;
+        ctx.setLineDash([4, 2.5]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+      ctx.restore();
+    };
+
+    if (meta.text) {
+      // 吉语文字刺绣：用微勒压痕 + 细密丝线横纹融合进布面（告别冰冷系统字体贴纸）
+      ctx.font = `bold ${meta.text.length > 1 ? 21 : 28}px "Songti SC", serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.strokeStyle = 'rgba(34, 15, 6, 0.30)';
+      ctx.lineWidth = 2.2;
+      ctx.strokeText(meta.text, 0, 0);
+      ctx.fillStyle = st === 'gold' ? '#F2C96B' : col;
+      ctx.globalAlpha = 0.92;
+      ctx.fillText(meta.text, 0, 0);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = st === 'gold' ? '#9E5B16' : 'rgba(255, 250, 238, 0.42)';
+      ctx.lineWidth = st === 'gold' ? 1.0 : 0.65;
+      ctx.setLineDash([2, 2.2]);
+      ctx.strokeText(meta.text, 0, 0);
+      ctx.setLineDash([]);
+    } else if (item.type === 'm_plum') {
+      // 1. 梅花（5圆瓣 + 放射金丝花蕊）
+      for (let i = 0; i < 5; i++) {
+        const a = (i * Math.PI * 2) / 5 - Math.PI / 2;
+        fillEmbroideredPath(() => {
+          ctx.beginPath(); ctx.arc(Math.cos(a) * 10, Math.sin(a) * 10, 7.2, 0, Math.PI * 2);
+        });
+      }
+      for (let k = 0; k < 7; k++) {
+        const a = (k * Math.PI * 2) / 7;
+        drawFrenchKnot(ctx, Math.cos(a) * 4.5, Math.sin(a) * 4.5, 1.5, '#FFE89E');
+      }
+      drawFrenchKnot(ctx, 0, 0, 2.6, '#E0AD45');
+    } else if (item.type === 'm_lotus') {
+      // 2. 荷花（重瓣莲华 + 莲蓬芯）
+      [-0.75, -0.38, 0, 0.38, 0.75].forEach((rot, idx) => {
+        const h = idx === 2 ? 22 : (idx === 1 || idx === 3 ? 19 : 15);
+        fillEmbroideredPath(() => {
+          ctx.save(); ctx.rotate(rot);
+          ctx.beginPath(); ctx.moveTo(0, 12); ctx.quadraticCurveTo(-8, -2, 0, 12 - h); ctx.quadraticCurveTo(8, -2, 0, 12); ctx.closePath();
+          ctx.restore();
+        });
+      });
+      drawFrenchKnot(ctx, 0, 8, 3.2, '#F2C96B');
+    } else if (item.type === 'm_peony') {
+      // 3. 牡丹（外层8宽瓣 + 内层5卷瓣 + 富贵金蕊）
+      for (let i = 0; i < 8; i++) {
+        const a = (i * Math.PI * 2) / 8;
+        fillEmbroideredPath(() => {
+          ctx.beginPath(); ctx.ellipse(Math.cos(a) * 11, Math.sin(a) * 11, 7.5, 6, a, 0, Math.PI * 2);
+        });
+      }
+      for (let i = 0; i < 5; i++) {
+        const a = (i * Math.PI * 2) / 5 + 0.3;
+        fillEmbroideredPath(() => {
+          ctx.beginPath(); ctx.ellipse(Math.cos(a) * 5.5, Math.sin(a) * 5.5, 5, 4.2, a, 0, Math.PI * 2);
+        });
+      }
+      drawFrenchKnot(ctx, 0, 0, 3.5, '#FFE89E');
+    } else if (item.type === 'm_orchid') {
+      // 4. 兰花（修长飘逸兰叶 + 素雅三瓣兰心）
+      ctx.strokeStyle = col; ctx.lineWidth = 2.2; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-2, 16); ctx.quadraticCurveTo(-16, 2, -18, -12);
+      ctx.moveTo(0, 16); ctx.quadraticCurveTo(4, -2, 16, -15);
+      ctx.moveTo(2, 16); ctx.quadraticCurveTo(14, 6, 18, -2);
+      ctx.stroke();
+      [-0.6, 0, 0.6].forEach(a => {
+        fillEmbroideredPath(() => {
+          ctx.save(); ctx.translate(2, -4); ctx.rotate(a);
+          ctx.beginPath(); ctx.ellipse(0, -6, 3.2, 6.5, 0, 0, Math.PI * 2);
+          ctx.restore();
+        }, '#FFF4D6');
+      });
+    } else if (item.type === 'm_osman') {
+      // 5. 桂花枝（曲枝 + 簇生四瓣金桂）
+      ctx.strokeStyle = '#6E472B'; ctx.lineWidth = 2; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(-16, 12); ctx.quadraticCurveTo(-2, 2, 15, -12); ctx.stroke();
+      [[-6, 4], [2, -2], [10, -8], [-2, -6], [8, 3]].forEach(([gx, gy]) => {
+        for (let k = 0; k < 4; k++) {
+          const a = (k * Math.PI) / 2;
+          drawFrenchKnot(ctx, gx + Math.cos(a) * 3, gy + Math.sin(a) * 3, 2.2, col);
+        }
+      });
+    } else if (item.type === 'm_chrys') {
+      // 6. 菊花（14 枚纤细放射菊瓣）
+      for (let i = 0; i < 14; i++) {
+        const a = (i * Math.PI * 2) / 14;
+        fillEmbroideredPath(() => {
+          ctx.beginPath(); ctx.ellipse(Math.cos(a) * 11, Math.sin(a) * 11, 7, 2.4, a, 0, Math.PI * 2);
+        });
+      }
+      drawFrenchKnot(ctx, 0, 0, 4.2, '#E0AD45');
+    } else if (item.type === 'm_cloud') {
+      // 7. 祥云（灵动卷尾汉风流云）
+      fillEmbroideredPath(() => {
+        ctx.beginPath();
+        ctx.moveTo(-18, 6);
+        ctx.bezierCurveTo(-20, -4, -10, -8, -4, -3);
+        ctx.bezierCurveTo(-2, -14, 12, -14, 12, -3);
+        ctx.bezierCurveTo(20, -4, 22, 6, 13, 8);
+        ctx.quadraticCurveTo(0, 10, -18, 6);
+        ctx.closePath();
+      });
+    } else if (item.type === 'm_ruyi') {
+      // 8. 如意（古玉灵芝如意云头）
+      fillEmbroideredPath(() => {
+        ctx.beginPath();
+        ctx.moveTo(0, -14);
+        ctx.bezierCurveTo(16, -16, 20, 2, 7, 7);
+        ctx.quadraticCurveTo(3, 14, 0, 17);
+        ctx.quadraticCurveTo(-3, 14, -7, 7);
+        ctx.bezierCurveTo(-20, 2, -16, -16, 0, -14);
+        ctx.closePath();
+      });
+      ctx.strokeStyle = '#FFF5D6'; ctx.lineWidth = 1.3;
+      ctx.beginPath(); ctx.arc(-6, -3, 4, 0, Math.PI * 1.4); ctx.stroke();
+      ctx.beginPath(); ctx.arc(6, -3, 4, -Math.PI * 0.4, Math.PI); ctx.stroke();
+    } else if (item.type === 'm_bat') {
+      // 9. 福蝠（展翅对称五福蝙蝠）
+      fillEmbroideredPath(() => {
+        ctx.beginPath();
+        ctx.moveTo(0, -8);
+        ctx.quadraticCurveTo(5, -12, 8, -6);
+        ctx.bezierCurveTo(18, -14, 22, -2, 16, 5);
+        ctx.quadraticCurveTo(10, 2, 6, 9);
+        ctx.quadraticCurveTo(0, 14, -6, 9);
+        ctx.quadraticCurveTo(-10, 2, -16, 5);
+        ctx.bezierCurveTo(-22, -2, -18, -14, -8, -6);
+        ctx.quadraticCurveTo(-5, -12, 0, -8);
+        ctx.closePath();
+      });
+    } else if (item.type === 'm_fish') {
+      // 10. 双鱼（太极环游吉庆双鱼）
+      [0, Math.PI].forEach(rot => {
+        fillEmbroideredPath(() => {
+          ctx.save(); ctx.rotate(rot);
+          ctx.beginPath();
+          ctx.moveTo(-4, -14);
+          ctx.quadraticCurveTo(14, -12, 14, 2);
+          ctx.lineTo(18, 9); ctx.lineTo(10, 6); ctx.lineTo(7, 11);
+          ctx.quadraticCurveTo(4, -2, -4, -14);
+          ctx.closePath();
+          ctx.restore();
+        });
+      });
+    } else if (item.type === 'm_branch') {
+      // 11. 连理枝（双枝交缠对叶含苞）
+      ctx.strokeStyle = col; ctx.lineWidth = 2.4; ctx.lineCap = 'round';
+      ctx.beginPath();
+      ctx.moveTo(-14, 14); ctx.bezierCurveTo(-4, 4, 4, -4, 14, -14);
+      ctx.moveTo(14, 14); ctx.bezierCurveTo(4, 4, -4, -4, -14, -14);
+      ctx.stroke();
+      [[-10, -10], [10, -10], [0, -14]].forEach(([bx, by]) => drawFrenchKnot(ctx, bx, by, 3.6, '#F0A1B0'));
+    } else {
+      // 12. 瑞兽纹（汉代铜镜蟠螭团兽纹）
+      fillEmbroideredPath(() => {
+        ctx.beginPath();
+        ctx.arc(0, 0, 13, 0.25, Math.PI * 1.85);
+        ctx.quadraticCurveTo(8, -8, 4, 0);
+        ctx.quadraticCurveTo(-6, 8, -11, 2);
+        ctx.closePath();
+      });
+      drawFrenchKnot(ctx, 5, -5, 2.2, '#FFE89E');
+    }
+    ctx.restore();
+  }
+
+  // Layer 04: 刺绣绘纹层（严格使用香囊轮廓 clip，自由刺绣与纹样均具备真实针法质感）
+  function renderLayer04_Embroidery(ctx) {
+    ctx.clearRect(0, 0, CW, CH);
+    const hasSketch = Boolean(state.sachetSketchImg && state.sachetSketchImg.complete && state.sachetSketchImg.naturalWidth > 0);
+    if (state.embroidery.motifs.length === 0 && state.embroidery.freehandStrokes.length === 0 && !hasSketch) return;
+
+    ctx.save();
+    traceSachetContour(ctx, state.fabric.shape, 0.96);
+    ctx.clip();
+
+    // 1. 绘制自由刺绣轨迹（按所选针法渲染平绣/锁绣/盘金绣/打籽绣）
+    state.embroidery.freehandStrokes.forEach(st => {
+      if (!st.points || st.points.length < 2) return;
+      const worldPts = st.points.map(pt => uvToSachetWorld(pt.u, pt.v));
+      drawEmbroideryPathStroke(ctx, worldPts, st.color || '#E0AD45', st.stitchStyle || 'satin', st.width || 3.8);
+    });
+
+    // 1.5 绘制名士囊面手绘刺绣简笔画（带柔和丝线投影）
+    if (hasSketch) {
+      const dim = getShapeDimensions(state.fabric.shape);
+      const skW = dim.rx * 1.18;
+      const skH = dim.ry * 1.05;
+      ctx.save();
+      ctx.globalAlpha = 0.92;
+      ctx.shadowColor = 'rgba(42, 20, 8, 0.25)';
+      ctx.shadowBlur = 3;
+      ctx.shadowOffsetX = 1;
+      ctx.shadowOffsetY = 2;
+      ctx.drawImage(state.sachetSketchImg, CX - skW * 0.5, CY - skH * 0.5, skW, skH);
+      ctx.restore();
+    }
+
+    // 2. 按 zIndex 升序绘制对象式刺绣纹样
+    const sorted = [...state.embroidery.motifs].sort((a, b) => (a.zIndex || 0) - (b.zIndex || 0));
+    sorted.forEach(m => drawEmbroideryMotifItem(ctx, m));
+
+    ctx.restore();
+  }
+
+  // 辅助：绘制双股拧绳编织曲线（告别单色扁平线条）
+  function drawBraidedCord(ctx, pts, color, isDouble = false, width = 5.2) {
+    if (!pts || pts.length < 2) return;
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+
+    // 绳底柔影
+    ctx.strokeStyle = 'rgba(42, 20, 8, 0.26)';
+    ctx.lineWidth = width + 1.8;
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x + 1.5, p.y + 2.5) : ctx.lineTo(p.x + 1.5, p.y + 2.5));
+    ctx.stroke();
+
+    // 绳体主色
+    ctx.strokeStyle = color;
+    ctx.lineWidth = width;
+    ctx.beginPath();
+    pts.forEach((p, i) => i === 0 ? ctx.moveTo(p.x, p.y) : ctx.lineTo(p.x, p.y));
+    ctx.stroke();
+
+    // 拧股斜向绞丝高光与暗纹
+    ctx.strokeStyle = isDouble ? '#F2C96B' : 'rgba(255, 250, 238, 0.45)';
+    ctx.lineWidth = Math.max(1.4, width * 0.42);
+    ctx.setLineDash([4.5, 4.5]);
+    ctx.stroke();
+
+    ctx.strokeStyle = 'rgba(36, 16, 6, 0.25)';
+    ctx.lineWidth = Math.max(1.0, width * 0.26);
+    ctx.lineDashOffset = 4.5;
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
+  // Layer 05: 物理精准连接的顶部拧绳穿珠、4款汉风结饰、串联玉珠与柔顺绕线流苏层
+  function renderLayer05_Accessories(ctx, time = 0) {
+    ctx.clearRect(0, 0, CW, CH);
+    const acc = state.accessories;
+    const dim = getShapeDimensions(state.fabric.shape);
+    const topY = CY - dim.ry;
+    const botY = CY + dim.ry;
+
+    ctx.save();
+
+    // 1. 顶部双股拧绳 + 束口绕线小环 + 居中穿在绳上的玉珠（彻底杜绝悬空！）
+    if (acc.cord && (state.step >= 5 || state.stepStatus[5])) {
+      const loopPts = [];
+      for (let i = 0; i <= 28; i++) {
+        const t = i / 28;
+        // 贝塞尔采样双股收拢挂绳环
+        const p0x = CX - 5, p0y = topY + 2;
+        const p1x = CX - 42, p1y = topY - 108;
+        const p2x = CX + 42, p2y = topY - 108;
+        const p3x = CX + 5, p3y = topY + 2;
+        const mt = 1 - t;
+        const x = mt*mt*mt*p0x + 3*mt*mt*t*p1x + 3*mt*t*t*p2x + t*t*t*p3x;
+        const y = mt*mt*mt*p0y + 3*mt*mt*t*p1y + 3*mt*t*t*p2y + t*t*t*p3y;
+        loopPts.push({ x, y });
+      }
+      drawBraidedCord(ctx, loopPts, acc.cord.color, acc.cord.double, 5.2);
+
+      // 顶部束口缠金小扣环（紧贴香囊最顶端，使挂绳真实“长”在香囊上）
+      ctx.fillStyle = '#D49B2A';
+      ctx.strokeStyle = '#7A4F10';
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.roundRect(CX - 9, topY - 5, 18, 9, 4);
+      ctx.fill(); ctx.stroke();
+      ctx.strokeStyle = 'rgba(255, 248, 215, 0.7)';
+      ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(CX - 6, topY - 2); ctx.lineTo(CX + 6, topY - 2); ctx.stroke();
+
+      // 若有玉珠，第一颗精准穿在顶部收拢的双股绳颈上（topY - 16），绝不漂浮在空气中
+      if (acc.beads.length > 0) {
+        const topBead = acc.beads[0];
+        const by = topY - 17;
+        ctx.save();
+        ctx.translate(CX, by);
+        if (topBead.isRing) {
+          ctx.strokeStyle = topBead.color; ctx.lineWidth = 6;
+          ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.stroke();
+          ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 1.8;
+          ctx.beginPath(); ctx.arc(-1.5, -1.5, 12, -Math.PI * 0.85, -Math.PI * 0.15); ctx.stroke();
+        } else {
+          const bg = ctx.createRadialGradient(-3.5, -3.5, 1.2, 0, 0, 11);
+          bg.addColorStop(0, '#FFFFFF'); bg.addColorStop(0.32, topBead.color); bg.addColorStop(1, topBead.rim);
+          ctx.fillStyle = bg;
+          ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
+        }
+        ctx.restore();
+      }
+    }
+
+    // 2. 底部连接短茎 + 4款独立精编汉风绳结 + 串联玉珠 + 鎏金帽头柔顺流苏
+    const hasBottom = Boolean(acc.knot || acc.tassel || acc.beads.length > 1);
+    let cursorY = botY;
+
+    if (hasBottom) {
+      const stemColor = (acc.knot && acc.knot.color) || (acc.tassel && acc.tassel.color) || (acc.cord && acc.cord.color) || '#C83E2B';
+      // 底部连接金扣与短丝茎
+      drawBraidedCord(ctx, [{ x: CX, y: botY - 2 }, { x: CX, y: botY + 14 }], stemColor, false, 4.2);
+      ctx.fillStyle = '#D49B2A';
+      ctx.beginPath(); ctx.roundRect(CX - 7, botY - 3, 14, 7, 3); ctx.fill();
+      cursorY = botY + 14;
+    }
+
+    // 汉风结饰（4款独立造型）
+    if (acc.knot) {
+      const kc = acc.knot.color;
+      const ky = cursorY + 8;
+      ctx.save();
+      ctx.translate(CX, ky);
+      ctx.strokeStyle = 'rgba(38, 16, 6, 0.25)';
+      ctx.fillStyle = kc;
+      ctx.lineWidth = 2.6;
+      if (acc.knot.id === 'kn_ear') {
+        // 双耳结
+        ctx.strokeStyle = kc; ctx.lineWidth = 4.2;
+        ctx.beginPath(); ctx.ellipse(-15, 0, 12, 6, -0.22, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(15, 0, 12, 6, 0.22, 0, Math.PI * 2); ctx.stroke();
+        ctx.fillStyle = kc; ctx.strokeStyle = '#E0AD45'; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.roundRect(-7, -7, 14, 14, 4); ctx.fill(); ctx.stroke();
+      } else if (acc.knot.id === 'kn_ruyi') {
+        // 如意结（四向云耳）
+        ctx.strokeStyle = kc; ctx.lineWidth = 4;
+        [[-11, -5], [11, -5], [-11, 5], [11, 5]].forEach(([ex, ey]) => {
+          ctx.beginPath(); ctx.arc(ex, ey, 6.5, 0, Math.PI * 2); ctx.stroke();
+        });
+        ctx.fillStyle = kc; ctx.strokeStyle = '#F2C96B'; ctx.lineWidth = 1.4;
+        ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+      } else if (acc.knot.id === 'kn_simple') {
+        // 同心结（交缠双环）
+        ctx.strokeStyle = kc; ctx.lineWidth = 4.5;
+        ctx.beginPath(); ctx.arc(-7, 0, 9.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(7, 0, 9.5, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = '#F2C96B'; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(-2, -6); ctx.lineTo(2, 6); ctx.stroke();
+      } else {
+        // 盘长花结（菱形编织网结）
+        ctx.rotate(Math.PI / 4);
+        ctx.fillStyle = kc; ctx.strokeStyle = '#E0AD45'; ctx.lineWidth = 1.5;
+        ctx.beginPath(); ctx.roundRect(-10, -10, 20, 20, 4); ctx.fill(); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,250,235,0.48)'; ctx.lineWidth = 1.2;
+        ctx.beginPath(); ctx.moveTo(-10, 0); ctx.lineTo(10, 0); ctx.moveTo(0, -10); ctx.lineTo(0, 10); ctx.stroke();
+      }
+      ctx.restore();
+      cursorY = ky + 14;
+    }
+
+    // 底部串联玉珠（idx >= 1，紧密穿在丝绳上零缝隙）
+    const botBeads = acc.beads.slice(1);
+    botBeads.forEach((bd) => {
+      const stemColor = (acc.tassel && acc.tassel.color) || (acc.knot && acc.knot.color) || '#C83E2B';
+      drawBraidedCord(ctx, [{ x: CX, y: cursorY - 2 }, { x: CX, y: cursorY + 18 }], stemColor, false, 3.6);
+      const by = cursorY + 9;
+      ctx.save();
+      ctx.translate(CX, by);
+      if (bd.isRing) {
+        ctx.strokeStyle = bd.color; ctx.lineWidth = 6;
+        ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.75)'; ctx.lineWidth = 1.8;
+        ctx.beginPath(); ctx.arc(-1.5, -1.5, 12, -Math.PI * 0.85, -Math.PI * 0.15); ctx.stroke();
+        cursorY += 24;
+      } else {
+        const bg = ctx.createRadialGradient(-3.5, -3.5, 1.2, 0, 0, 11);
+        bg.addColorStop(0, '#FFFFFF'); bg.addColorStop(0.32, bd.color); bg.addColorStop(1, bd.rim);
+        ctx.fillStyle = bg;
+        ctx.beginPath(); ctx.arc(0, 0, 10, 0, Math.PI * 2); ctx.fill();
+        cursorY += 20;
+      }
+      ctx.restore();
+    });
+
+    // 3. 绕线鎏金帽头 + 42 根多层次丝光垂坠流苏（告别硬扫帚！）
+    if (acc.tassel) {
+      const ty = cursorY;
+      const sway = Math.sin(time * 0.0026) * 6.5;
+      const len = acc.tassel.len || 96;
+      const tc = acc.tassel.color;
+
+      // 柔顺垂坠丝穗底层阴影
+      ctx.fillStyle = 'rgba(38, 16, 6, 0.14)';
+      ctx.beginPath();
+      ctx.moveTo(CX - 7, ty + 14);
+      ctx.quadraticCurveTo(CX - 16 + sway * 0.45, ty + len * 0.58, CX - 19 + sway, ty + len + 2);
+      ctx.lineTo(CX + 21 + sway, ty + len + 2);
+      ctx.quadraticCurveTo(CX + 18 + sway * 0.45, ty + len * 0.58, CX + 9, ty + 14);
+      ctx.closePath();
+      ctx.fill();
+
+      // 42 根分层丝线（中密外柔、自带真丝横向反光带）
+      const strands = 42;
+      for (let i = 0; i < strands; i++) {
+        const ratio = (i / (strands - 1)) - 0.5;
+        const spread = ratio * 34;
+        const curLen = len * (0.94 + Math.cos(ratio * Math.PI) * 0.08);
+        const strandCol = (acc.tassel.style === 'double' && i % 4 === 0) ? '#E5B94C' : tc;
+        ctx.strokeStyle = strandCol;
+        ctx.globalAlpha = 0.78 + (1 - Math.abs(ratio * 1.4)) * 0.22;
+        ctx.lineWidth = 1.25;
+        ctx.beginPath();
+        ctx.moveTo(CX + ratio * 11, ty + 13);
+        ctx.bezierCurveTo(
+          CX + ratio * 14 + sway * 0.2, ty + curLen * 0.35,
+          CX + spread * 0.72 + sway * 0.65, ty + curLen * 0.72,
+          CX + spread + sway, ty + curLen
+        );
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+
+      // 流苏腰部真丝光泽反光带
+      const sheenG = ctx.createLinearGradient(CX - 16, ty + 20, CX + 18, ty + len * 0.7);
+      sheenG.addColorStop(0, 'rgba(255,255,255,0)');
+      sheenG.addColorStop(0.42, 'rgba(255,252,240,0.28)');
+      sheenG.addColorStop(0.58, 'rgba(255,255,255,0)');
+      ctx.fillStyle = sheenG;
+      ctx.beginPath();
+      ctx.moveTo(CX - 8, ty + 14);
+      ctx.lineTo(CX - 18 + sway, ty + len);
+      ctx.lineTo(CX + 18 + sway, ty + len);
+      ctx.lineTo(CX + 8, ty + 14);
+      ctx.closePath();
+      ctx.fill();
+
+      // 若为花瓣流苏，在帽头处点缀小花托
+      if (acc.tassel.style === 'petal') {
+        ctx.fillStyle = '#F5C6D0';
+        for (let k = -2; k <= 2; k++) {
+          ctx.beginPath();
+          ctx.ellipse(CX + k * 4.5, ty + 12, 3.8, 6.5, k * 0.22, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+
+      // 绕线鎏金流苏帽头（带细密横绕金丝纹理）
+      const capG = ctx.createLinearGradient(CX - 9, ty, CX + 9, ty);
+      capG.addColorStop(0, '#9E6E1A');
+      capG.addColorStop(0.4, '#F7D774');
+      capG.addColorStop(0.7, '#D49B2A');
+      capG.addColorStop(1, '#7A510E');
+      ctx.fillStyle = capG;
+      ctx.beginPath();
+      ctx.roundRect(CX - 8.5, ty, 17, 14, 4);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(110, 65, 10, 0.45)';
+      ctx.lineWidth = 0.9;
+      for (let wy = ty + 3; wy <= ty + 11; wy += 2.6) {
+        ctx.beginPath(); ctx.moveTo(CX - 8, wy); ctx.lineTo(CX + 8, wy); ctx.stroke();
+      }
+    }
+
+    ctx.restore();
+  }
+
+  // Layer 06: 实时跟随工具（剪刀、穿线银针、绣花针）、布屑粒子与选中框
+  function renderLayer06_Effects(ctx, time) {
+    ctx.clearRect(0, 0, CW, CH);
+    ctx.save();
+
+    // 1. 刺绣选中纹样高亮虚线框
+    if (state.step === 4 && state.embroidery.selectedUid) {
+      const sel = state.embroidery.motifs.find(m => m.uid === state.embroidery.selectedUid);
+      if (sel) {
+        const wp = uvToSachetWorld(sel.u, sel.v);
+        ctx.strokeStyle = sel.locked ? '#D9A441' : '#C84B31';
+        ctx.lineWidth = 1.8;
+        ctx.setLineDash([5, 4]);
+        ctx.beginPath();
+        ctx.arc(wp.x, wp.y, 26 * (sel.scale || 1), 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    }
+
+    // 2. 动态飞落布屑与香料粒子
+    for (let i = runtimeParticles.length - 1; i >= 0; i--) {
+      const pt = runtimeParticles[i];
+      pt.x += pt.vx;
+      pt.y += pt.vy;
+      pt.vy += 0.25;
+      pt.alpha -= 0.022;
+      if (pt.alpha <= 0) { runtimeParticles.splice(i, 1); continue; }
+      ctx.fillStyle = pt.color;
+      ctx.globalAlpha = pt.alpha;
+      ctx.beginPath();
+      ctx.arc(pt.x, pt.y, pt.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    // 3. 跟随手指的真实女红工具（3款裁剪工具 + 3款针具独立手绘造型）
+    const p = state.pointer;
+    if (p.down) {
+      if (state.step === 1) {
+        const cTool = state.cutting.tool || 'scissors';
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        const ang = Math.atan2(p.vy || 0, p.vx || 1);
+        if (cTool === 'knife') {
+          // 胡桃木柄斜刃古法裁布刀
+          ctx.rotate(ang - 0.35);
+          const bG = ctx.createLinearGradient(0, -5, 28, 5);
+          bG.addColorStop(0, '#CFD8DC'); bG.addColorStop(0.5, '#FFFFFF'); bG.addColorStop(1, '#78909C');
+          ctx.fillStyle = bG; ctx.strokeStyle = '#546E7A'; ctx.lineWidth = 1.2;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(-14, -6); ctx.lineTo(-24, -5); ctx.lineTo(-24, 4); ctx.lineTo(-8, 4); ctx.closePath();
+          ctx.fill(); ctx.stroke();
+          ctx.fillStyle = '#C9A25B'; ctx.fillRect(-29, -5.5, 6, 10);
+          ctx.fillStyle = '#6E472B';
+          ctx.beginPath(); ctx.roundRect(-72, -6.5, 44, 12, 5); ctx.fill();
+        } else if (cTool === 'ruler') {
+          // 带刻度汉代竹布尺 + 磁吸引导光环
+          ctx.strokeStyle = 'rgba(217, 164, 65, 0.55)';
+          ctx.lineWidth = 1.8;
+          ctx.setLineDash([4, 4]);
+          ctx.beginPath(); ctx.arc(0, 0, 26, 0, Math.PI * 2); ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.rotate(ang + 0.2);
+          ctx.fillStyle = '#E5C487'; ctx.strokeStyle = '#8C6239'; ctx.lineWidth = 1.3;
+          ctx.beginPath(); ctx.roundRect(-54, -9, 108, 18, 3); ctx.fill(); ctx.stroke();
+          ctx.strokeStyle = '#6E472B'; ctx.lineWidth = 1;
+          for (let k = -44; k <= 44; k += 8) {
+            ctx.beginPath(); ctx.moveTo(k, -9); ctx.lineTo(k, k % 16 === 0 ? -2 : -5); ctx.stroke();
+          }
+        } else {
+          // 跟随开合的汉代交股小剪刀
+          const snip = Math.sin(time * 0.025) * 0.28;
+          ctx.rotate(ang);
+          ctx.strokeStyle = '#78909C';
+          ctx.lineWidth = 4;
+          ctx.lineCap = 'round';
+          [-1, 1].forEach(dir => {
+            ctx.save();
+            ctx.rotate(dir * (0.22 + Math.abs(snip)));
+            ctx.beginPath(); ctx.moveTo(-18, 0); ctx.lineTo(26, 0); ctx.stroke();
+            ctx.strokeStyle = '#C84B31'; ctx.lineWidth = 3;
+            ctx.beginPath(); ctx.arc(-25, dir * 5, 7, 0, Math.PI * 2); ctx.stroke();
+            ctx.restore();
+          });
+        }
+        ctx.restore();
+      } else if (state.step === 3 || (state.step === 4 && state.embroidery.toolMode === 'freehand')) {
+        // 3款不同针具（细针 / 金鼻绣花针 / 半月弯针）+ 动态悬垂丝线
+        const threadCol = state.step === 3 ? state.sewing.threadColor : state.embroidery.threadColor;
+        const needleId = state.step === 3 ? (state.sewing.needle || 'fine') : 'embroidery';
+        const tailX = needleId === 'curved' ? (p.x + 34) : (p.x + 30);
+        const tailY = needleId === 'curved' ? (p.y - 22) : (p.y - 30);
+
+        ctx.strokeStyle = threadCol;
+        ctx.lineWidth = needleId === 'fine' ? 1.5 : (needleId === 'embroidery' ? 2.5 : 2.0);
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(CX, CY - 90);
+        ctx.quadraticCurveTo((CX + p.x) * 0.5, Math.max(CY, p.y) + 45, tailX, tailY);
+        ctx.stroke();
+
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        if (needleId === 'curved') {
+          // 半月弧形弯针
+          ctx.rotate(-0.55);
+          ctx.strokeStyle = '#CFD8DC';
+          ctx.lineWidth = 2.8;
+          ctx.beginPath();
+          ctx.arc(20, 8, 22, Math.PI * 1.12, Math.PI * 1.88);
+          ctx.stroke();
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 1.0;
+          ctx.beginPath();
+          ctx.arc(20, 7.5, 22, Math.PI * 1.15, Math.PI * 1.82);
+          ctx.stroke();
+        } else if (needleId === 'embroidery') {
+          // 带鎏金针鼻的饱满绣花针
+          ctx.rotate(-0.78);
+          ctx.strokeStyle = '#CFD8DC';
+          ctx.lineWidth = 3.2;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(36, 0); ctx.stroke();
+          ctx.strokeStyle = '#F2C96B';
+          ctx.lineWidth = 3.6;
+          ctx.beginPath(); ctx.moveTo(34, 0); ctx.lineTo(44, 0); ctx.stroke();
+          ctx.strokeStyle = '#FFFFFF';
+          ctx.lineWidth = 1.0;
+          ctx.beginPath(); ctx.moveTo(2, -0.8); ctx.lineTo(34, -0.8); ctx.stroke();
+        } else {
+          // 纤细银亮细针
+          ctx.rotate(-0.78);
+          ctx.strokeStyle = '#ECEFF1';
+          ctx.lineWidth = 1.8;
+          ctx.beginPath(); ctx.moveTo(0, 0); ctx.lineTo(42, 0); ctx.stroke();
+          ctx.strokeStyle = '#90A4AE';
+          ctx.lineWidth = 0.7;
+          ctx.beginPath(); ctx.moveTo(0, 0.8); ctx.lineTo(42, 0.8); ctx.stroke();
+        }
+        ctx.restore();
+      }
+    }
+    ctx.restore();
+  }
+
+  // 合成八层离屏 Canvas 至目标画布（lighting 光影褶皱层位于刺绣层之上，让纹样真正融入曲面丝绸）
+  function compositeAllLayers(targetCtx, cam, time, includeEffects = true) {
+    if (layerDirty.bg)         { renderLayer00_Background(layers.bg.ctx); layerDirty.bg = false; }
+    if (layerDirty.fabric)     { renderLayer01_Fabric(layers.fabric.ctx); layerDirty.fabric = false; }
+    if (layerDirty.filling)    { renderLayer02_Filling(layers.filling.ctx); layerDirty.filling = false; }
+    if (layerDirty.sewing)     { renderLayer03_Sewing(layers.sewing.ctx); layerDirty.sewing = false; }
+    if (layerDirty.embroidery) { renderLayer04_Embroidery(layers.embroidery.ctx); layerDirty.embroidery = false; }
+    if (layerDirty.lighting)   { renderLayer045_Lighting(layers.lighting.ctx); layerDirty.lighting = false; }
+    // 流苏含微风物理摆动，存在流苏或处于第6步时每帧刷新 Layer 05
+    if (layerDirty.accessories || state.accessories.tassel) {
+      renderLayer05_Accessories(layers.accessories.ctx, time);
+      layerDirty.accessories = false;
+    }
+    if (includeEffects) renderLayer06_Effects(layers.effects.ctx, time);
+
+    targetCtx.save();
+    targetCtx.setTransform(1, 0, 0, 1, 0, 0);
+    targetCtx.clearRect(0, 0, targetCtx.canvas.width, targetCtx.canvas.height);
+
+    // Layer 00 木案或礼盒背景
+    targetCtx.drawImage(layers.bg.canvas, 0, 0);
+
+    // 应用相机缩放与平移合成 Layer 01 ~ 06
+    const scaleRatio = targetCtx.canvas.width / CW;
+    targetCtx.translate((CW * 0.5 + cam.panX) * scaleRatio, (CH * 0.5 + cam.panY) * scaleRatio);
+    targetCtx.scale(cam.zoom, cam.zoom);
+    targetCtx.translate(-CW * 0.5 * scaleRatio, -CH * 0.5 * scaleRatio);
+
+    ['fabric', 'filling', 'sewing', 'embroidery', 'lighting', 'accessories'].forEach(name => {
+      targetCtx.drawImage(layers[name].canvas, 0, 0);
+    });
+    if (includeEffects) targetCtx.drawImage(layers.effects.canvas, 0, 0);
+    targetCtx.restore();
+  }
+
+  let animPaused = false;
+  document.addEventListener('visibilitychange', () => { animPaused = document.hidden; });
+
+  function renderLoop(time) {
+    if (!animPaused) {
+      const cam = state.camera;
+      cam.zoom += (cam.targetZoom - cam.zoom) * 0.22;
+      cam.panX += (cam.targetPanX - cam.panX) * 0.22;
+      cam.panY += (cam.targetPanY - cam.panY) * 0.22;
+
+      if (state.cutting.completed && state.cutting.foldProgress < 1) {
+        state.cutting.foldProgress = Math.min(1, state.cutting.foldProgress + 0.06);
+        markDirty('fabric');
+      }
+      if (state.sewing.completed && state.sewing.cinchProgress < 1) {
+        state.sewing.cinchProgress = Math.min(1, state.sewing.cinchProgress + 0.05);
+        markDirty('fabric', 'sewing');
+      }
+      compositeAllLayers(mainCtx, cam, time, true);
+    }
+    requestAnimationFrame(renderLoop);
+  }
+
+  /* ============================================================================
+   * 7. 相机缩放、坐标换算与七步触控交互系统 (含双指 95ms 防误触与 setPointerCapture)
+   * ============================================================================ */
+  function clampCameraPan(zoom, panX, panY) {
+    const maxPan = Math.max(0, (zoom - 0.85) * 280);
+    return { panX: Math.max(-maxPan, Math.min(maxPan, panX)), panY: Math.max(-maxPan, Math.min(maxPan, panY)) };
+  }
+
+  function setCameraZoom(nextZoom, anchorRawX = CW * 0.5, anchorRawY = CH * 0.5, immediate = false) {
+    const cam = state.camera;
+    const cz = Math.max(0.85, Math.min(3.0, nextZoom));
+    const bz = immediate ? cam.zoom : cam.targetZoom;
+    const bpx = immediate ? cam.panX : cam.targetPanX, bpy = immediate ? cam.panY : cam.targetPanY;
+    const wx = (anchorRawX - CW * 0.5 - bpx) / bz + CW * 0.5;
+    const wy = (anchorRawY - CH * 0.5 - bpy) / bz + CH * 0.5;
+    const clamped = clampCameraPan(cz, anchorRawX - CW * 0.5 - (wx - CW * 0.5) * cz, anchorRawY - CH * 0.5 - (wy - CH * 0.5) * cz);
+    cam.targetZoom = cz; cam.targetPanX = clamped.panX; cam.targetPanY = clamped.panY;
+    if (immediate) { cam.zoom = cz; cam.panX = clamped.panX; cam.panY = clamped.panY; }
+    document.getElementById('zoomResetBtn').textContent = `${Math.round(cam.targetZoom * 100)}%`;
+  }
+
+  function resetCamera() {
+    state.camera.targetZoom = 1.0; state.camera.targetPanX = 0; state.camera.targetPanY = 0;
+    document.getElementById('zoomResetBtn').textContent = '100%';
+  }
+
+  function getRawCanvasPos(e) {
+    const rect = mainCanvas.getBoundingClientRect();
+    const cx = e.touches ? e.touches[0].clientX : e.clientX;
+    const cy = e.touches ? e.touches[0].clientY : e.clientY;
+    return { rawX: (cx - rect.left) * (CW / rect.width), rawY: (cy - rect.top) * (CH / rect.height) };
+  }
+
+  function canvasToWorld(rawX, rawY) {
+    const cam = state.camera;
+    return { x: (rawX - CW * 0.5 - cam.panX) / cam.zoom + CW * 0.5, y: (rawY - CH * 0.5 - cam.panY) / cam.zoom + CH * 0.5, rawX, rawY };
+  }
+
+  function getCanvasPos(e) {
+    const raw = getRawCanvasPos(e);
+    return canvasToWorld(raw.rawX, raw.rawY);
+  }
+
+  function isInsideSachet(wx, wy) {
+    const dim = getShapeDimensions(state.fabric.shape);
+    if (Math.abs(wy - CY) > dim.ry + 12) return false;
+    const v = (wy - CY) / dim.ry;
+    return Math.abs(wx - CX) <= getSachetHalfWidthAtV(state.fabric.shape, v) + 12;
+  }
+
+  function spawnParticlesAt(x, y, color, count = 4) {
+    for (let i = 0; i < count; i++) {
+      runtimeParticles.push({
+        x, y,
+        vx: (Math.random() - 0.5) * 4,
+        vy: -1 - Math.random() * 2.5,
+        r: 2 + Math.random() * 2.5,
+        color: color || state.fabric.color,
+        alpha: 0.9
+      });
+    }
+  }
+
+  // STEP 03: 添加/移除香料与古方预设
+  function addHerbToFilling(herbId, amountToAdd = 10, customUV = null) {
+    const meta = HERB_CATALOG.find(h => h.id === herbId) || HERB_CATALOG[0];
+    if (state.filling.totalAmount >= state.filling.capacity) {
+      flashPromptWarning('香囊内腔已满 100 份，可点击右侧清单删除部分材料后再添加');
+      return;
+    }
+    pushHistory();
+    const actualAdd = Math.min(amountToAdd, state.filling.capacity - state.filling.totalAmount);
+    let entry = state.filling.ingredients.find(it => it.id === meta.id);
+    if (entry) entry.amount += actualAdd;
+    else state.filling.ingredients.push({ id: meta.id, name: meta.name, category: meta.category, color: meta.color, amount: actualAdd });
+    state.filling.totalAmount += actualAdd;
+
+    // 生成 4~6 枚落入囊腔内部的香料图形
+    const pCount = Math.max(3, Math.round(actualAdd * 0.5));
+    for (let i = 0; i < pCount; i++) {
+      const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * 0.78;
+      const u = customUV ? (customUV.u + (Math.random() - 0.5) * 0.25) : (Math.cos(a) * r);
+      const v = customUV ? (customUV.v + (Math.random() - 0.5) * 0.25) : (Math.sin(a) * r);
+      state.filling.particles.push({
+        uid: Date.now() + Math.random(),
+        id: meta.id,
+        u: Math.max(-0.85, Math.min(0.85, u)),
+        v: Math.max(-0.85, Math.min(0.85, v)),
+        scale: 0.85 + Math.random() * 0.35,
+        rot: (Math.random() - 0.5) * 1.6
+      });
+    }
+    if (validateStep(2)) state.stepStatus[2] = true;
+    markDirty('fabric', 'filling');
+    sfx.playPop(540);
+    updateUI();
+  }
+
+  function removeHerbFromFilling(herbId) {
+    const idx = state.filling.ingredients.findIndex(it => it.id === herbId);
+    if (idx < 0) return;
+    pushHistory();
+    state.filling.totalAmount = Math.max(0, state.filling.totalAmount - state.filling.ingredients[idx].amount);
+    state.filling.ingredients.splice(idx, 1);
+    state.filling.particles = state.filling.particles.filter(p => p.id !== herbId);
+    state.stepStatus[2] = validateStep(2);
+    markDirty('fabric', 'filling');
+    sfx.playPop(380);
+    updateUI();
+  }
+
+  function applyPresetRecipe(preset) {
+    pushHistory();
+    state.filling.ingredients = [];
+    state.filling.particles = [];
+    state.filling.totalAmount = 0;
+    preset.items.forEach(item => {
+      const meta = HERB_CATALOG.find(h => h.id === item.id) || HERB_CATALOG[0];
+      state.filling.ingredients.push({ id: meta.id, name: meta.name, category: meta.category, color: meta.color, amount: item.amount });
+      state.filling.totalAmount += item.amount;
+      for (let i = 0; i < Math.round(item.amount * 0.45); i++) {
+        const a = Math.random() * Math.PI * 2, r = Math.sqrt(Math.random()) * 0.8;
+        state.filling.particles.push({ uid: Date.now() + Math.random(), id: meta.id, u: Math.cos(a) * r, v: Math.sin(a) * r, scale: 0.9 + Math.random() * 0.3, rot: (Math.random() - 0.5) * 1.5 });
+      }
+    });
+    state.stepStatus[2] = true;
+    markDirty('fabric', 'filling');
+    sfx.playChime();
+    updateUI();
+  }
+
+  const activePointers = new Map();
+  const gesture = { mode: 'none', startDist: 0, startZoom: 1, lastMidX: 0, lastMidY: 0, drawStartTime: 0, pushedHistory: false, spaceHeld: false };
+
+  function handlePointerDown(e) {
+    e.preventDefault();
+    try { mainCanvas.setPointerCapture(e.pointerId); } catch (_) {}
+    const raw = getRawCanvasPos(e);
+    activePointers.set(e.pointerId, { rawX: raw.rawX, rawY: raw.rawY });
+
+    if (activePointers.size === 2) {
+      if (gesture.mode === 'draw' && gesture.pushedHistory && (performance.now() - gesture.drawStartTime < 95)) {
+        undoAction();
+        gesture.pushedHistory = false;
+      }
+      state.pointer.down = false;
+      state.pointer.activeStroke = null;
+      const pts = Array.from(activePointers.values());
+      gesture.mode = 'pinch';
+      gesture.startDist = Math.max(10, Math.hypot(pts[1].rawX - pts[0].rawX, pts[1].rawY - pts[0].rawY));
+      gesture.startZoom = state.camera.targetZoom;
+      gesture.lastMidX = (pts[0].rawX + pts[1].rawX) * 0.5;
+      gesture.lastMidY = (pts[0].rawY + pts[1].rawY) * 0.5;
+      return;
+    }
+
+    if (gesture.spaceHeld || e.button === 1 || e.button === 2) {
+      gesture.mode = 'pan';
+      gesture.lastMidX = raw.rawX; gesture.lastMidY = raw.rawY;
+      return;
+    }
+    if (activePointers.size > 2) return;
+
+    gesture.mode = 'draw';
+    gesture.drawStartTime = performance.now();
+    gesture.pushedHistory = false;
+
+    const pos = canvasToWorld(raw.rawX, raw.rawY);
+    state.pointer.down = true;
+    state.pointer.x = pos.x; state.pointer.y = pos.y;
+
+    if (state.step === 1 && !state.cutting.completed) {
+      pushHistory(); gesture.pushedHistory = true;
+      handleCuttingAt(pos.x, pos.y);
+    } else if (state.step === 2) {
+      if (isInsideSachet(pos.x, pos.y)) {
+        const uv = worldToSachetUV(pos.x, pos.y);
+        addHerbToFilling(state.filling.activeHerbId, 10, uv);
+        spawnParticlesAt(pos.x, pos.y, '#F2B749', 5);
+      }
+    } else if (state.step === 3 && !state.sewing.completed) {
+      pushHistory(); gesture.pushedHistory = true;
+      handleSewingAt(pos.x, pos.y);
+    } else if (state.step === 4) {
+      if (state.embroidery.toolMode === 'freehand') {
+        if (isInsideSachet(pos.x, pos.y)) {
+          pushHistory(); gesture.pushedHistory = true;
+          const uv = worldToSachetUV(pos.x, pos.y);
+          const st = { uid: Date.now() + Math.random(), color: state.embroidery.threadColor, stitchStyle: state.embroidery.stitchStyle, width: 3.5, points: [uv] };
+          state.embroidery.freehandStrokes.push(st);
+          state.pointer.activeStroke = st;
+          state.stepStatus[4] = true;
+          markDirty('embroidery');
+          sfx.playPop(580);
+          updatePromptAndProgress();
+        }
+      } else {
+        // 按 zIndex 从高到低进行命中检测
+        const sorted = [...state.embroidery.motifs].sort((a, b) => (b.zIndex || 0) - (a.zIndex || 0));
+        let hit = null;
+        for (const m of sorted) {
+          const wp = uvToSachetWorld(m.u, m.v);
+          if (Math.hypot(pos.x - wp.x, pos.y - wp.y) < 26 * (m.scale || 1)) { hit = m; break; }
+        }
+        if (hit) {
+          state.embroidery.selectedUid = hit.uid;
+          if (!hit.locked) { pushHistory(); gesture.pushedHistory = true; state.pointer.draggingMotif = hit; }
+          sfx.playPop(620);
+          updateSelectionToolbar();
+        } else if (isInsideSachet(pos.x, pos.y)) {
+          pushHistory(); gesture.pushedHistory = true;
+          const uv = worldToSachetUV(pos.x, pos.y);
+          const maxZ = state.embroidery.motifs.reduce((acc, it) => Math.max(acc, it.zIndex || 0), 0);
+          const newM = {
+            uid: Date.now() + Math.random(),
+            type: state.embroidery.activeMotifId,
+            u: uv.u, v: uv.v,
+            scale: 1.0, rotation: 0,
+            color: state.embroidery.threadColor,
+            stitchStyle: state.embroidery.stitchStyle,
+            zIndex: maxZ + 1,
+            locked: false
+          };
+          state.embroidery.motifs.push(newM);
+          state.embroidery.selectedUid = newM.uid;
+          state.pointer.draggingMotif = newM;
+          state.stepStatus[4] = true;
+          markDirty('embroidery');
+          sfx.playPop(540);
+          updateUI();
+        } else {
+          state.embroidery.selectedUid = null;
+          updateSelectionToolbar();
+        }
+      }
+    } else if (state.step === 6) {
+      openCardModal();
+    }
+  }
+
+  function handlePointerMove(e) {
+    if (activePointers.has(e.pointerId)) {
+      const raw = getRawCanvasPos(e);
+      activePointers.set(e.pointerId, { rawX: raw.rawX, rawY: raw.rawY });
+
+      if (gesture.mode === 'pinch' && activePointers.size === 2) {
+        e.preventDefault();
+        const pts = Array.from(activePointers.values());
+        const dist = Math.max(10, Math.hypot(pts[1].rawX - pts[0].rawX, pts[1].rawY - pts[0].rawY));
+        const midX = (pts[0].rawX + pts[1].rawX) * 0.5, midY = (pts[0].rawY + pts[1].rawY) * 0.5;
+        const dx = midX - gesture.lastMidX, dy = midY - gesture.lastMidY;
+        gesture.lastMidX = midX; gesture.lastMidY = midY;
+        const cam = state.camera;
+        const clamped = clampCameraPan(cam.targetZoom, cam.targetPanX + dx, cam.targetPanY + dy);
+        cam.targetPanX = clamped.panX; cam.targetPanY = clamped.panY; cam.panX = clamped.panX; cam.panY = clamped.panY;
+        setCameraZoom(gesture.startZoom * (dist / gesture.startDist), midX, midY, true);
+        return;
+      }
+      if (gesture.mode === 'pan') {
+        e.preventDefault();
+        const dx = raw.rawX - gesture.lastMidX, dy = raw.rawY - gesture.lastMidY;
+        gesture.lastMidX = raw.rawX; gesture.lastMidY = raw.rawY;
+        const cam = state.camera;
+        const clamped = clampCameraPan(cam.targetZoom, cam.targetPanX + dx, cam.targetPanY + dy);
+        cam.targetPanX = clamped.panX; cam.targetPanY = clamped.panY; cam.panX = clamped.panX; cam.panY = clamped.panY;
+        return;
+      }
+    }
+
+    if (!state.pointer.down || gesture.mode !== 'draw') return;
+    e.preventDefault();
+    const pos = getCanvasPos(e);
+    state.pointer.vx = pos.x - state.pointer.x;
+    state.pointer.vy = pos.y - state.pointer.y;
+    state.pointer.x = pos.x; state.pointer.y = pos.y;
+
+    if (state.step === 1 && !state.cutting.completed) {
+      handleCuttingAt(pos.x, pos.y);
+    } else if (state.step === 3 && !state.sewing.completed) {
+      handleSewingAt(pos.x, pos.y);
+    } else if (state.step === 4) {
+      if (state.embroidery.toolMode === 'freehand' && state.pointer.activeStroke) {
+        if (isInsideSachet(pos.x, pos.y)) {
+          const uv = worldToSachetUV(pos.x, pos.y);
+          const pts = state.pointer.activeStroke.points;
+          const last = pts[pts.length - 1];
+          if (Math.hypot(uv.u - last.u, uv.v - last.v) > 0.025) {
+            pts.push(uv);
+            markDirty('embroidery');
+            sfx.playSnip();
+          }
+        }
+      } else if (state.pointer.draggingMotif && !state.pointer.draggingMotif.locked) {
+        if (isInsideSachet(pos.x, pos.y)) {
+          const uv = worldToSachetUV(pos.x, pos.y);
+          state.pointer.draggingMotif.u = uv.u;
+          state.pointer.draggingMotif.v = uv.v;
+          markDirty('embroidery');
+        }
+      }
+    }
+  }
+
+  function handlePointerUp(e) {
+    if (e && e.pointerId !== undefined) {
+      try { mainCanvas.releasePointerCapture(e.pointerId); } catch (_) {}
+      activePointers.delete(e.pointerId);
+    } else {
+      activePointers.clear();
+    }
+    if (activePointers.size === 0) { gesture.mode = 'none'; gesture.pushedHistory = false; }
+    state.pointer.down = false;
+    state.pointer.activeStroke = null;
+    state.pointer.draggingMotif = null;
+  }
+
+  // STEP 02 裁剪路径覆盖率算法（小剪刀精准 / 裁布刀锋利快划 / 竹布尺强磁吸连裁）
+  function handleCuttingAt(px, py) {
+    const pts = getContourSamplePoints(state.fabric.shape, state.cutting.checkpoints.length);
+    const cTool = state.cutting.tool || 'scissors';
+    const hitRad = cTool === 'ruler' ? 62 : (cTool === 'knife' ? 48 : 32);
+    const chipCnt = cTool === 'knife' ? 3 : 2;
+    let hitAny = false;
+    pts.forEach((p, idx) => {
+      if (!state.cutting.checkpoints[idx] && Math.hypot(px - p.x, py - p.y) < hitRad) {
+        state.cutting.checkpoints[idx] = true;
+        // 竹布尺辅助定型：自动磁吸连带对齐相邻 1 个节点，极顺手
+        if (cTool === 'ruler') {
+          const nxtIdx = (idx + 1) % pts.length;
+          state.cutting.checkpoints[nxtIdx] = true;
+        }
+        hitAny = true;
+        spawnParticlesAt(p.x, p.y, state.fabric.color, chipCnt);
+      }
+    });
+    if (hitAny) {
+      sfx.playSnip();
+      const done = state.cutting.checkpoints.filter(Boolean).length;
+      state.cutting.progress = Math.round((done / pts.length) * 100);
+      if (state.cutting.progress >= 88) {
+        state.cutting.checkpoints.fill(true);
+        state.cutting.progress = 100;
+        state.cutting.completed = true;
+        state.stepStatus[1] = true;
+        sfx.playChime();
+      }
+      markDirty('fabric');
+      updatePromptAndProgress();
+    }
+  }
+
+  // STEP 04 缝合路径覆盖率算法（细针秀气 / 绣花针饱满 / 弯针宽幅顺滑收口）
+  function handleSewingAt(px, py) {
+    const pts = getSewingSamplePoints(state.fabric.shape, state.sewing.checkpoints.length);
+    const nTool = state.sewing.needle || 'fine';
+    const hitRad = nTool === 'curved' ? 50 : (nTool === 'embroidery' ? 35 : 30);
+    let hitAny = false;
+    pts.forEach((p, idx) => {
+      if (!state.sewing.checkpoints[idx] && Math.hypot(px - p.x, py - p.y) < hitRad) {
+        state.sewing.checkpoints[idx] = true;
+        hitAny = true;
+      }
+    });
+    if (hitAny) {
+      sfx.playSnip();
+      const done = state.sewing.checkpoints.filter(Boolean).length;
+      state.sewing.progress = Math.round((done / pts.length) * 100);
+      if (state.sewing.progress >= 90) {
+        state.sewing.checkpoints.fill(true);
+        state.sewing.progress = 100;
+        state.sewing.completed = true;
+        state.stepStatus[3] = true;
+        sfx.playChime();
+      }
+      markDirty('sewing', 'fabric');
+      updatePromptAndProgress();
+    }
+  }
+
+  /* ============================================================================
+   * 8. 动态底部面板生成 (renderBottomDock)、浮动工具与步骤守门验证
+   * ============================================================================ */
+  const promptBarEl = document.getElementById('promptBar');
+  const promptTextEl = document.getElementById('promptText');
+  const promptBadgeEl = document.getElementById('promptBadge');
+  const progressFillEl = document.getElementById('progressFill');
+  const subTabsEl = document.getElementById('subTabs');
+  const optionsScrollEl = document.getElementById('optionsScroll');
+  const floatingToolsEl = document.getElementById('floatingTools');
+  const prevStepBtn = document.getElementById('prevStepBtn');
+  const nextStepBtn = document.getElementById('nextStepBtn');
+  const nextStepText = document.getElementById('nextStepText');
+  const selectionToolbar = document.getElementById('selectionToolbar');
+
+  function flashPromptWarning(msg) {
+    promptTextEl.textContent = msg;
+    promptBarEl.classList.add('warn');
+    sfx.playPop(300);
+    setTimeout(() => promptBarEl.classList.remove('warn'), 2400);
+  }
+
+  function updatePromptAndProgress() {
+    let text = '', badge = '', pct = 0;
+    const s = state.step;
+    if (s === 0) {
+      const sh = getShapeDimensions(state.fabric.shape).name;
+      const mat = (FABRIC_MATERIALS.find(m => m.id === state.fabric.material) || {}).name;
+      text = `已选「${sh} · ${mat}」——点击下方卡片可随时切换形制、布料、底色与暗纹`;
+      badge = '择囊选绢'; pct = 100;
+    } else if (s === 1) {
+      text = state.cutting.completed
+        ? '丝帛已裁定并折叠成囊体！可选择囊口样式或进入下一步调香填囊'
+        : '按住剪刀沿着白色虚线拖动裁剪丝帛（或点击右上角「自动裁剪」）';
+      badge = `裁剪 ${state.cutting.progress}%`; pct = state.cutting.progress;
+    } else if (s === 2) {
+      text = '点击或拖动香囊内衬，填入花材、香草与香料（至少2种且满20份，上限100份）';
+      badge = `香方 ${state.filling.totalAmount}/${state.filling.capacity}份`;
+      pct = (state.filling.totalAmount / state.filling.capacity) * 100;
+    } else if (s === 3) {
+      text = state.sewing.completed
+        ? '囊口已严密缝合收紧！可点击下一步为香囊刺绣绘纹'
+        : '选择丝线与针法，沿着囊口虚线拖动针尖缝合（达到 90% 即可收口）';
+      badge = `缝合 ${state.sewing.progress}%`; pct = state.sewing.progress;
+    } else if (s === 4) {
+      text = state.embroidery.toolMode === 'freehand'
+        ? '自由刺绣模式：按住手指在香囊表面滑动，绣出连续丝线纹路'
+        : '点击香囊表面放置刺绣纹样，点击已有纹样可拖动、缩放、旋转或调整层级';
+      const cnt = state.embroidery.motifs.length + state.embroidery.freehandStrokes.length;
+      badge = `已刺绣 ${cnt} 处`; pct = Math.min(100, cnt * 35);
+    } else if (s === 5) {
+      text = '为香囊搭配顶部丝绳、垂穗流苏、玉珠与汉风绳结（可点击右上角「自动雅配」）';
+      const hasAcc = Boolean(state.accessories.cord && (state.accessories.tassel || state.accessories.beads.length > 0 || state.accessories.knot));
+      badge = hasAcc ? '缀饰完备' : '待配流苏/玉珠'; pct = hasAcc ? 100 : 50;
+    } else if (s === 6) {
+      text = '为香囊题写雅名、赠言与毛笔落款，选择礼盒封存并导出专属纪念图';
+      badge = state.gift.completed ? '礼成封存' : '待题名封礼'; pct = state.gift.completed ? 100 : 80;
+    }
+    promptTextEl.textContent = text;
+    promptBadgeEl.textContent = badge;
+    progressFillEl.style.width = `${Math.min(100, Math.max(0, pct))}%`;
+  }
+
+  function updateSelectionToolbar() {
+    const show = state.step === 4 && state.embroidery.selectedUid;
+    selectionToolbar.classList.toggle('hidden', !show);
+    if (show) {
+      const sel = state.embroidery.motifs.find(m => m.uid === state.embroidery.selectedUid);
+      document.getElementById('btnLockMotif').textContent = (sel && sel.locked) ? '已锁' : '锁定';
+    }
+  }
+
+  function renderFloatingTools() {
+    floatingToolsEl.innerHTML = '';
+    const s = state.step;
+
+    if (s === 1 && !state.cutting.completed) {
+      const autoCutBtn = document.createElement('button');
+      autoCutBtn.className = 'float-pill active';
+      autoCutBtn.textContent = '自动裁剪';
+      autoCutBtn.onclick = () => {
+        pushHistory();
+        state.cutting.checkpoints.fill(true);
+        state.cutting.progress = 100;
+        state.cutting.completed = true;
+        state.stepStatus[1] = true;
+        markDirty('fabric');
+        sfx.playChime();
+        updateUI();
+      };
+      floatingToolsEl.appendChild(autoCutBtn);
+    } else if (s === 2) {
+      // 三大古方一键预设按钮
+      PRESET_RECIPES.forEach(pr => {
+        const btn = document.createElement('button');
+        btn.className = 'float-pill';
+        btn.textContent = `古方 · ${pr.name}`;
+        btn.onclick = () => applyPresetRecipe(pr);
+        floatingToolsEl.appendChild(btn);
+      });
+
+      // 实时配方比例清单悬浮盒
+      if (state.filling.ingredients.length > 0) {
+        const box = document.createElement('div');
+        box.className = 'recipe-box';
+        box.innerHTML = `<div class="recipe-title"><span>香方配比清单</span><span>${state.filling.totalAmount}/100份</span></div>`;
+        state.filling.ingredients.forEach(ing => {
+          const pct = state.filling.totalAmount > 0 ? Math.round((ing.amount / state.filling.totalAmount) * 100) : 0;
+          const row = document.createElement('div');
+          row.className = 'recipe-row';
+          row.innerHTML = `<span>${ing.name} ${ing.amount}份 (${pct}%)</span><button class="recipe-del" data-id="${ing.id}">×</button>`;
+          row.querySelector('.recipe-del').onclick = () => removeHerbFromFilling(ing.id);
+          box.appendChild(row);
+        });
+        floatingToolsEl.appendChild(box);
+      }
+    } else if (s === 3 && !state.sewing.completed) {
+      const autoSewBtn = document.createElement('button');
+      autoSewBtn.className = 'float-pill active';
+      autoSewBtn.textContent = '自动缝合';
+      autoSewBtn.onclick = () => {
+        pushHistory();
+        state.sewing.checkpoints.fill(true);
+        state.sewing.progress = 100;
+        state.sewing.completed = true;
+        state.stepStatus[3] = true;
+        markDirty('sewing', 'fabric');
+        sfx.playChime();
+        updateUI();
+      };
+      floatingToolsEl.appendChild(autoSewBtn);
+    } else if (s === 4) {
+      const modeBtn = document.createElement('button');
+      const isFree = state.embroidery.toolMode === 'freehand';
+      modeBtn.className = `float-pill ${isFree ? 'active' : ''}`;
+      modeBtn.textContent = isFree ? '模式: 自由刺绣笔' : '模式: 放置刺绣纹样';
+      modeBtn.onclick = () => {
+        state.embroidery.toolMode = isFree ? 'motif' : 'freehand';
+        state.embroidery.selectedUid = null;
+        sfx.playPop(520);
+        updateUI();
+      };
+      floatingToolsEl.appendChild(modeBtn);
+    } else if (s === 5) {
+      const autoAccBtn = document.createElement('button');
+      autoAccBtn.className = 'float-pill active';
+      autoAccBtn.textContent = '自动雅配';
+      autoAccBtn.onclick = () => {
+        pushHistory();
+        state.accessories.cord = CORDS[0];
+        state.accessories.knot = KNOTS[1];
+        state.accessories.tassel = TASSELS[0];
+        state.accessories.beads = [{ ...BEADS[0], uid: Date.now() }, { ...BEADS[1], uid: Date.now() + 1 }];
+        state.stepStatus[5] = true;
+        markDirty('accessories');
+        sfx.playChime();
+        updateUI();
+      };
+      floatingToolsEl.appendChild(autoAccBtn);
+    }
+  }
+
+  function createMotifThumb(motifId) {
+    const c = document.createElement('canvas');
+    c.width = 56; c.height = 56;
+    const cctx = c.getContext('2d');
+    drawEmbroideryMotifItem(cctx, {
+      type: motifId,
+      scale: 0.92,
+      rotation: 0,
+      color: state.embroidery.threadColor || '#D9A441',
+      stitchStyle: state.embroidery.stitchStyle || 'satin'
+    }, { x: 28, y: 28 });
+    c.style.width = '32px'; c.style.height = '32px';
+    return c;
+  }
+
+  function renderBottomDock() {
+    const cfg = STEP_CONFIG[state.step];
+    if (!cfg) return;
+    if (!cfg.tabs.some(t => t.id === state.subTab)) state.subTab = cfg.tabs[0].id;
+
+    subTabsEl.innerHTML = '';
+    cfg.tabs.forEach(t => {
+      const pill = document.createElement('div');
+      pill.className = `sub-tab ${state.subTab === t.id ? 'active' : ''}`;
+      pill.textContent = t.name;
+      pill.onclick = () => { state.subTab = t.id; sfx.playPop(480); renderBottomDock(); };
+      subTabsEl.appendChild(pill);
+    });
+
+    optionsScrollEl.innerHTML = '';
+    const st = state.subTab;
+
+    const addCard = (name, swatchColor, isActive, onClick, customThumb = null) => {
+      const card = document.createElement('div');
+      card.className = `option-card ${isActive ? 'active' : ''}`;
+      if (customThumb) {
+        const th = document.createElement('div'); th.className = 'option-thumb'; th.appendChild(customThumb);
+        card.appendChild(th);
+      } else {
+        const sw = document.createElement('div'); sw.className = 'swatch-circle'; sw.style.background = swatchColor;
+        card.appendChild(sw);
+      }
+      const lb = document.createElement('span'); lb.className = 'option-name'; lb.textContent = name;
+      card.appendChild(lb);
+      card.onclick = onClick;
+      optionsScrollEl.appendChild(card);
+    };
+
+    if (st === 'shape' || st === 'outline') {
+      SACHET_SHAPES.forEach(sh => addCard(sh.name, state.fabric.color, state.fabric.shape === sh.id, () => {
+        pushHistory(); state.fabric.shape = sh.id; markDirty('fabric', 'filling', 'sewing', 'embroidery', 'accessories'); sfx.playPop(520); updateUI();
+      }));
+    } else if (st === 'fabric') {
+      FABRIC_MATERIALS.forEach(m => addCard(m.name, m.swatch, state.fabric.material === m.id, () => {
+        pushHistory(); state.fabric.material = m.id; markDirty('fabric'); sfx.playPop(520); updateUI();
+      }));
+    } else if (st === 'color') {
+      FABRIC_COLORS.forEach(c => addCard(c.name, c.hex, state.fabric.color === c.hex, () => {
+        pushHistory(); state.fabric.color = c.hex; markDirty('fabric'); sfx.playPop(540); updateUI();
+      }));
+    } else if (st === 'pattern') {
+      FABRIC_PATTERNS.forEach(p => addCard(p.name, p.swatch, state.fabric.pattern === p.id, () => {
+        pushHistory(); state.fabric.pattern = p.id; markDirty('fabric'); sfx.playPop(520); updateUI();
+      }));
+    } else if (st === 'tool') {
+      CUT_TOOLS.forEach(tl => addCard(tl.name, tl.swatch, state.cutting.tool === tl.id, () => {
+        state.cutting.tool = tl.id; sfx.playPop(500); renderBottomDock();
+      }));
+    } else if (st === 'opening') {
+      OPENINGS.forEach(op => addCard(op.name, op.swatch, state.fabric.opening === op.id, () => {
+        pushHistory(); state.fabric.opening = op.id; markDirty('fabric'); sfx.playPop(520); updateUI();
+      }));
+    } else if (['flower', 'herb', 'spice', 'filler'].includes(st)) {
+      HERB_CATALOG.filter(h => h.category === st).forEach(h => addCard(h.name, h.color, state.filling.activeHerbId === h.id, () => {
+        state.filling.activeHerbId = h.id;
+        addHerbToFilling(h.id, 10);
+      }));
+    } else if (st === 'needle') {
+      NEEDLES.forEach(nd => addCard(nd.name, nd.swatch, state.sewing.needle === nd.id, () => {
+        state.sewing.needle = nd.id; markDirty('sewing'); sfx.playPop(500); renderBottomDock();
+      }));
+    } else if (st === 'thread') {
+      THREAD_COLORS.forEach(tc => addCard(tc.name, tc.hex, state.sewing.threadColor === tc.hex, () => {
+        pushHistory(); state.sewing.threadColor = tc.hex; markDirty('sewing'); sfx.playPop(520); renderBottomDock();
+      }));
+    } else if (st === 'stitch') {
+      STITCH_TYPES.forEach(sc => addCard(sc.name, sc.swatch, state.sewing.stitchType === sc.id, () => {
+        pushHistory(); state.sewing.stitchType = sc.id; markDirty('sewing'); sfx.playPop(520); renderBottomDock();
+      }));
+    } else if (['m_flower', 'm_ausp', 'm_text'].includes(st)) {
+      EMBROIDERY_MOTIFS.filter(m => m.category === st).forEach(m => addCard(m.name, state.embroidery.threadColor, state.embroidery.activeMotifId === m.id && state.embroidery.toolMode === 'motif', () => {
+        state.embroidery.toolMode = 'motif';
+        state.embroidery.activeMotifId = m.id;
+        sfx.playPop(540);
+        updateUI();
+      }, createMotifThumb(m.id)));
+    } else if (st === 'e_thread') {
+      THREAD_COLORS.forEach(tc => addCard(tc.name, tc.hex, state.embroidery.threadColor === tc.hex, () => {
+        state.embroidery.threadColor = tc.hex;
+        if (state.embroidery.selectedUid) {
+          const sel = state.embroidery.motifs.find(m => m.uid === state.embroidery.selectedUid);
+          if (sel && !sel.locked) { pushHistory(); sel.color = tc.hex; markDirty('embroidery'); }
+        }
+        sfx.playPop(520); updateUI();
+      }));
+    } else if (st === 'e_tool') {
+      EMBROIDERY_TOOLS.forEach(et => addCard(et.name, et.swatch, (et.mode === 'freehand' && state.embroidery.toolMode === 'freehand') || (et.mode === 'motif' && state.embroidery.toolMode === 'motif' && state.embroidery.stitchStyle === et.id), () => {
+        if (et.mode === 'freehand') {
+          state.embroidery.toolMode = 'freehand';
+        } else {
+          state.embroidery.toolMode = 'motif';
+          state.embroidery.stitchStyle = et.id;
+          if (state.embroidery.selectedUid) {
+            const sel = state.embroidery.motifs.find(m => m.uid === state.embroidery.selectedUid);
+            if (sel && !sel.locked) { pushHistory(); sel.stitchStyle = et.id; markDirty('embroidery'); }
+          }
+        }
+        sfx.playPop(520); updateUI();
+      }));
+    } else if (st === 'cord') {
+      CORDS.forEach(cd => addCard(cd.name, cd.color, state.accessories.cord && state.accessories.cord.id === cd.id, () => {
+        pushHistory(); state.accessories.cord = cd; state.stepStatus[5] = validateStep(5); markDirty('accessories'); sfx.playPop(520); updateUI();
+      }));
+    } else if (st === 'tassel') {
+      TASSELS.forEach(ts => addCard(ts.name, ts.color, state.accessories.tassel && state.accessories.tassel.id === ts.id, () => {
+        pushHistory(); state.accessories.tassel = ts; state.stepStatus[5] = validateStep(5); markDirty('accessories'); sfx.playPop(540); updateUI();
+      }));
+    } else if (st === 'bead') {
+      BEADS.forEach(bd => addCard(bd.name, bd.color, false, () => {
+        pushHistory();
+        if (state.accessories.beads.length >= 3) state.accessories.beads.shift();
+        state.accessories.beads.push({ ...bd, uid: Date.now() + Math.random() });
+        state.stepStatus[5] = validateStep(5);
+        markDirty('accessories'); sfx.playPop(580); updateUI();
+      }));
+    } else if (st === 'knot') {
+      KNOTS.forEach(kn => addCard(kn.name, kn.color, state.accessories.knot && state.accessories.knot.id === kn.id, () => {
+        pushHistory(); state.accessories.knot = kn; state.stepStatus[5] = validateStep(5); markDirty('accessories'); sfx.playPop(540); updateUI();
+      }));
+    } else if (st === 'package') {
+      GIFT_BOXES.forEach(bx => addCard(bx.name, bx.bg, state.gift.box === bx.id, () => {
+        pushHistory(); state.gift.box = bx.id; markDirty('bg'); sfx.playPop(520); updateUI();
+      }));
+    } else if (st === 'seal') {
+      GIFT_SEALS.forEach(sl => addCard(sl.name, sl.swatch, state.gift.seal === sl.id, () => {
+        pushHistory();
+        state.gift.seal = sl.id;
+        markDirty('bg');
+        sfx.playPop(520);
+        renderBottomDock();
+      }));
+    } else if (st === 'message') {
+      const btn = document.createElement('button');
+      btn.className = 'btn-secondary'; btn.style.width = '100%';
+      btn.textContent = '点击打开题名与祝词案台（毛笔落款 / 印章刻字）';
+      btn.onclick = openCardModal;
+      optionsScrollEl.appendChild(btn);
+    }
+
+    prevStepBtn.classList.toggle('hidden', state.step === 0);
+    const nextLabels = [
+      '选好丝帛，进入裁绢定形',
+      '完成裁剪，进入调香填囊',
+      '香方配妥，进入缝合囊口',
+      '囊口缝妥，进入刺绣绘纹',
+      '完成刺绣，进入系绳缀饰',
+      '缀饰完备，进入题名封礼',
+      '生成专属香囊成品纪念图'
+    ];
+    nextStepText.textContent = nextLabels[state.step];
+  }
+
+  function updateUI() {
+    document.querySelectorAll('#stepperBar .step-item').forEach(el => {
+      const idx = Number(el.dataset.step);
+      el.classList.toggle('active', idx === state.step);
+      el.classList.toggle('done', idx < state.step || Boolean(state.stepStatus[idx]));
+    });
+    const xrayBtn = document.getElementById('xrayModeBtn');
+    const xrayLabel = document.getElementById('xrayModeLabel');
+    xrayBtn.classList.toggle('active', state.xrayMode);
+    xrayLabel.textContent = state.xrayMode ? '内腔透视: 开' : '内腔透视: 关';
+
+    updatePromptAndProgress();
+    updateSelectionToolbar();
+    renderFloatingTools();
+    renderBottomDock();
+    syncHistoryBtns();
+  }
+
+  /* ============================================================================
+   * 9. 900×1200 离屏成品图导出 (generateFinalPoster + toBlob) 与压感毛笔签名板
+   * ============================================================================ */
+  const cardModal = document.getElementById('cardModal');
+  const sigCanvas = document.getElementById('sigCanvas');
+  const sigCtx = sigCanvas.getContext('2d');
+  let sigDrawing = false;
+
+  function initSignaturePad() {
+    sigCtx.strokeStyle = '#3E2215';
+    sigCtx.lineCap = 'round'; sigCtx.lineJoin = 'round';
+    let lastPt = null, lastTime = 0, lastW = 3.2;
+
+    const getPos = (e) => {
+      const r = sigCanvas.getBoundingClientRect();
+      const cx = e.touches ? e.touches[0].clientX : e.clientX;
+      const cy = e.touches ? e.touches[0].clientY : e.clientY;
+      return { x: (cx - r.left) * (sigCanvas.width / r.width), y: (cy - r.top) * (sigCanvas.height / r.height) };
+    };
+    sigCanvas.addEventListener('pointerdown', (e) => { e.preventDefault(); sigDrawing = true; lastPt = getPos(e); lastTime = performance.now(); lastW = 3.5; });
+    sigCanvas.addEventListener('pointermove', (e) => {
+      if (!sigDrawing || !lastPt) return; e.preventDefault();
+      const p = getPos(e), now = performance.now();
+      const vel = Math.hypot(p.x - lastPt.x, p.y - lastPt.y) / Math.max(1, now - lastTime);
+      const curW = lastW + (Math.max(1.2, Math.min(5.0, 4.6 - vel * 2.1)) - lastW) * 0.35;
+      sigCtx.lineWidth = curW;
+      sigCtx.beginPath(); sigCtx.moveTo(lastPt.x, lastPt.y); sigCtx.lineTo(p.x, p.y); sigCtx.stroke();
+      lastPt = p; lastTime = now; lastW = curW;
+    });
+    window.addEventListener('pointerup', () => { sigDrawing = false; lastPt = null; });
+    document.getElementById('clearSigBtn').onclick = () => { sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height); sfx.playPop(400); };
+  }
+
+  function openCardModal() { cardModal.classList.add('show'); sfx.playPop(520); }
+
+  function generateFinalPoster() {
+    const poster = document.createElement('canvas');
+    poster.width = 900; poster.height = 1200;
+    const pctx = poster.getContext('2d');
+
+    // 1. 汉代丝帛暖色渐变底
+    const bg = pctx.createLinearGradient(0, 0, 0, 1200);
+    bg.addColorStop(0, '#FFFDF9'); bg.addColorStop(0.6, '#FDF3E4'); bg.addColorStop(1, '#F5DEC2');
+    pctx.fillStyle = bg; pctx.fillRect(0, 0, 900, 1200);
+
+    pctx.strokeStyle = '#C84B31'; pctx.lineWidth = 3.5; pctx.strokeRect(28, 28, 844, 1144);
+    pctx.strokeStyle = '#D9A441'; pctx.lineWidth = 1.5; pctx.strokeRect(38, 38, 824, 1124);
+
+    // 2. 顶部香囊雅名与工坊题头
+    pctx.fillStyle = '#3E2215';
+    pctx.font = 'bold 34px "Songti SC", serif';
+    pctx.textAlign = 'center';
+    pctx.fillText(`《 ${state.gift.name || '幽兰长乐囊'} 》`, 450, 88);
+
+    const shName = getShapeDimensions(state.fabric.shape).name;
+    const matName = (FABRIC_MATERIALS.find(m => m.id === state.fabric.material) || {}).name;
+    pctx.fillStyle = '#784B31';
+    pctx.font = '16px "Songti SC", serif';
+    pctx.fillText(`东汉古法香囊工坊 · ${shName} · ${matName}`, 450, 120);
+
+    // 东汉工坊印章（与主画布实时预览一致：朱文阳刻红字 vs 白文阴刻白字）
+    const isRelief = state.gift.seal !== 'white_intaglio';
+    if (isRelief) {
+      pctx.fillStyle = '#FFFDF8';
+      pctx.fillRect(745, 58, 56, 56);
+      pctx.strokeStyle = '#C83E2B'; pctx.lineWidth = 3.2; pctx.strokeRect(747, 60, 52, 52);
+      pctx.lineWidth = 1.0; pctx.strokeRect(751, 64, 44, 44);
+      pctx.fillStyle = '#C83E2B';
+    } else {
+      pctx.fillStyle = '#B83222';
+      pctx.fillRect(745, 58, 56, 56);
+      pctx.strokeStyle = 'rgba(255, 249, 239, 0.55)'; pctx.lineWidth = 1.4; pctx.strokeRect(749, 62, 48, 48);
+      pctx.fillStyle = '#FFF9EF';
+    }
+    pctx.font = 'bold 16px "Songti SC", serif';
+    const stxt = (state.gift.sealText || '长乐未央').slice(0, 4);
+    pctx.fillText(stxt.slice(0, 2), 773, 82);
+    pctx.fillText(stxt.slice(2, 4) || '印', 773, 102);
+
+    // 3. 离屏无损渲染标准 100% 视角的成品香囊主体（不受当前手机缩放与平移影响）
+    const snap = document.createElement('canvas');
+    snap.width = CW * dpr; snap.height = CH * dpr;
+    const prevStep = state.step;
+    state.step = 6; markDirty('bg', 'fabric', 'sewing', 'embroidery', 'accessories');
+    compositeAllLayers(snap.getContext('2d'), { zoom: 1.0, panX: 0, panY: 0 }, performance.now(), false);
+    state.step = prevStep;
+    pctx.drawImage(snap, 90, 115, 720, 740);
+
+    // 4. 内藏香方比例明细条与赠言木牍区
+    pctx.fillStyle = '#FFFDF8';
+    pctx.strokeStyle = '#D9B68C';
+    pctx.lineWidth = 2.5;
+    pctx.beginPath();
+    pctx.roundRect(72, 865, 756, 265, 18);
+    pctx.fill(); pctx.stroke();
+
+    const recipeSummary = state.filling.ingredients.length > 0
+      ? state.filling.ingredients.map(i => `${i.name} ${Math.round((i.amount / Math.max(1, state.filling.totalAmount)) * 100)}%`).join(' · ')
+      : '桂花 40% · 艾草 30% · 白芷 30%';
+    pctx.fillStyle = '#9E331E';
+    pctx.font = 'bold 16px "Songti SC", serif';
+    pctx.textAlign = 'left';
+    pctx.fillText(`【内藏香方】 ${recipeSummary}`, 104, 906);
+
+    pctx.fillStyle = '#3E2215';
+    pctx.font = 'bold 22px "Songti SC", serif';
+    pctx.fillText(state.gift.recipient || '致：洛阳知音', 104, 950);
+
+    pctx.fillStyle = '#5A3822';
+    pctx.font = '19px "Songti SC", serif';
+    const msg = state.gift.message || '纫秋兰以为佩，寄芳馨于君侧，愿岁岁常欢愉。';
+    pctx.fillText(msg.slice(0, 28), 104, 990);
+    if (msg.length > 28) pctx.fillText(msg.slice(28, 56), 104, 1022);
+
+    pctx.drawImage(sigCanvas, 520, 1035, 260, 60);
+    pctx.fillStyle = '#B58867';
+    pctx.font = '14px "Songti SC", serif';
+    const boxName = (GIFT_BOXES.find(b => b.id === state.gift.box) || GIFT_BOXES[0]).name;
+    pctx.fillText(`制香人亲笔花押 · 封礼：${boxName}`, 104, 1088);
+
+    return poster;
+  }
+
+  function showPosterModal() {
+    const poster = generateFinalPoster();
+    const dataUrl = poster.toDataURL('image/png');
+    document.getElementById('posterImage').src = dataUrl;
+    document.getElementById('posterModal').classList.add('show');
+    state.gift.completed = true;
+    state.stepStatus[6] = true;
+    storageDB.writeRecord('gallery', { id: `sachet_${Date.now()}`, createdAt: Date.now(), name: state.gift.name, posterDataUrl: dataUrl });
+    sfx.playChime();
+    if (typeof window.__sachetOnPosterReady === 'function') window.__sachetOnPosterReady(dataUrl, poster);
+  }
+
+  /* ============================================================================
+   * 10. 步骤切换守门 (tryGoToStep) 与全局事件绑定
+   * ============================================================================ */
+  function tryGoToStep(targetStep) {
+    if (targetStep < 0 || targetStep > 6) return;
+    // 允许自由返回已解锁的前序步骤修改，但向后推进必须通过当前步骤完成条件校验
+    if (targetStep > state.step) {
+      for (let s = state.step; s < targetStep; s++) {
+        if (!validateStep(s) && !state.stepStatus[s]) {
+          flashPromptWarning(getStepIncompleteReason(s));
+          return;
+        }
+        state.stepStatus[s] = true;
+      }
+    }
+    state.step = targetStep;
+    state.embroidery.selectedUid = null;
+    const cfg = STEP_CONFIG[targetStep];
+    if (cfg) state.subTab = cfg.tabs[0].id;
+    markAllLayersDirty();
+    sfx.playPop(520);
+    updateUI();
+    storageDB.scheduleSave(getSerializableState());
+    if (targetStep === 6 && !state.gift.completed) openCardModal();
+    if (typeof window.__sachetOnStepChanged === 'function') window.__sachetOnStepChanged(targetStep);
+  }
+
+  function bindEvents() {
+    mainCanvas.addEventListener('pointerdown', handlePointerDown);
+    mainCanvas.addEventListener('pointermove', handlePointerMove);
+    mainCanvas.addEventListener('pointerup', handlePointerUp);
+    mainCanvas.addEventListener('pointercancel', handlePointerUp);
+    window.addEventListener('pointerup', handlePointerUp);
+    mainCanvas.addEventListener('contextmenu', e => e.preventDefault());
+
+    mainCanvas.addEventListener('wheel', (e) => {
+      e.preventDefault();
+      const raw = getRawCanvasPos(e);
+      setCameraZoom(state.camera.targetZoom * (e.deltaY < 0 ? 1.12 : 1 / 1.12), raw.rawX, raw.rawY, false);
+    }, { passive: false });
+
+    document.getElementById('undoBtn').onclick = undoAction;
+    document.getElementById('redoBtn').onclick = redoAction;
+    document.getElementById('xrayModeBtn').onclick = () => {
+      state.xrayMode = !state.xrayMode;
+      markDirty('filling'); sfx.playPop(520); updateUI();
+    };
+    document.getElementById('zoomInBtn').onclick = () => setCameraZoom(state.camera.targetZoom + 0.3);
+    document.getElementById('zoomOutBtn').onclick = () => setCameraZoom(state.camera.targetZoom - 0.3);
+    document.getElementById('zoomResetBtn').onclick = resetCamera;
+
+    document.querySelectorAll('#stepperBar .step-item').forEach(el => {
+      el.onclick = () => tryGoToStep(Number(el.dataset.step));
+    });
+
+    prevStepBtn.onclick = () => { if (state.step > 0) tryGoToStep(state.step - 1); };
+    nextStepBtn.onclick = () => {
+      if (state.step < 6) tryGoToStep(state.step + 1);
+      else showPosterModal();
+    };
+
+    // 刺绣纹样微调栏：放大/缩小/旋转/上下层级/锁定/删除
+    const withSelectedMotif = (fn) => {
+      const m = state.embroidery.motifs.find(it => it.uid === state.embroidery.selectedUid);
+      if (!m) return;
+      pushHistory(); fn(m); markDirty('embroidery'); updateUI();
+    };
+    document.getElementById('btnScaleUp').onclick = () => withSelectedMotif(m => { if (!m.locked) m.scale = Math.min(2.0, (m.scale || 1) + 0.15); });
+    document.getElementById('btnScaleDown').onclick = () => withSelectedMotif(m => { if (!m.locked) m.scale = Math.max(0.5, (m.scale || 1) - 0.15); });
+    document.getElementById('btnRotate').onclick = () => withSelectedMotif(m => { if (!m.locked) m.rotation = (m.rotation || 0) + 0.35; });
+    document.getElementById('btnLayerUp').onclick = () => withSelectedMotif(m => { m.zIndex = (m.zIndex || 1) + 2; });
+    document.getElementById('btnLayerDown').onclick = () => withSelectedMotif(m => { m.zIndex = Math.max(0, (m.zIndex || 1) - 2); });
+    document.getElementById('btnLockMotif').onclick = () => withSelectedMotif(m => { m.locked = !m.locked; });
+    document.getElementById('btnDeleteMotif').onclick = () => {
+      pushHistory();
+      state.embroidery.motifs = state.embroidery.motifs.filter(it => it.uid !== state.embroidery.selectedUid);
+      state.embroidery.selectedUid = null;
+      state.stepStatus[4] = validateStep(4);
+      markDirty('embroidery'); sfx.playPop(340); updateUI();
+    };
+
+    document.getElementById('soundToggleBtn').onclick = () => {
+      sfx.enabled = !sfx.enabled;
+      document.getElementById('soundToggleBtn').style.opacity = sfx.enabled ? '1' : '0.45';
+      if (sfx.enabled) sfx.playPop(560);
+    };
+
+    document.getElementById('resetGameBtn').onclick = () => {
+      pushHistory();
+      state = createInitialState();
+      sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+      markAllLayersDirty(); sfx.playPop(420); updateUI();
+    };
+
+    document.getElementById('closeCardModalBtn').onclick = () => cardModal.classList.remove('show');
+    document.querySelectorAll('#presetChips .preset-chip').forEach(chip => {
+      chip.onclick = () => {
+        document.getElementById('giftNameInput').value = chip.dataset.name;
+        document.getElementById('giftMsgInput').value = chip.dataset.msg;
+        document.getElementById('giftSealInput').value = chip.dataset.seal;
+        sfx.playPop(560);
+      };
+    });
+
+    document.getElementById('saveCardBtn').onclick = () => {
+      const nameVal = document.getElementById('giftNameInput').value.trim();
+      if (!nameVal) { alert('请为香囊题写一个雅名'); return; }
+      pushHistory();
+      state.gift.name = nameVal;
+      state.gift.recipient = document.getElementById('giftToInput').value.trim() || '致：洛阳知音';
+      state.gift.message = document.getElementById('giftMsgInput').value.trim();
+      state.gift.sealText = document.getElementById('giftSealInput').value.trim() || '长乐未央';
+      state.gift.completed = true;
+      state.stepStatus[6] = true;
+      cardModal.classList.remove('show');
+      showPosterModal();
+    };
+
+    document.getElementById('closePosterModalBtn').onclick = () => document.getElementById('posterModal').classList.remove('show');
+    document.getElementById('downloadPosterBtn').onclick = () => {
+      const poster = generateFinalPoster();
+      poster.toBlob(blob => {
+        if (!blob) return;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${state.gift.name || '东汉香囊成品'}.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }, 'image/png');
+      sfx.playPop(640);
+    };
+  }
+
+  /* ============================================================================
+   * 11. 传讯名士共创桥接引擎（无缝兼容宿主 WORKSHOP_CAKE_* 消息协议与七步接力）
+   * ============================================================================ */
+  function initSachetCoCreationBridge() {
+    const EDITION = 'sachet';
+    const charSelectEl = document.getElementById('coopCharSelect');
+    const modeSelectEl = document.getElementById('coopModeSelect');
+    const swapBtnEl = document.getElementById('coopSwapTurnBtn');
+    const actionBtnEl = document.getElementById('coopActionBtn');
+    const pillEl = document.getElementById('coopSpeakerPill');
+    const pillNameEl = document.getElementById('coopPillName');
+    const bubbleEl = document.getElementById('coopBubble');
+    const bubbleNameEl = document.getElementById('coopBubbleName');
+    const bubbleTagEl = document.getElementById('coopBubbleTag');
+    const bubbleTextEl = document.getElementById('coopBubbleText');
+    const bubbleActionsEl = document.getElementById('coopBubbleActions');
+    const nextStepBtnEl = document.getElementById('coopNextStepBtn');
+    const skipAnimBtnEl = document.getElementById('coopSkipAnimBtn');
+    const collapseBtnEl = document.getElementById('coopBubbleCollapseBtn');
+
+    const posterViewTabsEl = document.getElementById('posterViewTabs');
+    const tabPosterImgEl = document.getElementById('tabPosterImg');
+    const tabPosterNotesEl = document.getElementById('tabPosterNotes');
+    const posterImgEl = document.getElementById('posterImage');
+    const posterNotesPageEl = document.getElementById('posterNotesPage');
+    const posterReviewBoxEl = document.getElementById('posterReviewBox');
+    const posterTasteRowEl = document.getElementById('posterTasteRow');
+    const askCharTasteBtnEl = document.getElementById('askCharTasteBtn');
+    const posterUserFeedbackRowEl = document.getElementById('posterUserFeedbackRow');
+    const userFeedbackInputEl = document.getElementById('userFeedbackInput');
+    const sendUserFeedbackBtnEl = document.getElementById('sendUserFeedbackBtn');
+    const saveBackpackBtnEl = document.getElementById('saveBackpackBtn');
+    const openForwardModalBtnEl = document.getElementById('openForwardModalBtn');
+    const posterToastEl = document.getElementById('posterActionToast');
+    const historyModalEl = document.getElementById('historyModal');
+    const historyListEl = document.getElementById('historyList');
+    const forwardModalEl = document.getElementById('forwardModal');
+    const forwardCharSelectEl = document.getElementById('forwardCharSelect');
+    const forwardNoteInputEl = document.getElementById('forwardNoteInput');
+    const confirmForwardBtnEl = document.getElementById('confirmForwardBtn');
+
+    const coop = {
+      characters: [], selectedCharId: '', userName: '广陵王',
+      mode: 'user_make_char_eat', userFirst: true, busy: false,
+      relayHistory: [], makingNotes: [], lastReview: null,
+      fullMakeSession: null, currentHistoryId: '', bubbleExpanded: false
+    };
+    const pendingRpcs = {};
+    let rpcSeq = 0;
+
+    function sendHostRpc(reqType, resType, payload) {
+      return new Promise((resolve, reject) => {
+        const reqId = `sachet_rpc_${Date.now()}_${++rpcSeq}`;
+        const timer = setTimeout(() => { delete pendingRpcs[reqId]; reject(new Error('与宿主通信超时')); }, 50000);
+        pendingRpcs[reqId] = { resType, resolve, reject, timer };
+        window.parent.postMessage({ type: reqType, requestId: reqId, payload: Object.assign({ edition: EDITION }, payload || {}) }, '*');
+      });
+    }
+
+    window.addEventListener('message', (ev) => {
+      const data = ev && ev.data;
+      if (!data || typeof data !== 'object' || !data.type) return;
+      if (data.type === 'WORKSHOP_CAKE_HOST_SYNC') {
+        const p = data.payload || {};
+        coop.characters = Array.isArray(p.characters) ? p.characters : [];
+        coop.userName = p.userName || '广陵王';
+        const opts = coop.characters.length > 0 ? coop.characters.map(c => `<option value="${String(c.id).replace(/"/g, '&quot;')}">${c.name}</option>`).join('') : '<option value="">暂未检测到名士</option>';
+        charSelectEl.innerHTML = opts; forwardCharSelectEl.innerHTML = opts;
+        if (!coop.selectedCharId && coop.characters.length > 0) coop.selectedCharId = String(coop.characters[0].id);
+        if (coop.selectedCharId) { charSelectEl.value = coop.selectedCharId; forwardCharSelectEl.value = coop.selectedCharId; }
+        syncCoopUI();
+        return;
+      }
+      if (data.requestId && pendingRpcs[data.requestId]) {
+        const entry = pendingRpcs[data.requestId];
+        clearTimeout(entry.timer); delete pendingRpcs[data.requestId];
+        if (data.error) entry.reject(new Error(data.error)); else entry.resolve(data.result);
+      }
+    });
+
+    function getCharName() {
+      const found = coop.characters.find(c => String(c.id) === String(coop.selectedCharId));
+      return (found && found.name) || '名士';
+    }
+    function showToast(msg) { posterToastEl.textContent = msg || ''; if (msg) setTimeout(() => { if (posterToastEl.textContent === msg) posterToastEl.textContent = ''; }, 3600); }
+    function setBubbleExpanded(exp) { coop.bubbleExpanded = Boolean(exp); bubbleEl.classList.toggle('show', coop.bubbleExpanded); pillEl.classList.toggle('show', !coop.bubbleExpanded && Boolean(bubbleTextEl.textContent)); }
+    function showBubble(name, tag, text, showBtns, btnLabel) {
+      bubbleNameEl.textContent = name || getCharName(); bubbleTagEl.textContent = tag || '制香中'; bubbleTextEl.textContent = text || '';
+      pillNameEl.textContent = name || getCharName(); bubbleActionsEl.style.display = showBtns ? 'flex' : 'none';
+      if (btnLabel) nextStepBtnEl.textContent = btnLabel;
+      setBubbleExpanded(Boolean(showBtns));
+    }
+    function hideBubble() { bubbleTextEl.textContent = ''; bubbleEl.classList.remove('show'); pillEl.classList.remove('show'); }
+    pillEl.onclick = () => setBubbleExpanded(true);
+    collapseBtnEl.onclick = () => setBubbleExpanded(false);
+
+    function captureSmallSachetSnapshot() {
+      try {
+        const tmp = document.createElement('canvas');
+        tmp.width = 384; tmp.height = 404;
+        const tctx = tmp.getContext('2d');
+        tctx.fillStyle = '#FFF9EF';
+        tctx.fillRect(0, 0, tmp.width, tmp.height);
+        tctx.drawImage(canvas, 0, 0, tmp.width, tmp.height);
+        return tmp.toDataURL('image/jpeg', 0.78);
+      } catch (_) { return ''; }
+    }
+
+    function loadSvgToImage(svgStr, onLoaded, onFailed) {
+      if (!svgStr || typeof svgStr !== 'string') { if (typeof onFailed === 'function') onFailed(); return; }
+      let safeSvg = svgStr.trim();
+      if (!/<svg[^>]*\swidth\s*=/i.test(safeSvg)) {
+        safeSvg = safeSvg.replace(/<svg\b/i, '<svg width="320" height="72"');
+      }
+      const tryDataUri = () => {
+        try {
+          const img = new Image();
+          img.onload = () => { if (typeof onLoaded === 'function') onLoaded(img); };
+          img.onerror = () => { if (typeof onFailed === 'function') onFailed(); };
+          img.src = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(safeSvg);
+        } catch (_) { if (typeof onFailed === 'function') onFailed(); }
+      };
+      try {
+        if (typeof Blob !== 'undefined' && typeof URL !== 'undefined' && typeof URL.createObjectURL === 'function') {
+          const blob = new Blob([safeSvg], { type: 'image/svg+xml;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const img = new Image();
+          img.onload = () => { try { URL.revokeObjectURL(url); } catch (_) {} if (typeof onLoaded === 'function') onLoaded(img); };
+          img.onerror = () => { try { URL.revokeObjectURL(url); } catch (_) {} tryDataUri(); };
+          img.src = url;
+          return;
+        }
+      } catch (_) {}
+      tryDataUri();
+    }
+
+    function drawFallbackSachetSignature(charName) {
+      sigCtx.save();
+      sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+      sigCtx.strokeStyle = '#5B8C6B';
+      sigCtx.lineWidth = 2.2;
+      sigCtx.lineCap = 'round';
+      sigCtx.beginPath();
+      sigCtx.moveTo(22, 54); sigCtx.quadraticCurveTo(66, 22, 122, 38);
+      sigCtx.stroke();
+      sigCtx.beginPath();
+      sigCtx.moveTo(38, 54); sigCtx.quadraticCurveTo(84, 16, 148, 25);
+      sigCtx.stroke();
+      [[150, 24, '#D9889A'], [156, 29, '#F5C6D0'], [144, 30, '#F5C6D0']].forEach(([fx, fy, fc]) => {
+        sigCtx.fillStyle = fc;
+        sigCtx.beginPath(); sigCtx.arc(fx, fy, 4, 0, Math.PI * 2); sigCtx.fill();
+      });
+      sigCtx.strokeStyle = '#C84B31';
+      sigCtx.lineWidth = 1.8;
+      sigCtx.strokeRect(184, 18, 24, 24);
+      sigCtx.fillStyle = '#C84B31';
+      sigCtx.font = 'bold 12px "Songti SC", serif';
+      sigCtx.textAlign = 'center'; sigCtx.textBaseline = 'middle';
+      sigCtx.fillText('香', 196, 31);
+      sigCtx.fillStyle = '#3E2215';
+      sigCtx.font = 'bold 20px "Songti SC", "STKaiti", serif';
+      sigCtx.textAlign = 'left';
+      sigCtx.fillText(String(charName || getCharName() || '名士').slice(0, 4), 224, 36);
+      sigCtx.strokeStyle = '#D9A441';
+      sigCtx.lineWidth = 1.5;
+      sigCtx.beginPath(); sigCtx.moveTo(218, 52); sigCtx.quadraticCurveTo(260, 48, 308, 54); sigCtx.stroke();
+      sigCtx.restore();
+    }
+
+    function describeStepActionChoice(stepIdx, act) {
+      if (!act || typeof act !== 'object') return '按心意完成本步';
+      if (stepIdx === 0) {
+        const sh = (SACHET_SHAPES.find(x => x.id === act.shapeId) || {}).name || '荷包形';
+        const mt = (FABRIC_MATERIALS.find(x => x.id === act.materialId) || {}).name || '绫罗';
+        const cl = (FABRIC_COLORS.find(x => x.id === act.colorId) || {}).name || '天水碧';
+        const pt = (FABRIC_PATTERNS.find(x => x.id === act.patternId) || {}).name || '云纹';
+        return `${cl}${mt}${sh} · ${pt}`;
+      }
+      if (stepIdx === 1) {
+        const ct = (CUT_TOOLS.find(x => x.id === act.cutToolId) || {}).name || '小剪刀';
+        const op = (OPENINGS.find(x => x.id === act.openingId) || {}).name || '抽绳口';
+        return `${ct}裁形 · ${op}`;
+      }
+      if (stepIdx === 2) {
+        const hs = (Array.isArray(act.herbs) ? act.herbs : []).map(h => {
+          const meta = HERB_CATALOG.find(x => x.id === h.id);
+          return meta ? `${meta.name}${h.amount}份` : '';
+        }).filter(Boolean);
+        return hs.length > 0 ? hs.join('、') : '古法君臣香方';
+      }
+      if (stepIdx === 3) {
+        const nd = (NEEDLES.find(x => x.id === act.needleId) || {}).name || '绣花针';
+        const th = (THREAD_COLORS.find(x => x.id === act.threadColorId) || {}).name || '金丝';
+        const st = (STITCH_TYPES.find(x => x.id === act.stitchTypeId) || {}).name || '锁边针';
+        return `${nd} · ${th}线 · ${st}`;
+      }
+      if (stepIdx === 4) {
+        const ms = (Array.isArray(act.motifs) ? act.motifs : []).map(id => (EMBROIDERY_MOTIFS.find(x => x.id === id) || {}).name).filter(Boolean);
+        const tl = (EMBROIDERY_TOOLS.find(x => x.id === act.embToolId) || {}).name || '盘金绣';
+        const sk = act.sachetSketchSvg ? ` + 囊面手绣「${act.sachetSketchTitle || '简笔画'}」` : '';
+        return `${tl}：${ms.join('、') || '梅兰纹'}${sk}`;
+      }
+      if (stepIdx === 5) {
+        const cd = (CORDS.find(x => x.id === act.cordId) || {}).name || '流金丝绳';
+        const kn = (KNOTS.find(x => x.id === act.knotId) || {}).name || '如意结';
+        const ts = (TASSELS.find(x => x.id === act.tasselId) || {}).name || '长流苏';
+        const bs = (Array.isArray(act.beadIds) ? act.beadIds : []).map(id => (BEADS.find(x => x.id === id) || {}).name).filter(Boolean);
+        return `${cd} · ${kn} · ${ts}` + (bs.length ? ` + ${bs.join('、')}` : '');
+      }
+      const bx = (GIFT_BOXES.find(x => x.id === act.boxId) || {}).name || '朱漆木盒';
+      const sk = act.cardSketchSvg ? `｜ 花押「${act.cardSketchTitle || '幽兰花押'}」` : '';
+      return `雅名「${act.sachetName || '幽兰长乐囊'}」· ${bx} · 印「${act.sealText || '长乐未央'}」${sk}`;
+    }
+
+    function recordMakingNote(stepIdx, charName, act, reasonText) {
+      const stepNames = ['步骤一 · 择囊选绢', '步骤二 · 裁绢定形', '步骤三 · 调香填囊', '步骤四 · 缝合囊口', '步骤五 · 刺绣绘纹', '步骤六 · 系绳缀饰', '步骤七 · 题名封礼'];
+      const note = {
+        stepIdx,
+        stepName: stepNames[stepIdx] || `步骤 ${stepIdx + 1}`,
+        charName: charName || getCharName(),
+        pickedSummary: describeStepActionChoice(stepIdx, act),
+        reasonText: String(reasonText || '').trim()
+      };
+      const exist = coop.makingNotes.findIndex(n => n.stepIdx === stepIdx);
+      if (exist >= 0) coop.makingNotes[exist] = note; else coop.makingNotes.push(note);
+      coop.makingNotes.sort((a, b) => a.stepIdx - b.stepIdx);
+      renderPosterNotesView();
+    }
+
+    function setPosterViewTab(which) {
+      const showNotes = which === 'notes' && coop.makingNotes.length > 0;
+      tabPosterImgEl.classList.toggle('active', !showNotes);
+      tabPosterNotesEl.classList.toggle('active', showNotes);
+      posterImgEl.style.display = showNotes ? 'none' : 'block';
+      posterNotesPageEl.classList.toggle('show', showNotes);
+    }
+
+    function renderPosterNotesView() {
+      const hasNotes = coop.makingNotes.length > 0;
+      posterViewTabsEl.classList.toggle('show', hasNotes);
+      if (!hasNotes) { setPosterViewTab('img'); return; }
+      const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      posterNotesPageEl.innerHTML = coop.makingNotes.map(n =>
+        `<div class="poster-note-item">` +
+          `<div style="display:flex;justify-content:space-between;align-items:center;gap:6px;margin-bottom:4px;">` +
+            `<span style="font-size:11.5px;font-weight:800;color:#C84B31;">${esc(n.stepName)}</span>` +
+            `<span style="font-size:10px;padding:1px 7px;border-radius:999px;background:#FCE5CD;color:#784B31;font-weight:700;">${esc(n.charName)} 选配</span>` +
+          `</div>` +
+          `<div style="font-size:11.5px;font-weight:700;color:#5A301D;margin-bottom:4px;">所选料材：${esc(n.pickedSummary)}</div>` +
+          `<div style="font-size:12px;line-height:1.65;color:#3E2215;">「${esc(n.reasonText)}」</div>` +
+        `</div>`
+      ).join('');
+    }
+    tabPosterImgEl.onclick = () => setPosterViewTab('img');
+    tabPosterNotesEl.onclick = () => setPosterViewTab('notes');
+
+    function buildSachetSummary() {
+      const shName = getShapeDimensions(state.fabric.shape).name;
+      const matName = (FABRIC_MATERIALS.find(m => m.id === state.fabric.material) || {}).name || '绫罗';
+      const colName = (FABRIC_COLORS.find(c => c.hex === state.fabric.color) || {}).name || '胭脂色';
+      const patName = (FABRIC_PATTERNS.find(p => p.id === state.fabric.pattern) || {}).name || '云纹';
+      const herbStr = state.filling.ingredients.map(i => `${i.name}${i.amount}份`).join('、') || '桂花、兰草、白芷';
+      const motifStr = state.embroidery.motifs.map(m => (EMBROIDERY_MOTIFS.find(x => x.id === m.type) || {}).name).filter(Boolean).join('、') || '素面暗纹';
+      const skStr = state.sachetSketchTitle ? `，囊面亲绣「${state.sachetSketchTitle}」` : '';
+      const accStr = `${(state.accessories.cord && state.accessories.cord.name) || '丝绳'}、${(state.accessories.knot && state.accessories.knot.name) || '如意结'}、${(state.accessories.tassel && state.accessories.tassel.name) || '流苏'}`;
+      const fullText = [
+        `1. 囊形丝帛：${colName}${matName}${shName}（${patName}）`,
+        `2. 汉方香方：${herbStr}`,
+        `3. 囊面刺绣：${motifStr}${skStr}`,
+        `4. 系绳缀饰：${accStr}，佩珠 ${(state.accessories.beads || []).length} 颗`,
+        `5. 封礼题名：雅名「${state.gift.name || '幽兰长乐囊'}」，印文「${state.gift.sealText || '长乐未央'}」，祝词「${state.gift.message || ''}」`
+      ].join('\n');
+      return {
+        cakeName: state.gift.name || '幽兰长乐囊',
+        cakeDesc: `${colName}${matName}${shName}，内填${herbStr}，绣${motifStr}，配${accStr}`,
+        plaqueText: state.gift.sealText || '长乐未央',
+        visualSnapshotText: fullText
+      };
+    }
+
+    function applyCharStep(stepIdx, act) {
+      if (!act || typeof act !== 'object') return;
+      if (stepIdx === 0) {
+        const sh = SACHET_SHAPES.find(x => x.id === act.shapeId) || SACHET_SHAPES[0];
+        const mt = FABRIC_MATERIALS.find(x => x.id === act.materialId) || FABRIC_MATERIALS[1];
+        const cl = FABRIC_COLORS.find(x => x.id === act.colorId) || FABRIC_COLORS[2];
+        const pt = FABRIC_PATTERNS.find(x => x.id === act.patternId) || FABRIC_PATTERNS[1];
+        state.fabric.shape = sh.id;
+        state.fabric.material = mt.id;
+        state.fabric.color = cl.hex;
+        state.fabric.pattern = pt.id;
+        state.stepStatus[0] = true;
+      } else if (stepIdx === 1) {
+        state.cutting.tool = (CUT_TOOLS.find(x => x.id === act.cutToolId) || CUT_TOOLS[0]).id;
+        state.cutting.opening = (OPENINGS.find(x => x.id === act.openingId) || OPENINGS[0]).id;
+        state.cutting.checkpoints.fill(true);
+        state.cutting.progress = 100;
+        state.cutting.completed = true;
+        state.stepStatus[1] = true;
+      } else if (stepIdx === 2) {
+        const herbs = Array.isArray(act.herbs) && act.herbs.length > 0 ? act.herbs : PRESET_RECIPES[0].items;
+        applyPresetRecipe({ name: '名士私房香方', items: herbs });
+      } else if (stepIdx === 3) {
+        const nd = NEEDLES.find(x => x.id === act.needleId) || NEEDLES[1];
+        const th = THREAD_COLORS.find(x => x.id === act.threadColorId) || THREAD_COLORS[1];
+        const st = STITCH_TYPES.find(x => x.id === act.stitchTypeId) || STITCH_TYPES[2];
+        state.sewing.needle = nd.id;
+        state.sewing.threadColor = th.hex;
+        state.sewing.stitchType = st.id;
+        state.sewing.checkpoints.fill(true);
+        state.sewing.progress = 100;
+        state.sewing.completed = true;
+        state.stepStatus[3] = true;
+      } else if (stepIdx === 4) {
+        const th1 = (THREAD_COLORS.find(x => x.id === act.embThreadId) || THREAD_COLORS[1]).hex;
+        const th2 = (act.embThread2Id && act.embThread2Id !== 'none')
+          ? (THREAD_COLORS.find(x => x.id === act.embThread2Id) || THREAD_COLORS[2]).hex : th1;
+        const toolId = (EMBROIDERY_TOOLS.find(x => x.id === act.embToolId) || EMBROIDERY_TOOLS[2]).id;
+        if (act.sachetSketchSvg) {
+          state.sachetSketchTitle = act.sachetSketchTitle || '手绣简笔画';
+          loadSvgToImage(act.sachetSketchSvg, img => {
+            state.sachetSketchImg = img;
+            markDirty('embroidery');
+          });
+        } else {
+          state.sachetSketchImg = null;
+          state.sachetSketchTitle = '';
+        }
+        const rawMotifs = Array.isArray(act.motifs) && act.motifs.length > 0 ? act.motifs : ['m_plum', 'm_cloud', 't_changle'];
+        const hasCenterSketch = Boolean(act.sachetSketchSvg);
+        const slots = hasCenterSketch
+          ? [[-0.44, -0.34, 0.88], [0.44, -0.34, 0.88], [-0.42, 0.36, 0.86], [0.42, 0.36, 0.86], [0, -0.52, 0.82], [0, 0.52, 0.82]]
+          : [[0, -0.06, 1.12], [-0.38, -0.30, 0.88], [0.38, -0.28, 0.88], [-0.34, 0.34, 0.86], [0.36, 0.32, 0.86], [0, 0.46, 0.88]];
+        rawMotifs.slice(0, 6).forEach((mId, i) => {
+          const valid = EMBROIDERY_MOTIFS.find(x => x.id === mId);
+          if (!valid) return;
+          const pos = slots[i % slots.length];
+          state.embroidery.motifs.push({
+            uid: Date.now() + i * 23,
+            type: valid.id,
+            u: pos[0],
+            v: pos[1],
+            scale: pos[2],
+            rotation: (i % 2 === 0 ? -0.08 : 0.08),
+            color: i % 2 === 0 ? th1 : th2,
+            stitchStyle: toolId,
+            zIndex: 2 + i,
+            locked: false
+          });
+        });
+        state.stepStatus[4] = true;
+      } else if (stepIdx === 5) {
+        state.accessories.cord = CORDS.find(x => x.id === act.cordId) || CORDS[2];
+        state.accessories.tassel = TASSELS.find(x => x.id === act.tasselId) || TASSELS[0];
+        state.accessories.knot = KNOTS.find(x => x.id === act.knotId) || KNOTS[1];
+        const bIds = Array.isArray(act.beadIds) && act.beadIds.length > 0 ? act.beadIds : ['bd_jade', 'bd_ring'];
+        state.accessories.beads = bIds.slice(0, 3).map((bid, i) => {
+          const b = BEADS.find(x => x.id === bid) || BEADS[0];
+          return { ...b, uid: Date.now() + i * 31 };
+        });
+        state.stepStatus[5] = true;
+      } else if (stepIdx === 6) {
+        state.gift.box = (GIFT_BOXES.find(x => x.id === act.boxId) || GIFT_BOXES[0]).id;
+        state.gift.sealStyle = (GIFT_SEALS.find(x => x.id === act.sealStyleId) || GIFT_SEALS[0]).id;
+        state.gift.name = String(act.sachetName || '幽兰长乐囊').slice(0, 12);
+        state.gift.recipient = String(act.recipient || `致：${coop.userName}`).slice(0, 18);
+        state.gift.message = String(act.message || '幽兰佩君侧，愿此缕清香伴你岁岁常安。').slice(0, 60);
+        state.gift.sealText = String(act.sealText || '长乐未央').slice(0, 6);
+        state.gift.completed = true;
+        state.stepStatus[6] = true;
+        drawFallbackSachetSignature(getCharName());
+        if (act.cardSketchSvg) {
+          loadSvgToImage(act.cardSketchSvg, img => {
+            const iw = img.naturalWidth || img.width || 320;
+            const ih = img.naturalHeight || img.height || 72;
+            if (iw <= 0 || ih <= 0) return;
+            sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+            const pad = 4, ratio = Math.min((sigCanvas.width - pad * 2) / iw, (sigCanvas.height - pad * 2) / ih);
+            const dw = iw * ratio, dh = ih * ratio;
+            sigCtx.drawImage(img, (sigCanvas.width - dw) * 0.5, (sigCanvas.height - dh) * 0.5, dw, dh);
+          }, () => drawFallbackSachetSignature(getCharName()));
+        }
+      }
+      markAllLayersDirty(); sfx.playChime(); updateUI();
+    }
+
+    function isCharTurnInRelay(stepIdx) {
+      if (coop.mode !== 'relay_coop') return false;
+      return coop.userFirst ? (stepIdx % 2 === 1) : (stepIdx % 2 === 0);
+    }
+
+    function syncCoopUI() {
+      const m = coop.mode;
+      swapBtnEl.style.display = m === 'relay_coop' ? 'inline-block' : 'none';
+      swapBtnEl.textContent = coop.userFirst ? '我先手' : 'TA先手';
+      const isCharTurn = isCharTurnInRelay(state.step);
+      actionBtnEl.style.display = (m === 'char_make_user_eat' || isCharTurn) ? 'inline-block' : 'none';
+      if (m === 'char_make_user_eat') actionBtnEl.textContent = coop.busy ? '制香中…' : '请TA制囊';
+      else actionBtnEl.textContent = coop.busy ? 'TA操作中…' : '让TA做这步';
+      posterTasteRowEl.style.display = m === 'char_make_user_eat' ? 'none' : 'flex';
+      posterUserFeedbackRowEl.style.display = m === 'char_make_user_eat' ? 'flex' : 'none';
+      askCharTasteBtnEl.textContent = `请「${getCharName()}」佩香品评`;
+    }
+
+    async function runCharacterRelayStep(stepIdx) {
+      if (coop.busy || !coop.selectedCharId) return;
+      coop.busy = true; syncCoopUI();
+      showBubble(getCharName(), '理线配香中', '正在细看香囊丝帛与香方，准备亲手接力这一步…', false);
+      try {
+        const snap = buildSachetSummary();
+        const res = await sendHostRpc('WORKSHOP_CAKE_STEP_RELAY_REQUEST', 'WORKSHOP_CAKE_STEP_RELAY_RESPONSE', {
+          charId: coop.selectedCharId,
+          stepIndex: stepIdx,
+          visualSnapshotText: snap.visualSnapshotText,
+          cakeSummary: snap.cakeDesc,
+          imageDataUrl: captureSmallSachetSnapshot(),
+          relayHistory: coop.relayHistory
+        });
+        applyCharStep(stepIdx, res.stepAction);
+        coop.relayHistory.push(`第${stepIdx + 1}步(${res.charName})：${res.spokenLine}`);
+        recordMakingNote(stepIdx, res.charName, res.stepAction, res.spokenLine);
+        showBubble(res.charName, res.moodTag || '接力完成', res.spokenLine, false);
+      } catch (err) { showBubble(getCharName(), '网络波动', `接力失败：${err.message || err}`, false); }
+      coop.busy = false; syncCoopUI();
+    }
+
+    async function runCharacterFullMake() {
+      if (coop.busy || !coop.selectedCharId) return;
+      coop.busy = true;
+      coop.lastReview = null;
+      coop.makingNotes = [];
+      coop.fullMakeSession = null;
+      renderPosterNotesView();
+      syncCoopUI();
+      state = createInitialState();
+      sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+      markAllLayersDirty();
+      updateUI();
+      showBubble(getCharName(), '构思香方中', '正在挑选丝帛、配伍君臣香料并细想绣纹，请稍候…', false);
+      try {
+        const res = await sendHostRpc('WORKSHOP_CAKE_FULL_MAKE_REQUEST', 'WORKSHOP_CAKE_FULL_MAKE_RESPONSE', { charId: coop.selectedCharId });
+        const plan = res.plan || {}, stepLines = res.stepLines || [];
+        const stepActions = [
+          { shapeId: plan.shapeId, materialId: plan.materialId, colorId: plan.colorId, patternId: plan.patternId },
+          { cutToolId: plan.cutToolId, openingId: plan.openingId },
+          { herbs: plan.herbs },
+          { needleId: plan.needleId, threadColorId: plan.threadColorId, stitchTypeId: plan.stitchTypeId },
+          { motifs: plan.motifs, embThreadId: plan.embThreadId, embThread2Id: plan.embThread2Id, embToolId: plan.embToolId, sachetSketchTitle: plan.sachetSketchTitle, sachetSketchSvg: plan.sachetSketchSvg },
+          { cordId: plan.cordId, tasselId: plan.tasselId, knotId: plan.knotId, beadIds: plan.beadIds },
+          { boxId: plan.boxId, sealStyleId: plan.sealStyleId, sachetName: plan.sachetName, recipient: plan.recipient, message: plan.message, sealText: plan.sealText, cardSketchTitle: plan.cardSketchTitle, cardSketchSvg: plan.cardSketchSvg }
+        ];
+        coop.fullMakeSession = { charName: res.charName, stepActions, stepLines, introNote: res.introNote || stepLines[6] || '香囊缝好了，佩在腰间试试罢。', currentStep: 0 };
+        state.step = 0;
+        applyCharStep(0, stepActions[0]);
+        recordMakingNote(0, res.charName, stepActions[0], stepLines[0] || '先挑合心意的囊形与丝帛。');
+        showBubble(res.charName, '第 1/7 步', stepLines[0] || '先挑合心意的囊形与丝帛。', true, '看下一步 (2/7)');
+      } catch (err) { showBubble(getCharName(), '制香中断', `生成失败：${err.message || err}`, false); }
+      coop.busy = false; syncCoopUI();
+    }
+
+    nextStepBtnEl.onclick = () => {
+      const sess = coop.fullMakeSession;
+      if (!sess) return;
+      if (sess.currentStep < 6) {
+        sess.currentStep++;
+        state.step = sess.currentStep;
+        applyCharStep(sess.currentStep, sess.stepActions[sess.currentStep]);
+        recordMakingNote(sess.currentStep, sess.charName, sess.stepActions[sess.currentStep], sess.stepLines[sess.currentStep] || sess.introNote);
+        showBubble(sess.charName, sess.currentStep < 6 ? `第 ${sess.currentStep + 1}/7 步` : '封礼呈香', sess.stepLines[sess.currentStep] || sess.introNote, true, sess.currentStep < 6 ? `看下一步 (${sess.currentStep + 2}/7)` : '查看香囊纪念笺');
+      } else {
+        showPosterModal();
+        setPosterViewTab('img');
+        posterReviewBoxEl.style.display = 'block';
+        posterReviewBoxEl.innerHTML = `<div style="font-weight:800;color:#C84B31;margin-bottom:4px;">${sess.charName} 亲手奉上香囊：</div><div>「${sess.introNote || '香囊缝好了，佩在腰间试试罢。'}」</div>`;
+        syncCoopUI();
+      }
+    };
+
+    skipAnimBtnEl.onclick = () => {
+      const sess = coop.fullMakeSession;
+      if (!sess) return;
+      for (let s = sess.currentStep + 1; s < 7; s++) {
+        state.step = s;
+        applyCharStep(s, sess.stepActions[s]);
+        recordMakingNote(s, sess.charName, sess.stepActions[s], sess.stepLines[s] || sess.introNote);
+      }
+      sess.currentStep = 6;
+      showBubble(sess.charName, '封礼呈香', sess.introNote || '香囊缝好了，佩在腰间试试罢。', true, '查看香囊纪念笺');
+    };
+
+    async function saveCurrentToHistory(posterDataUrl) {
+      try {
+        const snap = buildSachetSummary();
+        const id = coop.currentHistoryId || (`sachet_hist_${Date.now()}`);
+        coop.currentHistoryId = id;
+        await sendHostRpc('WORKSHOP_CAKE_SAVE_HISTORY', 'WORKSHOP_CAKE_ACTION_RESULT', {
+          id,
+          cakeName: snap.cakeName,
+          cakeDesc: snap.cakeDesc,
+          plaqueText: snap.plaqueText,
+          mode: coop.mode,
+          charId: coop.selectedCharId,
+          charName: getCharName(),
+          posterDataUrl: posterDataUrl || posterImgEl.src,
+          makingNotes: coop.makingNotes,
+          review: coop.lastReview
+        });
+      } catch (_) {}
+    }
+
+    window.__sachetOnPosterReady = (dataUrl) => {
+      coop.currentHistoryId = `sachet_hist_${Date.now()}`;
+      renderPosterNotesView();
+      syncCoopUI();
+      saveCurrentToHistory(dataUrl);
+    };
+
+    window.__sachetOnStepChanged = () => {
+      syncCoopUI();
+      if (coop.mode === 'relay_coop' && isCharTurnInRelay(state.step)) {
+        runCharacterRelayStep(state.step);
+      }
+    };
+
+    document.getElementById('backToWorkshopBtn').onclick = () => window.parent.postMessage({ type: 'WORKSHOP_CAKE_CLOSE' }, '*');
+    charSelectEl.onchange = () => { coop.selectedCharId = charSelectEl.value; forwardCharSelectEl.value = coop.selectedCharId; syncCoopUI(); };
+    modeSelectEl.onchange = () => {
+      coop.mode = modeSelectEl.value;
+      coop.relayHistory = [];
+      hideBubble();
+      syncCoopUI();
+      if (coop.mode === 'relay_coop' && isCharTurnInRelay(state.step)) runCharacterRelayStep(state.step);
+    };
+    swapBtnEl.onclick = () => {
+      coop.userFirst = !coop.userFirst;
+      syncCoopUI();
+      if (coop.mode === 'relay_coop' && isCharTurnInRelay(state.step)) runCharacterRelayStep(state.step);
+    };
+    actionBtnEl.onclick = () => {
+      if (coop.mode === 'char_make_user_eat') runCharacterFullMake();
+      else runCharacterRelayStep(state.step);
+    };
+
+    askCharTasteBtnEl.onclick = async () => {
+      if (coop.busy || !coop.selectedCharId) return;
+      coop.busy = true; askCharTasteBtnEl.textContent = '名士嗅香品评中…';
+      try {
+        const snap = buildSachetSummary();
+        const res = await sendHostRpc('WORKSHOP_CAKE_TASTE_REQUEST', 'WORKSHOP_CAKE_TASTE_RESPONSE', {
+          charId: coop.selectedCharId,
+          mode: coop.mode,
+          visualSnapshotText: snap.visualSnapshotText,
+          cakeSummary: snap.cakeDesc,
+          imageDataUrl: captureSmallSachetSnapshot()
+        });
+        coop.lastReview = res;
+        posterReviewBoxEl.style.display = 'block';
+        posterReviewBoxEl.innerHTML = `<div style="font-weight:800;color:#C83E2B;margin-bottom:4px;">${res.charName} 的佩香回函（${res.reactionTag}）</div><div>${res.comment}</div><div style="font-weight:700;margin-top:4px;">${res.dialogue}</div>`;
+        saveCurrentToHistory(posterImgEl.src);
+      } catch (err) { showToast(`品评失败：${err.message || err}`); }
+      coop.busy = false; syncCoopUI();
+    };
+
+    sendUserFeedbackBtnEl.onclick = async () => {
+      const fb = userFeedbackInputEl.value.trim();
+      if (!fb || coop.busy || !coop.selectedCharId) return;
+      coop.busy = true;
+      sendUserFeedbackBtnEl.textContent = '回应中…';
+      try {
+        const snap = buildSachetSummary();
+        const res = await sendHostRpc('WORKSHOP_CAKE_FEEDBACK_REQUEST', 'WORKSHOP_CAKE_FEEDBACK_RESPONSE', {
+          charId: coop.selectedCharId,
+          userFeedback: fb,
+          visualSnapshotText: snap.visualSnapshotText,
+          cakeSummary: snap.cakeDesc
+        });
+        coop.lastReview = res;
+        posterReviewBoxEl.style.display = 'block';
+        posterReviewBoxEl.innerHTML = `<div style="font-weight:800;color:#C83E2B;margin-bottom:4px;">${res.charName} 的回响（${res.reactionTag}）</div><div>${res.comment}</div><div style="font-weight:700;margin-top:4px;">${res.dialogue}</div>`;
+        userFeedbackInputEl.value = '';
+        saveCurrentToHistory(posterImgEl.src);
+      } catch (err) { showToast(`回应失败：${err.message || err}`); }
+      coop.busy = false;
+      sendUserFeedbackBtnEl.textContent = '发给TA';
+    };
+
+    saveBackpackBtnEl.onclick = async () => {
+      const snap = buildSachetSummary();
+      try {
+        const res = await sendHostRpc('WORKSHOP_CAKE_SAVE_BACKPACK', 'WORKSHOP_CAKE_ACTION_RESULT', { cakeName: snap.cakeName, cakeDesc: snap.cakeDesc, posterDataUrl: posterImgEl.src });
+        showToast((res && res.message) || '已收入行囊');
+      } catch (err) { showToast(`收入失败：${err.message || err}`); }
+    };
+
+    openForwardModalBtnEl.onclick = () => {
+      if (coop.selectedCharId) forwardCharSelectEl.value = coop.selectedCharId;
+      forwardModalEl.classList.add('show');
+    };
+    document.getElementById('closeForwardModalBtn').onclick = () => forwardModalEl.classList.remove('show');
+    confirmForwardBtnEl.onclick = async () => {
+      const targetId = forwardCharSelectEl.value;
+      const targetObj = coop.characters.find(c => String(c.id) === String(targetId));
+      const snap = buildSachetSummary();
+      confirmForwardBtnEl.textContent = '赠予中…';
+      try {
+        const res = await sendHostRpc('WORKSHOP_CAKE_SEND_CHAT', 'WORKSHOP_CAKE_ACTION_RESULT', {
+          charId: targetId, charName: targetObj ? targetObj.name : '', cakeName: snap.cakeName, cakeDesc: snap.cakeDesc, plaqueText: snap.plaqueText, forwardNote: forwardNoteInputEl.value.trim(), posterDataUrl: posterImgEl.src
+        });
+        forwardModalEl.classList.remove('show');
+        forwardNoteInputEl.value = '';
+        showToast((res && res.message) || '已赠予好友');
+      } catch (err) { showToast(`赠予失败：${err.message || err}`); }
+      confirmForwardBtnEl.textContent = '确认赠出香囊';
+    };
+
+    async function openHistoryModal() {
+      historyModalEl.classList.add('show');
+      historyListEl.innerHTML = '<div style="text-align:center;color:#B58867;font-size:12px;padding:18px;">正在翻阅幽兰香囊集录…</div>';
+      let records = [];
+      try {
+        const hostList = await sendHostRpc('WORKSHOP_CAKE_LIST_HISTORY', 'WORKSHOP_CAKE_ACTION_RESULT', {});
+        if (Array.isArray(hostList) && hostList.length > 0) records = hostList;
+      } catch (_) {}
+      if (records.length === 0) {
+        try { records = (await storageDB.loadGallery()) || []; } catch (_) {}
+      }
+      if (!records || records.length === 0) {
+        historyListEl.innerHTML = '<div style="text-align:center;color:#B58867;font-size:12px;padding:22px;">尚未封存香囊成品，完成第 7 步封礼后将自动收录于此。</div>';
+        return;
+      }
+      const esc = s => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      historyListEl.innerHTML = '';
+      records.forEach(rec => {
+        const card = document.createElement('div');
+        card.className = 'history-card';
+        const dStr = rec.createdAt ? new Date(rec.createdAt).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' }) : '';
+        const title = rec.cakeName || rec.name || '幽兰长乐囊';
+        card.innerHTML =
+          `<img class="history-thumb" src="${rec.posterDataUrl || ''}" alt="${esc(title)}">` +
+          `<div style="flex:1;min-width:0;">` +
+            `<div style="font-size:13px;font-weight:800;color:#3E2215;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(title)}</div>` +
+            `<div style="font-size:10.5px;color:#8C6348;margin-top:2px;">${esc(dStr)}${rec.charName ? ' · 同行：' + esc(rec.charName) : ''}</div>` +
+            (rec.cakeDesc ? `<div style="font-size:10.5px;color:#6E4930;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;">${esc(rec.cakeDesc)}</div>` : '') +
+          `</div>` +
+          `<div style="display:flex;flex-direction:column;gap:4px;flex-shrink:0;">` +
+            `<button type="button" class="coop-btn" data-view="1">查看</button>` +
+            `<button type="button" class="sel-btn danger" data-del="1">删</button>` +
+          `</div>`;
+        card.querySelector('[data-view="1"]').onclick = () => {
+          posterImgEl.src = rec.posterDataUrl || '';
+          historyModalEl.classList.remove('show');
+          document.getElementById('posterModal').classList.add('show');
+        };
+        card.querySelector('[data-del="1"]').onclick = async () => {
+          try { await sendHostRpc('WORKSHOP_CAKE_DELETE_HISTORY', 'WORKSHOP_CAKE_ACTION_RESULT', { id: rec.id }); } catch (_) {}
+          openHistoryModal();
+        };
+        historyListEl.appendChild(card);
+      });
+    }
+
+    document.getElementById('openHistoryBtn').onclick = openHistoryModal;
+    document.getElementById('closeHistoryModalBtn').onclick = () => historyModalEl.classList.remove('show');
+    window.parent.postMessage({ type: 'WORKSHOP_CAKE_REQUEST_SYNC', payload: { edition: EDITION } }, '*');
+  }
+
+  // 启动工坊并自动从 IndexedDB 恢复未完成草稿
+  initSignaturePad();
+  bindEvents();
+  initSachetCoCreationBridge();
+  storageDB.init().then(async (ok) => {
+    if (ok) {
+      const draft = await storageDB.loadDraft();
+      if (draft && draft.version === 1) restoreSerializedState(draft);
+    }
+  });
+  updateUI();
+  requestAnimationFrame(renderLoop);
+})();
+</script>
+</body>
+</html>
