@@ -61,7 +61,19 @@
     var [loading, setLoading] = useState(true);
     var [importStatus, setImportStatus] = useState("");
     var [importing, setImporting] = useState(false);
+    var [modelActions, setModelActions] = useState([]);
+    var [activeActionKey, setActiveActionKey] = useState("");
     var fileInputRef = useRef(null);
+    var vrmaInputRef = useRef(null);
+
+    function syncModelActions() {
+      var eng = global.HomeDollPetEngine;
+      if (eng && typeof eng.listActions === "function") {
+        setModelActions(eng.listActions() || []);
+      } else {
+        setModelActions([]);
+      }
+    }
 
     async function loadAll() {
       if (!store) { setLoading(false); return; }
@@ -72,14 +84,27 @@
       } catch (_) {
         setPets([]);
       }
+      syncModelActions();
       setLoading(false);
     }
 
     useEffect(function () {
       loadAll();
-      var onUpd = function () { loadAll(); };
+      var t1 = setTimeout(syncModelActions, 350);
+      var t2 = setTimeout(syncModelActions, 1100);
+      var onUpd = function () {
+        loadAll();
+        setTimeout(syncModelActions, 400);
+      };
+      var onActs = function () { syncModelActions(); };
       global.addEventListener("milvus-home-doll-pet-updated", onUpd);
-      return function () { global.removeEventListener("milvus-home-doll-pet-updated", onUpd); };
+      global.addEventListener("milvus-home-doll-pet-actions-ready", onActs);
+      return function () {
+        clearTimeout(t1);
+        clearTimeout(t2);
+        global.removeEventListener("milvus-home-doll-pet-updated", onUpd);
+        global.removeEventListener("milvus-home-doll-pet-actions-ready", onActs);
+      };
     }, []);
 
     function updateCfg(patch) {
@@ -137,6 +162,26 @@
         setImportStatus("导入失败：" + (err && err.message ? err.message : String(err)));
       } finally {
         setImporting(false);
+      }
+    }
+
+    async function handleVrmaSelected(ev) {
+      var file = ev.target && ev.target.files && ev.target.files[0];
+      if (ev.target) ev.target.value = "";
+      if (!file) return;
+      var importer = global.HomeDollPetImporters;
+      if (!importer || typeof importer.importVrmaMotion !== "function") {
+        setImportStatus("VRMA 动作模块尚未就绪。");
+        return;
+      }
+      try {
+        var rec = await importer.importVrmaMotion(file);
+        setImportStatus("已添加 VRM 动作：「" + rec.name + "」，可直接在上方点播！");
+        if (global.HomeDollPetEngine && typeof global.HomeDollPetEngine.refresh === "function") {
+          global.HomeDollPetEngine.refresh();
+        }
+      } catch (err) {
+        setImportStatus("导入 .vrma 失败：" + (err && err.message ? err.message : String(err)));
       }
     }
 
@@ -330,6 +375,69 @@
                 })
               )
         ),
+
+        // 2.5. Current Pet Built-in Actions / Expressions Panel (VRM Expressions + VRMA / Spine / Live2D / Frames / Cotton)
+        cfg.enabled &&
+          h(
+            "div",
+            { style: { background: "#FFFFFF", borderRadius: "16px", padding: "14px 16px", boxShadow: "0 2px 10px rgba(0,0,0,0.04)", display: "flex", flexDirection: "column", gap: "10px" } },
+            h(
+              "div",
+              { style: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px" } },
+              h("div", { style: { fontSize: "14px", fontWeight: 700, color: "#1F2937" } }, "当前模型动作与表情点播"),
+              h("button", {
+                type: "button",
+                onClick: syncModelActions,
+                style: { border: "1px solid #E5E7EB", background: "#F9FAFB", color: "#4B5563", fontSize: "11px", fontWeight: 600, padding: "3px 8px", borderRadius: "8px", cursor: "pointer" }
+              }, "刷新")
+            ),
+            modelActions.length > 0
+              ? h(
+                  "div",
+                  { style: { display: "flex", flexWrap: "wrap", gap: "7px" } },
+                  modelActions.map(function (act) {
+                    var isAct = activeActionKey === act.key;
+                    return h("button", {
+                      key: act.key,
+                      type: "button",
+                      onClick: function () {
+                        setActiveActionKey(act.key);
+                        if (global.HomeDollPetEngine && typeof global.HomeDollPetEngine.playAction === "function") {
+                          global.HomeDollPetEngine.playAction(act.key);
+                        }
+                      },
+                      style: {
+                        padding: "6px 10px",
+                        borderRadius: "10px",
+                        border: isAct ? "1.5px solid #1E5F50" : "1px solid #D1E7E0",
+                        background: isAct ? "#1E5F50" : "#F4FAF8",
+                        color: isAct ? "#FFFFFF" : "#1E5F50",
+                        fontSize: "11.5px",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                        transition: "all 0.16s ease"
+                      }
+                    }, act.label);
+                  })
+                )
+              : h("div", { style: { fontSize: "11.5px", color: "#9CA3AF" } }, "正在等待当前模型就绪…（也可长按或双击桌宠本体直接唤出动作胶囊）"),
+            h("input", { ref: vrmaInputRef, type: "file", accept: ".vrma", onChange: handleVrmaSelected, style: { display: "none" } }),
+            h("button", {
+              type: "button",
+              onClick: function () { if (vrmaInputRef.current) vrmaInputRef.current.click(); },
+              style: {
+                width: "100%",
+                padding: "8px",
+                borderRadius: "10px",
+                border: "1px dashed #9CA3AF",
+                background: "#FAFAFA",
+                color: "#4B5563",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer"
+              }
+            }, "+ 为 VRM 模型导入外部 .vrma 动作文件（MateEngine / VRoid 通用）")
+          ),
 
         // 3. Behavior & Appearance Controls
         cfg.enabled &&

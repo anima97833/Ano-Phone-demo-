@@ -495,6 +495,19 @@
           }
         } catch (_) {}
       },
+      listCustomActions: function () {
+        return animNames.map(function (n) { return { key: "spine:" + n, label: n }; });
+      },
+      playCustomAction: function (key) {
+        if (!player || !player.animationState || !key) return;
+        var name = String(key).replace(/^spine:/, "");
+        try {
+          player.animationState.setAnimation(0, name, name === idleAnimName);
+          if (idleAnimName && name !== idleAnimName) {
+            player.animationState.addAnimation(0, idleAnimName, true, 0);
+          }
+        } catch (_) {}
+      },
       hitTest: function (localX, localY) {
         return localX >= cssW * 0.14 && localX <= cssW * 0.86 && localY >= cssH * 0.08 && localY <= cssH * 0.94;
       },

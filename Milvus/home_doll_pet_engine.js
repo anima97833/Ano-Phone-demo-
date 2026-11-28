@@ -118,6 +118,19 @@
       setAnimation: function (clipName) {
         curClip = clipName || "idle";
       },
+      listCustomActions: function () {
+        return [
+          { key: "cotton:wave", label: "招手问好" },
+          { key: "cotton:happy", label: "开心蹦跳" },
+          { key: "cotton:shy", label: "害羞摇摆" },
+          { key: "cotton:sit", label: "坐下晃脚" },
+          { key: "cotton:walk", label: "迈步走路" },
+          { key: "cotton:idle", label: "呼吸待机" }
+        ];
+      },
+      playCustomAction: function (key) {
+        curClip = String(key || "idle").replace(/^cotton:/, "");
+      },
       setTurnDeg: function (deg) {
         turnDeg = Math.max(-18, Math.min(18, Number(deg) || 0));
       },
@@ -173,6 +186,10 @@
 
     var baseClip = "idle";
     var tempClipTimer = null;
+    var manualActionLockUntil = 0;
+    var manualWalkUntil = 0;
+    var fallRafId = 0;
+    var landTimer = null;
     var bubbleTimer = null;
     var roamTimer = null;
     var roamDir = -1;
@@ -275,26 +292,157 @@
       if (roamTimer) { clearInterval(roamTimer); roamTimer = null; }
     }
 
+    function stopFallPhysics() {
+      if (fallRafId) { global.cancelAnimationFrame(fallRafId); fallRafId = 0; }
+      if (landTimer) { clearTimeout(landTimer); landTimer = null; }
+      if (stageEl) {
+        stageEl.style.transition = "";
+        stageEl.style.transform = "";
+        stageEl.style.transformOrigin = "50% 92%";
+      }
+    }
+
+    function triggerLandingCushion() {
+      if (!stageEl) return;
+      stageEl.style.transformOrigin = "50% 92%";
+      // 第一拍：触地压缩回弹（Q弹缓冲）
+      stageEl.style.transition = "transform 0.11s cubic-bezier(0.22, 1, 0.36, 1)";
+      stageEl.style.transform = "scale(1.16, 0.84) translateY(5px)";
+      if (curAdapter && typeof curAdapter.setAnimation === "function") {
+        curAdapter.setAnimation("land");
+      }
+      if (landTimer) clearTimeout(landTimer);
+      landTimer = setTimeout(function () {
+        if (!stageEl) return;
+        // 第二拍：轻微回弹拉起
+        stageEl.style.transition = "transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1)";
+        stageEl.style.transform = "scale(0.96, 1.04) translateY(-2px)";
+        landTimer = setTimeout(function () {
+          if (!stageEl) return;
+          // 第三拍：自然归位并等待落地过渡帧（如张飞-猫 014~017 约 520ms）播完后切回基础动作
+          stageEl.style.transition = "transform 0.18s ease-out";
+          stageEl.style.transform = "scale(1, 1) translateY(0)";
+          landTimer = setTimeout(function () {
+            landTimer = null;
+            if (stageEl) { stageEl.style.transition = ""; stageEl.style.transform = ""; }
+            if (!drag.active && Date.now() >= manualActionLockUntil && curAdapter && typeof curAdapter.setAnimation === "function") {
+              curAdapter.setAnimation(baseClip);
+            }
+          }, 260);
+        }, 160);
+      }, 125);
+    }
+
+    function startFallToGround(startLeft, startTop, throwVx) {
+      stopFallPhysics();
+      if (!rootEl) return;
+      var vp = getViewportSize();
+      var box = getBoxSize();
+      // 落脚基准线：屏幕底部上方留出自然站立空间（约 ny = 0.85）
+      var floorTop = Math.max(36, Math.min(vp.h - box.h * 0.85, vp.h * 0.85 - box.h * 0.5));
+      var dist = floorTop - startTop;
+
+      // 若本身就放得很低（已在地面附近），直接播放轻巧落地缓冲，不强行弹跳
+      if (dist <= 26) {
+        var nx0 = (startLeft + box.w * 0.5) / vp.w;
+        var ny0 = (startTop + box.h * 0.5) / vp.h;
+        var st0 = getStore();
+        if (st0) st0.saveConfig({ nx: nx0, ny: ny0 });
+        triggerLandingCushion();
+        return;
+      }
+
+      if (curAdapter && typeof curAdapter.setAnimation === "function") {
+        curAdapter.setAnimation("fall");
+      }
+      if (stageEl) {
+        stageEl.style.transformOrigin = "50% 85%";
+        stageEl.style.transition = "transform 0.12s ease-out";
+        stageEl.style.transform = "scale(0.93, 1.08)";
+      }
+
+      var curL = startLeft;
+      var curT = startTop;
+      var vx = Math.max(-280, Math.min(280, (Number(throwVx) || 0) * 18));
+      var vy = 40;
+      var gravity = 2150;
+      var lastTs = performance.now();
+
+      function stepFall(now) {
+        fallRafId = 0;
+        if (drag.active || !rootEl) return;
+        var dt = Math.min(0.04, Math.max(0.008, (now - lastTs) * 0.001));
+        lastTs = now;
+        vy += gravity * dt;
+        curT += vy * dt;
+        curL += vx * dt;
+        vx *= Math.pow(0.25, dt);
+
+        var minL = -box.w * 0.12;
+        var maxL = vp.w - box.w * 0.88;
+        if (curL < minL) { curL = minL; vx = Math.abs(vx) * 0.45; }
+        else if (curL > maxL) { curL = maxL; vx = -Math.abs(vx) * 0.45; }
+
+        if (curT >= floorTop) {
+          curT = floorTop;
+          rootEl.style.left = Math.round(curL) + "px";
+          rootEl.style.top = Math.round(curT) + "px";
+          var nx = (curL + box.w * 0.5) / vp.w;
+          var ny = (curT + box.h * 0.5) / vp.h;
+          if (cfg) { cfg.nx = nx; cfg.ny = ny; }
+          var st = getStore();
+          if (st) st.saveConfig({ nx: nx, ny: ny });
+          triggerLandingCushion();
+          return;
+        }
+
+        rootEl.style.left = Math.round(curL) + "px";
+        rootEl.style.top = Math.round(curT) + "px";
+        fallRafId = global.requestAnimationFrame(stepFall);
+      }
+
+      fallRafId = global.requestAnimationFrame(stepFall);
+    }
+
     function startRoamLoopIfNeeded() {
       stopRoamLoop();
-      if (!cfg || !cfg.enabled || cfg.behaviorMode !== "roam") return;
+      if (!cfg || !cfg.enabled) return;
+      var needLoop = cfg.behaviorMode === "roam" || Date.now() < manualWalkUntil;
+      if (!needLoop) return;
       roamTimer = setInterval(function () {
-        if (isAppCovering || isTabHidden || drag.active || tempClipTimer || menuOpen || !cfg || !cfg.enabled) return;
-        if (curAdapter && typeof curAdapter.setAnimation === "function") curAdapter.setAnimation("walk");
+        if (!cfg || !cfg.enabled) { stopRoamLoop(); return; }
+        var now = Date.now();
+        var isTempWalking = now < manualWalkUntil;
+        if (cfg.behaviorMode !== "roam" && !isTempWalking) {
+          stopRoamLoop();
+          if (curAdapter && typeof curAdapter.setTurnDeg === "function") curAdapter.setTurnDeg(0);
+          if (!drag.active && !fallRafId && curAdapter && typeof curAdapter.setAnimation === "function") {
+            curAdapter.setAnimation(baseClip);
+          }
+          return;
+        }
+        if (isAppCovering || isTabHidden || drag.active || fallRafId || tempClipTimer || menuOpen) return;
+        if (!isTempWalking && now < manualActionLockUntil) return;
+        if (!isTempWalking && curAdapter && typeof curAdapter.setAnimation === "function") curAdapter.setAnimation("walk");
         if (curAdapter && typeof curAdapter.setTurnDeg === "function") curAdapter.setTurnDeg(roamDir * 10);
-        cfg.nx = Math.max(0.14, Math.min(0.86, (cfg.nx || 0.84) + roamDir * 0.0045));
+        // 按固定像素速度悠闲漫步（约 24px/秒，复刻《张飞-猫》160ms 走 3px 的舒缓步频，不随宽屏变快）
+        var vpW = Math.max(320, getViewportSize().w);
+        var stepNorm = 1.15 / vpW;
+        cfg.nx = Math.max(0.14, Math.min(0.86, (cfg.nx || 0.84) + roamDir * stepNorm));
         if (cfg.nx <= 0.15) roamDir = 1;
         else if (cfg.nx >= 0.85) roamDir = -1;
         applyPositionFromNorm(cfg.nx, cfg.ny);
-      }, 60);
+      }, 45);
     }
 
     function playTempClip(clipName, durationMs) {
       if (!curAdapter) return;
+      if (Date.now() < manualActionLockUntil) return;
       if (tempClipTimer) clearTimeout(tempClipTimer);
       if (typeof curAdapter.setAnimation === "function") curAdapter.setAnimation(clipName);
       tempClipTimer = setTimeout(function () {
         tempClipTimer = null;
+        if (Date.now() < manualActionLockUntil) return;
         if (curAdapter && typeof curAdapter.setAnimation === "function") {
           curAdapter.setAnimation(baseClip);
         }
@@ -320,8 +468,68 @@
       if (menuEl) menuEl.style.display = "none";
     }
 
+    function listCurrentActions() {
+      if (curAdapter && typeof curAdapter.listCustomActions === "function") {
+        try { return curAdapter.listCustomActions() || []; } catch (_) {}
+      }
+      return [];
+    }
+
+    function playCurrentAction(key) {
+      if (!curAdapter || !key) return;
+      stopFallPhysics();
+      if (tempClipTimer) { clearTimeout(tempClipTimer); tempClipTimer = null; }
+      var kStr = String(key);
+      var isWalkAct = /walk|run|move|crawl|carry|走|跑|漫步/i.test(kStr);
+      var isIdleReset = /:(idle|stand|wait|default)$/i.test(kStr);
+      if (isWalkAct) {
+        manualActionLockUntil = Date.now() + 9500;
+        manualWalkUntil = Date.now() + 9500;
+      } else if (isIdleReset) {
+        manualActionLockUntil = 0;
+        manualWalkUntil = 0;
+      } else {
+        manualActionLockUntil = Date.now() + 9000;
+        manualWalkUntil = 0;
+      }
+      if (typeof curAdapter.playCustomAction === "function") {
+        try { curAdapter.playCustomAction(key); } catch (_) {}
+      }
+      startRoamLoopIfNeeded();
+    }
+
+    function rebuildQuickMenu() {
+      if (!menuEl || !global.document) return;
+      var doc = global.document;
+      menuEl.innerHTML = "";
+      var acts = listCurrentActions().slice(0, 10);
+      var makeBtn = function (label, onClick, isDanger) {
+        var btn = doc.createElement("button");
+        btn.type = "button";
+        btn.textContent = label;
+        btn.style.cssText =
+          "border:none;background:" + (isDanger ? "#F3F4F6" : "#FDF2F4") + ";color:" + (isDanger ? "#6B7280" : "#B76373") + ";" +
+          "font-size:10px;font-weight:700;padding:4px 7px;border-radius:8px;cursor:pointer;font-family:inherit;white-space:nowrap;";
+        btn.onclick = function (ev) { ev.stopPropagation(); onClick(); };
+        menuEl.appendChild(btn);
+      };
+      if (acts.length > 0) {
+        acts.forEach(function (a) {
+          makeBtn(a.label.replace(/^(表情|动作|动画):/, "").slice(0, 8), function () { closeMenu(); playCurrentAction(a.key); }, false);
+        });
+      } else {
+        makeBtn("招手", function () { closeMenu(); playTempClip("wave", 2400); }, false);
+        makeBtn("坐下", function () { closeMenu(); var st = getStore(); if (st) st.saveConfig({ behaviorMode: cfg && cfg.behaviorMode === "sit_dock" ? "quiet" : "sit_dock" }); }, false);
+      }
+      makeBtn("收起", function () { closeMenu(); var st = getStore(); if (st) st.saveConfig({ enabled: false }); }, true);
+    }
+
     function toggleMenu() {
       menuOpen = !menuOpen;
+      if (menuOpen) {
+        if (tempClipTimer) { clearTimeout(tempClipTimer); tempClipTimer = null; }
+        rebuildQuickMenu();
+      }
       if (menuEl) menuEl.style.display = menuOpen ? "flex" : "none";
     }
 
@@ -356,28 +564,13 @@
         "overflow:hidden;text-overflow:ellipsis;pointer-events:none;opacity:0;transition:all 0.2s ease;";
       rootEl.appendChild(bubbleEl);
 
-      // 长按/双击呼出的极简控台胶囊
+      // 长按/双击呼出的极简控台胶囊（动态展示当前模型全部动作/表情）
       menuEl = doc.createElement("div");
       menuEl.style.cssText =
         "position:absolute;left:50%;bottom:calc(100% + 4px);transform:translateX(-50%);" +
-        "display:none;gap:4px;padding:4px 6px;border-radius:14px;background:rgba(255,253,249,0.96);" +
+        "display:none;flex-wrap:wrap;justify-content:center;max-width:220px;gap:4px;padding:5px 6px;border-radius:14px;background:rgba(255,253,249,0.96);" +
         "border:1px solid rgba(228,212,195,0.95);box-shadow:0 6px 18px rgba(43,33,28,0.18);" +
-        "pointer-events:auto;white-space:nowrap;z-index:48;";
-      var btns = [
-        { label: "招手", fn: function () { closeMenu(); playTempClip("wave", 2400); } },
-        { label: "坐下", fn: function () { closeMenu(); var st = getStore(); if (st) st.saveConfig({ behaviorMode: cfg && cfg.behaviorMode === "sit_dock" ? "quiet" : "sit_dock" }); } },
-        { label: "收起", fn: function () { closeMenu(); var st = getStore(); if (st) st.saveConfig({ enabled: false }); } }
-      ];
-      btns.forEach(function (b) {
-        var btn = doc.createElement("button");
-        btn.type = "button";
-        btn.textContent = b.label;
-        btn.style.cssText =
-          "border:none;background:#FDF2F4;color:#B76373;font-size:10.5px;font-weight:700;" +
-          "padding:4px 8px;border-radius:9px;cursor:pointer;font-family:inherit;";
-        btn.onclick = function (ev) { ev.stopPropagation(); b.fn(); };
-        menuEl.appendChild(btn);
-      });
+        "pointer-events:auto;z-index:48;";
       rootEl.appendChild(menuEl);
 
       // 像素级透明穿透：点击透明处直接放行给下层主屏图标
@@ -392,12 +585,14 @@
         }
         ev.stopPropagation();
         closeMenu();
+        stopFallPhysics();
         drag.active = true;
         drag.moved = false;
         drag.pointerId = ev.pointerId;
         drag.startX = ev.clientX;
         drag.startY = ev.clientY;
         drag.lastX = ev.clientX;
+        drag.lastVx = 0;
         drag.origLeft = rect.left;
         drag.origTop = rect.top;
         drag.downTime = Date.now();
@@ -418,13 +613,21 @@
         var dy = ev.clientY - drag.startY;
         if (!drag.moved && Math.hypot(dx, dy) >= 8) {
           drag.moved = true;
+          manualActionLockUntil = 0;
+          manualWalkUntil = 0;
           if (drag.longPressTimer) { clearTimeout(drag.longPressTimer); drag.longPressTimer = null; }
           if (curAdapter && typeof curAdapter.setAnimation === "function") curAdapter.setAnimation("lift");
+          if (stageEl) {
+            stageEl.style.transformOrigin = "50% 18%";
+            stageEl.style.transition = "transform 0.14s ease-out";
+            stageEl.style.transform = "translateY(-4px) scale(0.98, 1.03)";
+          }
         }
         if (drag.moved) {
           var vx = ev.clientX - drag.lastX;
           drag.lastX = ev.clientX;
-          if (curAdapter && typeof curAdapter.setDragVelocity === "function") curAdapter.setDragVelocity(vx);
+          drag.lastVx = drag.lastVx * 0.55 + vx * 0.45;
+          if (curAdapter && typeof curAdapter.setDragVelocity === "function") curAdapter.setDragVelocity(drag.lastVx);
           var vp = getViewportSize();
           var box = getBoxSize();
           var nl = Math.max(-box.w * 0.15, Math.min(vp.w - box.w * 0.85, drag.origLeft + dx));
@@ -438,18 +641,15 @@
         if (!drag.active || (ev && ev.pointerId !== drag.pointerId)) return;
         if (drag.longPressTimer) { clearTimeout(drag.longPressTimer); drag.longPressTimer = null; }
         var wasMoved = drag.moved;
+        var releaseVx = drag.lastVx || 0;
         drag.active = false;
         drag.moved = false;
+        drag.lastVx = 0;
         if (curAdapter && typeof curAdapter.setDragVelocity === "function") curAdapter.setDragVelocity(0);
 
         if (wasMoved && rootEl) {
           var rect = rootEl.getBoundingClientRect();
-          var vp = getViewportSize();
-          var nx = (rect.left + rect.width * 0.5) / vp.w;
-          var ny = (rect.top + rect.height * 0.5) / vp.h;
-          var st = getStore();
-          if (st) st.saveConfig({ nx: nx, ny: ny });
-          if (curAdapter && typeof curAdapter.setAnimation === "function") curAdapter.setAnimation(baseClip);
+          startFallToGround(rect.left, rect.top, releaseVx);
         } else {
           var now = Date.now();
           if (now - lastTapAt < 320) {
@@ -529,13 +729,25 @@
             scale: cfg.scale,
             initialClip: baseClip
           });
+          try {
+            if (typeof global.dispatchEvent === "function" && typeof CustomEvent === "function") {
+              global.dispatchEvent(new CustomEvent("milvus-home-doll-pet-actions-ready"));
+            }
+          } catch (_) {}
         } catch (err) {
           console.warn("[HomeDollPet] 模型加载失败:", err);
           say("模型加载失败，请检查文件", 3200);
         }
       } else {
         if (typeof curAdapter.resize === "function") curAdapter.resize(box.w, box.h);
-        if (!tempClipTimer && typeof curAdapter.setAnimation === "function") curAdapter.setAnimation(baseClip);
+        if (!tempClipTimer && Date.now() >= manualActionLockUntil && typeof curAdapter.setAnimation === "function") {
+          curAdapter.setAnimation(baseClip);
+        }
+        try {
+          if (typeof global.dispatchEvent === "function" && typeof CustomEvent === "function") {
+            global.dispatchEvent(new CustomEvent("milvus-home-doll-pet-actions-ready"));
+          }
+        } catch (_) {}
       }
 
       startRoamLoopIfNeeded();
@@ -566,6 +778,8 @@
       init: init,
       refresh: mountCurrentPet,
       setAnimation: playTempClip,
+      listActions: listCurrentActions,
+      playAction: playCurrentAction,
       say: say,
       moveTo: function (nx, ny) {
         var st = getStore();
@@ -611,6 +825,8 @@
     registerAdapter: registerAdapter,
     refresh: controller.refresh,
     setAnimation: controller.setAnimation,
+    listActions: controller.listActions,
+    playAction: controller.playAction,
     say: controller.say,
     moveTo: controller.moveTo,
     setEnabled: controller.setEnabled,

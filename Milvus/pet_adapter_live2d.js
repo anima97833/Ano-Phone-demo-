@@ -466,6 +466,19 @@
           }
         } catch (_) {}
       },
+      listCustomActions: function () {
+        var out = [];
+        motionGroups.forEach(function (g) { out.push({ key: "motion:" + g, label: "动作:" + g }); });
+        expressions.forEach(function (e) { out.push({ key: "expr:" + e, label: "表情:" + e }); });
+        return out;
+      },
+      playCustomAction: function (key) {
+        if (!model || !key) return;
+        try {
+          if (String(key).indexOf("motion:") === 0) model.motion(String(key).slice(7));
+          else if (String(key).indexOf("expr:") === 0 && typeof model.expression === "function") model.expression(String(key).slice(5));
+        } catch (_) {}
+      },
       hitTest: function (localX, localY) {
         return localX >= cssW * 0.14 && localX <= cssW * 0.86 && localY >= cssH * 0.08 && localY <= cssH * 0.94;
       },
